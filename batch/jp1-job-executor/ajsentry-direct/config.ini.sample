@@ -1,6 +1,0 @@
-[JP1]
-JP1_HOST=192.168.1.100
-JP1_USER=jp1admin
-JP1_PASSWORD=
-JOBNET_PATH=/main_unit/jobgroup1/daily_batch
-AJSENTRY_CMD=ajsentry

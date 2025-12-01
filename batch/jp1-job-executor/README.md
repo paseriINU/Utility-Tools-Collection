@@ -2,7 +2,7 @@
 
 ローカルPCから**JP1/AJS3のジョブネット**を起動するためのツール群です。
 
-3つの異なるアプローチで実装されており、環境に応じて選択できます。
+2つの異なるアプローチで実装されており、環境に応じて選択できます。
 
 ---
 
@@ -10,16 +10,11 @@
 
 ```
 jp1-job-executor/
-├── ajsentry-direct/       # 方法1: ajsentryコマンド版（標準）
-│   ├── jp1_start_job.bat
-│   ├── jp1_start_job_config.bat
-│   └── config.ini.sample
-│
-├── remote-exec/           # 方法2: リモート実行版
+├── remote-exec/           # 方法1: リモート実行版
 │   ├── jp1_remote_start.bat
 │   └── config.ini.sample
 │
-└── rest-api/              # 方法3: REST API版
+└── rest-api/              # 方法2: REST API版
     ├── Start-JP1Job.ps1
     ├── jp1_start_api.bat
     └── config.ini.sample
@@ -27,24 +22,9 @@ jp1-job-executor/
 
 ---
 
-## 🚀 3つのアプローチ
+## 🚀 2つのアプローチ
 
-### 方法1: ajsentryコマンド版（標準的な方法）
-
-**特徴**:
-- ✅ JP1の標準コマンド`ajsentry`を使用
-- ✅ 最もシンプルで信頼性が高い
-- ✅ ローカルにJP1/AJS3 - Viewまたは- Managerのインストールが必要
-
-**使用条件**:
-- JP1/AJS3 - ViewまたはJP1/AJS3 - Managerがインストール済み
-- `ajsentry`コマンドが使用可能
-
-**詳細**: [ajsentry-direct/README.md](ajsentry-direct/README.md)
-
----
-
-### 方法2: リモート実行版
+### 方法1: リモート実行版
 
 **特徴**:
 - ✅ PowerShell Remotingを使用してリモートサーバで`ajsentry`を実行
@@ -60,7 +40,7 @@ jp1-job-executor/
 
 ---
 
-### 方法3: REST API版（最新）
+### 方法2: REST API版（最新）
 
 **特徴**:
 - ✅ JP1/AJS3のREST APIを使用
@@ -79,29 +59,25 @@ jp1-job-executor/
 
 ## 📊 比較表
 
-| 項目 | ajsentryコマンド版 | リモート実行版 | REST API版 |
-|------|-------------------|---------------|-----------|
-| **ローカルJP1必要** | ✅ 必要 | ❌ 不要 | ❌ 不要 |
-| **セットアップ難易度** | ⭐ 簡単 | ⭐⭐ 中程度 | ⭐⭐ 中程度 |
-| **JP1バージョン要件** | すべて | すべて | 10以降 |
-| **通信プロトコル** | JP1独自 | WinRM (5985/5986) | HTTP/HTTPS (22250) |
-| **認証方法** | JP1認証 | Windows認証+JP1認証 | JP1認証 |
-| **ファイアウォール設定** | JP1ポート | WinRM | HTTP/HTTPS |
-| **推奨用途** | 標準的な環境 | JP1未インストールPC | モダンな環境 |
+| 項目 | リモート実行版 | REST API版 |
+|------|---------------|-----------|
+| **ローカルJP1必要** | ❌ 不要 | ❌ 不要 |
+| **セットアップ難易度** | ⭐⭐ 中程度 | ⭐⭐ 中程度 |
+| **JP1バージョン要件** | すべて | 10以降 |
+| **通信プロトコル** | WinRM (5985/5986) | HTTP/HTTPS (22250) |
+| **認証方法** | Windows認証+JP1認証 | JP1認証 |
+| **ファイアウォール設定** | WinRM | HTTP/HTTPS |
+| **推奨用途** | JP1未インストールPC | モダンな環境 |
 
 ---
 
 ## 🎯 どれを選ぶべきか？
 
-### ajsentryコマンド版を選ぶ場合:
-- ✅ ローカルにJP1/AJS3がインストール済み
-- ✅ 標準的な方法を使いたい
-- ✅ 既存のJP1環境と統一したい
-
 ### リモート実行版を選ぶ場合:
 - ✅ ローカルにJP1をインストールできない
 - ✅ PowerShell Remotingが既に設定済み
 - ✅ 複数のサーバで実行する可能性がある
+- ✅ JP1のバージョンに関係なく使いたい
 
 ### REST API版を選ぶ場合:
 - ✅ JP1/AJS3 - Manager バージョン10以降を使用
@@ -135,9 +111,8 @@ jp1-job-executor/
 
 各アプローチの詳細な使い方は、それぞれのフォルダ内のREADME.mdを参照してください。
 
-1. **ajsentryコマンド版**: [ajsentry-direct/README.md](ajsentry-direct/README.md)
-2. **リモート実行版**: [remote-exec/README.md](remote-exec/README.md)
-3. **REST API版**: [rest-api/README.md](rest-api/README.md)
+1. **リモート実行版**: [remote-exec/README.md](remote-exec/README.md)
+2. **REST API版**: [rest-api/README.md](rest-api/README.md)
 
 ---
 
