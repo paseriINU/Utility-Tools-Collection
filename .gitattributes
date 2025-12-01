@@ -1,0 +1,8 @@
+# バッチファイルをUTF-8として扱う
+*.bat text eol=crlf working-tree-encoding=UTF-8
+
+# マークダウンファイル
+*.md text eol=lf
+
+# ライセンスファイル
+LICENSE text eol=lf

@@ -1,0 +1,9 @@
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# テスト用ディレクトリ（もしあれば）
+test/
+tests/
