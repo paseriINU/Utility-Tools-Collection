@@ -30,7 +30,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ### 新しいツールを追加する場合
 
 1. **適切なフォルダを選択**
-   - バッチスクリプト → `batch/[用途]/`
+   - バッチスクリプト（.bat / .ps1） → `batch/[用途]/`
    - VBAマクロ → `vba/[用途]/`
    - JavaScriptツール → `javascript/[用途]/`
 
@@ -45,11 +45,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ### コーディング規約
 
-#### Batch Scripts (.bat)
-- **エンコーディング**: UTF-8（BOMなし）で保存
-- 日本語のファイル名・パスに対応すること
-- コマンドプロンプトでの実行を想定
-- 先頭にスクリプトの目的をコメントで記載
+#### Batch Scripts (.bat / .ps1)
+- **バッチファイル (.bat)**:
+  - **エンコーディング**: UTF-8（BOMなし）で保存
+  - 日本語のファイル名・パスに対応すること
+  - コマンドプロンプトでの実行を想定
+  - 先頭にスクリプトの目的をコメントで記載
+- **PowerShellスクリプト (.ps1)**:
+  - PowerShell 5.1以降で動作すること
+  - 実行ポリシーへの配慮（VBSラッパーなど）
+  - 管理者権限が必要な場合は明記
+  - コメントベースのヘルプを記載
 
 #### VBA Macros (.bas, .xlsm)
 - Excel 2010以降で動作すること
@@ -98,8 +104,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Tools Currently Available
 
-### Batch Scripts
+### Batch Scripts (.bat / .ps1)
 - **TFS-Git-sync** (`batch/sync/`): TFS（Team Foundation Server）とGitリポジトリを同期
+- **Remote-Batch-Executor** (`batch/remote-exec/`): リモートサーバでバッチ実行（schtasks/WinRM/PowerShell Remoting）
+- **Git-Diff-Extract** (`batch/git-diff-extract/`): Gitブランチ間の差分ファイル抽出
+- **Git-Branch-Manager** (`batch/git-branch-manager/`): Gitブランチを対話的に削除
 
 ### Other Categories
 VBA、JavaScriptのツールは今後追加予定

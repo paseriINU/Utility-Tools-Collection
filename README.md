@@ -26,6 +26,8 @@
 ## 🛠️ 現在利用可能なツール
 
 ### Batch Scripts
+
+**Note**: このカテゴリにはWindowsバッチファイル(.bat)およびPowerShellスクリプト(.ps1)が含まれます。
 - **[TFS-Git-sync](batch/sync/)**: TFS（Team Foundation Server）とGitリポジトリを同期するバッチスクリプト
   - MD5ハッシュによる高速差分チェック
   - 自動的なファイル更新・追加・削除
