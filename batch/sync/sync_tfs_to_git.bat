@@ -17,9 +17,8 @@ echo ========================================
 echo.
 
 :: TFSとGitのディレクトリパスを設定（固定値）
-:: ★★★ ここを環境に合わせて編集してください ★★★
-set "TFS_DIR=C:\Path\To\TFS\Project"
-set "GIT_DIR=C:\Path\To\Git\Project"
+set "TFS_DIR=C:\Users\%username%\source"
+set "GIT_DIR=C:\Users\%username%\source\Git\project"
 
 :: パスの存在確認
 if not exist "%TFS_DIR%" (

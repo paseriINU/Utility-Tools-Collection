@@ -20,10 +20,6 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 │   └── excel-automation/    # Excel自動化ツール
 │       └── README.md
 │
-├── python/                  # Pythonスクリプト
-│   └── utilities/           # 汎用ユーティリティ
-│       └── README.md
-│
 ├── javascript/              # JavaScriptツール
 │   └── browser-automation/  # ブラウザ自動化スクリプト
 │       └── README.md
@@ -40,7 +36,6 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 1. **適切なフォルダを選択**
    - バッチスクリプト → `batch/[用途]/`
    - VBAマクロ → `vba/[用途]/`
-   - Pythonスクリプト → `python/[用途]/`
    - JavaScriptツール → `javascript/[用途]/`
    - PowerShellスクリプト → `powershell/[用途]/`
 
@@ -66,12 +61,6 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - マクロ有効ブック(.xlsm)として保存
 - 変数は明示的に宣言（Option Explicit使用）
 - 日本語のコメントで処理内容を説明
-
-#### Python Scripts (.py)
-- Python 3.8以降で動作すること
-- 必要なライブラリはrequirements.txtに記載
-- docstringで関数・クラスの説明を記載
-- PEP 8に準拠したコーディングスタイル
 
 #### JavaScript (.js)
 - ブラウザコンソールでの実行を想定
@@ -124,7 +113,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **TFS-Git-sync** (`batch/sync/`): TFS（Team Foundation Server）とGitリポジトリを同期
 
 ### Other Categories
-VBA、Python、JavaScript、PowerShellのツールは今後追加予定
+VBA、JavaScript、PowerShellのツールは今後追加予定
 
 ## Development Approach
 
