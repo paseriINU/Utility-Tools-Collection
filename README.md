@@ -19,11 +19,8 @@
 ├── vba/                     # Excel VBAマクロ
 │   └── excel-automation/    # Excel自動化ツール
 │
-├── javascript/              # JavaScriptツール
-│   └── browser-automation/  # ブラウザ自動化スクリプト
-│
-└── powershell/              # PowerShellスクリプト
-    └── scripts/             # 各種スクリプト
+└── javascript/              # JavaScriptツール
+    └── browser-automation/  # ブラウザ自動化スクリプト
 ```
 
 ## 🛠️ 現在利用可能なツール
@@ -61,9 +58,6 @@
 ### JavaScript Tools
 *準備中 - 今後追加予定*
 
-### PowerShell Scripts
-*準備中 - 今後追加予定*
-
 ## 🚀 使い方
 
 各ツールの詳細な使い方は、それぞれのフォルダ内のREADME.mdを参照してください。
@@ -77,7 +71,7 @@
 
 新しいツールを追加する際は、以下の手順に従ってください：
 
-1. 適切な言語フォルダを選択（batch/vba/javascript/powershell）
+1. 適切な言語フォルダを選択（batch/vba/javascript）
 2. 用途に応じたサブフォルダを作成または既存のものを使用
 3. スクリプトファイルとREADME.mdを配置
 4. このREADME.mdの「現在利用可能なツール」セクションを更新

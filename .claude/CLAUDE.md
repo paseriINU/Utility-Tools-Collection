@@ -20,12 +20,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 │   └── excel-automation/    # Excel自動化ツール
 │       └── README.md
 │
-├── javascript/              # JavaScriptツール
-│   └── browser-automation/  # ブラウザ自動化スクリプト
-│       └── README.md
-│
-└── powershell/              # PowerShellスクリプト
-    └── scripts/             # 各種スクリプト
+└── javascript/              # JavaScriptツール
+    └── browser-automation/  # ブラウザ自動化スクリプト
         └── README.md
 ```
 
@@ -37,7 +33,6 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
    - バッチスクリプト → `batch/[用途]/`
    - VBAマクロ → `vba/[用途]/`
    - JavaScriptツール → `javascript/[用途]/`
-   - PowerShellスクリプト → `powershell/[用途]/`
 
 2. **ファイル配置**
    - スクリプトファイルを配置
@@ -67,12 +62,6 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - ブックマークレット形式も考慮
 - 対象サイトの構造変更に注意
 - 先頭にコメントで対象サイト・目的を記載
-
-#### PowerShell (.ps1)
-- PowerShell 5.1以降で動作すること
-- 実行ポリシーへの配慮
-- 管理者権限が必要な場合は明記
-- コメントベースのヘルプを記載
 
 ### ドキュメント規約
 
@@ -113,7 +102,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **TFS-Git-sync** (`batch/sync/`): TFS（Team Foundation Server）とGitリポジトリを同期
 
 ### Other Categories
-VBA、JavaScript、PowerShellのツールは今後追加予定
+VBA、JavaScriptのツールは今後追加予定
 
 ## Development Approach
 

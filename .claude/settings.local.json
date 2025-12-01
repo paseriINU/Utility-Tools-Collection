@@ -5,7 +5,11 @@
       "Bash(rm:*)",
       "Bash(tree:*)",
       "Bash(find:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$(cat <<''EOF''\nAdd Git tools, remote execution tools, and repository-wide MIT license\n\n- Add Git diff extraction tool with folder structure preservation\n- Add Git branch manager with interactive deletion (remote/local/both)\n- Add remote batch execution tools (schtasks/WinRM/PowerShell Remoting)\n- Add repository-wide MIT license with clear liability disclaimer\n- Update all Git tools to use fixed path: C:\\Users\\%username%\\source\\Git\\project\n- Update TFS sync tool to use fixed paths: TFS source and Git project\n- Remove Python folder (not needed in restricted environment)\n- Add comprehensive documentation for all tools\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
+      "Bash(git push)",
+      "Bash(git push:*)",
+      "Bash(git commit -m \"$(cat <<''EOF''\nRemove PowerShell folder and update documentation\n\n- Remove powershell/ folder (managed via batch tools instead)\n- Update README.md to remove PowerShell references\n- Update CLAUDE.md to reflect current repository structure\n- Simplify repository to focus on batch, VBA, and JavaScript tools\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")"
     ],
     "deny": [],
     "ask": []
