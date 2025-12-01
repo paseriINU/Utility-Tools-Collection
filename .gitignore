@@ -3,7 +3,60 @@ Thumbs.db
 ehthumbs.db
 Desktop.ini
 $RECYCLE.BIN/
+*.lnk
 
-# テスト用ディレクトリ（もしあれば）
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# IDEs and Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+*.egg-info/
+dist/
+build/
+
+# Node.js / JavaScript
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+yarn.lock
+
+# VBA
+~$*.xlsm
+~$*.xls
+*.tmp
+
+# 一時ファイル
+*.log
+*.bak
+*.tmp
+temp/
+tmp/
+
+# テスト用ディレクトリ
 test/
 tests/
+
+# 機密情報（念のため）
+.env
+*.key
+*.pem
+credentials.*
+config.local.*
