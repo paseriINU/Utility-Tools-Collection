@@ -1,0 +1,9 @@
+[Remote]
+JP1_SERVER=192.168.1.100
+REMOTE_USER=Administrator
+
+[JP1]
+JP1_USER=jp1admin
+JP1_PASSWORD=
+JOBNET_PATH=/main_unit/jobgroup1/daily_batch
+AJSENTRY_PATH=C:\Program Files\HITACHI\JP1AJS3\bin\ajsentry.exe
