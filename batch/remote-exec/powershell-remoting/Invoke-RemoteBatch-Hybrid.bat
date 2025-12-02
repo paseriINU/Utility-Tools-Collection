@@ -1,16 +1,10 @@
 <# :
 @echo off
-:: ============================================================================
-:: リモートバッチ実行ツール（バッチ＋PowerShellハイブリッド版）
-:: このファイルは .bat として実行できます
-:: ============================================================================
 setlocal
 chcp 65001 >nul
-
-:: PowerShell部分を実行（最初の13行をスキップ）
-@powershell -NoProfile -ExecutionPolicy Bypass -Command "iex ((gc '%~f0' | select -skip 13) -join \"`n\")"
+@powershell -NoProfile -ExecutionPolicy Bypass -Command "iex ((gc '%~f0' | select -skip 6) -join \"`n\")"
 exit /b %ERRORLEVEL%
-: #>
+: #> | sv -name _ > $null
 
 <#
 .SYNOPSIS
