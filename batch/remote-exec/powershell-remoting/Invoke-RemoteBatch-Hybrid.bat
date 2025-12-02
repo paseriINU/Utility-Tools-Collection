@@ -8,7 +8,7 @@ setlocal
 chcp 65001 >nul
 
 :: PowerShell部分を実行（最初の13行をスキップ）
-powershell -NoProfile -ExecutionPolicy Bypass -Command "iex ((gc '%~f0' | select -skip 13) -join \"`n\")"
+@powershell -NoProfile -ExecutionPolicy Bypass -Command "iex ((gc '%~f0' | select -skip 13) -join \"`n\")"
 exit /b %ERRORLEVEL%
 : #>
 
