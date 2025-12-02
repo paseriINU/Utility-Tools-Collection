@@ -2,7 +2,7 @@
 @echo off
 setlocal
 chcp 65001 >nul
-@powershell -NoProfile -ExecutionPolicy Bypass -Command "iex ((gc '%~f0' | select -skip 6) -join \"`n\")"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "iex ((gc '%~f0' | select -skip 6) -join \"`n\")"
 exit /b %ERRORLEVEL%
 : #> | sv -name _ > $null
 
@@ -42,7 +42,8 @@ $Config = @{
     # Password = ""
 
     # 実行するバッチファイルのパス（リモートサーバ上のパス）
-    BatchPath = "C:\Scripts\test.bat"
+    # {env}の部分が実行時に選択した環境（tst1t/tst2t）に置換されます
+    BatchPath = "C:\Scripts\{env}\test.bat"
 
     # バッチファイルに渡す引数（オプション、不要な場合は空文字）
     Arguments = ""
@@ -81,6 +82,34 @@ Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "PowerShell Remoting - リモートバッチ実行" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
+
+#region 環境選択
+if ($Config.BatchPath -like "*{env}*") {
+    Write-Host "実行環境を選択してください:" -ForegroundColor Cyan
+    Write-Host "  1. tst1t"
+    Write-Host "  2. tst2t"
+    Write-Host ""
+
+    $envChoice = Read-Host "選択 (1-2)"
+
+    switch ($envChoice) {
+        "1" { $selectedEnv = "tst1t" }
+        "2" { $selectedEnv = "tst2t" }
+        default {
+            Write-Host "[エラー] 無効な選択です" -ForegroundColor Red
+            Write-Host "Enterキーを押して終了..." -ForegroundColor Gray
+            $null = Read-Host
+            exit 1
+        }
+    }
+
+    # BatchPathの{env}を選択した環境に置換
+    $Config.BatchPath = $Config.BatchPath -replace '\{env\}', $selectedEnv
+    Write-Host ""
+    Write-Host "選択された環境: $selectedEnv" -ForegroundColor Green
+    Write-Host ""
+}
+#endregion
 
 #region 認証情報の準備
 if ($Config.UserName) {
