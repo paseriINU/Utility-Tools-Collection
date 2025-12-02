@@ -1,111 +1,315 @@
+<# :
 @echo off
-rem ====================================================================
-rem リモートWindowsサーバ上でバッチファイルをWinRMで実行するスクリプト
-rem PowerShellのInvoke-Commandを使用してリモート実行し、結果を取得
-rem ====================================================================
+setlocal
+chcp 65001 >nul
+powershell -NoProfile -ExecutionPolicy Bypass -Command "iex ((gc '%~f0') -join \"`n\")"
+exit /b %ERRORLEVEL%
+: #> | sv -name _ > $null
 
-setlocal enabledelayedexpansion
+<#
+.SYNOPSIS
+    リモートWindowsサーバ上でバッチファイルをWinRMで実行（ハイブリッド版）
 
-rem ====================================================================
-rem 設定項目（必要に応じて編集してください）
-rem ====================================================================
+.DESCRIPTION
+    PowerShellのInvoke-Commandを使用してリモート実行し、結果を取得します。
+    WinRM設定を自動的に構成・復元します。
 
-rem リモートサーバのコンピュータ名またはIPアドレス
-set REMOTE_SERVER=192.168.1.100
+.NOTES
+    作成日: 2025-12-02
+    バージョン: 3.0
 
-rem リモートサーバの管理者ユーザー名
-set REMOTE_USER=Administrator
+    使い方:
+    1. 下記の「■ 設定セクション」を編集
+    2. このファイルをダブルクリックで実行
+#>
 
-rem リモートサーバで実行するバッチファイルのフルパス
-set REMOTE_BATCH_PATH=C:\Scripts\target_script.bat
+# ==============================================================================
+# ■ 設定セクション（ここを編集してください）
+# ==============================================================================
 
-rem 実行結果を保存するローカルファイル（オプション）
-set OUTPUT_LOG=%~dp0remote_exec_output.log
+$Config = @{
+    # リモートサーバのコンピュータ名またはIPアドレス
+    ComputerName = "192.168.1.100"
 
-rem ====================================================================
-rem メイン処理
-rem ====================================================================
+    # リモートサーバの管理者ユーザー名
+    UserName = "Administrator"
 
-echo ========================================
-echo リモートバッチ実行ツール (WinRM版)
-echo ========================================
-echo.
-echo リモートサーバ: %REMOTE_SERVER%
-echo 実行ユーザー  : %REMOTE_USER%
-echo 実行ファイル  : %REMOTE_BATCH_PATH%
-echo 出力ログ      : %OUTPUT_LOG%
-echo.
+    # パスワード（空の場合は実行時に入力を求められます）
+    Password = ""
 
-rem PowerShellが利用可能か確認
-powershell -Command "Write-Host 'PowerShell確認OK'" >nul 2>&1
-if errorlevel 1 (
-    echo [エラー] PowerShellが利用できません。
-    goto :ERROR_EXIT
-)
+    # リモートサーバで実行するバッチファイルのフルパス
+    BatchPath = "C:\Scripts\target_script.bat"
 
-echo パスワードを入力してください：
-set /p REMOTE_PASSWORD=
+    # 実行結果を保存するローカルファイル（空の場合は自動生成）
+    OutputLog = ""
 
-echo.
-echo リモートサーバに接続中...
-echo.
+    # HTTPS接続を使用する場合は $true
+    UseSSL = $false
+}
 
-rem PowerShellでリモート実行
-powershell -ExecutionPolicy Bypass -Command ^
-    "$password = ConvertTo-SecureString '%REMOTE_PASSWORD%' -AsPlainText -Force; ^
-     $credential = New-Object System.Management.Automation.PSCredential('%REMOTE_USER%', $password); ^
-     try { ^
-         Write-Host '接続確認中...' -ForegroundColor Cyan; ^
-         $session = New-PSSession -ComputerName '%REMOTE_SERVER%' -Credential $credential -ErrorAction Stop; ^
-         Write-Host '接続成功' -ForegroundColor Green; ^
-         Write-Host ''; ^
-         Write-Host '========================================' -ForegroundColor Yellow; ^
-         Write-Host 'バッチファイル実行結果：' -ForegroundColor Yellow; ^
-         Write-Host '========================================' -ForegroundColor Yellow; ^
-         Write-Host ''; ^
-         $result = Invoke-Command -Session $session -ScriptBlock { ^
-             cmd.exe /c '%REMOTE_BATCH_PATH%' 2>&1 ^
-         }; ^
-         $result | Out-String; ^
-         Write-Host ''; ^
-         Write-Host '========================================' -ForegroundColor Yellow; ^
-         Write-Host '実行完了' -ForegroundColor Green; ^
-         Write-Host '========================================' -ForegroundColor Yellow; ^
-         if ('%OUTPUT_LOG%' -ne '') { ^
-             $result | Out-File -FilePath '%OUTPUT_LOG%' -Encoding UTF8; ^
-             Write-Host ''; ^
-             Write-Host '結果をログファイルに保存しました: %OUTPUT_LOG%' -ForegroundColor Cyan; ^
-         }; ^
-         Remove-PSSession -Session $session; ^
-         exit 0; ^
-     } catch { ^
-         Write-Host ''; ^
-         Write-Host '[エラー] リモート実行に失敗しました' -ForegroundColor Red; ^
-         Write-Host $_.Exception.Message -ForegroundColor Red; ^
-         Write-Host ''; ^
-         Write-Host 'トラブルシューティング：' -ForegroundColor Yellow; ^
-         Write-Host '1. リモートサーバでWinRMが有効になっているか確認' -ForegroundColor Gray; ^
-         Write-Host '   winrm quickconfig' -ForegroundColor Gray; ^
-         Write-Host '2. ファイアウォールでポート5985(HTTP)/5986(HTTPS)が開いているか確認' -ForegroundColor Gray; ^
-         Write-Host '3. ユーザー名とパスワードが正しいか確認' -ForegroundColor Gray; ^
-         Write-Host '4. リモートサーバがTrustedHostsに登録されているか確認' -ForegroundColor Gray; ^
-         Write-Host '   winrm get winrm/config/client' -ForegroundColor Gray; ^
-         exit 1; ^
-     }"
+# ==============================================================================
+# ■ メイン処理（以下は編集不要）
+# ==============================================================================
 
-if errorlevel 1 (
-    goto :ERROR_EXIT
-)
+$ErrorActionPreference = "Stop"
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
-echo.
-echo 処理が完了しました。
-goto :END
+# 出力ログファイルのデフォルト設定
+if (-not $Config.OutputLog) {
+    $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
+    $scriptDir = Split-Path -Path $MyInvocation.MyCommand.Path -Parent
+    if (-not $scriptDir) {
+        $scriptDir = Get-Location
+    }
+    $Config.OutputLog = Join-Path $scriptDir "remote_exec_output_$timestamp.log"
+}
 
-:ERROR_EXIT
-echo.
-echo 処理を中断しました。
-exit /b 1
+Write-Host "========================================" -ForegroundColor Cyan
+Write-Host "リモートバッチ実行ツール (WinRM版)" -ForegroundColor Cyan
+Write-Host "========================================" -ForegroundColor Cyan
+Write-Host ""
 
-:END
-endlocal
-exit /b 0
+#region WinRM設定の保存と自動設定
+$originalTrustedHosts = $null
+$winrmConfigChanged = $false
+
+try {
+    Write-Host "WinRM設定を確認中..." -ForegroundColor Cyan
+
+    # 現在のTrustedHostsを取得（復元用）
+    try {
+        $originalTrustedHosts = (Get-Item WSMan:\localhost\Client\TrustedHosts -ErrorAction SilentlyContinue).Value
+        Write-Verbose "現在のTrustedHosts: $originalTrustedHosts"
+    } catch {
+        $originalTrustedHosts = ""
+        Write-Verbose "TrustedHostsは未設定です"
+    }
+
+    # WinRMサービスの起動確認
+    $winrmService = Get-Service -Name WinRM -ErrorAction SilentlyContinue
+    if ($winrmService.Status -ne 'Running') {
+        Write-Host "WinRMサービスを起動中..." -ForegroundColor Yellow
+        Start-Service -Name WinRM -ErrorAction Stop
+        Write-Host "[OK] WinRMサービスを起動しました" -ForegroundColor Green
+    } else {
+        Write-Host "[OK] WinRMサービスは起動済みです" -ForegroundColor Green
+    }
+
+    # 接続先がTrustedHostsに含まれているか確認
+    $needsConfig = $true
+    if ($originalTrustedHosts) {
+        $trustedList = $originalTrustedHosts -split ','
+        if ($trustedList -contains $Config.ComputerName -or $trustedList -contains '*') {
+            Write-Host "[OK] 接続先は既にTrustedHostsに登録されています" -ForegroundColor Green
+            $needsConfig = $false
+        }
+    }
+
+    # 必要に応じてTrustedHostsに追加
+    if ($needsConfig) {
+        Write-Host "接続先をTrustedHostsに追加中..." -ForegroundColor Yellow
+
+        if ([string]::IsNullOrEmpty($originalTrustedHosts)) {
+            Set-Item WSMan:\localhost\Client\TrustedHosts -Value $Config.ComputerName -Force
+        } else {
+            Set-Item WSMan:\localhost\Client\TrustedHosts -Value "$originalTrustedHosts,$($Config.ComputerName)" -Force
+        }
+
+        $winrmConfigChanged = $true
+        Write-Host "[OK] TrustedHostsに追加しました: $($Config.ComputerName)" -ForegroundColor Green
+    }
+
+    Write-Host ""
+} catch {
+    Write-Host "[警告] WinRM設定の自動構成に失敗しました" -ForegroundColor Yellow
+    Write-Host "エラー: $($_.Exception.Message)" -ForegroundColor Yellow
+    Write-Host "手動でWinRM設定を行ってください" -ForegroundColor Yellow
+    Write-Host ""
+}
+#endregion
+
+#region 認証情報の準備
+if ($Config.UserName) {
+    if ($Config.Password) {
+        $securePassword = ConvertTo-SecureString $Config.Password -AsPlainText -Force
+        $Credential = New-Object System.Management.Automation.PSCredential($Config.UserName, $securePassword)
+    } else {
+        Write-Host "ユーザー名: $($Config.UserName)" -ForegroundColor Cyan
+        $securePassword = Read-Host "パスワードを入力してください" -AsSecureString
+        $Credential = New-Object System.Management.Automation.PSCredential($Config.UserName, $securePassword)
+    }
+} else {
+    Write-Host "認証情報を入力してください" -ForegroundColor Yellow
+    $Credential = Get-Credential -Message "リモートサーバの認証情報を入力"
+}
+#endregion
+
+#region セッションオプションの設定
+$sessionOption = New-PSSessionOption -SkipCACheck -SkipCNCheck
+#endregion
+
+Write-Host "リモートサーバ: $($Config.ComputerName)" -ForegroundColor White
+Write-Host "実行ユーザー  : $($Credential.UserName)" -ForegroundColor White
+Write-Host "実行ファイル  : $($Config.BatchPath)" -ForegroundColor White
+Write-Host "出力ログ      : $($Config.OutputLog)" -ForegroundColor White
+Write-Host "プロトコル    : " -NoNewline -ForegroundColor White
+if ($Config.UseSSL) {
+    Write-Host "HTTPS (ポート 5986)" -ForegroundColor Green
+} else {
+    Write-Host "HTTP (ポート 5985)" -ForegroundColor Yellow
+}
+Write-Host ""
+
+# WinRM設定復元用のfinallyブロックでメイン処理を囲む
+try {
+try {
+    Write-Host "リモートサーバに接続中..." -ForegroundColor Cyan
+
+    $sessionParams = @{
+        ComputerName = $Config.ComputerName
+        Credential = $Credential
+        SessionOption = $sessionOption
+        ErrorAction = "Stop"
+    }
+
+    if ($Config.UseSSL) {
+        $sessionParams.UseSSL = $true
+    }
+
+    $session = New-PSSession @sessionParams
+    Write-Host "[OK] 接続成功" -ForegroundColor Green
+    Write-Host ""
+
+    Write-Host "========================================" -ForegroundColor Yellow
+    Write-Host "バッチファイル実行結果" -ForegroundColor Yellow
+    Write-Host "========================================" -ForegroundColor Yellow
+    Write-Host ""
+
+    $scriptBlock = {
+        param($batchPath)
+
+        if (-not (Test-Path $batchPath)) {
+            throw "バッチファイルが見つかりません: $batchPath"
+        }
+
+        $output = & cmd.exe /c $batchPath 2>&1
+        $exitCode = $LASTEXITCODE
+
+        @{
+            Output = $output
+            ExitCode = $exitCode
+        }
+    }
+
+    $result = Invoke-Command -Session $session -ScriptBlock $scriptBlock -ArgumentList $Config.BatchPath
+
+    # 出力を表示
+    $result.Output | ForEach-Object {
+        Write-Host $_ -ForegroundColor White
+    }
+
+    Write-Host ""
+    Write-Host "========================================" -ForegroundColor Yellow
+    Write-Host "実行完了" -ForegroundColor Green
+    Write-Host "終了コード: $($result.ExitCode)" -ForegroundColor $(if ($result.ExitCode -eq 0) { "Green" } else { "Red" })
+    Write-Host "========================================" -ForegroundColor Yellow
+
+    # ログファイル保存
+    if ($Config.OutputLog) {
+        Write-Host ""
+        Write-Host "実行結果をログファイルに保存中..." -ForegroundColor Cyan
+
+        $logContent = @"
+========================================
+リモートバッチ実行結果 (WinRM版)
+========================================
+実行日時: $(Get-Date -Format "yyyy/MM/dd HH:mm:ss")
+リモートサーバ: $($Config.ComputerName)
+実行ユーザー: $($Credential.UserName)
+実行ファイル: $($Config.BatchPath)
+終了コード: $($result.ExitCode)
+
+========================================
+実行結果:
+========================================
+$($result.Output | Out-String)
+"@
+
+        $logContent | Out-File -FilePath $Config.OutputLog -Encoding UTF8
+        Write-Host "[OK] ログ保存完了: $($Config.OutputLog)" -ForegroundColor Green
+    }
+
+    Remove-PSSession -Session $session
+    Write-Host ""
+    Write-Host "処理が正常に完了しました。" -ForegroundColor Green
+
+    $exitCode = $result.ExitCode
+
+} catch {
+    Write-Host ""
+    Write-Host "========================================" -ForegroundColor Red
+    Write-Host "[エラー] リモート実行に失敗しました" -ForegroundColor Red
+    Write-Host "========================================" -ForegroundColor Red
+    Write-Host ""
+    Write-Host "エラー詳細:" -ForegroundColor Yellow
+    Write-Host $_.Exception.Message -ForegroundColor Red
+    Write-Host ""
+    Write-Host "エラー種類: $($_.Exception.GetType().FullName)" -ForegroundColor Gray
+
+    if ($_.Exception.InnerException) {
+        Write-Host "内部エラー: $($_.Exception.InnerException.Message)" -ForegroundColor Gray
+    }
+
+    Write-Host ""
+    Write-Host "========================================" -ForegroundColor Yellow
+    Write-Host "トラブルシューティング:" -ForegroundColor Yellow
+    Write-Host "========================================" -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "1. リモートサーバでWinRMが有効か確認:" -ForegroundColor White
+    Write-Host "   winrm quickconfig" -ForegroundColor Gray
+    Write-Host ""
+    Write-Host "2. ファイアウォールでポートが開いているか確認:" -ForegroundColor White
+    Write-Host "   HTTP: 5985 / HTTPS: 5986" -ForegroundColor Gray
+    Write-Host ""
+    Write-Host "3. TrustedHostsの設定（ワークグループ環境の場合）:" -ForegroundColor White
+    Write-Host "   Set-Item WSMan:\localhost\Client\TrustedHosts -Value '$($Config.ComputerName)'" -ForegroundColor Gray
+    Write-Host ""
+    Write-Host "4. 接続テスト:" -ForegroundColor White
+    Write-Host "   Test-WSMan -ComputerName $($Config.ComputerName)" -ForegroundColor Gray
+    Write-Host ""
+
+    if ($session) {
+        Remove-PSSession -Session $session -ErrorAction SilentlyContinue
+    }
+
+    $exitCode = 1
+}
+} finally {
+    #region WinRM設定の復元
+    if ($winrmConfigChanged) {
+        Write-Host ""
+        Write-Host "WinRM設定を復元中..." -ForegroundColor Cyan
+
+        try {
+            if ([string]::IsNullOrEmpty($originalTrustedHosts)) {
+                Set-Item WSMan:\localhost\Client\TrustedHosts -Value "" -Force
+                Write-Host "[OK] TrustedHostsを元の状態（空）に復元しました" -ForegroundColor Green
+            } else {
+                Set-Item WSMan:\localhost\Client\TrustedHosts -Value $originalTrustedHosts -Force
+                Write-Host "[OK] TrustedHostsを元の状態に復元しました" -ForegroundColor Green
+            }
+        } catch {
+            Write-Host "[警告] TrustedHostsの復元に失敗しました" -ForegroundColor Yellow
+            Write-Host "エラー: $($_.Exception.Message)" -ForegroundColor Yellow
+            Write-Host "手動で復元してください: Set-Item WSMan:\localhost\Client\TrustedHosts -Value '$originalTrustedHosts' -Force" -ForegroundColor Yellow
+        }
+    }
+    #endregion
+}
+}
+
+Write-Host ""
+Write-Host "Enterキーを押して終了..." -ForegroundColor Gray
+$null = Read-Host
+
+exit $exitCode
