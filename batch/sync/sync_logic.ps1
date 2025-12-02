@@ -14,8 +14,8 @@ param(
 # UTF-8出力設定
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
-Write-Host '差分チェック中...' -ForegroundColor Cyan
-Write-Host ''
+Write-Host "差分チェック中..." -ForegroundColor Cyan
+Write-Host ""
 
 # TFSとGitのファイル一覧を取得
 Write-Verbose "TFSディレクトリをスキャン中: $TfsDir"
@@ -44,8 +44,8 @@ $copiedCount = 0
 $deletedCount = 0
 $identicalCount = 0
 
-Write-Host '=== ファイル差分チェック ===' -ForegroundColor Yellow
-Write-Host ''
+Write-Host "=== ファイル差分チェック ===" -ForegroundColor Yellow
+Write-Host ""
 
 # TFSファイルをチェック（更新 & 新規追加）
 foreach ($relativePath in $tfsFileDict.Keys) {
@@ -60,7 +60,7 @@ foreach ($relativePath in $tfsFileDict.Keys) {
 
             if ($tfsHash -ne $gitHash) {
                 # ハッシュが異なる → 更新
-                Write-Host '[更新] ' -ForegroundColor Yellow -NoNewline
+                Write-Host "[更新] " -ForegroundColor Yellow -NoNewline
                 Write-Host $relativePath
 
                 $targetDir = Split-Path -Path $gitFilePath -Parent
@@ -79,7 +79,7 @@ foreach ($relativePath in $tfsFileDict.Keys) {
         }
     } else {
         # Gitに存在しない → 新規追加
-        Write-Host '[新規] ' -ForegroundColor Green -NoNewline
+        Write-Host "[新規] " -ForegroundColor Green -NoNewline
         Write-Host $relativePath
 
         $targetDir = Split-Path -Path $gitFilePath -Parent
@@ -92,15 +92,15 @@ foreach ($relativePath in $tfsFileDict.Keys) {
     }
 }
 
-Write-Host ''
-Write-Host '=== Gitのみに存在するファイル (削除対象) ===' -ForegroundColor Yellow
-Write-Host ''
+Write-Host ""
+Write-Host "=== Gitのみに存在するファイル (削除対象) ===" -ForegroundColor Yellow
+Write-Host ""
 
 # Gitのみのファイルをチェック（削除）
 foreach ($relativePath in $gitFileDict.Keys) {
     if (-not $tfsFileDict.ContainsKey($relativePath)) {
         $gitFile = $gitFileDict[$relativePath]
-        Write-Host '[削除] ' -ForegroundColor Red -NoNewline
+        Write-Host "[削除] " -ForegroundColor Red -NoNewline
         Write-Host $relativePath
 
         try {
@@ -112,15 +112,15 @@ foreach ($relativePath in $gitFileDict.Keys) {
     }
 }
 
-Write-Host ''
-Write-Host '========================================' -ForegroundColor Cyan
-Write-Host '同期完了' -ForegroundColor Cyan
-Write-Host '========================================' -ForegroundColor Cyan
-Write-Host ''
+Write-Host ""
+Write-Host "========================================" -ForegroundColor Cyan
+Write-Host "同期完了" -ForegroundColor Cyan
+Write-Host "========================================" -ForegroundColor Cyan
+Write-Host ""
 Write-Host "更新/新規ファイル: $copiedCount" -ForegroundColor Green
 Write-Host "削除ファイル: $deletedCount" -ForegroundColor Red
 Write-Host "変更なし: $identicalCount" -ForegroundColor Gray
-Write-Host ''
+Write-Host ""
 
 # 終了コード: 0=成功
 exit 0

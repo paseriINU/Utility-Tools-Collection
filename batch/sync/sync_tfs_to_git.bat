@@ -56,9 +56,9 @@ echo.
 
 :BRANCH_MENU
 echo ブランチ操作を選択してください:
-echo 1. このまま続行
-echo 2. ブランチを切り替える
-echo 3. 終了
+echo  1. このまま続行
+echo  2. ブランチを切り替える
+echo  3. 終了
 echo.
 set /p BRANCH_CHOICE="選択 (1-3): "
 
