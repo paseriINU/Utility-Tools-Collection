@@ -95,78 +95,14 @@ echo ========================================
 echo.
 
 :: PowerShellスクリプトを実行
-powershell -NoProfile -ExecutionPolicy Bypass -Command ^
-"$tfsDir = '%TFS_DIR%'; ^
-$gitDir = '%GIT_DIR%'; ^
-Write-Host '差分チェック中...' -ForegroundColor Cyan; ^
-Write-Host ''; ^
-$tfsFiles = Get-ChildItem -Path $tfsDir -Recurse -File; ^
-$gitFiles = Get-ChildItem -Path $gitDir -Recurse -File | Where-Object { $_.FullName -notlike '*\.git\*' }; ^
-$tfsFileDict = @{}; ^
-foreach ($file in $tfsFiles) { ^
-    $relativePath = $file.FullName.Substring($tfsDir.Length).TrimStart('\'); ^
-    $tfsFileDict[$relativePath] = $file; ^
-}; ^
-$gitFileDict = @{}; ^
-foreach ($file in $gitFiles) { ^
-    $relativePath = $file.FullName.Substring($gitDir.Length).TrimStart('\'); ^
-    $gitFileDict[$relativePath] = $file; ^
-}; ^
-$copiedCount = 0; ^
-$deletedCount = 0; ^
-$identicalCount = 0; ^
-Write-Host '=== ファイル差分チェック ===' -ForegroundColor Yellow; ^
-Write-Host ''; ^
-foreach ($relativePath in $tfsFileDict.Keys) { ^
-    $tfsFile = $tfsFileDict[$relativePath]; ^
-    $gitFilePath = Join-Path $gitDir $relativePath; ^
-    if (Test-Path $gitFilePath) { ^
-        $tfsHash = (Get-FileHash -Path $tfsFile.FullName -Algorithm MD5).Hash; ^
-        $gitHash = (Get-FileHash -Path $gitFilePath -Algorithm MD5).Hash; ^
-        if ($tfsHash -ne $gitHash) { ^
-            Write-Host '[更新] ' -ForegroundColor Yellow -NoNewline; ^
-            Write-Host $relativePath; ^
-            $targetDir = Split-Path -Path $gitFilePath -Parent; ^
-            if (-not (Test-Path $targetDir)) { ^
-                New-Item -ItemType Directory -Path $targetDir -Force | Out-Null; ^
-            }; ^
-            Copy-Item -Path $tfsFile.FullName -Destination $gitFilePath -Force; ^
-            $copiedCount++; ^
-        } else { ^
-            $identicalCount++; ^
-        } ^
-    } else { ^
-        Write-Host '[新規] ' -ForegroundColor Green -NoNewline; ^
-        Write-Host $relativePath; ^
-        $targetDir = Split-Path -Path $gitFilePath -Parent; ^
-        if (-not (Test-Path $targetDir)) { ^
-            New-Item -ItemType Directory -Path $targetDir -Force | Out-Null; ^
-        }; ^
-        Copy-Item -Path $tfsFile.FullName -Destination $gitFilePath -Force; ^
-        $copiedCount++; ^
-    } ^
-}; ^
-Write-Host ''; ^
-Write-Host '=== Gitのみに存在するファイル (削除対象) ===' -ForegroundColor Yellow; ^
-Write-Host ''; ^
-foreach ($relativePath in $gitFileDict.Keys) { ^
-    if (-not $tfsFileDict.ContainsKey($relativePath)) { ^
-        $gitFile = $gitFileDict[$relativePath]; ^
-        Write-Host '[削除] ' -ForegroundColor Red -NoNewline; ^
-        Write-Host $relativePath; ^
-        Remove-Item -Path $gitFile.FullName -Force; ^
-        $deletedCount++; ^
-    } ^
-}; ^
-Write-Host ''; ^
-Write-Host '========================================' -ForegroundColor Cyan; ^
-Write-Host '同期完了' -ForegroundColor Cyan; ^
-Write-Host '========================================' -ForegroundColor Cyan; ^
-Write-Host ''; ^
-Write-Host \"更新/新規ファイル: $copiedCount\" -ForegroundColor Green; ^
-Write-Host \"削除ファイル: $deletedCount\" -ForegroundColor Red; ^
-Write-Host \"変更なし: $identicalCount\" -ForegroundColor Gray; ^
-Write-Host ''"
+set "SCRIPT_DIR=%~dp0"
+powershell -NoProfile -ExecutionPolicy Bypass -File "%SCRIPT_DIR%sync_logic.ps1" -TfsDir "%TFS_DIR%" -GitDir "%GIT_DIR%"
+
+if errorlevel 1 (
+    echo [エラー] PowerShellスクリプトの実行に失敗しました
+    pause
+    exit /b 1
+)
 
 echo.
 echo ========================================
