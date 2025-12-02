@@ -99,6 +99,67 @@ $ErrorActionPreference = "Stop"
 # UTF-8出力設定
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
+#region WinRM設定の保存と自動設定
+$originalTrustedHosts = $null
+$winrmConfigChanged = $false
+
+try {
+    Write-Host "WinRM設定を確認中..." -ForegroundColor Cyan
+
+    # 現在のTrustedHostsを取得（復元用）
+    try {
+        $originalTrustedHosts = (Get-Item WSMan:\localhost\Client\TrustedHosts -ErrorAction SilentlyContinue).Value
+        Write-Verbose "現在のTrustedHosts: $originalTrustedHosts"
+    } catch {
+        $originalTrustedHosts = ""
+        Write-Verbose "TrustedHostsは未設定です"
+    }
+
+    # WinRMサービスの起動確認
+    $winrmService = Get-Service -Name WinRM -ErrorAction SilentlyContinue
+    if ($winrmService.Status -ne 'Running') {
+        Write-Host "WinRMサービスを起動中..." -ForegroundColor Yellow
+        Start-Service -Name WinRM -ErrorAction Stop
+        Write-Host "[OK] WinRMサービスを起動しました" -ForegroundColor Green
+    } else {
+        Write-Host "[OK] WinRMサービスは起動済みです" -ForegroundColor Green
+    }
+
+    # 接続先がTrustedHostsに含まれているか確認
+    $needsConfig = $true
+    if ($originalTrustedHosts) {
+        $trustedList = $originalTrustedHosts -split ','
+        if ($trustedList -contains $ComputerName -or $trustedList -contains '*') {
+            Write-Host "[OK] 接続先は既にTrustedHostsに登録されています" -ForegroundColor Green
+            $needsConfig = $false
+        }
+    }
+
+    # 必要に応じてTrustedHostsに追加
+    if ($needsConfig) {
+        Write-Host "接続先をTrustedHostsに追加中..." -ForegroundColor Yellow
+
+        if ([string]::IsNullOrEmpty($originalTrustedHosts)) {
+            # 既存設定なし
+            Set-Item WSMan:\localhost\Client\TrustedHosts -Value $ComputerName -Force
+        } else {
+            # 既存設定あり
+            Set-Item WSMan:\localhost\Client\TrustedHosts -Value "$originalTrustedHosts,$ComputerName" -Force
+        }
+
+        $winrmConfigChanged = $true
+        Write-Host "[OK] TrustedHostsに追加しました: $ComputerName" -ForegroundColor Green
+    }
+
+    Write-Host ""
+} catch {
+    Write-Host "[警告] WinRM設定の自動構成に失敗しました" -ForegroundColor Yellow
+    Write-Host "エラー: $($_.Exception.Message)" -ForegroundColor Yellow
+    Write-Host "手動でWinRM設定を行ってください" -ForegroundColor Yellow
+    Write-Host ""
+}
+#endregion
+
 #region 認証情報の準備
 if ($Credential) {
     # Credentialオブジェクトが指定されている場合はそれを使用
@@ -143,6 +204,8 @@ if ($UseSSL) {
 }
 Write-Host ""
 
+# WinRM設定復元用のfinallyブロックでメイン処理を囲む
+try {
 try {
     #region リモートセッションの確立
     Write-Host "リモートサーバに接続中..." -ForegroundColor Cyan
@@ -283,4 +346,29 @@ $($result.Output | Out-String)
     }
 
     exit 1
+}
+} finally {
+    #region WinRM設定の復元
+    if ($winrmConfigChanged) {
+        Write-Host ""
+        Write-Host "WinRM設定を復元中..." -ForegroundColor Cyan
+
+        try {
+            if ([string]::IsNullOrEmpty($originalTrustedHosts)) {
+                # 元々空だった場合は空に戻す
+                Set-Item WSMan:\localhost\Client\TrustedHosts -Value "" -Force
+                Write-Host "[OK] TrustedHostsを元の状態（空）に復元しました" -ForegroundColor Green
+            } else {
+                # 元の値に戻す
+                Set-Item WSMan:\localhost\Client\TrustedHosts -Value $originalTrustedHosts -Force
+                Write-Host "[OK] TrustedHostsを元の状態に復元しました" -ForegroundColor Green
+            }
+        } catch {
+            Write-Host "[警告] TrustedHostsの復元に失敗しました" -ForegroundColor Yellow
+            Write-Host "エラー: $($_.Exception.Message)" -ForegroundColor Yellow
+            Write-Host "手動で復元してください: Set-Item WSMan:\localhost\Client\TrustedHosts -Value '$originalTrustedHosts' -Force" -ForegroundColor Yellow
+        }
+    }
+    #endregion
+}
 }
