@@ -42,7 +42,9 @@ $Config = @{
     # バッチファイルに渡す引数（オプション、不要な場合は空文字）
     Arguments = ""
 
-    # 実行結果を保存するローカルファイルパス（オプション、不要な場合は空文字）
+    # 実行結果を保存するローカルファイルパス
+    # 空の場合は自動的に日時付きファイル名で保存されます
+    # 例: RemoteBatch_20250102_153045.log
     OutputLog = ""
 
     # SSL/HTTPS接続を使用する場合は $true（通常は $false）
@@ -58,6 +60,19 @@ $ErrorActionPreference = "Stop"
 
 # UTF-8出力設定
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+
+# 出力ログファイルのデフォルト設定（空の場合）
+if (-not $Config.OutputLog) {
+    $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
+    $scriptDir = Split-Path -Path $MyInvocation.MyCommand.Path -Parent
+    $Config.OutputLog = Join-Path $scriptDir "RemoteBatch_$timestamp.log"
+}
+
+# ヘッダー表示
+Write-Host "========================================" -ForegroundColor Cyan
+Write-Host "PowerShell Remoting - リモートバッチ実行" -ForegroundColor Cyan
+Write-Host "========================================" -ForegroundColor Cyan
+Write-Host ""
 
 #region 認証情報の準備
 if ($Config.UserName) {
@@ -83,10 +98,7 @@ if ($Config.UserName) {
 $sessionOption = New-PSSessionOption -SkipCACheck -SkipCNCheck
 #endregion
 
-Write-Host "========================================" -ForegroundColor Cyan
-Write-Host "PowerShell Remoting - リモートバッチ実行" -ForegroundColor Cyan
-Write-Host "========================================" -ForegroundColor Cyan
-Write-Host ""
+# 設定情報を表示
 Write-Host "リモートサーバ: $($Config.ComputerName)" -ForegroundColor White
 Write-Host "実行ユーザー  : $($Credential.UserName)" -ForegroundColor White
 Write-Host "実行ファイル  : $($Config.BatchPath)" -ForegroundColor White
@@ -120,7 +132,7 @@ try {
     }
 
     $session = New-PSSession @sessionParams
-    Write-Host "✓ 接続成功" -ForegroundColor Green
+    Write-Host "[OK] 接続成功" -ForegroundColor Green
     Write-Host ""
     #endregion
 
@@ -192,7 +204,7 @@ $($result.Output | Out-String)
 "@
 
         $logContent | Out-File -FilePath $Config.OutputLog -Encoding UTF8
-        Write-Host "✓ ログ保存完了: $($Config.OutputLog)" -ForegroundColor Green
+        Write-Host "[OK] ログ保存完了: $($Config.OutputLog)" -ForegroundColor Green
     }
     #endregion
 
