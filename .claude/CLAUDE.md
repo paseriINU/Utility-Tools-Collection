@@ -51,11 +51,29 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   - 日本語のファイル名・パスに対応すること
   - コマンドプロンプトでの実行を想定
   - 先頭にスクリプトの目的をコメントで記載
-- **PowerShellスクリプト (.ps1)**:
+
+- **PowerShellスクリプト (.ps1) → ハイブリッド.bat形式を推奨**:
+  - **重要**: PowerShellを使用する場合は、`.ps1`ファイルではなく、ポリグロットパターンを使用した`.bat`形式で作成すること
+  - ポリグロットパターン:
+    ```batch
+    <# :
+    @echo off
+    setlocal
+    chcp 65001 >nul
+    powershell -NoProfile -ExecutionPolicy Bypass -Command "iex ((gc '%~f0') -join \"`n\")"
+    exit /b %ERRORLEVEL%
+    : #> | sv -name _ > $null
+
+    # PowerShellコードはここから
+    ```
   - PowerShell 5.1以降で動作すること
-  - 実行ポリシーへの配慮（VBSラッパーなど）
-  - 管理者権限が必要な場合は明記
   - コメントベースのヘルプを記載
+  - パラメータ版とスタンドアローン版（内部設定）の両方を作成することを推奨
+  - 管理者権限が必要な場合は明記
+
+- **既存の.ps1ファイルの変換**:
+  - 既存の`.ps1`ファイルを見つけた場合は、自動的にハイブリッド`.bat`形式に変換すること
+  - `.ps1`ファイルは保守性のため削除または非推奨とすること
 
 #### VBA Macros (.bas, .xlsm)
 - Excel 2010以降で動作すること
@@ -104,11 +122,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Tools Currently Available
 
-### Batch Scripts (.bat / .ps1)
-- **TFS-Git-sync** (`batch/sync/`): TFS（Team Foundation Server）とGitリポジトリを同期
+### Batch Scripts (.bat)
+- **TFS-Git-sync** (`batch/sync/`): TFS（Team Foundation Server）とGitリポジトリを同期（PowerShellロジック埋め込み版）
 - **Remote-Batch-Executor** (`batch/remote-exec/`): リモートサーバでバッチ実行（schtasks/WinRM/PowerShell Remoting）
+  - パラメータ版とスタンドアローン版
+  - 環境選択機能付きハイブリッド版
+- **JP1-Job-Executor** (`batch/jp1-job-executor/`): JP1/AJS3 REST APIを使用したジョブネット起動
+  - パラメータ版とスタンドアローン版
 - **Git-Diff-Extract** (`batch/git-diff-extract/`): Gitブランチ間の差分ファイル抽出
 - **Git-Branch-Manager** (`batch/git-branch-manager/`): Gitブランチを対話的に削除
+
+**注**: すべてのツールは`.bat`ファイル単体で動作し、PowerShellが必要な場合もポリグロットパターンで埋め込まれています。
 
 ### Other Categories
 VBA、JavaScriptのツールは今後追加予定
