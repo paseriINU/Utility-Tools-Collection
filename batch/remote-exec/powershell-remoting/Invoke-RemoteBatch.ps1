@@ -148,7 +148,7 @@ try {
     Write-Host ""
 
     $scriptBlock = {
-        param($batchPath, $args)
+        param($batchPath, $batchArgs)
 
         # バッチファイルの存在確認
         if (-not (Test-Path $batchPath)) {
@@ -156,8 +156,8 @@ try {
         }
 
         # バッチファイルを実行
-        if ($args) {
-            $output = & cmd.exe /c "$batchPath $args" 2>&1
+        if ($batchArgs) {
+            $output = & cmd.exe /c "$batchPath $batchArgs" 2>&1
         } else {
             $output = & cmd.exe /c $batchPath 2>&1
         }
