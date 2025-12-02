@@ -7,8 +7,8 @@
 setlocal
 chcp 65001 >nul
 
-:: PowerShell部分を実行（バッチ部分をスキップ）
-powershell -NoProfile -ExecutionPolicy Bypass -Command "& { $lines = Get-Content '%~f0'; $ps1Start = 0; for ($i = 0; $i -lt $lines.Count; $i++) { if ($lines[$i] -match '^<#$') { $ps1Start = $i; break } }; $ps1Code = $lines[$ps1Start..($lines.Count-1)] -join \"`n\"; Invoke-Expression $ps1Code }"
+:: PowerShell部分を実行（最初の13行をスキップ）
+powershell -NoProfile -ExecutionPolicy Bypass -Command "iex ((gc '%~f0' | select -skip 13) -join \"`n\")"
 exit /b %ERRORLEVEL%
 : #>
 
