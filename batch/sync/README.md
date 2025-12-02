@@ -52,18 +52,20 @@ batch/sync/
 
 ### 1. パスの設定
 
-バッチファイルの21-22行目を編集します:
+バッチファイルの20-21行目を編集します:
 
 ```batch
 set "TFS_DIR=C:\Path\To\TFS\Project"
-set "GIT_DIR=C:\Path\To\Git\Project"
+set "GIT_REPO_DIR=C:\Path\To\Git\Project"
 ```
 
 **例:**
 ```batch
 set "TFS_DIR=C:\Work\TFS\MyProject"
-set "GIT_DIR=D:\Repository\MyProject"
+set "GIT_REPO_DIR=D:\Repository\MyProject"
 ```
+
+**注意:** 変数名は`GIT_REPO_DIR`を使用してください（`GIT_DIR`はGitの環境変数と衝突します）
 
 ### 2. 実行
 
@@ -187,6 +189,12 @@ Gitにのみ存在するファイルは**自動的に削除**されます。誤�
 MIT License
 
 ## 変更履歴
+
+### v1.1.1 (2025-12-02)
+- **環境変数の衝突を修正**
+  - `GIT_DIR` を `GIT_REPO_DIR` に変更（Gitの環境変数と衝突回避）
+  - バッチファイルのecho構文を修正
+  - PowerShellの文字列リテラルをダブルクォートに統一
 
 ### v1.1.0 (2025-12-02)
 - **PowerShellロジックを別ファイルに分離**

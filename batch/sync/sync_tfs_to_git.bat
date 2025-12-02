@@ -18,7 +18,7 @@ echo.
 
 :: TFSとGitのディレクトリパスを設定（固定値）
 set "TFS_DIR=C:\Users\%username%\source"
-set "GIT_DIR=C:\Users\%username%\source\Git\project"
+set "GIT_REPO_DIR=C:\Users\%username%\source\Git\project"
 
 :: パスの存在確認
 if not exist "%TFS_DIR%" (
@@ -27,25 +27,25 @@ if not exist "%TFS_DIR%" (
     exit /b 1
 )
 
-if not exist "%GIT_DIR%" (
-    echo [エラー] Gitディレクトリが見つかりません: %GIT_DIR%
+if not exist "%GIT_REPO_DIR%" (
+    echo [エラー] Gitディレクトリが見つかりません: %GIT_REPO_DIR%
     pause
     exit /b 1
 )
 
-if not exist "%GIT_DIR%\.git" (
-    echo [エラー] 指定されたディレクトリはGitリポジトリではありません: %GIT_DIR%
+if not exist "%GIT_REPO_DIR%\.git" (
+    echo [エラー] 指定されたディレクトリはGitリポジトリではありません: %GIT_REPO_DIR%
     pause
     exit /b 1
 )
 
 echo.
 echo TFSディレクトリ: %TFS_DIR%
-echo Gitディレクトリ: %GIT_DIR%
+echo Gitディレクトリ: %GIT_REPO_DIR%
 echo.
 
 :: Gitディレクトリに移動
-cd /d "%GIT_DIR%"
+cd /d "%GIT_REPO_DIR%"
 
 :: 現在のブランチを表示
 echo ----------------------------------------
@@ -96,7 +96,7 @@ echo.
 
 :: PowerShellスクリプトを実行
 set "SCRIPT_DIR=%~dp0"
-powershell -NoProfile -ExecutionPolicy Bypass -File "%SCRIPT_DIR%sync_logic.ps1" -TfsDir "%TFS_DIR%" -GitDir "%GIT_DIR%"
+powershell -NoProfile -ExecutionPolicy Bypass -File "%SCRIPT_DIR%sync_logic.ps1" -TfsDir "%TFS_DIR%" -GitDir "%GIT_REPO_DIR%"
 
 if errorlevel 1 (
     echo [エラー] PowerShellスクリプトの実行に失敗しました
