@@ -1,3 +1,22 @@
+<# :
+@echo off
+setlocal
+chcp 65001 >nul
+
+:: 引数チェック
+if "%~1"=="" (
+    echo 使い方: %~nx0 -ComputerName ^<サーバ名^> -UserName ^<ユーザー名^> -BatchPath ^<バッチパス^> [-Arguments ^<引数^>] [-OutputLog ^<ログパス^>] [-UseSSL]
+    echo.
+    echo 例: %~nx0 -ComputerName "192.168.1.100" -UserName "Administrator" -BatchPath "C:\Scripts\test.bat"
+    pause
+    exit /b 1
+)
+
+:: PowerShellスクリプトを実行
+powershell -NoProfile -ExecutionPolicy Bypass -Command "iex ((gc '%~f0') -join \"`n\")" %*
+exit /b %ERRORLEVEL%
+: #> | sv -name _ > $null
+
 <#
 .SYNOPSIS
     リモートWindowsサーバ上でバッチファイルをPowerShell Remotingで実行
@@ -32,19 +51,19 @@
     HTTPS（ポート5986）を使用する場合はこのスイッチを指定
 
 .EXAMPLE
-    .\Invoke-RemoteBatch.ps1 -ComputerName "192.168.1.100" -UserName "Administrator" -BatchPath "C:\Scripts\backup.bat"
+    .\Invoke-RemoteBatch.bat -ComputerName "192.168.1.100" -UserName "Administrator" -BatchPath "C:\Scripts\backup.bat"
 
 .EXAMPLE
     $cred = Get-Credential
-    .\Invoke-RemoteBatch.ps1 -ComputerName "server01" -Credential $cred -BatchPath "C:\Scripts\test.bat" -OutputLog "result.log"
+    .\Invoke-RemoteBatch.bat -ComputerName "server01" -Credential $cred -BatchPath "C:\Scripts\test.bat" -OutputLog "result.log"
 
 .EXAMPLE
     # 引数付きでバッチを実行
-    .\Invoke-RemoteBatch.ps1 -ComputerName "192.168.1.100" -UserName "Administrator" -BatchPath "C:\Scripts\process.bat" -Arguments "param1 param2"
+    .\Invoke-RemoteBatch.bat -ComputerName "192.168.1.100" -UserName "Administrator" -BatchPath "C:\Scripts\process.bat" -Arguments "param1 param2"
 
 .NOTES
-    作成日: 2025-12-01
-    バージョン: 1.0
+    作成日: 2025-12-02
+    バージョン: 2.0
 #>
 
 [CmdletBinding()]
@@ -76,6 +95,70 @@ param(
 
 # エラー時は停止
 $ErrorActionPreference = "Stop"
+
+# UTF-8出力設定
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+
+#region WinRM設定の保存と自動設定
+$originalTrustedHosts = $null
+$winrmConfigChanged = $false
+
+try {
+    Write-Host "WinRM設定を確認中..." -ForegroundColor Cyan
+
+    # 現在のTrustedHostsを取得（復元用）
+    try {
+        $originalTrustedHosts = (Get-Item WSMan:\localhost\Client\TrustedHosts -ErrorAction SilentlyContinue).Value
+        Write-Verbose "現在のTrustedHosts: $originalTrustedHosts"
+    } catch {
+        $originalTrustedHosts = ""
+        Write-Verbose "TrustedHostsは未設定です"
+    }
+
+    # WinRMサービスの起動確認
+    $winrmService = Get-Service -Name WinRM -ErrorAction SilentlyContinue
+    if ($winrmService.Status -ne 'Running') {
+        Write-Host "WinRMサービスを起動中..." -ForegroundColor Yellow
+        Start-Service -Name WinRM -ErrorAction Stop
+        Write-Host "[OK] WinRMサービスを起動しました" -ForegroundColor Green
+    } else {
+        Write-Host "[OK] WinRMサービスは起動済みです" -ForegroundColor Green
+    }
+
+    # 接続先がTrustedHostsに含まれているか確認
+    $needsConfig = $true
+    if ($originalTrustedHosts) {
+        $trustedList = $originalTrustedHosts -split ','
+        if ($trustedList -contains $ComputerName -or $trustedList -contains '*') {
+            Write-Host "[OK] 接続先は既にTrustedHostsに登録されています" -ForegroundColor Green
+            $needsConfig = $false
+        }
+    }
+
+    # 必要に応じてTrustedHostsに追加
+    if ($needsConfig) {
+        Write-Host "接続先をTrustedHostsに追加中..." -ForegroundColor Yellow
+
+        if ([string]::IsNullOrEmpty($originalTrustedHosts)) {
+            # 既存設定なし
+            Set-Item WSMan:\localhost\Client\TrustedHosts -Value $ComputerName -Force
+        } else {
+            # 既存設定あり
+            Set-Item WSMan:\localhost\Client\TrustedHosts -Value "$originalTrustedHosts,$ComputerName" -Force
+        }
+
+        $winrmConfigChanged = $true
+        Write-Host "[OK] TrustedHostsに追加しました: $ComputerName" -ForegroundColor Green
+    }
+
+    Write-Host ""
+} catch {
+    Write-Host "[警告] WinRM設定の自動構成に失敗しました" -ForegroundColor Yellow
+    Write-Host "エラー: $($_.Exception.Message)" -ForegroundColor Yellow
+    Write-Host "手動でWinRM設定を行ってください" -ForegroundColor Yellow
+    Write-Host ""
+}
+#endregion
 
 #region 認証情報の準備
 if ($Credential) {
@@ -121,6 +204,8 @@ if ($UseSSL) {
 }
 Write-Host ""
 
+# WinRM設定復元用のfinallyブロックでメイン処理を囲む
+try {
 try {
     #region リモートセッションの確立
     Write-Host "リモートサーバに接続中..." -ForegroundColor Cyan
@@ -137,7 +222,7 @@ try {
     }
 
     $session = New-PSSession @sessionParams
-    Write-Host "✓ 接続成功" -ForegroundColor Green
+    Write-Host "[OK] 接続成功" -ForegroundColor Green
     Write-Host ""
     #endregion
 
@@ -209,7 +294,7 @@ $($result.Output | Out-String)
 "@
 
         $logContent | Out-File -FilePath $OutputLog -Encoding UTF8
-        Write-Host "✓ ログ保存完了: $OutputLog" -ForegroundColor Green
+        Write-Host "[OK] ログ保存完了: $OutputLog" -ForegroundColor Green
     }
     #endregion
 
@@ -261,4 +346,29 @@ $($result.Output | Out-String)
     }
 
     exit 1
+}
+} finally {
+    #region WinRM設定の復元
+    if ($winrmConfigChanged) {
+        Write-Host ""
+        Write-Host "WinRM設定を復元中..." -ForegroundColor Cyan
+
+        try {
+            if ([string]::IsNullOrEmpty($originalTrustedHosts)) {
+                # 元々空だった場合は空に戻す
+                Set-Item WSMan:\localhost\Client\TrustedHosts -Value "" -Force
+                Write-Host "[OK] TrustedHostsを元の状態（空）に復元しました" -ForegroundColor Green
+            } else {
+                # 元の値に戻す
+                Set-Item WSMan:\localhost\Client\TrustedHosts -Value $originalTrustedHosts -Force
+                Write-Host "[OK] TrustedHostsを元の状態に復元しました" -ForegroundColor Green
+            }
+        } catch {
+            Write-Host "[警告] TrustedHostsの復元に失敗しました" -ForegroundColor Yellow
+            Write-Host "エラー: $($_.Exception.Message)" -ForegroundColor Yellow
+            Write-Host "手動で復元してください: Set-Item WSMan:\localhost\Client\TrustedHosts -Value '$originalTrustedHosts' -Force" -ForegroundColor Yellow
+        }
+    }
+    #endregion
+}
 }

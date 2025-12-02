@@ -8,15 +8,16 @@ exit /b %ERRORLEVEL%
 
 <#
 .SYNOPSIS
-    リモートWindowsサーバ上でバッチファイルをWinRMで実行（ハイブリッド版）
+    リモートWindowsサーバ上でバッチファイルをPowerShell Remotingで実行（スタンドアローン版）
 
 .DESCRIPTION
-    PowerShellのInvoke-Commandを使用してリモート実行し、結果を取得します。
-    WinRM設定を自動的に構成・復元します。
+    設定を内部に記述できるスタンドアローン版です。
+    ファイル内の「設定セクション」を編集して、ダブルクリックで実行できます。
+    PowerShell Remotingを使用してリモートサーバでバッチファイルを実行します。
 
 .NOTES
     作成日: 2025-12-02
-    バージョン: 3.0
+    バージョン: 2.0
 
     使い方:
     1. 下記の「■ 設定セクション」を編集
@@ -27,23 +28,32 @@ exit /b %ERRORLEVEL%
 # ■ 設定セクション（ここを編集してください）
 # ==============================================================================
 
+# リモートサーバの設定
 $Config = @{
     # リモートサーバのコンピュータ名またはIPアドレス
     ComputerName = "192.168.1.100"
 
-    # リモートサーバの管理者ユーザー名
+    # 認証情報（以下のいずれかを設定）
+    # 方法1: ユーザー名とパスワードを直接指定（セキュリティ注意）
     UserName = "Administrator"
+    Password = ""  # 空の場合は実行時に入力を求められます
 
-    # パスワード（空の場合は実行時に入力を求められます）
-    Password = ""
+    # 方法2: 実行時に認証情報を入力（UserNameを空にする）
+    # UserName = ""
+    # Password = ""
 
-    # リモートサーバで実行するバッチファイルのフルパス
-    BatchPath = "C:\Scripts\target_script.bat"
+    # 実行するバッチファイルのパス（リモートサーバ上のパス）
+    BatchPath = "C:\Scripts\test.bat"
 
-    # 実行結果を保存するローカルファイル（空の場合は自動生成）
+    # バッチファイルに渡す引数（オプション、不要な場合は空文字）
+    Arguments = ""
+
+    # 実行結果を保存するローカルファイルパス
+    # 空の場合は自動的に日時付きファイル名で保存されます
+    # 例: RemoteBatch_20250102_153045.log
     OutputLog = ""
 
-    # HTTPS接続を使用する場合は $true
+    # SSL/HTTPS接続を使用する場合は $true（通常は $false）
     UseSSL = $false
 }
 
@@ -51,21 +61,25 @@ $Config = @{
 # ■ メイン処理（以下は編集不要）
 # ==============================================================================
 
+# エラー時は停止
 $ErrorActionPreference = "Stop"
+
+# UTF-8出力設定
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
-# 出力ログファイルのデフォルト設定
+# 出力ログファイルのデフォルト設定（空の場合）
 if (-not $Config.OutputLog) {
     $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
     $scriptDir = Split-Path -Path $MyInvocation.MyCommand.Path -Parent
     if (-not $scriptDir) {
         $scriptDir = Get-Location
     }
-    $Config.OutputLog = Join-Path $scriptDir "remote_exec_output_$timestamp.log"
+    $Config.OutputLog = Join-Path $scriptDir "RemoteBatch_$timestamp.log"
 }
 
+# ヘッダー表示
 Write-Host "========================================" -ForegroundColor Cyan
-Write-Host "リモートバッチ実行ツール (WinRM版)" -ForegroundColor Cyan
+Write-Host "PowerShell Remoting - リモートバッチ実行" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 
@@ -110,8 +124,10 @@ try {
         Write-Host "接続先をTrustedHostsに追加中..." -ForegroundColor Yellow
 
         if ([string]::IsNullOrEmpty($originalTrustedHosts)) {
+            # 既存設定なし
             Set-Item WSMan:\localhost\Client\TrustedHosts -Value $Config.ComputerName -Force
         } else {
+            # 既存設定あり
             Set-Item WSMan:\localhost\Client\TrustedHosts -Value "$originalTrustedHosts,$($Config.ComputerName)" -Force
         }
 
@@ -130,15 +146,19 @@ try {
 
 #region 認証情報の準備
 if ($Config.UserName) {
+    # UserNameが指定されている場合
     if ($Config.Password) {
+        # パスワードが指定されている場合
         $securePassword = ConvertTo-SecureString $Config.Password -AsPlainText -Force
         $Credential = New-Object System.Management.Automation.PSCredential($Config.UserName, $securePassword)
     } else {
+        # パスワードが指定されていない場合は入力を求める
         Write-Host "ユーザー名: $($Config.UserName)" -ForegroundColor Cyan
         $securePassword = Read-Host "パスワードを入力してください" -AsSecureString
         $Credential = New-Object System.Management.Automation.PSCredential($Config.UserName, $securePassword)
     }
 } else {
+    # 認証情報が何も指定されていない場合
     Write-Host "認証情報を入力してください" -ForegroundColor Yellow
     $Credential = Get-Credential -Message "リモートサーバの認証情報を入力"
 }
@@ -148,10 +168,16 @@ if ($Config.UserName) {
 $sessionOption = New-PSSessionOption -SkipCACheck -SkipCNCheck
 #endregion
 
+# 設定情報を表示
 Write-Host "リモートサーバ: $($Config.ComputerName)" -ForegroundColor White
 Write-Host "実行ユーザー  : $($Credential.UserName)" -ForegroundColor White
 Write-Host "実行ファイル  : $($Config.BatchPath)" -ForegroundColor White
-Write-Host "出力ログ      : $($Config.OutputLog)" -ForegroundColor White
+if ($Config.Arguments) {
+    Write-Host "引数          : $($Config.Arguments)" -ForegroundColor White
+}
+if ($Config.OutputLog) {
+    Write-Host "出力ログ      : $($Config.OutputLog)" -ForegroundColor White
+}
 Write-Host "プロトコル    : " -NoNewline -ForegroundColor White
 if ($Config.UseSSL) {
     Write-Host "HTTPS (ポート 5986)" -ForegroundColor Green
@@ -163,6 +189,7 @@ Write-Host ""
 # WinRM設定復元用のfinallyブロックでメイン処理を囲む
 try {
 try {
+    #region リモートセッションの確立
     Write-Host "リモートサーバに接続中..." -ForegroundColor Cyan
 
     $sessionParams = @{
@@ -179,29 +206,40 @@ try {
     $session = New-PSSession @sessionParams
     Write-Host "[OK] 接続成功" -ForegroundColor Green
     Write-Host ""
+    #endregion
 
+    #region バッチファイルの実行
     Write-Host "========================================" -ForegroundColor Yellow
-    Write-Host "バッチファイル実行結果" -ForegroundColor Yellow
+    Write-Host "バッチファイル実行中..." -ForegroundColor Yellow
     Write-Host "========================================" -ForegroundColor Yellow
     Write-Host ""
 
     $scriptBlock = {
-        param($batchPath)
+        param($batchPath, $batchArgs)
 
+        # バッチファイルの存在確認
         if (-not (Test-Path $batchPath)) {
             throw "バッチファイルが見つかりません: $batchPath"
         }
 
-        $output = & cmd.exe /c $batchPath 2>&1
+        # バッチファイルを実行
+        if ($batchArgs) {
+            $output = & cmd.exe /c "$batchPath $batchArgs" 2>&1
+        } else {
+            $output = & cmd.exe /c $batchPath 2>&1
+        }
+
+        # 終了コードを保存
         $exitCode = $LASTEXITCODE
 
+        # 結果を返す
         @{
             Output = $output
             ExitCode = $exitCode
         }
     }
 
-    $result = Invoke-Command -Session $session -ScriptBlock $scriptBlock -ArgumentList $Config.BatchPath
+    $result = Invoke-Command -Session $session -ScriptBlock $scriptBlock -ArgumentList $Config.BatchPath, $Config.Arguments
 
     # 出力を表示
     $result.Output | ForEach-Object {
@@ -213,20 +251,22 @@ try {
     Write-Host "実行完了" -ForegroundColor Green
     Write-Host "終了コード: $($result.ExitCode)" -ForegroundColor $(if ($result.ExitCode -eq 0) { "Green" } else { "Red" })
     Write-Host "========================================" -ForegroundColor Yellow
+    #endregion
 
-    # ログファイル保存
+    #region ログファイル保存
     if ($Config.OutputLog) {
         Write-Host ""
         Write-Host "実行結果をログファイルに保存中..." -ForegroundColor Cyan
 
         $logContent = @"
 ========================================
-リモートバッチ実行結果 (WinRM版)
+PowerShell Remoting - リモートバッチ実行結果
 ========================================
 実行日時: $(Get-Date -Format "yyyy/MM/dd HH:mm:ss")
 リモートサーバ: $($Config.ComputerName)
 実行ユーザー: $($Credential.UserName)
 実行ファイル: $($Config.BatchPath)
+引数: $($Config.Arguments)
 終了コード: $($result.ExitCode)
 
 ========================================
@@ -238,11 +278,15 @@ $($result.Output | Out-String)
         $logContent | Out-File -FilePath $Config.OutputLog -Encoding UTF8
         Write-Host "[OK] ログ保存完了: $($Config.OutputLog)" -ForegroundColor Green
     }
+    #endregion
 
+    #region セッションのクローズ
     Remove-PSSession -Session $session
     Write-Host ""
     Write-Host "処理が正常に完了しました。" -ForegroundColor Green
+    #endregion
 
+    # 終了コードを返す
     $exitCode = $result.ExitCode
 
 } catch {
@@ -278,6 +322,7 @@ $($result.Output | Out-String)
     Write-Host "   Test-WSMan -ComputerName $($Config.ComputerName)" -ForegroundColor Gray
     Write-Host ""
 
+    # セッションが残っている場合はクリーンアップ
     if ($session) {
         Remove-PSSession -Session $session -ErrorAction SilentlyContinue
     }
@@ -292,9 +337,11 @@ $($result.Output | Out-String)
 
         try {
             if ([string]::IsNullOrEmpty($originalTrustedHosts)) {
+                # 元々空だった場合は空に戻す
                 Set-Item WSMan:\localhost\Client\TrustedHosts -Value "" -Force
                 Write-Host "[OK] TrustedHostsを元の状態（空）に復元しました" -ForegroundColor Green
             } else {
+                # 元の値に戻す
                 Set-Item WSMan:\localhost\Client\TrustedHosts -Value $originalTrustedHosts -Force
                 Write-Host "[OK] TrustedHostsを元の状態に復元しました" -ForegroundColor Green
             }
@@ -308,6 +355,7 @@ $($result.Output | Out-String)
 }
 }
 
+# 実行後にウィンドウを閉じないようにする
 Write-Host ""
 Write-Host "Enterキーを押して終了..." -ForegroundColor Gray
 $null = Read-Host
