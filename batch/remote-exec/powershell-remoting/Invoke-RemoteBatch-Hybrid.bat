@@ -2,7 +2,7 @@
 @echo off
 setlocal
 chcp 65001 >nul
-powershell -NoProfile -ExecutionPolicy Bypass -Command "iex ((gc '%~f0' | select -skip 6) -join \"`n\")"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "iex ((gc '%~f0') -join \"`n\")"
 exit /b %ERRORLEVEL%
 : #> | sv -name _ > $null
 
