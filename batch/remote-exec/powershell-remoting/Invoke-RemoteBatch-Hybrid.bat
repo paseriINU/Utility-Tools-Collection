@@ -5,7 +5,7 @@ chcp 65001 >nul
 set "SCRIPT_DIR=%~dp0"
 powershell -NoProfile -ExecutionPolicy Bypass -Command "$env:SCRIPT_DIR='%SCRIPT_DIR%'; iex ((gc '%~f0') -join \"`n\")"
 exit /b %ERRORLEVEL%
-: #> | sv -name _ > $null
+: #>
 
 <#
 .SYNOPSIS
