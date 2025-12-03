@@ -1,7 +1,6 @@
 <# :
 @echo off
 setlocal
-chcp 65001 >nul
 
 rem 管理者権限チェック
 net session >nul 2>&1
