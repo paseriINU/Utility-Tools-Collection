@@ -2,8 +2,7 @@
 @echo off
 setlocal
 chcp 65001 >nul
-set "SCRIPT_DIR=%~dp0"
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$env:SCRIPT_DIR='%SCRIPT_DIR%'; iex ((gc '%~f0') -join \"`n\")"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$scriptDir=('%~dp0' -replace '\\$',''); iex ((gc '%~f0') -join \"`n\")"
 exit /b %ERRORLEVEL%
 : #>
 
@@ -64,13 +63,10 @@ $ErrorActionPreference = "Stop"
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
 # 出力ログファイル名を自動生成（日時付き）
-# バッチファイルのディレクトリを環境変数から取得
+# $scriptDir はバッチ起動時にコマンドラインから設定されます
 $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
-if ($env:SCRIPT_DIR) {
-    # バッチファイルから渡された場合
-    $scriptDir = $env:SCRIPT_DIR.TrimEnd('\')
-} else {
-    # PowerShellから直接実行された場合（通常は起こらない）
+if (-not $scriptDir) {
+    # フォールバック: PowerShellから直接実行された場合
     $scriptDir = $PSScriptRoot
     if (-not $scriptDir) {
         $scriptDir = (Get-Location).Path
