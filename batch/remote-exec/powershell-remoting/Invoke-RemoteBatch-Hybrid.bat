@@ -48,11 +48,6 @@ $Config = @{
     # バッチファイルに渡す引数（オプション、不要な場合は空文字）
     Arguments = ""
 
-    # 実行結果を保存するローカルファイルパス
-    # 空の場合は自動的に日時付きファイル名で保存されます
-    # 例: RemoteBatch_20250102_153045.log
-    OutputLog = ""
-
     # SSL/HTTPS接続を使用する場合は $true（通常は $false）
     UseSSL = $false
 }
@@ -67,15 +62,13 @@ $ErrorActionPreference = "Stop"
 # UTF-8出力設定
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
-# 出力ログファイルのデフォルト設定（空の場合）
-if ([string]::IsNullOrEmpty($Config.OutputLog)) {
-    $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
-    $scriptDir = Split-Path -Path $MyInvocation.MyCommand.Path -Parent
-    if (-not $scriptDir) {
-        $scriptDir = Get-Location
-    }
-    $Config.OutputLog = Join-Path $scriptDir "RemoteBatch_$timestamp.log"
+# 出力ログファイル名を自動生成（日時付き）
+$timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
+$scriptDir = Split-Path -Path $MyInvocation.MyCommand.Path -Parent
+if (-not $scriptDir) {
+    $scriptDir = Get-Location
 }
+$OutputLog = Join-Path $scriptDir "RemoteBatch_$timestamp.log"
 
 # ヘッダー表示
 Write-Host "========================================" -ForegroundColor Cyan
@@ -203,9 +196,7 @@ Write-Host "実行ファイル  : $($Config.BatchPath)" -ForegroundColor White
 if ($Config.Arguments) {
     Write-Host "引数          : $($Config.Arguments)" -ForegroundColor White
 }
-if ($Config.OutputLog) {
-    Write-Host "出力ログ      : $($Config.OutputLog)" -ForegroundColor White
-}
+Write-Host "出力ログ      : $OutputLog" -ForegroundColor White
 Write-Host "プロトコル    : " -NoNewline -ForegroundColor White
 if ($Config.UseSSL) {
     Write-Host "HTTPS (ポート 5986)" -ForegroundColor Green
@@ -281,11 +272,10 @@ try {
     #endregion
 
     #region ログファイル保存
-    if ($Config.OutputLog) {
-        Write-Host ""
-        Write-Host "実行結果をログファイルに保存中..." -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "実行結果をログファイルに保存中..." -ForegroundColor Cyan
 
-        $logContent = @"
+    $logContent = @"
 ========================================
 PowerShell Remoting - リモートバッチ実行結果
 ========================================
@@ -302,9 +292,8 @@ PowerShell Remoting - リモートバッチ実行結果
 $($result.Output | Out-String)
 "@
 
-        $logContent | Out-File -FilePath $Config.OutputLog -Encoding UTF8
-        Write-Host "[OK] ログ保存完了: $($Config.OutputLog)" -ForegroundColor Green
-    }
+    $logContent | Out-File -FilePath $OutputLog -Encoding UTF8
+    Write-Host "[OK] ログ保存完了: $OutputLog" -ForegroundColor Green
     #endregion
 
     #region セッションのクローズ
