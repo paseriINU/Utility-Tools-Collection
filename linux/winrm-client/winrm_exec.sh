@@ -30,8 +30,12 @@ WINRM_PORT="${WINRM_PORT:-5985}"                 # WinRMポート（HTTP: 5985, 
 WINRM_USER="${WINRM_USER:-Administrator}"        # Windowsユーザー名
 WINRM_PASS="${WINRM_PASS:-YourPassword}"         # Windowsパスワード
 
+# 環境フォルダ名（実行時に選択可能）
+ENV_FOLDER="${ENV_FOLDER:-TST1T}"                # デフォルト環境（TST1T または TST2T）
+
 # 実行するバッチファイル（Windows側のパス）
-BATCH_FILE_PATH="${BATCH_FILE_PATH:-C:\\Scripts\\test.bat}"
+# {ENV} は選択した環境フォルダ名に置換されます
+BATCH_FILE_PATH="${BATCH_FILE_PATH:-C:\\Scripts\\{ENV}\\test.bat}"
 
 # または直接コマンドを指定
 DIRECT_COMMAND="${DIRECT_COMMAND:-}"  # 例: "echo Hello from WinRM"
@@ -74,24 +78,34 @@ log_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
-# 必要なコマンドの確認
-check_requirements() {
-    local missing=0
+# 環境選択メニュー
+select_environment() {
+    echo "======================================"
+    echo "  環境選択"
+    echo "======================================"
+    echo "1. TST1T"
+    echo "2. TST2T"
+    echo "======================================"
+    echo -n "環境を選択してください (1 または 2) [デフォルト: 1]: "
 
-    if ! command -v curl &> /dev/null; then
-        log_error "curlコマンドが見つかりません"
-        log_error "Red Hat系: sudo yum install curl"
-        missing=1
-    fi
+    read -r selection
 
-    if ! command -v base64 &> /dev/null; then
-        log_error "base64コマンドが見つかりません"
-        missing=1
-    fi
+    case "$selection" in
+        1|"")
+            ENV_FOLDER="TST1T"
+            ;;
+        2)
+            ENV_FOLDER="TST2T"
+            ;;
+        *)
+            log_error "無効な選択です。1 または 2 を入力してください。"
+            return 1
+            ;;
+    esac
 
-    if [ $missing -eq 1 ]; then
-        exit 1
-    fi
+    log_success "選択された環境: $ENV_FOLDER"
+    echo
+    return 0
 }
 
 # WinRMエンドポイントURL生成
@@ -164,7 +178,42 @@ send_soap_request() {
 
     if [ $exit_code -ne 0 ]; then
         log_error "curlコマンドが失敗しました (終了コード: $exit_code)"
-        log_error "レスポンス: $response"
+
+        # エラー内容の詳細表示
+        case $exit_code in
+            6)
+                log_error "ホスト名の解決に失敗しました: $WINRM_HOST"
+                log_error "ホスト名またはIPアドレスを確認してください"
+                ;;
+            7)
+                log_error "接続に失敗しました: ${WINRM_HOST}:${WINRM_PORT}"
+                log_error "ホストが起動しているか、ファイアウォール設定を確認してください"
+                ;;
+            28)
+                log_error "タイムアウトしました (${TIMEOUT}秒)"
+                log_error "TIMEOUT値を増やすか、ネットワーク接続を確認してください"
+                ;;
+            52)
+                log_error "サーバーから応答がありませんでした"
+                log_error "WinRMサービスが起動しているか確認してください"
+                ;;
+            *)
+                log_error "curl エラー詳細: $response"
+                ;;
+        esac
+        return 1
+    fi
+
+    # HTTPエラーレスポンスのチェック
+    if echo "$response" | grep -q "HTTP/1.1 401"; then
+        log_error "認証に失敗しました"
+        log_error "ユーザー名とパスワードを確認してください"
+        return 1
+    fi
+
+    if echo "$response" | grep -q "HTTP/1.1 500"; then
+        log_error "サーバー内部エラーが発生しました"
+        log_error "WinRM設定またはコマンド内容を確認してください"
         return 1
     fi
 
@@ -230,6 +279,7 @@ create_shell() {
 
     if [ $? -ne 0 ]; then
         log_error "シェル作成に失敗しました"
+        log_error "WinRM接続設定を確認してください"
         return 1
     fi
 
@@ -238,10 +288,14 @@ create_shell() {
 
     if [ -z "$shell_id" ]; then
         log_error "ShellIDの取得に失敗しました"
+        log_error "サーバーからの応答が不正です"
+        if [ "$DEBUG" != "true" ]; then
+            log_error "詳細を確認するには DEBUG=true を設定してください"
+        fi
         return 1
     fi
 
-    log_success "シェル作成成功: $shell_id"
+    echo -e "${GREEN}[SUCCESS]${NC} シェル作成成功: $shell_id"
     echo "$shell_id"
 }
 
@@ -287,6 +341,7 @@ run_command() {
 
     if [ $? -ne 0 ]; then
         log_error "コマンド実行に失敗しました"
+        log_error "実行コマンド: $command"
         return 1
     fi
 
@@ -295,10 +350,14 @@ run_command() {
 
     if [ -z "$command_id" ]; then
         log_error "CommandIDの取得に失敗しました"
+        log_error "コマンドの構文が正しいか確認してください"
+        if [ "$DEBUG" != "true" ]; then
+            log_error "詳細を確認するには DEBUG=true を設定してください"
+        fi
         return 1
     fi
 
-    log_success "コマンド実行開始: $command_id"
+    echo -e "${GREEN}[SUCCESS]${NC} コマンド実行開始: $command_id"
     echo "$command_id"
 }
 
@@ -351,6 +410,7 @@ get_command_output() {
 
         if [ $? -ne 0 ]; then
             log_error "出力取得に失敗しました"
+            log_error "コマンド実行中にエラーが発生した可能性があります"
             return 1
         fi
 
@@ -383,7 +443,7 @@ get_command_output() {
         log_warn "コマンド完了待機がタイムアウトしました"
     fi
 
-    log_success "コマンド完了 (終了コード: $exit_code)"
+    echo -e "${GREEN}[SUCCESS]${NC} コマンド完了 (終了コード: $exit_code)"
 
     # 出力を一時ファイルに保存（改行を保持）
     echo "$stdout_all" > /tmp/winrm_stdout_$$
@@ -421,7 +481,7 @@ delete_shell() {
 
     log_info "シェル削除中..."
     send_soap_request "$soap_envelope" > /dev/null
-    log_success "シェル削除完了"
+    echo -e "${GREEN}[SUCCESS]${NC} シェル削除完了"
 }
 
 # メイン処理
@@ -432,8 +492,10 @@ main() {
     echo "======================================"
     echo
 
-    # 必要なコマンドの確認
-    check_requirements
+    # 環境選択
+    if ! select_environment; then
+        exit 1
+    fi
 
     log_info "接続先: $(generate_endpoint)"
     log_info "ユーザー: $WINRM_USER"
@@ -441,16 +503,20 @@ main() {
     # 実行するコマンドの決定
     local command=""
     if [ -n "$DIRECT_COMMAND" ]; then
-        command="$DIRECT_COMMAND"
-        log_info "直接コマンド実行: $command"
+        # 直接コマンドの場合も {ENV} を置換
+        command="${DIRECT_COMMAND//\{ENV\}/$ENV_FOLDER}"
+        log_info "バッチファイル実行: ${DIRECT_COMMAND//\{ENV\}/$ENV_FOLDER}"
     elif [ -n "$BATCH_FILE_PATH" ]; then
-        command="cmd.exe /c \"$BATCH_FILE_PATH\""
-        log_info "バッチファイル実行: $BATCH_FILE_PATH"
+        # バッチファイルパスの {ENV} を選択した環境に置換
+        local batch_path="${BATCH_FILE_PATH//\{ENV\}/$ENV_FOLDER}"
+        command="cmd.exe /c \"$batch_path\""
+        log_info "バッチファイル実行: $batch_path"
     else
         log_error "実行するコマンドまたはバッチファイルが指定されていません"
         log_error "スクリプト内のDIRECT_COMMANDまたはBATCH_FILE_PATHを設定してください"
         exit 1
     fi
+    echo
 
     # 一時ファイルのクリーンアップ
     trap "rm -f /tmp/winrm_stdout_$$ /tmp/winrm_stderr_$$ /tmp/winrm_exitcode_$$" EXIT
@@ -461,6 +527,7 @@ main() {
         log_error "処理を中断します"
         exit 1
     fi
+    echo
 
     # コマンド実行
     local command_id=$(run_command "$shell_id" "$command")
@@ -469,10 +536,12 @@ main() {
         log_error "処理を中断します"
         exit 1
     fi
+    echo
 
     # 出力取得
     get_command_output "$shell_id" "$command_id"
     local get_output_result=$?
+    echo
 
     # シェル削除
     delete_shell "$shell_id"
