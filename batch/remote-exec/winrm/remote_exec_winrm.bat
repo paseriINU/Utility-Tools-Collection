@@ -160,8 +160,7 @@ if ($Config.UseSSL) {
 }
 Write-Host ""
 
-# WinRM設定復元用のfinallyブロックでメイン処理を囲む
-try {
+# メイン処理（WinRM設定復元用のfinallyブロック付き）
 try {
     Write-Host "リモートサーバに接続中..." -ForegroundColor Cyan
 
@@ -305,7 +304,6 @@ $($result.Output | Out-String)
         }
     }
     #endregion
-}
 }
 
 Write-Host ""
