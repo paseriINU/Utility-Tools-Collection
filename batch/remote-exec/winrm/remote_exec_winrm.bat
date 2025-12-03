@@ -11,7 +11,9 @@ if %errorLevel% neq 0 (
 )
 
 powershell -NoProfile -ExecutionPolicy Bypass -Command "$scriptDir=('%~dp0' -replace '\\$',''); iex ((gc '%~f0') -join \"`n\")"
-exit /b %ERRORLEVEL%
+set EXITCODE=%ERRORLEVEL%
+pause
+exit /b %EXITCODE%
 : #>
 
 <#
@@ -67,7 +69,20 @@ if (-not $scriptDir) {
         $scriptDir = (Get-Location).Path
     }
 }
-$OutputLog = "$scriptDir\remote_exec_output_$timestamp.log"
+
+# ネットワークパス対応: UNCパスの場合はローカルのTempフォルダを使用
+if ($scriptDir -like "\\*") {
+    $logDir = "$env:TEMP\RemoteExecLogs"
+} else {
+    $logDir = "$scriptDir\log"
+}
+
+# logフォルダが存在しない場合は作成
+if (-not (Test-Path $logDir)) {
+    New-Item -ItemType Directory -Path $logDir -Force | Out-Null
+}
+
+$OutputLog = "$logDir\remote_exec_output_$timestamp.log"
 
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "リモートバッチ実行ツール (WinRM版)" -ForegroundColor Cyan
@@ -82,6 +97,17 @@ $winrmServiceWasStarted = $false
 try {
     Write-Host "WinRM設定を確認中..." -ForegroundColor Cyan
 
+    # WinRMサービスの起動確認（TrustedHosts取得前に実行）
+    $winrmService = Get-Service -Name WinRM -ErrorAction SilentlyContinue
+    if ($winrmService.Status -ne 'Running') {
+        Write-Host "  WinRMサービスを起動中..." -ForegroundColor Yellow
+        Start-Service -Name WinRM -ErrorAction Stop -Confirm:$false
+        $winrmServiceWasStarted = $true
+        Write-Host "  [OK] WinRMサービスを起動しました（終了時に停止します）" -ForegroundColor Green
+    } else {
+        Write-Host "  [OK] WinRMサービスは起動済みです" -ForegroundColor Green
+    }
+
     # 現在のTrustedHostsを取得（復元用）
     try {
         $originalTrustedHosts = (Get-Item WSMan:\localhost\Client\TrustedHosts -ErrorAction SilentlyContinue).Value
@@ -91,30 +117,20 @@ try {
         Write-Verbose "TrustedHostsは未設定です"
     }
 
-    # WinRMサービスの起動確認
-    $winrmService = Get-Service -Name WinRM -ErrorAction SilentlyContinue
-    if ($winrmService.Status -ne 'Running') {
-        Write-Host "WinRMサービスを起動中..." -ForegroundColor Yellow
-        Start-Service -Name WinRM -ErrorAction Stop
-        $winrmServiceWasStarted = $true
-        Write-Host "[OK] WinRMサービスを起動しました（終了時に停止します）" -ForegroundColor Green
-    } else {
-        Write-Host "[OK] WinRMサービスは起動済みです" -ForegroundColor Green
-    }
-
     # 接続先がTrustedHostsに含まれているか確認
     $needsConfig = $true
     if ($originalTrustedHosts) {
         $trustedList = $originalTrustedHosts -split ','
         if ($trustedList -contains $Config.ComputerName -or $trustedList -contains '*') {
-            Write-Host "[OK] 接続先は既にTrustedHostsに登録されています" -ForegroundColor Green
+            Write-Host "  [OK] 接続先は既にTrustedHostsに登録されています" -ForegroundColor Green
             $needsConfig = $false
         }
     }
 
     # 必要に応じてTrustedHostsに追加
     if ($needsConfig) {
-        Write-Host "接続先をTrustedHostsに追加中..." -ForegroundColor Yellow
+        Write-Host ""
+        Write-Host "  接続先をTrustedHostsに追加中..." -ForegroundColor Yellow
 
         if ([string]::IsNullOrEmpty($originalTrustedHosts)) {
             Set-Item WSMan:\localhost\Client\TrustedHosts -Value $Config.ComputerName -Force -Confirm:$false
@@ -123,7 +139,7 @@ try {
         }
 
         $winrmConfigChanged = $true
-        Write-Host "[OK] TrustedHostsに追加しました: $($Config.ComputerName)" -ForegroundColor Green
+        Write-Host "  [OK] TrustedHostsに追加しました: $($Config.ComputerName)" -ForegroundColor Green
     }
 
     Write-Host ""
@@ -138,8 +154,6 @@ try {
     Write-Host ""
     Write-Host "このスクリプトは管理者権限で実行する必要があります。" -ForegroundColor Yellow
     Write-Host ""
-    Write-Host "Enterキーを押して終了..." -ForegroundColor Gray
-    $null = Read-Host
     exit 1
 }
 #endregion
@@ -328,7 +342,7 @@ $($result.Output | Out-String)
         Write-Host "WinRMサービスを停止中..." -ForegroundColor Cyan
 
         try {
-            Stop-Service -Name WinRM -Force -ErrorAction Stop
+            Stop-Service -Name WinRM -Force -Confirm:$false -ErrorAction Stop
             Write-Host "[OK] WinRMサービスを元の状態（停止）に復元しました" -ForegroundColor Green
         } catch {
             Write-Host "[警告] WinRMサービスの停止に失敗しました" -ForegroundColor Yellow
@@ -338,8 +352,6 @@ $($result.Output | Out-String)
     #endregion
 }
 
+# バッチ側でpauseが実行されるため、ここでは何もしない
 Write-Host ""
-Write-Host "Enterキーを押して終了..." -ForegroundColor Gray
-$null = Read-Host
-
 exit $exitCode

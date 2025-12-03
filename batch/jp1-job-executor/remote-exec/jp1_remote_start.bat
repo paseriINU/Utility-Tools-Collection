@@ -11,7 +11,9 @@ if %errorLevel% neq 0 (
 )
 
 powershell -NoProfile -ExecutionPolicy Bypass -Command "$scriptDir=('%~dp0' -replace '\\$',''); iex ((gc '%~f0') -join \"`n\")"
-exit /b %ERRORLEVEL%
+set EXITCODE=%ERRORLEVEL%
+pause
+exit /b %EXITCODE%
 : #>
 
 <#
@@ -84,6 +86,17 @@ $winrmServiceWasStarted = $false
 try {
     Write-Host "WinRM設定を確認中..." -ForegroundColor Cyan
 
+    # WinRMサービスの起動確認（TrustedHosts取得前に実行）
+    $winrmService = Get-Service -Name WinRM -ErrorAction SilentlyContinue
+    if ($winrmService.Status -ne 'Running') {
+        Write-Host "  WinRMサービスを起動中..." -ForegroundColor Yellow
+        Start-Service -Name WinRM -ErrorAction Stop -Confirm:$false
+        $winrmServiceWasStarted = $true
+        Write-Host "  [OK] WinRMサービスを起動しました（終了時に停止します）" -ForegroundColor Green
+    } else {
+        Write-Host "  [OK] WinRMサービスは起動済みです" -ForegroundColor Green
+    }
+
     # 現在のTrustedHostsを取得
     try {
         $originalTrustedHosts = (Get-Item WSMan:\localhost\Client\TrustedHosts -ErrorAction SilentlyContinue).Value
@@ -93,30 +106,20 @@ try {
         Write-Verbose "TrustedHostsは未設定です"
     }
 
-    # WinRMサービスの起動確認
-    $winrmService = Get-Service -Name WinRM -ErrorAction SilentlyContinue
-    if ($winrmService.Status -ne 'Running') {
-        Write-Host "WinRMサービスを起動中..." -ForegroundColor Yellow
-        Start-Service -Name WinRM -ErrorAction Stop
-        $winrmServiceWasStarted = $true
-        Write-Host "[OK] WinRMサービスを起動しました（終了時に停止します）" -ForegroundColor Green
-    } else {
-        Write-Host "[OK] WinRMサービスは起動済みです" -ForegroundColor Green
-    }
-
     # 接続先がTrustedHostsに含まれているか確認
     $needsConfig = $true
     if ($originalTrustedHosts) {
         $trustedList = $originalTrustedHosts -split ','
         if ($trustedList -contains $Config.JP1Server -or $trustedList -contains '*') {
-            Write-Host "[OK] 接続先は既にTrustedHostsに登録されています" -ForegroundColor Green
+            Write-Host "  [OK] 接続先は既にTrustedHostsに登録されています" -ForegroundColor Green
             $needsConfig = $false
         }
     }
 
     # 必要に応じてTrustedHostsに追加
     if ($needsConfig) {
-        Write-Host "接続先をTrustedHostsに追加中..." -ForegroundColor Yellow
+        Write-Host ""
+        Write-Host "  接続先をTrustedHostsに追加中..." -ForegroundColor Yellow
 
         if ([string]::IsNullOrEmpty($originalTrustedHosts)) {
             Set-Item WSMan:\localhost\Client\TrustedHosts -Value $Config.JP1Server -Force -Confirm:$false
@@ -125,7 +128,7 @@ try {
         }
 
         $winrmConfigChanged = $true
-        Write-Host "[OK] TrustedHostsに追加しました: $($Config.JP1Server)" -ForegroundColor Green
+        Write-Host "  [OK] TrustedHostsに追加しました: $($Config.JP1Server)" -ForegroundColor Green
     }
 
     Write-Host ""
@@ -140,8 +143,6 @@ try {
     Write-Host ""
     Write-Host "このスクリプトは管理者権限で実行する必要があります。" -ForegroundColor Yellow
     Write-Host ""
-    Write-Host "Enterキーを押して終了..." -ForegroundColor Gray
-    $null = Read-Host
     exit 1
 }
 #endregion
@@ -166,8 +167,6 @@ $confirmation = Read-Host
 if ($confirmation -ne "Y" -and $confirmation -ne "y") {
     Write-Host "処理をキャンセルしました。" -ForegroundColor Yellow
     Write-Host ""
-    Write-Host "Enterキーを押して終了..." -ForegroundColor Gray
-    $null = Read-Host
     exit 0
 }
 
@@ -190,8 +189,6 @@ if ($Config.RemoteUser) {
 if ($null -eq $Credential) {
     Write-Host "[エラー] 認証情報の入力がキャンセルされました。" -ForegroundColor Red
     Write-Host ""
-    Write-Host "Enterキーを押して終了..." -ForegroundColor Gray
-    $null = Read-Host
     exit 1
 }
 #endregion
@@ -326,7 +323,7 @@ try {
         Write-Host "WinRMサービスを停止中..." -ForegroundColor Cyan
 
         try {
-            Stop-Service -Name WinRM -Force -ErrorAction Stop
+            Stop-Service -Name WinRM -Force -Confirm:$false -ErrorAction Stop
             Write-Host "[OK] WinRMサービスを元の状態（停止）に復元しました" -ForegroundColor Green
         } catch {
             Write-Host "[警告] WinRMサービスの停止に失敗しました" -ForegroundColor Yellow
@@ -336,8 +333,6 @@ try {
     #endregion
 }
 
+# バッチ側でpauseが実行されるため、ここでは何もしない
 Write-Host ""
-Write-Host "Enterキーを押して終了..." -ForegroundColor Gray
-$null = Read-Host
-
 exit $exitCode
