@@ -2,7 +2,8 @@
 @echo off
 setlocal
 chcp 65001 >nul
-powershell -NoProfile -ExecutionPolicy Bypass -Command "iex ((gc '%~f0') -join \"`n\")"
+set "SCRIPT_DIR=%~dp0"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$env:SCRIPT_DIR='%SCRIPT_DIR%'; iex ((gc '%~f0') -join \"`n\")"
 exit /b %ERRORLEVEL%
 : #> | sv -name _ > $null
 
@@ -63,12 +64,19 @@ $ErrorActionPreference = "Stop"
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
 # 出力ログファイル名を自動生成（日時付き）
+# バッチファイルのディレクトリを環境変数から取得
 $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
-$scriptDir = Split-Path -Path $MyInvocation.MyCommand.Path -Parent
-if (-not $scriptDir) {
-    $scriptDir = Get-Location
+if ($env:SCRIPT_DIR) {
+    # バッチファイルから渡された場合
+    $scriptDir = $env:SCRIPT_DIR.TrimEnd('\')
+} else {
+    # PowerShellから直接実行された場合（通常は起こらない）
+    $scriptDir = $PSScriptRoot
+    if (-not $scriptDir) {
+        $scriptDir = (Get-Location).Path
+    }
 }
-$OutputLog = Join-Path $scriptDir "RemoteBatch_$timestamp.log"
+$OutputLog = "$scriptDir\RemoteBatch_$timestamp.log"
 
 # ヘッダー表示
 Write-Host "========================================" -ForegroundColor Cyan
