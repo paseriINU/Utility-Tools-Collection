@@ -160,10 +160,10 @@ try {
 
         if ([string]::IsNullOrEmpty($originalTrustedHosts)) {
             # 既存設定なし
-            Set-Item WSMan:\localhost\Client\TrustedHosts -Value $Config.ComputerName -Force
+            Set-Item WSMan:\localhost\Client\TrustedHosts -Value $Config.ComputerName -Force -Confirm:$false
         } else {
             # 既存設定あり
-            Set-Item WSMan:\localhost\Client\TrustedHosts -Value "$originalTrustedHosts,$($Config.ComputerName)" -Force
+            Set-Item WSMan:\localhost\Client\TrustedHosts -Value "$originalTrustedHosts,$($Config.ComputerName)" -Force -Confirm:$false
         }
 
         $winrmConfigChanged = $true
@@ -378,11 +378,11 @@ $($result.Output | Out-String)
         try {
             if ([string]::IsNullOrEmpty($originalTrustedHosts)) {
                 # 元々空だった場合は空に戻す
-                Set-Item WSMan:\localhost\Client\TrustedHosts -Value "" -Force
+                Set-Item WSMan:\localhost\Client\TrustedHosts -Value "" -Force -Confirm:$false
                 Write-Host "[OK] TrustedHostsを元の状態（空）に復元しました" -ForegroundColor Green
             } else {
                 # 元の値に戻す
-                Set-Item WSMan:\localhost\Client\TrustedHosts -Value $originalTrustedHosts -Force
+                Set-Item WSMan:\localhost\Client\TrustedHosts -Value $originalTrustedHosts -Force -Confirm:$false
                 Write-Host "[OK] TrustedHostsを元の状態に復元しました" -ForegroundColor Green
             }
         } catch {
