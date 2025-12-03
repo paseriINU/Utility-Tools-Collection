@@ -2,6 +2,15 @@
 @echo off
 setlocal
 chcp 65001 >nul
+
+rem 管理者権限チェック
+net session >nul 2>&1
+if %errorLevel% neq 0 (
+    echo 管理者権限が必要です。管理者として再起動します...
+    powershell -Command "Start-Process -FilePath '%~f0' -Verb RunAs"
+    exit /b
+)
+
 powershell -NoProfile -ExecutionPolicy Bypass -Command "$scriptDir=('%~dp0' -replace '\\$',''); iex ((gc '%~f0') -join \"`n\")"
 exit /b %ERRORLEVEL%
 : #>
@@ -162,10 +171,19 @@ try {
 
     Write-Host ""
 } catch {
-    Write-Host "[警告] WinRM設定の自動構成に失敗しました" -ForegroundColor Yellow
-    Write-Host "エラー: $($_.Exception.Message)" -ForegroundColor Yellow
-    Write-Host "手動でWinRM設定を行ってください" -ForegroundColor Yellow
     Write-Host ""
+    Write-Host "========================================" -ForegroundColor Red
+    Write-Host "[エラー] WinRM設定の自動構成に失敗しました" -ForegroundColor Red
+    Write-Host "========================================" -ForegroundColor Red
+    Write-Host ""
+    Write-Host "エラー詳細:" -ForegroundColor Yellow
+    Write-Host $_.Exception.Message -ForegroundColor Red
+    Write-Host ""
+    Write-Host "このスクリプトは管理者権限で実行する必要があります。" -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "Enterキーを押して終了..." -ForegroundColor Gray
+    $null = Read-Host
+    exit 1
 }
 #endregion
 
