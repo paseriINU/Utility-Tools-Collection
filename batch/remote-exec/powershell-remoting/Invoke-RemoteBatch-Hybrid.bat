@@ -185,11 +185,13 @@ if ($Config.UserName) {
         Write-Host "ユーザー名: $($Config.UserName)" -ForegroundColor Cyan
         $securePassword = Read-Host "パスワードを入力してください" -AsSecureString
         $Credential = New-Object System.Management.Automation.PSCredential($Config.UserName, $securePassword)
+        Write-Host ""
     }
 } else {
     # 認証情報が何も指定されていない場合
     Write-Host "認証情報を入力してください" -ForegroundColor Yellow
     $Credential = Get-Credential -Message "リモートサーバの認証情報を入力"
+    Write-Host ""
 }
 #endregion
 
