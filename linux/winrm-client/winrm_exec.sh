@@ -1,0 +1,528 @@
+#!/bin/bash
+# -*- coding: utf-8 -*-
+#
+# WinRM Remote Batch Executor for Linux (Shell Script版 - 標準コマンドのみ)
+# Linux（Red Hat等）からWindows Server 2022へWinRM接続してバッチを実行
+#
+# 必要なツール（すべて標準でインストール済み）:
+#   - bash
+#   - curl
+#   - date
+#   - base64
+#
+# 使い方:
+#   1. このスクリプト内の設定セクションを編集
+#   2. 実行権限を付与: chmod +x winrm_exec.sh
+#   3. 実行: ./winrm_exec.sh
+#
+#   または環境変数で設定を上書き:
+#   WINRM_HOST=192.168.1.100 WINRM_USER=Admin WINRM_PASS=Pass123 ./winrm_exec.sh
+#
+
+set -u  # 未定義変数の使用をエラーとする
+
+# ==================== 設定セクション ====================
+# ここを編集して使用してください
+
+# Windows接続情報
+WINRM_HOST="${WINRM_HOST:-192.168.1.100}"        # Windows ServerのIPアドレスまたはホスト名
+WINRM_PORT="${WINRM_PORT:-5985}"                 # WinRMポート（HTTP: 5985, HTTPS: 5986）
+WINRM_USER="${WINRM_USER:-Administrator}"        # Windowsユーザー名
+WINRM_PASS="${WINRM_PASS:-YourPassword}"         # Windowsパスワード
+
+# 実行するバッチファイル（Windows側のパス）
+BATCH_FILE_PATH="${BATCH_FILE_PATH:-C:\\Scripts\\test.bat}"
+
+# または直接コマンドを指定
+DIRECT_COMMAND="${DIRECT_COMMAND:-}"  # 例: "echo Hello from WinRM"
+
+# HTTPS接続を使用する場合は"true"に設定
+USE_HTTPS="${USE_HTTPS:-false}"
+
+# 証明書検証を無効にする場合は"true"（自己署名証明書の場合）
+DISABLE_CERT_VALIDATION="${DISABLE_CERT_VALIDATION:-true}"
+
+# タイムアウト（秒）
+TIMEOUT="${TIMEOUT:-300}"
+
+# デバッグモード（trueにするとXML送受信を表示）
+DEBUG="${DEBUG:-false}"
+
+# =========================================================
+
+# 色付き出力用
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# ログ関数
+log_info() {
+    echo -e "${BLUE}[INFO]${NC} $1"
+}
+
+log_success() {
+    echo -e "${GREEN}[SUCCESS]${NC} $1"
+}
+
+log_warn() {
+    echo -e "${YELLOW}[WARN]${NC} $1"
+}
+
+log_error() {
+    echo -e "${RED}[ERROR]${NC} $1"
+}
+
+# 必要なコマンドの確認
+check_requirements() {
+    local missing=0
+
+    if ! command -v curl &> /dev/null; then
+        log_error "curlコマンドが見つかりません"
+        log_error "Red Hat系: sudo yum install curl"
+        missing=1
+    fi
+
+    if ! command -v base64 &> /dev/null; then
+        log_error "base64コマンドが見つかりません"
+        missing=1
+    fi
+
+    if [ $missing -eq 1 ]; then
+        exit 1
+    fi
+}
+
+# WinRMエンドポイントURL生成
+generate_endpoint() {
+    local protocol="http"
+    if [ "$USE_HTTPS" = "true" ]; then
+        protocol="https"
+    fi
+    echo "${protocol}://${WINRM_HOST}:${WINRM_PORT}/wsman"
+}
+
+# UUIDの生成（標準コマンドのみ）
+generate_uuid() {
+    # /proc/sys/kernel/random/uuidが利用可能な場合
+    if [ -r /proc/sys/kernel/random/uuid ]; then
+        cat /proc/sys/kernel/random/uuid
+        return
+    fi
+
+    # dateコマンドで簡易UUID生成
+    local timestamp=$(date +%s%N 2>/dev/null || date +%s)
+    local random1=$RANDOM
+    local random2=$RANDOM
+    local random3=$RANDOM
+    echo "$(printf '%08x' $timestamp)-$(printf '%04x' $random1)-4$(printf '%03x' $random2)-$(printf '%04x' $random3)-$(printf '%012x' $timestamp)"
+}
+
+# XML特殊文字のエスケープ
+xml_escape() {
+    local string="$1"
+    string="${string//&/&amp;}"
+    string="${string//</&lt;}"
+    string="${string//>/&gt;}"
+    string="${string//\"/&quot;}"
+    string="${string//\'/&apos;}"
+    echo "$string"
+}
+
+# SOAP リクエストの送信
+send_soap_request() {
+    local soap_envelope="$1"
+    local endpoint=$(generate_endpoint)
+
+    if [ "$DEBUG" = "true" ]; then
+        log_info "送信XML:"
+        echo "$soap_envelope"
+        echo ""
+    fi
+
+    # curl オプションの構築
+    local curl_opts=(-s -S --max-time "$TIMEOUT")
+
+    if [ "$DISABLE_CERT_VALIDATION" = "true" ]; then
+        curl_opts+=(-k)  # 証明書検証を無効化
+    fi
+
+    # Basic認証
+    curl_opts+=(--user "${WINRM_USER}:${WINRM_PASS}")
+
+    # HTTPヘッダー
+    curl_opts+=(-H "Content-Type: application/soap+xml;charset=UTF-8")
+
+    # データ送信
+    curl_opts+=(--data-binary "$soap_envelope")
+
+    # リクエスト送信
+    local response
+    response=$(curl "${curl_opts[@]}" "$endpoint" 2>&1)
+    local exit_code=$?
+
+    if [ $exit_code -ne 0 ]; then
+        log_error "curlコマンドが失敗しました (終了コード: $exit_code)"
+        log_error "レスポンス: $response"
+        return 1
+    fi
+
+    if [ "$DEBUG" = "true" ]; then
+        log_info "受信XML:"
+        echo "$response"
+        echo ""
+    fi
+
+    echo "$response"
+}
+
+# XMLからタグの値を抽出（シンプルなgrep/sed実装）
+extract_xml_value() {
+    local xml="$1"
+    local tag="$2"
+
+    # <tag>値</tag> の形式から値を抽出
+    echo "$xml" | grep -oP "(?<=<${tag}>)[^<]+" | head -1
+}
+
+# Base64デコード
+base64_decode() {
+    echo "$1" | base64 -d 2>/dev/null || echo ""
+}
+
+# シェルの作成
+create_shell() {
+    local endpoint=$(generate_endpoint)
+    local uuid=$(generate_uuid)
+
+    local soap_envelope="<?xml version=\"1.0\" encoding=\"UTF-8\"?>
+<s:Envelope xmlns:s=\"http://www.w3.org/2003/05/soap-envelope\"
+            xmlns:a=\"http://schemas.xmlsoap.org/ws/2004/08/addressing\"
+            xmlns:w=\"http://schemas.dmtf.org/wbem/wsman/1/wsman.xsd\"
+            xmlns:rsp=\"http://schemas.microsoft.com/wbem/wsman/1/windows/shell\">
+  <s:Header>
+    <a:To>${endpoint}</a:To>
+    <a:ReplyTo>
+      <a:Address s:mustUnderstand=\"true\">http://schemas.xmlsoap.org/ws/2004/08/addressing/role/anonymous</a:Address>
+    </a:ReplyTo>
+    <a:Action s:mustUnderstand=\"true\">http://schemas.xmlsoap.org/ws/2004/09/transfer/Create</a:Action>
+    <w:MaxEnvelopeSize s:mustUnderstand=\"true\">153600</w:MaxEnvelopeSize>
+    <a:MessageID>uuid:${uuid}</a:MessageID>
+    <w:Locale xml:lang=\"ja-JP\" s:mustUnderstand=\"false\"/>
+    <w:OperationTimeout>PT${TIMEOUT}S</w:OperationTimeout>
+    <w:ResourceURI s:mustUnderstand=\"true\">http://schemas.microsoft.com/wbem/wsman/1/windows/shell/cmd</w:ResourceURI>
+    <w:OptionSet>
+      <w:Option Name=\"WINRS_NOPROFILE\">FALSE</w:Option>
+      <w:Option Name=\"WINRS_CODEPAGE\">65001</w:Option>
+    </w:OptionSet>
+  </s:Header>
+  <s:Body>
+    <rsp:Shell>
+      <rsp:InputStreams>stdin</rsp:InputStreams>
+      <rsp:OutputStreams>stdout stderr</rsp:OutputStreams>
+    </rsp:Shell>
+  </s:Body>
+</s:Envelope>"
+
+    log_info "シェル作成中..."
+    local response=$(send_soap_request "$soap_envelope")
+
+    if [ $? -ne 0 ]; then
+        log_error "シェル作成に失敗しました"
+        return 1
+    fi
+
+    # ShellIdを抽出
+    local shell_id=$(extract_xml_value "$response" "rsp:ShellId")
+
+    if [ -z "$shell_id" ]; then
+        log_error "ShellIDの取得に失敗しました"
+        return 1
+    fi
+
+    log_success "シェル作成成功: $shell_id"
+    echo "$shell_id"
+}
+
+# コマンドの実行
+run_command() {
+    local shell_id="$1"
+    local command="$2"
+    local endpoint=$(generate_endpoint)
+    local uuid=$(generate_uuid)
+
+    # コマンドをXMLエスケープ
+    local command_escaped=$(xml_escape "$command")
+
+    local soap_envelope="<?xml version=\"1.0\" encoding=\"UTF-8\"?>
+<s:Envelope xmlns:s=\"http://www.w3.org/2003/05/soap-envelope\"
+            xmlns:a=\"http://schemas.xmlsoap.org/ws/2004/08/addressing\"
+            xmlns:w=\"http://schemas.dmtf.org/wbem/wsman/1/wsman.xsd\"
+            xmlns:rsp=\"http://schemas.microsoft.com/wbem/wsman/1/windows/shell\">
+  <s:Header>
+    <a:To>${endpoint}</a:To>
+    <a:ReplyTo>
+      <a:Address s:mustUnderstand=\"true\">http://schemas.xmlsoap.org/ws/2004/08/addressing/role/anonymous</a:Address>
+    </a:ReplyTo>
+    <a:Action s:mustUnderstand=\"true\">http://schemas.microsoft.com/wbem/wsman/1/windows/shell/Command</a:Action>
+    <w:MaxEnvelopeSize s:mustUnderstand=\"true\">153600</w:MaxEnvelopeSize>
+    <a:MessageID>uuid:${uuid}</a:MessageID>
+    <w:Locale xml:lang=\"ja-JP\" s:mustUnderstand=\"false\"/>
+    <w:OperationTimeout>PT${TIMEOUT}S</w:OperationTimeout>
+    <w:ResourceURI s:mustUnderstand=\"true\">http://schemas.microsoft.com/wbem/wsman/1/windows/shell/cmd</w:ResourceURI>
+    <w:SelectorSet>
+      <w:Selector Name=\"ShellId\">${shell_id}</w:Selector>
+    </w:SelectorSet>
+  </s:Header>
+  <s:Body>
+    <rsp:CommandLine>
+      <rsp:Command>${command_escaped}</rsp:Command>
+    </rsp:CommandLine>
+  </s:Body>
+</s:Envelope>"
+
+    log_info "コマンド実行中..."
+    local response=$(send_soap_request "$soap_envelope")
+
+    if [ $? -ne 0 ]; then
+        log_error "コマンド実行に失敗しました"
+        return 1
+    fi
+
+    # CommandIdを抽出
+    local command_id=$(extract_xml_value "$response" "rsp:CommandId")
+
+    if [ -z "$command_id" ]; then
+        log_error "CommandIDの取得に失敗しました"
+        return 1
+    fi
+
+    log_success "コマンド実行開始: $command_id"
+    echo "$command_id"
+}
+
+# コマンド出力の取得
+get_command_output() {
+    local shell_id="$1"
+    local command_id="$2"
+    local endpoint=$(generate_endpoint)
+
+    local stdout_all=""
+    local stderr_all=""
+    local exit_code=0
+    local command_done=false
+    local max_attempts=60  # 最大60回試行（タイムアウト対策）
+    local attempt=0
+
+    log_info "コマンド出力取得中..."
+
+    while [ "$command_done" = "false" ] && [ $attempt -lt $max_attempts ]; do
+        local uuid=$(generate_uuid)
+
+        local soap_envelope="<?xml version=\"1.0\" encoding=\"UTF-8\"?>
+<s:Envelope xmlns:s=\"http://www.w3.org/2003/05/soap-envelope\"
+            xmlns:a=\"http://schemas.xmlsoap.org/ws/2004/08/addressing\"
+            xmlns:w=\"http://schemas.dmtf.org/wbem/wsman/1/wsman.xsd\"
+            xmlns:rsp=\"http://schemas.microsoft.com/wbem/wsman/1/windows/shell\">
+  <s:Header>
+    <a:To>${endpoint}</a:To>
+    <a:ReplyTo>
+      <a:Address s:mustUnderstand=\"true\">http://schemas.xmlsoap.org/ws/2004/08/addressing/role/anonymous</a:Address>
+    </a:ReplyTo>
+    <a:Action s:mustUnderstand=\"true\">http://schemas.microsoft.com/wbem/wsman/1/windows/shell/Receive</a:Action>
+    <w:MaxEnvelopeSize s:mustUnderstand=\"true\">153600</w:MaxEnvelopeSize>
+    <a:MessageID>uuid:${uuid}</a:MessageID>
+    <w:Locale xml:lang=\"ja-JP\" s:mustUnderstand=\"false\"/>
+    <w:OperationTimeout>PT${TIMEOUT}S</w:OperationTimeout>
+    <w:ResourceURI s:mustUnderstand=\"true\">http://schemas.microsoft.com/wbem/wsman/1/windows/shell/cmd</w:ResourceURI>
+    <w:SelectorSet>
+      <w:Selector Name=\"ShellId\">${shell_id}</w:Selector>
+    </w:SelectorSet>
+  </s:Header>
+  <s:Body>
+    <rsp:Receive>
+      <rsp:DesiredStream CommandId=\"${command_id}\">stdout stderr</rsp:DesiredStream>
+    </rsp:Receive>
+  </s:Body>
+</s:Envelope>"
+
+        local response=$(send_soap_request "$soap_envelope")
+
+        if [ $? -ne 0 ]; then
+            log_error "出力取得に失敗しました"
+            return 1
+        fi
+
+        # stdout抽出（Base64デコード）
+        local stdout_b64=$(echo "$response" | grep -oP '(?<=<rsp:Stream Name="stdout">)[^<]+' | head -1)
+        if [ -n "$stdout_b64" ]; then
+            local stdout_decoded=$(echo "$stdout_b64" | base64 -d 2>/dev/null || echo "")
+            stdout_all="${stdout_all}${stdout_decoded}"
+        fi
+
+        # stderr抽出（Base64デコード）
+        local stderr_b64=$(echo "$response" | grep -oP '(?<=<rsp:Stream Name="stderr">)[^<]+' | head -1)
+        if [ -n "$stderr_b64" ]; then
+            local stderr_decoded=$(echo "$stderr_b64" | base64 -d 2>/dev/null || echo "")
+            stderr_all="${stderr_all}${stderr_decoded}"
+        fi
+
+        # コマンド完了チェック
+        if echo "$response" | grep -q "CommandState/Done"; then
+            command_done=true
+            exit_code=$(extract_xml_value "$response" "rsp:ExitCode")
+            [ -z "$exit_code" ] && exit_code=0
+        fi
+
+        attempt=$((attempt + 1))
+        sleep 0.5  # 0.5秒待機
+    done
+
+    if [ "$command_done" = "false" ]; then
+        log_warn "コマンド完了待機がタイムアウトしました"
+    fi
+
+    log_success "コマンド完了 (終了コード: $exit_code)"
+
+    # 出力を一時ファイルに保存（改行を保持）
+    echo "$stdout_all" > /tmp/winrm_stdout_$$
+    echo "$stderr_all" > /tmp/winrm_stderr_$$
+    echo "$exit_code" > /tmp/winrm_exitcode_$$
+}
+
+# シェルの削除
+delete_shell() {
+    local shell_id="$1"
+    local endpoint=$(generate_endpoint)
+    local uuid=$(generate_uuid)
+
+    local soap_envelope="<?xml version=\"1.0\" encoding=\"UTF-8\"?>
+<s:Envelope xmlns:s=\"http://www.w3.org/2003/05/soap-envelope\"
+            xmlns:a=\"http://schemas.xmlsoap.org/ws/2004/08/addressing\"
+            xmlns:w=\"http://schemas.dmtf.org/wbem/wsman/1/wsman.xsd\">
+  <s:Header>
+    <a:To>${endpoint}</a:To>
+    <a:ReplyTo>
+      <a:Address s:mustUnderstand=\"true\">http://schemas.xmlsoap.org/ws/2004/08/addressing/role/anonymous</a:Address>
+    </a:ReplyTo>
+    <a:Action s:mustUnderstand=\"true\">http://schemas.xmlsoap.org/ws/2004/09/transfer/Delete</a:Action>
+    <w:MaxEnvelopeSize s:mustUnderstand=\"true\">153600</w:MaxEnvelopeSize>
+    <a:MessageID>uuid:${uuid}</a:MessageID>
+    <w:Locale xml:lang=\"ja-JP\" s:mustUnderstand=\"false\"/>
+    <w:OperationTimeout>PT${TIMEOUT}S</w:OperationTimeout>
+    <w:ResourceURI s:mustUnderstand=\"true\">http://schemas.microsoft.com/wbem/wsman/1/windows/shell/cmd</w:ResourceURI>
+    <w:SelectorSet>
+      <w:Selector Name=\"ShellId\">${shell_id}</w:Selector>
+    </w:SelectorSet>
+  </s:Header>
+  <s:Body/>
+</s:Envelope>"
+
+    log_info "シェル削除中..."
+    send_soap_request "$soap_envelope" > /dev/null
+    log_success "シェル削除完了"
+}
+
+# メイン処理
+main() {
+    echo "======================================"
+    echo "  WinRM Remote Batch Executor (Bash)"
+    echo "  標準コマンドのみ版"
+    echo "======================================"
+    echo
+
+    # 必要なコマンドの確認
+    check_requirements
+
+    log_info "接続先: $(generate_endpoint)"
+    log_info "ユーザー: $WINRM_USER"
+
+    # 実行するコマンドの決定
+    local command=""
+    if [ -n "$DIRECT_COMMAND" ]; then
+        command="$DIRECT_COMMAND"
+        log_info "直接コマンド実行: $command"
+    elif [ -n "$BATCH_FILE_PATH" ]; then
+        command="cmd.exe /c \"$BATCH_FILE_PATH\""
+        log_info "バッチファイル実行: $BATCH_FILE_PATH"
+    else
+        log_error "実行するコマンドまたはバッチファイルが指定されていません"
+        log_error "スクリプト内のDIRECT_COMMANDまたはBATCH_FILE_PATHを設定してください"
+        exit 1
+    fi
+
+    # 一時ファイルのクリーンアップ
+    trap "rm -f /tmp/winrm_stdout_$$ /tmp/winrm_stderr_$$ /tmp/winrm_exitcode_$$" EXIT
+
+    # シェル作成
+    local shell_id=$(create_shell)
+    if [ $? -ne 0 ] || [ -z "$shell_id" ]; then
+        log_error "処理を中断します"
+        exit 1
+    fi
+
+    # コマンド実行
+    local command_id=$(run_command "$shell_id" "$command")
+    if [ $? -ne 0 ] || [ -z "$command_id" ]; then
+        delete_shell "$shell_id"
+        log_error "処理を中断します"
+        exit 1
+    fi
+
+    # 出力取得
+    get_command_output "$shell_id" "$command_id"
+    local get_output_result=$?
+
+    # シェル削除
+    delete_shell "$shell_id"
+
+    if [ $get_output_result -ne 0 ]; then
+        log_error "処理を中断します"
+        exit 1
+    fi
+
+    # 結果の表示
+    echo
+    echo "============================================================"
+    echo "実行結果"
+    echo "============================================================"
+
+    if [ -f /tmp/winrm_stdout_$$ ]; then
+        local stdout_content=$(cat /tmp/winrm_stdout_$$)
+        if [ -n "$stdout_content" ]; then
+            echo
+            echo "[標準出力]"
+            echo "$stdout_content"
+        fi
+    fi
+
+    if [ -f /tmp/winrm_stderr_$$ ]; then
+        local stderr_content=$(cat /tmp/winrm_stderr_$$)
+        if [ -n "$stderr_content" ]; then
+            echo
+            echo "[標準エラー出力]"
+            echo "$stderr_content"
+        fi
+    fi
+
+    local exit_code=0
+    if [ -f /tmp/winrm_exitcode_$$ ]; then
+        exit_code=$(cat /tmp/winrm_exitcode_$$)
+    fi
+
+    echo
+    echo "終了コード: $exit_code"
+    echo "============================================================"
+
+    if [ $exit_code -eq 0 ]; then
+        log_success "完了"
+    else
+        log_error "コマンドが失敗しました (終了コード: $exit_code)"
+    fi
+
+    exit $exit_code
+}
+
+# スクリプト実行
+main "$@"
