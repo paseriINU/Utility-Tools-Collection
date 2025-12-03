@@ -355,7 +355,6 @@ $($result.Output | Out-String)
     }
 
     $exitCode = 1
-}
 } finally {
     #region WinRM設定の復元
     if ($winrmConfigChanged) {
