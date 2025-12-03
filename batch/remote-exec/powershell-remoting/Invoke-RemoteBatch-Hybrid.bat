@@ -119,6 +119,7 @@ if ($Config.BatchPath -like "*{env}*") {
 #region WinRM設定の保存と自動設定
 $originalTrustedHosts = $null
 $winrmConfigChanged = $false
+$winrmServiceWasStarted = $false
 
 try {
     Write-Host "WinRM設定を確認中..." -ForegroundColor Cyan
@@ -137,7 +138,8 @@ try {
     if ($winrmService.Status -ne 'Running') {
         Write-Host "WinRMサービスを起動中..." -ForegroundColor Yellow
         Start-Service -Name WinRM -ErrorAction Stop
-        Write-Host "[OK] WinRMサービスを起動しました" -ForegroundColor Green
+        $winrmServiceWasStarted = $true
+        Write-Host "[OK] WinRMサービスを起動しました（終了時に停止します）" -ForegroundColor Green
     } else {
         Write-Host "[OK] WinRMサービスは起動済みです" -ForegroundColor Green
     }
@@ -387,6 +389,20 @@ $($result.Output | Out-String)
             Write-Host "[警告] TrustedHostsの復元に失敗しました" -ForegroundColor Yellow
             Write-Host "エラー: $($_.Exception.Message)" -ForegroundColor Yellow
             Write-Host "手動で復元してください: Set-Item WSMan:\localhost\Client\TrustedHosts -Value '$originalTrustedHosts' -Force" -ForegroundColor Yellow
+        }
+    }
+
+    # WinRMサービスを停止（このスクリプトで起動した場合のみ）
+    if ($winrmServiceWasStarted) {
+        Write-Host ""
+        Write-Host "WinRMサービスを停止中..." -ForegroundColor Cyan
+
+        try {
+            Stop-Service -Name WinRM -Force -ErrorAction Stop
+            Write-Host "[OK] WinRMサービスを元の状態（停止）に復元しました" -ForegroundColor Green
+        } catch {
+            Write-Host "[警告] WinRMサービスの停止に失敗しました" -ForegroundColor Yellow
+            Write-Host "エラー: $($_.Exception.Message)" -ForegroundColor Yellow
         }
     }
     #endregion
