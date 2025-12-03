@@ -54,26 +54,131 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - **PowerShellスクリプト (.ps1) → ハイブリッド.bat形式を推奨**:
   - **重要**: PowerShellを使用する場合は、`.ps1`ファイルではなく、ポリグロットパターンを使用した`.bat`形式で作成すること
-  - ポリグロットパターン:
+  - ポリグロットパターン（標準版）:
     ```batch
     <# :
     @echo off
     setlocal
-    chcp 65001 >nul
     powershell -NoProfile -ExecutionPolicy Bypass -Command "iex ((gc '%~f0') -join \"`n\")"
     exit /b %ERRORLEVEL%
-    : #> | sv -name _ > $null
+    : #>
 
     # PowerShellコードはここから
     ```
+  - ポリグロットパターン（管理者権限必須版）:
+    ```batch
+    <# :
+    @echo off
+    setlocal
+
+    rem 管理者権限チェック
+    net session >nul 2>&1
+    if %errorLevel% neq 0 (
+        echo 管理者権限が必要です。管理者として再起動します...
+        powershell -Command "Start-Process -FilePath '%~f0' -Verb RunAs"
+        exit /b
+    )
+
+    powershell -NoProfile -ExecutionPolicy Bypass -Command "$scriptDir=('%~dp0' -replace '\\$',''); iex ((gc '%~f0') -join \"`n\")"
+    exit /b %ERRORLEVEL%
+    : #>
+
+    # PowerShellコードはここから
+    # $scriptDir 変数でバッチファイルのディレクトリパスが利用可能
+    ```
   - PowerShell 5.1以降で動作すること
   - コメントベースのヘルプを記載
-  - パラメータ版とスタンドアローン版（内部設定）の両方を作成することを推奨
-  - 管理者権限が必要な場合は明記
+  - **スタンドアローン版を基本とする**: ソース内の設定セクションを編集するだけで使用可能にすること
+  - 管理者権限が必要な場合は自動昇格パターンを使用すること
 
 - **既存の.ps1ファイルの変換**:
   - 既存の`.ps1`ファイルを見つけた場合は、自動的にハイブリッド`.bat`形式に変換すること
   - `.ps1`ファイルは保守性のため削除または非推奨とすること
+
+- **WinRM関連ツールの標準仕様**:
+
+  WinRM（Windows Remote Management）を使用するツールは、以下の実装を**必須**とします：
+
+  **必須実装項目**:
+  1. **管理者権限の自動昇格**
+     - `net session` チェックで管理者権限を確認
+     - 権限がない場合は自動的にUACプロンプトで再起動
+
+  2. **WinRMサービスの自動起動と復元**
+     - スクリプト開始時にWinRMサービスの状態を確認
+     - 停止している場合のみ起動し、`$winrmServiceWasStarted` フラグを設定
+     - finally ブロックでフラグを確認し、起動した場合のみ停止して元の状態に復元
+
+  3. **TrustedHostsの自動設定と復元**
+     - 現在の TrustedHosts 設定を `$originalTrustedHosts` に保存
+     - 接続先が含まれていない場合のみ一時的に追加
+     - finally ブロックで必ず元の設定に復元
+
+  4. **確認プロンプトの完全無効化**
+     - すべての `Set-Item WSMan:\localhost\Client\TrustedHosts` コマンドに `-Confirm:$false` を追加
+     - 言語環境に依存しない動作を保証
+
+  5. **エラー時の自動復元**
+     - try-catch-finally パターンを使用
+     - finally ブロックで設定の復元を保証（エラー時も実行される）
+     - WinRM設定エラー時は `exit 1` で終了
+
+  6. **環境変数を使わない実装**
+     - `$scriptDir` 変数をバッチ起動時に PowerShell に直接渡す
+     - 環境変数の汚染を防ぐ
+
+  **実装パターン例**:
+  ```powershell
+  #region WinRM設定の保存と自動設定
+  $originalTrustedHosts = $null
+  $winrmConfigChanged = $false
+  $winrmServiceWasStarted = $false
+
+  try {
+      # 現在のTrustedHostsを取得
+      $originalTrustedHosts = (Get-Item WSMan:\localhost\Client\TrustedHosts -ErrorAction SilentlyContinue).Value
+
+      # WinRMサービスの起動確認
+      $winrmService = Get-Service -Name WinRM -ErrorAction SilentlyContinue
+      if ($winrmService.Status -ne 'Running') {
+          Start-Service -Name WinRM -ErrorAction Stop
+          $winrmServiceWasStarted = $true
+      }
+
+      # TrustedHostsに接続先を追加（必要な場合のみ）
+      if ($needsConfig) {
+          Set-Item WSMan:\localhost\Client\TrustedHosts -Value $newValue -Force -Confirm:$false
+          $winrmConfigChanged = $true
+      }
+  } catch {
+      Write-Host "[エラー] WinRM設定の自動構成に失敗しました" -ForegroundColor Red
+      exit 1
+  }
+  #endregion
+
+  # メイン処理
+  try {
+      # リモート実行処理
+  } catch {
+      # エラー処理
+      $exitCode = 1
+  } finally {
+      #region WinRM設定の復元
+      if ($winrmConfigChanged) {
+          Set-Item WSMan:\localhost\Client\TrustedHosts -Value $originalTrustedHosts -Force -Confirm:$false
+      }
+
+      if ($winrmServiceWasStarted) {
+          Stop-Service -Name WinRM -Force -ErrorAction Stop
+      }
+      #endregion
+  }
+  ```
+
+  **基本方針**:
+  - **スタンドアローン版のみ**: config ファイルを使わず、ソース内に設定を記述
+  - **ダブルクリックで実行可能**: .bat 形式で保存し、設定編集のみで使用可能
+  - **自動設定・自動復元**: ユーザーが手動でWinRM設定を行う必要がない
 
 #### VBA Macros (.bas, .xlsm)
 - Excel 2010以降で動作すること
