@@ -68,7 +68,7 @@ $ErrorActionPreference = "Stop"
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
 # 出力ログファイルのデフォルト設定（空の場合）
-if (-not $Config.OutputLog) {
+if ([string]::IsNullOrEmpty($Config.OutputLog)) {
     $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
     $scriptDir = Split-Path -Path $MyInvocation.MyCommand.Path -Parent
     if (-not $scriptDir) {
