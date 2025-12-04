@@ -52,7 +52,7 @@ for env in "${ENVIRONMENTS[@]}"; do
     echo "======================================"
 
     # スクリプト実行
-    if eval "$EXECUTOR_CMD -e $env"; then
+    if eval "$EXECUTOR_CMD $env"; then
         results[$env]="成功"
         success=$((success + 1))
         echo -e "${GREEN}✓ ${env} 環境の実行が完了しました${NC}"

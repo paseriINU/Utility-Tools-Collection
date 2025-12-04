@@ -8,11 +8,12 @@ Linux（Red Hat等）からWindows Server 2022へWinRM接続してバッチを�
     Python 3.6以降（標準ライブラリのみ使用、追加パッケージ不要）
 
 使い方:
-    # スクリプト内の設定を編集してから実行
-    python3 winrm_exec.py
+    # 環境を引数で指定（必須）
+    python3 winrm_exec.py TST1T
+    python3 winrm_exec.py TST2T
 
-    # またはコマンドライン引数で指定
-    python3 winrm_exec.py --host 192.168.1.100 --user Administrator --password Pass123
+    # またはコマンドライン引数で詳細設定も指定
+    python3 winrm_exec.py TST1T --host 192.168.1.100 --user Administrator --password Pass123
 """
 
 import sys
@@ -489,8 +490,11 @@ def main():
     """メイン処理"""
     # コマンドライン引数のパース
     parser = argparse.ArgumentParser(
-        description='Linux to Windows WinRM Batch Executor (標準ライブラリのみ版)'
+        description='Linux to Windows WinRM Batch Executor (標準ライブラリのみ版)',
+        usage='%(prog)s ENV [オプション]'
     )
+    parser.add_argument('env', metavar='ENV',
+                        help='環境名 (例: TST1T, TST2T)')
     parser.add_argument('--host', default=WINDOWS_HOST,
                         help='Windows ServerのIPアドレスまたはホスト名')
     parser.add_argument('--port', type=int, default=WINDOWS_PORT,
@@ -513,8 +517,6 @@ def main():
     parser.add_argument('--log-level', default=LOG_LEVEL,
                         choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'],
                         help='ログレベル')
-    parser.add_argument('-e', '--env', default=None,
-                        help='環境を指定 (例: TST1T, TST2T)')
 
     args = parser.parse_args()
 
@@ -523,30 +525,20 @@ def main():
 
     logging.info("=== WinRM Remote Batch Executor (標準ライブラリ版) ===")
 
-    # 環境選択（引数指定または対話的選択）
-    selected_env = None
-    if (args.batch and '{ENV}' in args.batch) or (args.command and '{ENV}' in args.command):
-        if args.env:
-            # 引数で環境が指定されている場合
-            if args.env not in ENVIRONMENTS:
-                logging.error(f"無効な環境が指定されました: {args.env}")
-                logging.error(f"利用可能な環境: {', '.join(ENVIRONMENTS)}")
-                return 1
+    # 環境の有効性チェック
+    if args.env not in ENVIRONMENTS:
+        logging.error(f"無効な環境が指定されました: {args.env}")
+        logging.error(f"利用可能な環境: {', '.join(ENVIRONMENTS)}")
+        return 1
 
-            selected_env = args.env
-            logging.info(f"引数で指定された環境: {selected_env}")
-        else:
-            # 引数で指定されていない場合は対話的に選択
-            selected_env = select_environment()
-            if selected_env is None:
-                logging.error("環境選択がキャンセルされました")
-                return 1
+    selected_env = args.env
+    logging.info(f"指定された環境: {selected_env}")
 
-        # {ENV} プレースホルダーを置換
-        if args.batch:
-            args.batch = args.batch.replace('{ENV}', selected_env)
-        if args.command:
-            args.command = args.command.replace('{ENV}', selected_env)
+    # {ENV} プレースホルダーを置換
+    if args.batch and '{ENV}' in args.batch:
+        args.batch = args.batch.replace('{ENV}', selected_env)
+    if args.command and '{ENV}' in args.command:
+        args.command = args.command.replace('{ENV}', selected_env)
 
     logging.info(f"接続先: {args.host}:{args.port}")
     logging.info(f"ユーザー: {args.user}")

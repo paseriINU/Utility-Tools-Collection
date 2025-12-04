@@ -82,7 +82,7 @@ fi
 ```bash
 #!/bin/bash
 # 単一環境を実行
-/path/to/winrm_exec.sh -e TST1T
+/path/to/winrm_exec.sh TST1T
 ```
 
 ### ループ処理
@@ -91,7 +91,7 @@ fi
 # 複数環境をループ実行
 for env in TST1T TST2T TST3T; do
     echo "環境 $env を実行中..."
-    /path/to/winrm_exec.sh -e "$env"
+    /path/to/winrm_exec.sh "$env"
 done
 ```
 
@@ -107,15 +107,15 @@ else
     ENV="TST2T"
 fi
 
-/path/to/winrm_exec.sh -e "$ENV"
+/path/to/winrm_exec.sh "$ENV"
 ```
 
 ### 並列実行
 ```bash
 #!/bin/bash
 # 複数環境を並列実行（バックグラウンド実行）
-/path/to/winrm_exec.sh -e TST1T &
-/path/to/winrm_exec.sh -e TST2T &
+/path/to/winrm_exec.sh TST1T &
+/path/to/winrm_exec.sh TST2T &
 
 # すべてのバックグラウンドジョブの完了を待つ
 wait
