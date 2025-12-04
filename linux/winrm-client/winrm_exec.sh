@@ -30,7 +30,9 @@ WINRM_PORT="${WINRM_PORT:-5985}"                 # WinRMポート（HTTP: 5985, 
 WINRM_USER="${WINRM_USER:-Administrator}"        # Windowsユーザー名
 WINRM_PASS="${WINRM_PASS:-YourPassword}"         # Windowsパスワード
 
-# 環境フォルダ名（実行時に選択可能）
+# 環境フォルダ名のリスト（実行時に選択可能）
+# 新しい環境を追加する場合は、この配列に追加してください
+ENVIRONMENTS=("TST1T" "TST2T")                   # 利用可能な環境のリスト
 ENV_FOLDER="${ENV_FOLDER:-}"                     # デフォルト環境なし（実行時に必ず選択）
 
 # 実行するバッチファイル（Windows側のパス）
@@ -83,25 +85,34 @@ select_environment() {
     echo "======================================"
     echo "  環境選択"
     echo "======================================"
-    echo "1. TST1T"
-    echo "2. TST2T"
+
+    # 環境リストを動的に表示
+    local i=1
+    for env in "${ENVIRONMENTS[@]}"; do
+        echo "${i}. ${env}"
+        i=$((i + 1))
+    done
+
     echo "======================================"
-    echo -n "環境を選択してください (1 または 2): "
+    echo -n "環境を選択してください (1-${#ENVIRONMENTS[@]}): "
 
     read -r selection
 
-    case "$selection" in
-        1)
-            ENV_FOLDER="TST1T"
-            ;;
-        2)
-            ENV_FOLDER="TST2T"
-            ;;
-        *)
-            log_error "無効な選択です。1 または 2 を入力してください。"
-            return 1
-            ;;
-    esac
+    # 入力が数値かチェック
+    if ! [[ "$selection" =~ ^[0-9]+$ ]]; then
+        log_error "無効な選択です。数値を入力してください。"
+        return 1
+    fi
+
+    # 範囲チェック
+    if [ "$selection" -lt 1 ] || [ "$selection" -gt "${#ENVIRONMENTS[@]}" ]; then
+        log_error "無効な選択です。1-${#ENVIRONMENTS[@]} の範囲で入力してください。"
+        return 1
+    fi
+
+    # 配列は0始まりなので、選択番号から1を引く
+    local index=$((selection - 1))
+    ENV_FOLDER="${ENVIRONMENTS[$index]}"
 
     log_success "選択された環境: $ENV_FOLDER"
     echo
