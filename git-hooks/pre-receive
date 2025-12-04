@@ -1,0 +1,193 @@
+#!/bin/bash
+#
+# Git Pre-receive Hook - セキュリティとファイルサイズチェック
+#
+# このフックは以下をチェックします：
+# 1. 機密情報の検出（パスワード、APIキー、秘密鍵など）
+# 2. 大きなファイルの防止（デフォルト: 10MB以上）
+# 3. 禁止されたファイルタイプの検出（.env, credentials.json など）
+#
+# リモートリポジトリの .git/hooks/pre-receive に配置してください
+#
+
+# 設定
+MAX_FILE_SIZE=$((10 * 1024 * 1024))  # 10MB
+WARN_FILE_SIZE=$((5 * 1024 * 1024))   # 5MB（警告のみ）
+
+# 禁止ファイルパターン（機密情報が含まれる可能性が高いファイル）
+FORBIDDEN_FILES=(
+    '\.env$'
+    '\.env\..*'
+    'credentials\.json$'
+    'secrets\..*'
+    '.*_rsa$'
+    '.*\.pem$'
+    '.*\.key$'
+    'id_rsa$'
+    'id_dsa$'
+    '\.aws/credentials$'
+    '\.ssh/.*_rsa$'
+    'password.*\.txt$'
+    'passwd$'
+)
+
+# 機密情報検出パターン
+SECRET_PATTERNS=(
+    'password\s*=\s*["\047][^"\047]{8,}'
+    'api[_-]?key\s*=\s*["\047][A-Za-z0-9]{20,}'
+    'secret[_-]?key\s*=\s*["\047][A-Za-z0-9]{20,}'
+    'access[_-]?token\s*=\s*["\047][A-Za-z0-9]{20,}'
+    'aws[_-]?access[_-]?key[_-]?id\s*=\s*["\047]AKI[A-Z0-9]{16,}'
+    'private[_-]?key\s*=\s*["\047][^"\047]{20,}'
+    'BEGIN (RSA|DSA|EC|OPENSSH) PRIVATE KEY'
+    'mysql://.*:.*@'
+    'postgres://.*:.*@'
+)
+
+# 色付き出力
+RED='\033[0;31m'
+YELLOW='\033[1;33m'
+GREEN='\033[0;32m'
+NC='\033[0m'
+
+# エラーフラグ
+has_error=false
+warnings_count=0
+
+# 標準入力から更新情報を読み取る
+while read oldrev newrev refname; do
+    # 新規ブランチの場合
+    if [ "$oldrev" = "0000000000000000000000000000000000000000" ]; then
+        # 最初のコミットから現在まですべてチェック
+        commit_range="$newrev"
+    else
+        # 既存ブランチの更新
+        commit_range="$oldrev..$newrev"
+    fi
+
+    # すべての新しいコミットを処理
+    for commit in $(git rev-list "$commit_range"); do
+        # コミットで変更されたファイルのリストを取得
+        files=$(git diff-tree --no-commit-id --name-only -r "$commit")
+
+        for file in $files; do
+            # ファイル名チェック（禁止ファイルパターン）
+            for pattern in "${FORBIDDEN_FILES[@]}"; do
+                if echo "$file" | grep -qE "$pattern"; then
+                    echo -e "${RED}========================================${NC}" >&2
+                    echo -e "${RED}エラー: 禁止されたファイルが検出されました${NC}" >&2
+                    echo -e "${RED}========================================${NC}" >&2
+                    echo "" >&2
+                    echo -e "${RED}ファイル: $file${NC}" >&2
+                    echo -e "${RED}コミット: $commit${NC}" >&2
+                    echo "" >&2
+                    echo "理由: このファイルタイプは機密情報を含む可能性が高いため、" >&2
+                    echo "      リポジトリへのコミットが禁止されています。" >&2
+                    echo "" >&2
+                    echo "対処方法:" >&2
+                    echo "  1. .gitignore に追加して、今後コミットされないようにする" >&2
+                    echo "  2. 履歴から削除する:" >&2
+                    echo "     git filter-branch --index-filter 'git rm --cached --ignore-unmatch $file' HEAD" >&2
+                    echo "" >&2
+                    echo "  3. 機密情報は環境変数や設定管理ツール（Vault等）を使用" >&2
+                    echo -e "${RED}========================================${NC}" >&2
+                    has_error=true
+                fi
+            done
+
+            # ファイルサイズチェック
+            if git cat-file -e "$commit:$file" 2>/dev/null; then
+                size=$(git cat-file -s "$commit:$file" 2>/dev/null || echo 0)
+
+                # エラーレベル（10MB以上）
+                if [ "$size" -ge "$MAX_FILE_SIZE" ]; then
+                    size_mb=$(echo "scale=2; $size / 1024 / 1024" | bc)
+                    echo -e "${RED}========================================${NC}" >&2
+                    echo -e "${RED}エラー: ファイルサイズが大きすぎます${NC}" >&2
+                    echo -e "${RED}========================================${NC}" >&2
+                    echo "" >&2
+                    echo -e "${RED}ファイル: $file${NC}" >&2
+                    echo -e "${RED}サイズ: ${size_mb} MB${NC}" >&2
+                    echo -e "${RED}最大許容サイズ: 10 MB${NC}" >&2
+                    echo -e "${RED}コミット: $commit${NC}" >&2
+                    echo "" >&2
+                    echo "理由: 大きなファイルはリポジトリのクローンを遅くし、" >&2
+                    echo "      Git の動作に悪影響を及ぼします。" >&2
+                    echo "" >&2
+                    echo "推奨対処方法:" >&2
+                    echo "  • バイナリファイルや大きなファイルは Git LFS を使用" >&2
+                    echo "  • ビルド成果物はリポジトリに含めない" >&2
+                    echo "  • 大きなデータファイルは外部ストレージを使用" >&2
+                    echo -e "${RED}========================================${NC}" >&2
+                    has_error=true
+
+                # 警告レベル（5MB以上）
+                elif [ "$size" -ge "$WARN_FILE_SIZE" ]; then
+                    size_mb=$(echo "scale=2; $size / 1024 / 1024" | bc)
+                    echo -e "${YELLOW}========================================${NC}" >&2
+                    echo -e "${YELLOW}警告: ファイルサイズが大きめです${NC}" >&2
+                    echo -e "${YELLOW}========================================${NC}" >&2
+                    echo "" >&2
+                    echo -e "${YELLOW}ファイル: $file${NC}" >&2
+                    echo -e "${YELLOW}サイズ: ${size_mb} MB${NC}" >&2
+                    echo "" >&2
+                    echo "このファイルは許容範囲内ですが、可能であれば" >&2
+                    echo "Git LFS の使用を検討してください。" >&2
+                    echo -e "${YELLOW}========================================${NC}" >&2
+                    warnings_count=$((warnings_count + 1))
+                fi
+            fi
+
+            # ファイル内容のチェック（機密情報パターン）
+            if git cat-file -e "$commit:$file" 2>/dev/null; then
+                content=$(git cat-file -p "$commit:$file" 2>/dev/null || echo "")
+
+                for pattern in "${SECRET_PATTERNS[@]}"; do
+                    if echo "$content" | grep -qiE "$pattern"; then
+                        echo -e "${RED}========================================${NC}" >&2
+                        echo -e "${RED}エラー: 機密情報の可能性がある内容を検出${NC}" >&2
+                        echo -e "${RED}========================================${NC}" >&2
+                        echo "" >&2
+                        echo -e "${RED}ファイル: $file${NC}" >&2
+                        echo -e "${RED}コミット: $commit${NC}" >&2
+                        echo -e "${RED}検出パターン: $pattern${NC}" >&2
+                        echo "" >&2
+                        echo "理由: パスワード、APIキー、秘密鍵などの機密情報が" >&2
+                        echo "      含まれている可能性があります。" >&2
+                        echo "" >&2
+                        echo "対処方法:" >&2
+                        echo "  1. 機密情報をファイルから削除" >&2
+                        echo "  2. 環境変数または設定管理ツールを使用" >&2
+                        echo "  3. 既にプッシュ済みの場合は、キーをローテーション" >&2
+                        echo "" >&2
+                        echo "注意: この検出は誤検出の可能性もあります。" >&2
+                        echo "      確認後、問題なければリポジトリ管理者に連絡してください。" >&2
+                        echo -e "${RED}========================================${NC}" >&2
+                        has_error=true
+                        break
+                    fi
+                done
+            fi
+        done
+    done
+done
+
+# 結果の表示
+if [ "$has_error" = "true" ]; then
+    echo "" >&2
+    echo -e "${RED}========================================${NC}" >&2
+    echo -e "${RED}プッシュが拒否されました${NC}" >&2
+    echo -e "${RED}========================================${NC}" >&2
+    echo "" >&2
+    echo "上記のエラーを修正してから、再度プッシュしてください。" >&2
+    echo "" >&2
+    exit 1
+fi
+
+if [ "$warnings_count" -gt 0 ]; then
+    echo "" >&2
+    echo -e "${YELLOW}警告が ${warnings_count} 件ありましたが、プッシュは許可されます。${NC}" >&2
+    echo "" >&2
+fi
+
+exit 0
