@@ -15,11 +15,44 @@
 #   2. 実行権限を付与: chmod +x winrm_exec.sh
 #   3. 実行: ./winrm_exec.sh
 #
+#   環境を引数で指定する場合:
+#   ./winrm_exec.sh -e TST1T
+#   ./winrm_exec.sh --env TST2T
+#
 #   または環境変数で設定を上書き:
-#   WINRM_HOST=192.168.1.100 WINRM_USER=Admin WINRM_PASS=Pass123 ./winrm_exec.sh
+#   WINRM_HOST=192.168.1.100 WINRM_USER=Admin WINRM_PASS=Pass123 ./winrm_exec.sh -e TST1T
 #
 
 set -u  # 未定義変数の使用をエラーとする
+
+# 引数パース
+ENV_ARG=""
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -e|--env)
+            ENV_ARG="$2"
+            shift 2
+            ;;
+        -h|--help)
+            echo "使い方: $0 [オプション]"
+            echo ""
+            echo "オプション:"
+            echo "  -e, --env ENV     環境を指定 (TST1T, TST2T など)"
+            echo "  -h, --help        このヘルプメッセージを表示"
+            echo ""
+            echo "例:"
+            echo "  $0 -e TST1T"
+            echo "  $0 --env TST2T"
+            exit 0
+            ;;
+        *)
+            echo "不明なオプション: $1"
+            echo "ヘルプを表示するには: $0 --help"
+            exit 1
+            ;;
+    esac
+done
 
 # ==================== 設定セクション ====================
 # ここを編集して使用してください
@@ -503,9 +536,32 @@ main() {
     echo "======================================"
     echo
 
-    # 環境選択
-    if ! select_environment; then
-        exit 1
+    # 環境選択（引数指定または対話的選択）
+    if [ -n "$ENV_ARG" ]; then
+        # 引数で環境が指定されている場合
+        # 指定された環境が有効かチェック
+        local valid=false
+        for env in "${ENVIRONMENTS[@]}"; do
+            if [ "$env" = "$ENV_ARG" ]; then
+                valid=true
+                break
+            fi
+        done
+
+        if [ "$valid" = "false" ]; then
+            log_error "無効な環境が指定されました: $ENV_ARG"
+            log_error "利用可能な環境: ${ENVIRONMENTS[*]}"
+            exit 1
+        fi
+
+        ENV_FOLDER="$ENV_ARG"
+        log_success "引数で指定された環境: $ENV_FOLDER"
+        echo
+    else
+        # 引数で指定されていない場合は対話的に選択
+        if ! select_environment; then
+            exit 1
+        fi
     fi
 
     log_info "接続先: $(generate_endpoint)"

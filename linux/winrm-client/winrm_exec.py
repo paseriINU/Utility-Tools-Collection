@@ -513,6 +513,8 @@ def main():
     parser.add_argument('--log-level', default=LOG_LEVEL,
                         choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'],
                         help='ログレベル')
+    parser.add_argument('-e', '--env', default=None,
+                        help='環境を指定 (例: TST1T, TST2T)')
 
     args = parser.parse_args()
 
@@ -521,13 +523,24 @@ def main():
 
     logging.info("=== WinRM Remote Batch Executor (標準ライブラリ版) ===")
 
-    # 環境選択（バッチファイルまたはコマンドに {ENV} が含まれている場合）
+    # 環境選択（引数指定または対話的選択）
     selected_env = None
     if (args.batch and '{ENV}' in args.batch) or (args.command and '{ENV}' in args.command):
-        selected_env = select_environment()
-        if selected_env is None:
-            logging.error("環境選択がキャンセルされました")
-            return 1
+        if args.env:
+            # 引数で環境が指定されている場合
+            if args.env not in ENVIRONMENTS:
+                logging.error(f"無効な環境が指定されました: {args.env}")
+                logging.error(f"利用可能な環境: {', '.join(ENVIRONMENTS)}")
+                return 1
+
+            selected_env = args.env
+            logging.info(f"引数で指定された環境: {selected_env}")
+        else:
+            # 引数で指定されていない場合は対話的に選択
+            selected_env = select_environment()
+            if selected_env is None:
+                logging.error("環境選択がキャンセルされました")
+                return 1
 
         # {ENV} プレースホルダーを置換
         if args.batch:
