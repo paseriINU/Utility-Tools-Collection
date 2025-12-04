@@ -31,7 +31,7 @@ WINRM_USER="${WINRM_USER:-Administrator}"        # Windowsユーザー名
 WINRM_PASS="${WINRM_PASS:-YourPassword}"         # Windowsパスワード
 
 # 環境フォルダ名（実行時に選択可能）
-ENV_FOLDER="${ENV_FOLDER:-TST1T}"                # デフォルト環境（TST1T または TST2T）
+ENV_FOLDER="${ENV_FOLDER:-}"                     # デフォルト環境なし（実行時に必ず選択）
 
 # 実行するバッチファイル（Windows側のパス）
 # {ENV} は選択した環境フォルダ名に置換されます
@@ -86,12 +86,12 @@ select_environment() {
     echo "1. TST1T"
     echo "2. TST2T"
     echo "======================================"
-    echo -n "環境を選択してください (1 または 2) [デフォルト: 1]: "
+    echo -n "環境を選択してください (1 または 2): "
 
     read -r selection
 
     case "$selection" in
-        1|"")
+        1)
             ENV_FOLDER="TST1T"
             ;;
         2)
