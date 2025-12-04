@@ -195,22 +195,32 @@ if ($transferMode -eq "changed") {
         $status = $line.Substring(0, 2)
         $filePath = $line.Substring(3).Trim()
 
-        # 削除されたファイル (D で始まる) を除外
-        if ($status -notmatch '^.?D') {
-            # 拡張子フィルタ
-            if ($TARGET_EXTENSIONS.Count -eq 0) {
-                # フィルタなし
+        # 削除されたファイルを除外（ステータスコードに'D'が含まれる場合）
+        # D  = ステージング済み削除
+        #  D = ステージングされていない削除
+        # DD = 両方
+        if ($status -match 'D') {
+            return
+        }
+
+        # ../ で始まるパスを除外
+        if ($filePath -match '^\.\./') {
+            return
+        }
+
+        # 拡張子フィルタ
+        if ($TARGET_EXTENSIONS.Count -eq 0) {
+            # フィルタなし
+            $fileList += [PSCustomObject]@{
+                Status = $status
+                Path = $filePath
+            }
+        } else {
+            $fileExt = [System.IO.Path]::GetExtension($filePath)
+            if ($TARGET_EXTENSIONS -contains $fileExt) {
                 $fileList += [PSCustomObject]@{
                     Status = $status
                     Path = $filePath
-                }
-            } else {
-                $fileExt = [System.IO.Path]::GetExtension($filePath)
-                if ($TARGET_EXTENSIONS -contains $fileExt) {
-                    $fileList += [PSCustomObject]@{
-                        Status = $status
-                        Path = $filePath
-                    }
                 }
             }
         }
@@ -282,17 +292,16 @@ Write-Host ""
 #region 転送確認
 Write-Color "これらのファイルを転送しますか？" "Yellow"
 Write-Host ""
-Write-Host "  [A] すべて転送"
-Write-Host "  [I] 個別に選択"
-Write-Host "  [C] キャンセル"
+Write-Host "  1. すべて転送"
+Write-Host "  2. 個別に選択"
+Write-Host "  3. キャンセル"
 Write-Host ""
 
 do {
-    $choice = Read-Host "選択してください (A/I/C)"
-    $choice = $choice.ToUpper()
-} while ($choice -notin @("A", "I", "C"))
+    $choice = Read-Host "番号を入力 (1-3)"
+} while ($choice -notin @("1", "2", "3"))
 
-if ($choice -eq "C") {
+if ($choice -eq "3") {
     Write-Color "[キャンセル] 転送を中止しました" "Yellow"
     exit 0
 }
@@ -300,7 +309,7 @@ if ($choice -eq "C") {
 # 転送するファイルリスト
 $filesToTransfer = @()
 
-if ($choice -eq "A") {
+if ($choice -eq "1") {
     # すべて転送
     $filesToTransfer = $fileList
     Write-Color "[選択] すべてのファイルを転送します" "Green"
