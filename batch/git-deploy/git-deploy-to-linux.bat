@@ -214,8 +214,8 @@ if ($transferMode -eq "changed") {
 
         # ステータスコードを取得（最初の2文字）
         $status = $line.Substring(0, 2)
-        # ファイルパス（3文字目以降、先頭の空白のみ除去）
-        $filePath = $line.Substring(3).TrimStart()
+        # ファイルパス（2文字目以降、先頭の空白のみ除去）
+        $filePath = $line.Substring(2).TrimStart()
 
         # 引用符で囲まれている場合は除去
         if ($filePath.StartsWith('"') -and $filePath.EndsWith('"') -and $filePath.Length -ge 2) {
