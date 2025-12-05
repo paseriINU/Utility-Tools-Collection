@@ -242,14 +242,22 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ### ブランチ戦略
 
-- 基本的に`main`ブランチで直接作業
-- 大きな変更の場合はフィーチャーブランチを作成することも可
+- **mainブランチへの直接プッシュは禁止**
+- **必ずフィーチャーブランチを作成してプルリクエスト（PR）を作成すること**
+- ブランチ命名規則: `claude/[機能名]-[session-id]`
+  - 例: `claude/remote-exec-consolidation-01BGfeHT5izXrCtTTXPVzWdZ`
+- 作業フロー:
+  1. フィーチャーブランチを作成: `git checkout -b claude/feature-name-sessionid`
+  2. 変更をコミット
+  3. リモートにプッシュ: `git push -u origin claude/feature-name-sessionid`
+  4. GitHubでプルリクエストを作成
+  5. レビュー後、mainにマージ
 
 ## Special Considerations
 
-- **個人用リポジトリ**: プルリクエストやイシュー管理は不要
+- **個人用リポジトリ**: mainブランチは保護されており、すべての変更はPRを通してマージ
 - **多言語対応**: ファイル名やコメントに日本語を使用可能
-- **エンコーディング注意**: 特にバッチファイルはUTF-8で保存
+- **エンコーディング注意**: 特にバッチファイルはShift_JISで保存（UTF-8入力がある場合は chcp 65001 使用）
 - **プライバシー**: 機密情報（パスワード、APIキーなど）をコミットしないこと
 
 ## Tools Currently Available
