@@ -1,10 +1,20 @@
 <# :
 @echo off
-setlocal
 chcp 65001 >nul
-powershell -NoProfile -ExecutionPolicy Bypass -Command "iex ((gc '%~f0') -join \"`n\")"
-exit /b %ERRORLEVEL%
-: #> | sv -name _ > $null
+title JP1 ジョブネット起動ツール
+setlocal
+
+rem UNCパス対応（PushD/PopDで自動マッピング）
+pushd "%~dp0"
+
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$scriptDir=('%~dp0' -replace '\\$',''); try { iex ((gc '%~f0') -join \"`n\") } finally { Set-Location C:\ }"
+set EXITCODE=%ERRORLEVEL%
+
+popd
+
+pause
+exit /b %EXITCODE%
+: #>
 
 #Requires -Version 5.1
 <#

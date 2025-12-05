@@ -2,6 +2,46 @@
 必ず日本語で回答してください。
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## 重要な作業ルール
+
+### 広範囲な修正を行う場合の事前確認
+
+**必須**: 以下のいずれかに該当する場合、**修正を実行する前に必ずユーザーに確認すること**：
+
+1. **複数ファイルの修正**
+   - 3つ以上のファイルを修正する場合
+   - リポジトリ全体に影響する変更の場合
+
+2. **実装方法の選択肢がある場合**
+   - 複数のアプローチが考えられる場合
+   - 異なる技術的トレードオフがある場合
+
+3. **大規模なリファクタリング**
+   - ファイル構造の変更
+   - コーディングパターンの変更
+   - 既存の動作を大きく変更する場合
+
+**確認時に提示すべき情報**:
+- 修正対象のファイルリスト
+- 各アプローチの説明
+- メリット・デメリットの比較
+- 推奨する方法とその理由
+
+**例**:
+```
+以下の7つのバッチファイルを修正します：
+1. batch/git-diff-extract/extract_diff.bat
+2. batch/sync/sync_tfs_to_git.bat
+...
+
+UNCパス対応には以下の方法があります：
+1. 一時ドライブマッピング方式（確実だが複雑）
+2. PushD/PopD方式（シンプル・推奨）
+3. PowerShell Set-Location方式（環境依存性高い）
+
+どの方式を採用しますか？
+```
+
 ## Project Overview
 
 このリポジトリは個人の開発効率化・業務自動化のための便利ツール集です。言語・用途別に整理されたスクリプトとマクロを管理しています。
@@ -113,6 +153,50 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
     # $scriptDir 変数でバッチファイルのディレクトリパスが利用可能
     ```
+  - ポリグロットパターン（UNCパス対応版 - PushD/PopD方式）:
+    **重要**: UNCパス（`\\server\share\folder`形式のネットワークパス）に配置されたバッチファイルを実行する場合、PowerShellが直接UNCパスから実行できないため、PushD/PopDで一時的にドライブマッピングを行います。
+    ```batch
+    <# :
+    @echo off
+    chcp 65001 >nul
+    title ツール名
+    setlocal
+
+    rem UNCパス対応（PushD/PopDで自動マッピング）
+    pushd "%~dp0"
+
+    powershell -NoProfile -ExecutionPolicy Bypass -Command "$scriptDir=('%~dp0' -replace '\\$',''); try { iex ((gc '%~f0') -join \"`n\") } finally { Set-Location C:\ }"
+    set EXITCODE=%ERRORLEVEL%
+
+    popd
+
+    pause
+    exit /b %EXITCODE%
+    : #>
+
+    # PowerShellコードはここから
+    # 最初にタイトルを表示
+    Write-Host ""
+    Write-Host "================================================================" -ForegroundColor Cyan
+    Write-Host "  ツール名" -ForegroundColor Cyan
+    Write-Host "================================================================" -ForegroundColor Cyan
+    Write-Host ""
+
+    # $scriptDir 変数でバッチファイルのディレクトリパスが利用可能
+    ```
+    **UNCパス対応版（PushD/PopD方式）の動作**:
+    - `pushd "%~dp0"` でUNCパスを自動検出し、一時ドライブをマッピング
+    - PowerShell内で `try-finally` を使用してエラー時も確実にクリーンアップ
+    - `finally { Set-Location C:\ }` でカレントディレクトリを変更してからpopd実行
+    - `popd` で一時ドライブマッピングを自動解除
+    - **×ボタンで閉じた場合もWindowsが自動的にドライブを解除**（pushd/popdの仕組み）
+    - ローカルパスの場合は通常通り実行（オーバーヘッドなし）
+
+    **従来の明示的なドライブマッピング方式との比較**:
+    - ✅ コードが大幅にシンプル（約50%削減）
+    - ✅ ドライブレター検索ループが不要
+    - ✅ Windowsの標準機能でクリーンアップを保証
+    - ✅ エラー処理がシンプル
   - PowerShell 5.1以降で動作すること
   - コメントベースのヘルプを記載
   - **スタンドアローン版を基本とする**: ソース内の設定セクションを編集するだけで使用可能にすること

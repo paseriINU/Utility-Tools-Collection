@@ -1,179 +1,188 @@
+<# :
 @echo off
-:: UTF-8モードに設定（日本語ブランチ名対応）
 chcp 65001 >nul
-setlocal enabledelayedexpansion
+title TFS to Git 同期スクリプト
+setlocal
 
-:: =============================================================================
-:: TFS to Git Sync Script
-:: TFSのファイルをGitリポジトリに同期します
-:: =============================================================================
+rem UNCパス対応（PushD/PopDで自動マッピング）
+pushd "%~dp0"
 
-:: Git日本語表示設定
-git config --global core.quotepath false >nul 2>&1
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$scriptDir=('%~dp0' -replace '\\$',''); try { iex ((gc '%~f0') -join \"`n\") } finally { Set-Location C:\ }"
+set EXITCODE=%ERRORLEVEL%
 
-echo ========================================
-echo TFS to Git 同期スクリプト
-echo ========================================
-echo.
+popd
 
-:: TFSとGitのディレクトリパスを設定（固定値）
-set "TFS_DIR=C:\Users\%username%\source"
-set "GIT_REPO_DIR=C:\Users\%username%\source\Git\project"
-
-:: パスの存在確認
-if not exist "%TFS_DIR%" (
-    echo [エラー] TFSディレクトリが見つかりません: %TFS_DIR%
-    pause
-    exit /b 1
-)
-
-if not exist "%GIT_REPO_DIR%" (
-    echo [エラー] Gitディレクトリが見つかりません: %GIT_REPO_DIR%
-    pause
-    exit /b 1
-)
-
-if not exist "%GIT_REPO_DIR%\.git" (
-    echo [エラー] 指定されたディレクトリはGitリポジトリではありません: %GIT_REPO_DIR%
-    pause
-    exit /b 1
-)
-
-echo.
-echo TFSディレクトリ: %TFS_DIR%
-echo Gitディレクトリ: %GIT_REPO_DIR%
-echo.
-
-:: Gitディレクトリに移動
-cd /d "%GIT_REPO_DIR%"
-
-:: 現在のブランチを表示
-echo ----------------------------------------
-echo 現在のGitブランチ:
-echo ----------------------------------------
-git branch
-echo.
-
-:BRANCH_MENU
-echo ブランチ操作を選択してください:
-echo  1. このまま続行
-echo  2. ブランチを切り替える
-echo  3. 終了
-echo.
-set /p BRANCH_CHOICE="選択 (1-3): "
-
-if "%BRANCH_CHOICE%"=="1" goto START_SYNC
-if "%BRANCH_CHOICE%"=="2" goto SWITCH_BRANCH
-if "%BRANCH_CHOICE%"=="3" exit /b 0
-
-echo 無効な選択です。
-goto BRANCH_MENU
-
-:SWITCH_BRANCH
-echo.
-echo ----------------------------------------
-echo 利用可能なブランチ:
-echo ----------------------------------------
-git branch -a
-echo.
-set /p NEW_BRANCH="切り替え先のブランチ名を入力してください: "
-git checkout "%NEW_BRANCH%"
-if errorlevel 1 (
-    echo [エラー] ブランチの切り替えに失敗しました
-    pause
-    goto BRANCH_MENU
-)
-echo ブランチを切り替えました: %NEW_BRANCH%
-echo.
-goto BRANCH_MENU
-
-:START_SYNC
-echo.
-echo ========================================
-echo 同期処理を開始します
-echo ========================================
-echo.
-
-:: PowerShellスクリプトを実行（ファイル末尾に埋め込まれたコード）
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$content = Get-Content '%~f0' -Raw; $start = $content.IndexOf('<#SYNC_LOGIC#>') + 14; $end = $content.IndexOf('<#/SYNC_LOGIC#>'); if ($start -gt 13 -and $end -gt $start) { $psCode = $content.Substring($start, $end - $start); Invoke-Expression $psCode } else { Write-Error 'PowerShell sync logic not found'; exit 1 }" -TfsDir "%TFS_DIR%" -GitDir "%GIT_REPO_DIR%"
-
-if errorlevel 1 (
-    echo [エラー] PowerShellスクリプトの実行に失敗しました
-    pause
-    exit /b 1
-)
-
-echo.
-echo ========================================
-echo Gitステータスを確認してください
-echo ========================================
-git status
-
-echo.
-echo ----------------------------------------
-echo 次の操作を選択してください:
-echo 1. 変更をコミットする
-echo 2. 何もせず終了
-echo ----------------------------------------
-set /p COMMIT_CHOICE="選択 (1-2): "
-
-if "%COMMIT_CHOICE%"=="1" goto DO_COMMIT
-goto END
-
-:DO_COMMIT
-echo.
-set /p COMMIT_MSG="コミットメッセージを入力してください: "
-git add -A
-git commit -m "%COMMIT_MSG%"
-if errorlevel 1 (
-    echo [警告] コミットに失敗しました、または変更がありませんでした
-) else (
-    echo コミットが完了しました
-)
-
-:END
-echo.
-echo 処理が完了しました。
 pause
-exit /b 0
+exit /b %EXITCODE%
+: #>
 
-rem =============================================================================
-rem PowerShell Sync Logic (埋め込み版)
-rem =============================================================================
-<#SYNC_LOGIC#>
-param(
-    [Parameter(Mandatory=$true)]
-    [string]$TfsDir,
+# =============================================================================
+# TFS to Git Sync Script (PowerShell)
+# TFSのファイルをGitリポジトリに同期します
+# =============================================================================
 
-    [Parameter(Mandatory=$true)]
-    [string]$GitDir
-)
+# タイトル表示
+Write-Host ""
+Write-Host "========================================================================" -ForegroundColor Cyan
+Write-Host "  TFS to Git 同期スクリプト" -ForegroundColor Cyan
+Write-Host "========================================================================" -ForegroundColor Cyan
+Write-Host ""
 
 # UTF-8出力設定
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+
+# Git日本語表示設定
+git config --global core.quotepath false 2>&1 | Out-Null
+
+#region 設定セクション
+# TFSとGitのディレクトリパスを設定（固定値）
+$TFS_DIR = "C:\Users\$env:USERNAME\source"
+$GIT_REPO_DIR = "C:\Users\$env:USERNAME\source\Git\project"
+#endregion
+
+#region パスの存在確認
+if (-not (Test-Path $TFS_DIR)) {
+    Write-Host "[エラー] TFSディレクトリが見つかりません: $TFS_DIR" -ForegroundColor Red
+    exit 1
+}
+
+if (-not (Test-Path $GIT_REPO_DIR)) {
+    Write-Host "[エラー] Gitディレクトリが見つかりません: $GIT_REPO_DIR" -ForegroundColor Red
+    exit 1
+}
+
+# Gitリポジトリ確認（親ディレクトリを遡って.gitフォルダを探す）
+Push-Location $GIT_REPO_DIR
+$isGitRepo = $false
+try {
+    # git rev-parseコマンドでGitリポジトリかどうかを確認
+    git rev-parse --git-dir 2>&1 | Out-Null
+    if ($LASTEXITCODE -eq 0) {
+        $isGitRepo = $true
+    }
+} catch {
+    $isGitRepo = $false
+}
+Pop-Location
+
+if (-not $isGitRepo) {
+    Write-Host "[エラー] 指定されたディレクトリはGit管理下にありません: $GIT_REPO_DIR" -ForegroundColor Red
+    exit 1
+}
+#endregion
+
+Write-Host ""
+Write-Host "TFSディレクトリ: $TFS_DIR" -ForegroundColor White
+Write-Host "Gitディレクトリ: $GIT_REPO_DIR" -ForegroundColor White
+Write-Host ""
+
+# Gitディレクトリに移動
+Set-Location $GIT_REPO_DIR
+
+#region ブランチ操作
+Write-Host "------------------------------------------------------------------------" -ForegroundColor Yellow
+Write-Host " 現在のGitブランチ:" -ForegroundColor Yellow
+Write-Host "------------------------------------------------------------------------" -ForegroundColor Yellow
+git branch
+Write-Host ""
+
+# ブランチ操作メニュー
+while ($true) {
+    Write-Host "ブランチ操作を選択してください:" -ForegroundColor Cyan
+    Write-Host " 1. このまま続行"
+    Write-Host " 2. ブランチを切り替える"
+    Write-Host " 3. 終了"
+    Write-Host ""
+    $branchChoice = Read-Host "選択 (1-3)"
+
+    switch ($branchChoice) {
+        "1" {
+            # 同期処理へ
+            break
+        }
+        "2" {
+            Write-Host ""
+            Write-Host "------------------------------------------------------------------------" -ForegroundColor Yellow
+            Write-Host " 利用可能なブランチ:" -ForegroundColor Yellow
+            Write-Host "------------------------------------------------------------------------" -ForegroundColor Yellow
+
+            # ローカルブランチ一覧を取得
+            $branches = git branch --format="%(refname:short)" | ForEach-Object { $_.Trim() }
+
+            if ($branches.Count -eq 0) {
+                Write-Host "[エラー] ブランチが見つかりません" -ForegroundColor Red
+                Write-Host ""
+                continue
+            }
+
+            # ブランチを番号付きで表示
+            for ($i = 0; $i -lt $branches.Count; $i++) {
+                $displayNum = $i + 1
+                $branch = $branches[$i]
+                Write-Host " $displayNum. $branch"
+            }
+            Write-Host ""
+
+            # ブランチ選択
+            $maxNum = $branches.Count
+            $selection = Read-Host "ブランチ番号を入力してください (1-$maxNum)"
+
+            # 入力検証
+            if ($selection -match '^\d+$' -and [int]$selection -ge 1 -and [int]$selection -le $maxNum) {
+                $selectedBranch = $branches[[int]$selection - 1]
+
+                git checkout $selectedBranch
+                if ($LASTEXITCODE -ne 0) {
+                    Write-Host "[エラー] ブランチの切り替えに失敗しました" -ForegroundColor Red
+                    Write-Host ""
+                    continue
+                }
+                Write-Host "ブランチを切り替えました: $selectedBranch" -ForegroundColor Green
+                Write-Host ""
+            } else {
+                Write-Host "[エラー] 無効な番号です" -ForegroundColor Red
+                Write-Host ""
+            }
+        }
+        "3" {
+            exit 0
+        }
+        default {
+            Write-Host "無効な選択です。" -ForegroundColor Red
+        }
+    }
+}
+#endregion
+
+#region 同期処理
+Write-Host ""
+Write-Host "========================================================================" -ForegroundColor Cyan
+Write-Host " 同期処理を開始します" -ForegroundColor Cyan
+Write-Host "========================================================================" -ForegroundColor Cyan
+Write-Host ""
 
 Write-Host "差分チェック中..." -ForegroundColor Cyan
 Write-Host ""
 
 # TFSとGitのファイル一覧を取得
-Write-Verbose "TFSディレクトリをスキャン中: $TfsDir"
-$tfsFiles = Get-ChildItem -Path $TfsDir -Recurse -File -ErrorAction SilentlyContinue
+Write-Verbose "TFSディレクトリをスキャン中: $TFS_DIR"
+$tfsFiles = Get-ChildItem -Path $TFS_DIR -Recurse -File -ErrorAction SilentlyContinue
 
-Write-Verbose "Gitディレクトリをスキャン中: $GitDir"
-$gitFiles = Get-ChildItem -Path $GitDir -Recurse -File -ErrorAction SilentlyContinue | Where-Object {
+Write-Verbose "Gitディレクトリをスキャン中: $GIT_REPO_DIR"
+$gitFiles = Get-ChildItem -Path $GIT_REPO_DIR -Recurse -File -ErrorAction SilentlyContinue | Where-Object {
     $_.FullName -notlike '*\.git\*'
 }
 
 # ファイルを相対パスでハッシュテーブルに格納
 $tfsFileDict = @{}
 foreach ($file in $tfsFiles) {
-    $relativePath = $file.FullName.Substring($TfsDir.Length).TrimStart('\')
+    $relativePath = $file.FullName.Substring($TFS_DIR.Length).TrimStart('\')
     $tfsFileDict[$relativePath] = $file
 }
 
 $gitFileDict = @{}
 foreach ($file in $gitFiles) {
-    $relativePath = $file.FullName.Substring($GitDir.Length).TrimStart('\')
+    $relativePath = $file.FullName.Substring($GIT_REPO_DIR.Length).TrimStart('\')
     $gitFileDict[$relativePath] = $file
 }
 
@@ -188,7 +197,7 @@ Write-Host ""
 # TFSファイルをチェック（更新 & 新規追加）
 foreach ($relativePath in $tfsFileDict.Keys) {
     $tfsFile = $tfsFileDict[$relativePath]
-    $gitFilePath = Join-Path $GitDir $relativePath
+    $gitFilePath = Join-Path $GIT_REPO_DIR $relativePath
 
     if (Test-Path $gitFilePath) {
         # ファイルが両方に存在 → MD5ハッシュで比較
@@ -251,15 +260,45 @@ foreach ($relativePath in $gitFileDict.Keys) {
 }
 
 Write-Host ""
-Write-Host "========================================" -ForegroundColor Cyan
-Write-Host "同期完了" -ForegroundColor Cyan
-Write-Host "========================================" -ForegroundColor Cyan
+Write-Host "========================================================================" -ForegroundColor Cyan
+Write-Host " 同期完了" -ForegroundColor Cyan
+Write-Host "========================================================================" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "更新/新規ファイル: $copiedCount" -ForegroundColor Green
 Write-Host "削除ファイル: $deletedCount" -ForegroundColor Red
 Write-Host "変更なし: $identicalCount" -ForegroundColor Gray
 Write-Host ""
+#endregion
 
-# 終了コード: 0=成功
+#region Gitステータス確認とコミット
+Write-Host "========================================================================" -ForegroundColor Cyan
+Write-Host " Gitステータスを確認してください" -ForegroundColor Cyan
+Write-Host "========================================================================" -ForegroundColor Cyan
+git status
+
+Write-Host ""
+Write-Host "------------------------------------------------------------------------" -ForegroundColor Yellow
+Write-Host "次の操作を選択してください:" -ForegroundColor Cyan
+Write-Host " 1. 変更をコミットする"
+Write-Host " 2. 何もせず終了"
+Write-Host "------------------------------------------------------------------------" -ForegroundColor Yellow
+$commitChoice = Read-Host "選択 (1-2)"
+
+if ($commitChoice -eq "1") {
+    Write-Host ""
+    $commitMsg = Read-Host "コミットメッセージを入力してください"
+
+    git add -A
+    git commit -m $commitMsg
+
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "[警告] コミットに失敗しました、または変更がありませんでした" -ForegroundColor Yellow
+    } else {
+        Write-Host "コミットが完了しました" -ForegroundColor Green
+    }
+}
+#endregion
+
+Write-Host ""
+Write-Host "処理が完了しました。" -ForegroundColor Cyan
 exit 0
-<#/SYNC_LOGIC#>

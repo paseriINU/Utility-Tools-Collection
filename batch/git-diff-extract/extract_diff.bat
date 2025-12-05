@@ -1,188 +1,204 @@
+<# :
 @echo off
-rem ====================================================================
-rem Gitブランチ間の差分ファイルを抽出してフォルダ構造を保ったままコピー
-rem ====================================================================
+chcp 65001 >nul
+title Git 差分ファイル抽出ツール
+setlocal
 
-setlocal enabledelayedexpansion
+rem UNCパス対応（PushD/PopDで自動マッピング）
+pushd "%~dp0"
 
-rem ====================================================================
-rem 設定項目（必要に応じて編集してください）
-rem ====================================================================
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$scriptDir=('%~dp0' -replace '\\$',''); try { iex ((gc '%~f0') -join \"`n\") } finally { Set-Location C:\ }"
+set EXITCODE=%ERRORLEVEL%
 
-rem 比較元ブランチ（基準）
-set BASE_BRANCH=main
+popd
 
-rem 比較先ブランチ（差分を取得したいブランチ）
-set TARGET_BRANCH=develop
+pause
+exit /b %EXITCODE%
+: #>
 
-rem 出力先フォルダ（相対パスまたは絶対パス）
-set OUTPUT_DIR=diff_output
+# =============================================================================
+# Git Diff Extract Tool (PowerShell)
+# Gitブランチ間の差分ファイルを抽出してフォルダ構造を保ったままコピー
+# =============================================================================
 
-rem 削除されたファイルも含めるか（1=含める, 0=含めない）
-set INCLUDE_DELETED=0
+# タイトル表示
+Write-Host ""
+Write-Host "========================================================================" -ForegroundColor Cyan
+Write-Host "  Git 差分ファイル抽出ツール" -ForegroundColor Cyan
+Write-Host "========================================================================" -ForegroundColor Cyan
+Write-Host ""
 
-rem ====================================================================
-rem メイン処理
-rem ====================================================================
+# UTF-8出力設定
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
-echo ========================================
-echo Git差分ファイル抽出ツール
-echo ========================================
-echo.
+#region 設定セクション
+# 比較元ブランチ（基準）
+$BASE_BRANCH = "main"
 
-rem Gitリポジトリのパスに移動
-set GIT_PROJECT_PATH=C:\Users\%username%\source\Git\project
+# 比較先ブランチ（差分を取得したいブランチ）
+$TARGET_BRANCH = "develop"
 
-if not exist "%GIT_PROJECT_PATH%" (
-    echo [エラー] Gitプロジェクトフォルダが見つかりません。
-    echo パス: %GIT_PROJECT_PATH%
-    echo.
-    echo フォルダが存在するか確認してください。
-    pause
-    exit /b 1
-)
+# 出力先フォルダ（相対パスまたは絶対パス）
+$OUTPUT_DIR = "diff_output"
 
-echo Gitプロジェクトパス: %GIT_PROJECT_PATH%
-cd /d "%GIT_PROJECT_PATH%"
-echo.
+# 削除されたファイルも含めるか（$true=含める, $false=含めない）
+$INCLUDE_DELETED = $false
 
-rem Gitリポジトリかどうか確認
-git rev-parse --git-dir >nul 2>&1
-if errorlevel 1 (
-    echo [エラー] このフォルダはGitリポジトリではありません。
-    echo パス: %GIT_PROJECT_PATH%
-    pause
-    exit /b 1
-)
+# Gitプロジェクトのパス
+$GIT_PROJECT_PATH = "C:\Users\$env:USERNAME\source\Git\project"
+#endregion
 
-rem リポジトリのルートディレクトリを取得
-for /f "delims=" %%i in ('git rev-parse --show-toplevel') do set REPO_ROOT=%%i
-rem Windowsパス形式に変換（/をバックスラッシュに）
-set REPO_ROOT=%REPO_ROOT:/=\%
+#region Gitリポジトリ確認
+# パス存在確認
+if (-not (Test-Path $GIT_PROJECT_PATH)) {
+    Write-Host "[エラー] Gitプロジェクトフォルダが見つかりません: $GIT_PROJECT_PATH" -ForegroundColor Red
+    Write-Host ""
+    Write-Host "フォルダが存在するか確認してください。" -ForegroundColor Yellow
+    exit 1
+}
 
-echo リポジトリルート: %REPO_ROOT%
-echo 比較元ブランチ  : %BASE_BRANCH%
-echo 比較先ブランチ  : %TARGET_BRANCH%
-echo 出力先フォルダ  : %OUTPUT_DIR%
-echo.
+Write-Host "Gitプロジェクトパス: $GIT_PROJECT_PATH" -ForegroundColor White
+Set-Location $GIT_PROJECT_PATH
+Write-Host ""
 
-rem ブランチの存在確認
-git rev-parse --verify %BASE_BRANCH% >nul 2>&1
-if errorlevel 1 (
-    echo [エラー] ブランチ '%BASE_BRANCH%' が見つかりません。
-    pause
-    exit /b 1
-)
+# Gitリポジトリ確認
+git rev-parse --git-dir 2>&1 | Out-Null
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "[エラー] このフォルダはGit管理下にありません: $GIT_PROJECT_PATH" -ForegroundColor Red
+    exit 1
+}
 
-git rev-parse --verify %TARGET_BRANCH% >nul 2>&1
-if errorlevel 1 (
-    echo [エラー] ブランチ '%TARGET_BRANCH%' が見つかりません。
-    pause
-    exit /b 1
-)
+# リポジトリのルートディレクトリを取得
+$REPO_ROOT = git rev-parse --show-toplevel
+$REPO_ROOT = $REPO_ROOT -replace '/', '\'
 
-rem 出力先フォルダを作成（既存の場合は確認）
-if exist "%OUTPUT_DIR%" (
-    echo [警告] 出力先フォルダ '%OUTPUT_DIR%' は既に存在します。
-    choice /M "上書きしますか"
-    if errorlevel 2 (
-        echo 処理を中止しました。
-        pause
-        exit /b 0
-    )
-    echo 既存のフォルダをクリア中...
-    rd /s /q "%OUTPUT_DIR%"
-)
+Write-Host "リポジトリルート: $REPO_ROOT" -ForegroundColor White
+Write-Host "比較元ブランチ  : $BASE_BRANCH" -ForegroundColor White
+Write-Host "比較先ブランチ  : $TARGET_BRANCH" -ForegroundColor White
+Write-Host "出力先フォルダ  : $OUTPUT_DIR" -ForegroundColor White
+Write-Host ""
+#endregion
 
-mkdir "%OUTPUT_DIR%"
+#region ブランチ存在確認
+# 比較元ブランチ確認
+git rev-parse --verify $BASE_BRANCH 2>&1 | Out-Null
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "[エラー] ブランチ '$BASE_BRANCH' が見つかりません" -ForegroundColor Red
+    exit 1
+}
 
-rem 差分ファイルリストを取得
-echo 差分ファイルを検出中...
-echo.
+# 比較先ブランチ確認
+git rev-parse --verify $TARGET_BRANCH 2>&1 | Out-Null
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "[エラー] ブランチ '$TARGET_BRANCH' が見つかりません" -ForegroundColor Red
+    exit 1
+}
+#endregion
 
-rem 一時ファイルに差分リストを保存
-set TEMP_FILE=%TEMP%\git_diff_files_%RANDOM%.txt
+#region 出力先フォルダ確認
+if (Test-Path $OUTPUT_DIR) {
+    Write-Host "[警告] 出力先フォルダ '$OUTPUT_DIR' は既に存在します" -ForegroundColor Yellow
+    $overwrite = Read-Host "上書きしますか? (y/n)"
 
-if "%INCLUDE_DELETED%"=="1" (
-    rem 削除されたファイルも含める
-    git diff --name-only %BASE_BRANCH%...%TARGET_BRANCH% > "%TEMP_FILE%"
-) else (
-    rem 削除されたファイルを除外（追加・変更のみ）
-    git diff --name-only --diff-filter=ACMR %BASE_BRANCH%...%TARGET_BRANCH% > "%TEMP_FILE%"
-)
+    if ($overwrite -ne "y") {
+        Write-Host "処理を中止しました" -ForegroundColor Yellow
+        exit 0
+    }
 
-rem ファイル数をカウント
-set FILE_COUNT=0
-for /f %%i in ('type "%TEMP_FILE%" ^| find /c /v ""') do set FILE_COUNT=%%i
+    Write-Host "既存のフォルダをクリア中..." -ForegroundColor Yellow
+    Remove-Item -Path $OUTPUT_DIR -Recurse -Force
+}
 
-if %FILE_COUNT% EQU 0 (
-    echo [情報] 差分ファイルが見つかりませんでした。
-    echo 2つのブランチは同じ内容です。
-    del "%TEMP_FILE%"
-    pause
-    exit /b 0
-)
+New-Item -ItemType Directory -Path $OUTPUT_DIR -Force | Out-Null
+#endregion
 
-echo 検出された差分ファイル数: %FILE_COUNT% 個
-echo.
-echo ファイルをコピー中...
-echo.
+#region 差分ファイル取得
+Write-Host "差分ファイルを検出中..." -ForegroundColor Cyan
+Write-Host ""
 
-rem 各ファイルをコピー
-set COPY_COUNT=0
-set ERROR_COUNT=0
+# 差分ファイルリストを取得
+if ($INCLUDE_DELETED) {
+    # 削除されたファイルも含める
+    $diffFiles = git diff --name-only "$BASE_BRANCH...$TARGET_BRANCH"
+} else {
+    # 削除されたファイルを除外（追加・変更のみ）
+    $diffFiles = git diff --name-only --diff-filter=ACMR "$BASE_BRANCH...$TARGET_BRANCH"
+}
 
-for /f "usebackq delims=" %%f in ("%TEMP_FILE%") do (
-    set "FILE_PATH=%%f"
+if (-not $diffFiles -or $diffFiles.Count -eq 0) {
+    Write-Host "[情報] 差分ファイルが見つかりませんでした" -ForegroundColor Yellow
+    Write-Host "2つのブランチは同じ内容です" -ForegroundColor Yellow
+    exit 0
+}
 
-    rem Unixスタイルのパスをバックスラッシュに変換
-    set "FILE_PATH=!FILE_PATH:/=\!"
+$FILE_COUNT = ($diffFiles | Measure-Object).Count
+Write-Host "検出された差分ファイル数: $FILE_COUNT 個" -ForegroundColor Green
+Write-Host ""
+Write-Host "ファイルをコピー中..." -ForegroundColor Cyan
+Write-Host ""
+#endregion
 
-    rem フルパス
-    set "SOURCE_FILE=%REPO_ROOT%\!FILE_PATH!"
-    set "DEST_FILE=%OUTPUT_DIR%\!FILE_PATH!"
+#region ファイルコピー
+$COPY_COUNT = 0
+$ERROR_COUNT = 0
+$SKIP_COUNT = 0
 
-    rem ファイルの存在確認（削除されたファイルはスキップ）
-    if exist "!SOURCE_FILE!" (
-        rem コピー先のディレクトリを作成
-        for %%d in ("!DEST_FILE!") do set "DEST_DIR=%%~dpd"
-        if not exist "!DEST_DIR!" mkdir "!DEST_DIR!"
+foreach ($file in $diffFiles) {
+    # Unixスタイルのパスをバックスラッシュに変換
+    $filePath = $file -replace '/', '\'
 
-        rem ファイルをコピー
-        copy /y "!SOURCE_FILE!" "!DEST_FILE!" >nul 2>&1
+    # フルパス
+    $sourceFile = Join-Path $REPO_ROOT $filePath
+    $destFile = Join-Path $OUTPUT_DIR $filePath
 
-        if errorlevel 1 (
-            echo [エラー] !FILE_PATH!
-            set /a ERROR_COUNT+=1
-        ) else (
-            echo [コピー] !FILE_PATH!
-            set /a COPY_COUNT+=1
-        )
-    ) else (
-        echo [削除済] !FILE_PATH! ^(スキップ^)
-    )
-)
+    # ファイルの存在確認（削除されたファイルはスキップ）
+    if (Test-Path $sourceFile) {
+        # コピー先のディレクトリを作成
+        $destDir = Split-Path -Path $destFile -Parent
+        if (-not (Test-Path $destDir)) {
+            New-Item -ItemType Directory -Path $destDir -Force | Out-Null
+        }
 
-rem 一時ファイルを削除
-del "%TEMP_FILE%"
+        # ファイルをコピー
+        try {
+            Copy-Item -Path $sourceFile -Destination $destFile -Force -ErrorAction Stop
+            Write-Host "[コピー] $filePath" -ForegroundColor Green
+            $COPY_COUNT++
+        } catch {
+            Write-Host "[エラー] $filePath" -ForegroundColor Red
+            $ERROR_COUNT++
+        }
+    } else {
+        Write-Host "[削除済] $filePath (スキップ)" -ForegroundColor Gray
+        $SKIP_COUNT++
+    }
+}
+#endregion
 
-echo.
-echo ========================================
-echo 処理完了
-echo ========================================
-echo.
-echo コピーしたファイル数: %COPY_COUNT% 個
-if %ERROR_COUNT% GTR 0 (
-    echo エラー: %ERROR_COUNT% 個
-)
-echo 出力先: %OUTPUT_DIR%
-echo.
+#region 結果表示
+Write-Host ""
+Write-Host "========================================================================" -ForegroundColor Cyan
+Write-Host " 処理完了" -ForegroundColor Cyan
+Write-Host "========================================================================" -ForegroundColor Cyan
+Write-Host ""
+Write-Host "コピーしたファイル数: $COPY_COUNT 個" -ForegroundColor Green
 
-rem 出力先フォルダを開く
-choice /M "出力先フォルダを開きますか"
-if not errorlevel 2 (
-    explorer "%OUTPUT_DIR%"
-)
+if ($SKIP_COUNT -gt 0) {
+    Write-Host "スキップ          : $SKIP_COUNT 個" -ForegroundColor Gray
+}
 
-endlocal
-exit /b 0
+if ($ERROR_COUNT -gt 0) {
+    Write-Host "エラー            : $ERROR_COUNT 個" -ForegroundColor Red
+}
+
+Write-Host "出力先: $OUTPUT_DIR" -ForegroundColor White
+Write-Host ""
+
+# 出力先フォルダを開く
+$openFolder = Read-Host "出力先フォルダを開きますか? (y/n)"
+if ($openFolder -eq "y") {
+    explorer $OUTPUT_DIR
+}
+#endregion
+
+exit 0

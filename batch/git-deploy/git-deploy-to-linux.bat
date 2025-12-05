@@ -3,8 +3,15 @@
 chcp 65001 >nul
 title Git Deploy to Linux
 setlocal
-powershell -NoProfile -ExecutionPolicy Bypass -Command "iex ((gc '%~f0') -join \"`n\")"
+
+rem UNCパス対応（PushD/PopDで自動マッピング）
+pushd "%~dp0"
+
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$scriptDir=('%~dp0' -replace '\\$',''); try { iex ((gc '%~f0') -join \"`n\") } finally { Set-Location C:\ }"
 set EXITCODE=%ERRORLEVEL%
+
+popd
+
 pause
 exit /b %EXITCODE%
 : #>
