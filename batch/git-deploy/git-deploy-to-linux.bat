@@ -104,6 +104,13 @@ if ($GIT_ROOT -eq "") {
 
 Set-Location $GIT_ROOT
 
+# 最初にタイトルを表示
+Write-Host ""
+Write-Color "================================================================" "Cyan"
+Write-Color "  Git Deploy to Linux" "Cyan"
+Write-Color "================================================================" "Cyan"
+Write-Host ""
+
 # Gitリポジトリかどうか確認（.gitフォルダを親ディレクトリから探索）
 $gitDir = git rev-parse --git-dir 2>&1
 if ($LASTEXITCODE -ne 0) {
@@ -122,8 +129,6 @@ if ($LASTEXITCODE -eq 0) {
     }
     Write-Color "[情報] Gitリポジトリルート: $gitRootDir" "Green"
 }
-
-Write-Header "Git Deploy to Linux"
 
 Write-Color "[情報] 作業ディレクトリ: $GIT_ROOT" "Green"
 Write-Host ""
@@ -182,8 +187,6 @@ if ($TARGET_EXTENSIONS.Count -gt 0) {
 }
 
 Write-Host ""
-Write-Host "続行するには何かキーを押してください..."
-$null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
 #endregion
 
 #region ファイルリスト取得
@@ -206,12 +209,20 @@ if ($transferMode -eq "changed") {
     }
 
     $gitStatusOutput -split "`n" | ForEach-Object {
-        $line = $_.Trim()
-        if ($line -eq "") { return }
+        $line = $_
+        if ($line.Length -lt 4) { return }
 
         # ステータスコードを取得（最初の2文字）
         $status = $line.Substring(0, 2)
-        $filePath = $line.Substring(3).Trim()
+        # ファイルパス（3文字目以降、先頭の空白のみ除去）
+        $filePath = $line.Substring(3).TrimStart()
+
+        # 引用符で囲まれている場合は除去
+        if ($filePath.StartsWith('"') -and $filePath.EndsWith('"') -and $filePath.Length -ge 2) {
+            $filePath = $filePath.Substring(1, $filePath.Length - 2)
+        }
+
+        if ($filePath -eq "") { return }
 
         # 削除されたファイルを除外（ステータスコードに'D'が含まれる場合）
         # D  = ステージング済み削除
@@ -362,28 +373,9 @@ if ($choice -eq "1") {
 Write-Host ""
 #endregion
 
-#region SCP/SSH検出
-Write-Host ""
-Write-Color "[チェック] SCP/SSHコマンドを検出中..." "Yellow"
-
-# Windows OpenSSH Client の scp.exe と ssh.exe を確認
-$scpExe = Get-Command scp.exe -ErrorAction SilentlyContinue
-$sshExe = Get-Command ssh.exe -ErrorAction SilentlyContinue
-
-if (-not $scpExe -or -not $sshExe) {
-    Write-Color "[エラー] SCP/SSHコマンドが見つかりません" "Red"
-    Write-Host ""
-    Write-Host "Windows OpenSSH Client をインストールしてください："
-    Write-Host "  設定 > アプリ > オプション機能 > OpenSSH クライアント"
-    exit 1
-}
-
+# SCP/SSHコマンドを設定
 $scpCommand = "scp.exe"
 $sshCommand = "ssh.exe"
-Write-Color "[検出] Windows OpenSSH Client (scp.exe, ssh.exe)" "Green"
-
-Write-Host ""
-#endregion
 
 #region ファイル転送
 Write-Header "ファイル転送開始"
