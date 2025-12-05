@@ -100,14 +100,30 @@ if ($GIT_ROOT -eq "") {
 
 Set-Location $GIT_ROOT
 
-if (-not (Test-Path ".git")) {
+# Gitリポジトリかどうか確認（.gitフォルダを親ディレクトリから探索）
+$gitDir = git rev-parse --git-dir 2>&1
+if ($LASTEXITCODE -ne 0) {
     Write-Color "[エラー] Gitリポジトリではありません: $GIT_ROOT" "Red"
+    Write-Color "       git rev-parse --git-dir の実行に失敗しました" "Red"
+    Write-Host ""
+    Read-Host "続行するには Enter キーを押してください..."
     exit 1
+}
+
+# Gitリポジトリのルートディレクトリを取得
+$gitRootDir = git rev-parse --show-toplevel 2>&1
+if ($LASTEXITCODE -eq 0) {
+    # Linuxパスの場合はWindowsパスに変換（WSL環境対応）
+    if ($gitRootDir -match '^/') {
+        # WSLパスの場合は変換しない
+        $gitRootDir = $gitRootDir.Replace("/", "\")
+    }
+    Write-Color "[情報] Gitリポジトリルート: $gitRootDir" "Green"
 }
 
 Write-Header "Git Deploy to Linux"
 
-Write-Color "[情報] Gitリポジトリ: $GIT_ROOT" "Green"
+Write-Color "[情報] 作業ディレクトリ: $GIT_ROOT" "Green"
 Write-Host ""
 
 #region 環境選択
@@ -184,6 +200,8 @@ if ($transferMode -eq "changed") {
     if ($LASTEXITCODE -ne 0) {
         Write-Color "[エラー] Git status の取得に失敗しました" "Red"
         Write-Host $gitStatusOutput
+        Write-Host ""
+        Read-Host "続行するには Enter キーを押してください..."
         exit 1
     }
 
@@ -258,6 +276,8 @@ if ($transferMode -eq "changed") {
 if ($fileList.Count -eq 0) {
     Write-Host ""
     Write-Color "[情報] 転送対象のファイルがありません" "Yellow"
+    Write-Host ""
+    Read-Host "続行するには Enter キーを押してください..."
     exit 0
 }
 
@@ -303,6 +323,8 @@ do {
 
 if ($choice -eq "3") {
     Write-Color "[キャンセル] 転送を中止しました" "Yellow"
+    Write-Host ""
+    Read-Host "続行するには Enter キーを押してください..."
     exit 0
 }
 
@@ -334,6 +356,8 @@ if ($choice -eq "1") {
 
     if ($filesToTransfer.Count -eq 0) {
         Write-Color "[情報] 転送するファイルが選択されませんでした" "Yellow"
+        Write-Host ""
+        Read-Host "続行するには Enter キーを押してください..."
         exit 0
     }
 
@@ -350,41 +374,23 @@ $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
 Write-Host ""
 Write-Color "[チェック] SCP/SSHコマンドを検出中..." "Yellow"
 
-$scpCommand = $null
-$sshCommand = $null
-$scpType = $null
-
-# Windows OpenSSH Client の scp.exe を優先
+# Windows OpenSSH Client の scp.exe と ssh.exe を確認
 $scpExe = Get-Command scp.exe -ErrorAction SilentlyContinue
 $sshExe = Get-Command ssh.exe -ErrorAction SilentlyContinue
 
-if ($scpExe -and $sshExe) {
-    $scpCommand = "scp.exe"
-    $sshCommand = "ssh.exe"
-    $scpType = "OpenSSH"
-    Write-Color "[検出] Windows OpenSSH Client (scp.exe, ssh.exe)" "Green"
-} else {
-    # PSCP/PLINK (PuTTY) をフォールバック
-    $pscpExe = Get-Command pscp.exe -ErrorAction SilentlyContinue
-    $plinkExe = Get-Command plink.exe -ErrorAction SilentlyContinue
-
-    if ($pscpExe -and $plinkExe) {
-        $scpCommand = "pscp.exe"
-        $sshCommand = "plink.exe"
-        $scpType = "PuTTY"
-        Write-Color "[検出] PuTTY PSCP/PLINK (pscp.exe, plink.exe)" "Green"
-    } else {
-        Write-Color "[エラー] SCP/SSHコマンドが見つかりません" "Red"
-        Write-Host ""
-        Write-Host "以下のいずれかをインストールしてください："
-        Write-Host "  1. Windows OpenSSH Client (推奨)"
-        Write-Host "     設定 > アプリ > オプション機能 > OpenSSH クライアント"
-        Write-Host ""
-        Write-Host "  2. PuTTY PSCP/PLINK"
-        Write-Host "     https://www.putty.org/ からダウンロード"
-        exit 1
-    }
+if (-not $scpExe -or -not $sshExe) {
+    Write-Color "[エラー] SCP/SSHコマンドが見つかりません" "Red"
+    Write-Host ""
+    Write-Host "Windows OpenSSH Client をインストールしてください："
+    Write-Host "  設定 > アプリ > オプション機能 > OpenSSH クライアント"
+    Write-Host ""
+    Read-Host "続行するには Enter キーを押してください..."
+    exit 1
 }
+
+$scpCommand = "scp.exe"
+$sshCommand = "ssh.exe"
+Write-Color "[検出] Windows OpenSSH Client (scp.exe, ssh.exe)" "Green"
 
 Write-Host ""
 #endregion
@@ -419,11 +425,7 @@ foreach ($file in $filesToTransfer) {
         }
 
         if ($SSH_PORT -ne 22) {
-            if ($scpType -eq "OpenSSH") {
-                $sshArgs += "-p"
-            } else {
-                $sshArgs += "-P"
-            }
+            $sshArgs += "-p"
             $sshArgs += $SSH_PORT
         }
 
@@ -442,17 +444,8 @@ foreach ($file in $filesToTransfer) {
     }
 
     if ($SSH_PORT -ne 22) {
-        if ($scpType -eq "OpenSSH") {
-            $scpArgs += "-P"
-        } else {
-            $scpArgs += "-P"
-        }
+        $scpArgs += "-P"
         $scpArgs += $SSH_PORT
-    }
-
-    # バッチモード（対話なし）
-    if ($scpType -eq "PuTTY") {
-        $scpArgs += "-batch"
     }
 
     # ソースと宛先
@@ -473,11 +466,7 @@ foreach ($file in $filesToTransfer) {
             }
 
             if ($SSH_PORT -ne 22) {
-                if ($scpType -eq "OpenSSH") {
-                    $sshArgs += "-p"
-                } else {
-                    $sshArgs += "-P"
-                }
+                $sshArgs += "-p"
                 $sshArgs += $SSH_PORT
             }
 
@@ -520,9 +509,13 @@ Write-Host ""
 
 if ($failCount -eq 0) {
     Write-Color "すべてのファイル転送が完了しました！" "Green"
+    Write-Host ""
+    Read-Host "続行するには Enter キーを押してください..."
     exit 0
 } else {
     Write-Color "一部のファイル転送に失敗しました" "Yellow"
+    Write-Host ""
+    Read-Host "続行するには Enter キーを押してください..."
     exit 1
 }
 #endregion

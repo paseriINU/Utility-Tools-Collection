@@ -56,10 +56,11 @@
   - 通常削除・強制削除を選択可能
 
 - **[Git-Deploy-to-Linux](batch/git-deploy/)**: Git変更ファイルをLinuxサーバーに転送
-  - Git変更ファイルを自動検出（削除ファイルは除外）
+  - 複数環境対応・拡張子フィルタ・削除ファイル除外
   - すべて転送 or 個別選択の2つのモード
-  - SCP/PSCP自動検出（Windows OpenSSH Client/PuTTY対応）
-  - SSH公開鍵認証対応
+  - Linux側の自動設定（mkdir/chmod/chown）
+  - SCP/SSH対応（Windows OpenSSH Client）
+  - ネットワークパス（UNCパス）からの実行対応
   - ダブルクリックで実行可能
 
 ### VBA Macros
