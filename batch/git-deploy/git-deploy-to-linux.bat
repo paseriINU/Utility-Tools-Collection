@@ -1,5 +1,7 @@
 <# :
 @echo off
+chcp 65001 >nul
+title Git Deploy to Linux
 setlocal
 powershell -NoProfile -ExecutionPolicy Bypass -Command "iex ((gc '%~f0') -join \"`n\")"
 set EXITCODE=%ERRORLEVEL%
@@ -358,8 +360,6 @@ if ($choice -eq "1") {
 }
 
 Write-Host ""
-Write-Host "続行するには何かキーを押してください..."
-$null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
 #endregion
 
 #region SCP/SSH検出
@@ -465,15 +465,15 @@ foreach ($file in $filesToTransfer) {
 
             & $sshCommand $sshArgs 2>&1 | Out-Null
 
-            Write-Color "  ✓ 成功" "Green"
+            Write-Color "  [OK] 成功" "Green"
             $successCount++
         } else {
-            Write-Color "  ✗ 失敗 (終了コード: $LASTEXITCODE)" "Red"
+            Write-Color "  [NG] 失敗 (終了コード: $LASTEXITCODE)" "Red"
             $failCount++
             $failedFiles += $file.Path
         }
     } catch {
-        Write-Color "  ✗ 失敗: $($_.Exception.Message)" "Red"
+        Write-Color "  [NG] 失敗: $($_.Exception.Message)" "Red"
         $failCount++
         $failedFiles += $file.Path
     }
