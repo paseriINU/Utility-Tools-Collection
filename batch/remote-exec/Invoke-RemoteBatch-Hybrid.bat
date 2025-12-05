@@ -1,5 +1,7 @@
 <# :
 @echo off
+chcp 65001 >nul
+title リモートバッチ実行ツール
 setlocal
 
 rem 管理者権限チェック
@@ -10,8 +12,14 @@ if %errorLevel% neq 0 (
     exit /b
 )
 
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$scriptDir=('%~dp0' -replace '\\$',''); iex ((gc '%~f0') -join \"`n\")"
+rem UNCパス対応（PushD/PopDで自動マッピング）
+pushd "%~dp0"
+
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$scriptDir=('%~dp0' -replace '\\$',''); try { iex ((gc '%~f0') -join \"`n\") } finally { Set-Location C:\ }"
 set EXITCODE=%ERRORLEVEL%
+
+popd
+
 pause
 exit /b %EXITCODE%
 : #>

@@ -1,6 +1,0 @@
-[JP1_API]
-JP1_HOST=192.168.1.100
-JP1_PORT=22250
-JP1_USER=jp1admin
-JOBNET_PATH=/main_unit/jobgroup1/daily_batch
-USE_SSL=false
