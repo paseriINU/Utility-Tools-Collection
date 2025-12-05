@@ -1,0 +1,142 @@
+#!/bin/bash
+#
+# Git Commit-msg Hook - コミットメッセージフォーマット検証
+#
+# このフックは以下をチェックします：
+# 1. Conventional Commits形式の検証（オプション）
+# 2. コミットメッセージの最小文字数
+# 3. チケット番号の存在（オプション）
+#
+# クライアント側の .git/hooks/commit-msg に配置してください
+# （サーバー側では動作しません）
+#
+
+# ==================== 設定 ====================
+
+# Conventional Commits形式を強制するか（true/false）
+ENFORCE_CONVENTIONAL_COMMITS=false
+
+# コミットメッセージの最小文字数
+MIN_MESSAGE_LENGTH=10
+
+# チケット番号を必須にするか（true/false）
+REQUIRE_TICKET_NUMBER=false
+
+# チケット番号のパターン（例: JIRA-1234, #123）
+TICKET_PATTERN='(JIRA-|TICKET-|#)[0-9]+'
+
+# =========================================
+
+commit_msg_file="$1"
+commit_msg=$(cat "$commit_msg_file")
+
+# 色付き出力
+RED='\033[0;31m'
+YELLOW='\033[1;33m'
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+NC='\033[0m'
+
+# マージコミットは除外
+if echo "$commit_msg" | grep -qE '^Merge'; then
+    exit 0
+fi
+
+# Revertコミットは除外
+if echo "$commit_msg" | grep -qE '^Revert'; then
+    exit 0
+fi
+
+# 1行目を取得（件名）
+subject=$(echo "$commit_msg" | head -1)
+
+# 最小文字数チェック
+subject_length=${#subject}
+if [ "$subject_length" -lt "$MIN_MESSAGE_LENGTH" ]; then
+    echo -e "${RED}========================================${NC}" >&2
+    echo -e "${RED}エラー: コミットメッセージが短すぎます${NC}" >&2
+    echo -e "${RED}========================================${NC}" >&2
+    echo "" >&2
+    echo -e "${RED}現在の文字数: $subject_length${NC}" >&2
+    echo -e "${RED}最小文字数: $MIN_MESSAGE_LENGTH${NC}" >&2
+    echo "" >&2
+    echo "コミットメッセージは、変更内容を明確に説明する必要があります。" >&2
+    echo "" >&2
+    echo "良い例:" >&2
+    echo "  feat: ユーザー認証機能を追加" >&2
+    echo "  fix: ログイン時のバリデーションエラーを修正" >&2
+    echo "  docs: README にインストール手順を追加" >&2
+    echo "" >&2
+    echo "悪い例:" >&2
+    echo "  fix" >&2
+    echo "  update" >&2
+    echo "  変更" >&2
+    echo -e "${RED}========================================${NC}" >&2
+    exit 1
+fi
+
+# Conventional Commits形式のチェック
+if [ "$ENFORCE_CONVENTIONAL_COMMITS" = "true" ]; then
+    # Conventional Commitsの形式: type(scope): description
+    # type: feat, fix, docs, style, refactor, test, chore など
+    conventional_pattern='^(feat|fix|docs|style|refactor|perf|test|chore|ci|build|revert)(\(.+\))?: .{1,}'
+
+    if ! echo "$subject" | grep -qE "$conventional_pattern"; then
+        echo -e "${RED}========================================${NC}" >&2
+        echo -e "${RED}エラー: Conventional Commits形式に従っていません${NC}" >&2
+        echo -e "${RED}========================================${NC}" >&2
+        echo "" >&2
+        echo "コミットメッセージは以下の形式に従ってください:" >&2
+        echo "" >&2
+        echo -e "${BLUE}type(scope): description${NC}" >&2
+        echo "" >&2
+        echo "利用可能なtype:" >&2
+        echo "  feat:     新機能" >&2
+        echo "  fix:      バグ修正" >&2
+        echo "  docs:     ドキュメントのみの変更" >&2
+        echo "  style:    コードの意味に影響しない変更（空白、フォーマット等）" >&2
+        echo "  refactor: バグ修正や機能追加を伴わないコード変更" >&2
+        echo "  perf:     パフォーマンス改善" >&2
+        echo "  test:     テストの追加・修正" >&2
+        echo "  chore:    ビルドプロセスやツールの変更" >&2
+        echo "  ci:       CI設定ファイルやスクリプトの変更" >&2
+        echo "  build:    ビルドシステムや外部依存関係の変更" >&2
+        echo "" >&2
+        echo "例:" >&2
+        echo "  feat(auth): ユーザー登録機能を追加" >&2
+        echo "  fix(login): パスワードバリデーションのバグを修正" >&2
+        echo "  docs: README にセットアップ手順を追加" >&2
+        echo "  refactor(api): REST API エンドポイントを整理" >&2
+        echo "" >&2
+        echo "現在のメッセージ:" >&2
+        echo "  $subject" >&2
+        echo -e "${RED}========================================${NC}" >&2
+        exit 1
+    fi
+fi
+
+# チケット番号のチェック
+if [ "$REQUIRE_TICKET_NUMBER" = "true" ]; then
+    if ! echo "$commit_msg" | grep -qE "$TICKET_PATTERN"; then
+        echo -e "${RED}========================================${NC}" >&2
+        echo -e "${RED}エラー: チケット番号が見つかりません${NC}" >&2
+        echo -e "${RED}========================================${NC}" >&2
+        echo "" >&2
+        echo "コミットメッセージにチケット番号を含めてください。" >&2
+        echo "" >&2
+        echo "例:" >&2
+        echo "  feat: ユーザー登録機能を追加 (JIRA-1234)" >&2
+        echo "  fix: ログインエラーを修正 #123" >&2
+        echo "" >&2
+        echo "または本文に含める:" >&2
+        echo "  feat: ユーザー登録機能を追加" >&2
+        echo "" >&2
+        echo "  Closes JIRA-1234" >&2
+        echo -e "${RED}========================================${NC}" >&2
+        exit 1
+    fi
+fi
+
+# すべてのチェックを通過
+echo -e "${GREEN}✓ コミットメッセージの検証に成功しました${NC}" >&2
+exit 0

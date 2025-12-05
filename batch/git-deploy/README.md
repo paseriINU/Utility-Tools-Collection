@@ -1,0 +1,557 @@
+# Git Deploy to Linux
+
+## 概要
+
+Gitで変更されたファイルを自動的にLinuxサーバーに転送するWindowsバッチスクリプトです。
+
+PowerShell polyglot pattern を使用し、複数環境対応・拡張子フィルタ・Linux側の自動設定など、高度な機能を統合しています。
+
+### 主な機能
+
+- **複数環境対応**: tst1t/tst2t/tst3t など、複数の転送先環境から選択可能
+- **転送モード選択**: 変更ファイルのみ OR すべてのファイル
+- **拡張子フィルタ**: .c .pc .h など、特定の拡張子のみを転送（カスタマイズ可能）
+- **削除ファイル自動除外**: git status で削除されたファイルは自動的に除外（ステージング済み・未ステージング両方）
+- **../パス除外**: リポジトリ外のファイル（`../` で始まるパス）は自動的に除外
+- **柔軟な転送モード**: すべて転送 or 1ファイルずつ個別確認
+- **Linux側の自動設定**: ディレクトリ作成・パーミッション設定・所有者変更を自動実行
+- **相対パス維持**: ローカルのディレクトリ構造を転送先でも維持
+- **SCP/SSH対応**: Windows OpenSSH Client を使用
+- **SSH公開鍵認証対応**: パスワード認証と公開鍵認証の両方に対応
+- **終了時に一時停止**: エラー時・キャンセル時・正常終了時に画面を自動で閉じない
+
+## 必要な環境
+
+### 必須
+- **Git**: コマンドラインからgitコマンドが実行可能であること
+- **PowerShell**: Windows 7以降（標準搭載）
+- **Windows OpenSSH Client**: SCP/SSHコマンドが利用可能であること
+
+### 推奨
+- **SSH公開鍵認証**: パスワード入力を省略できます
+
+### 実行環境について
+
+このスクリプトは以下の環境で実行可能です：
+
+- **ローカルPC**: 通常の使用方法（Windows PC上で実行）
+  - GitリポジトリのプログラムフォルダまたはGitルートフォルダで実行
+
+- **ネットワークパス（UNCパス）**: ネットワーク共有上から実行可能
+  - `\\server\share\...` のようなパスからバッチファイルを実行しても動作
+  - 実行ユーザーのローカルPC上のGitリポジトリを参照
+  - `$GIT_ROOT` 設定でローカルのGitリポジトリパスを指定
+
+- **Windowsサーバー**: サーバー上のGitリポジトリで実行可能
+  - サーバーにGit、PowerShell、OpenSSH Clientがインストールされていること
+  - リモートデスクトップやSSH経由でサーバーにアクセスして実行
+  - タスクスケジューラで自動実行することも可能
+
+**注意**: どちらの環境でも、Gitリポジトリが存在し、転送先Linuxサーバーへのネットワーク接続が可能である必要があります。
+
+## インストール/セットアップ
+
+### 1. Windows OpenSSH Client のインストール
+
+Windows 10 (1809以降) / Windows 11の場合:
+
+1. **設定** > **アプリ** > **オプション機能**
+2. **機能の追加** をクリック
+3. **OpenSSH クライアント** を検索してインストール
+
+確認方法:
+```cmd
+scp -V
+ssh -V
+```
+
+**注意**: このスクリプトはWindows OpenSSH Client（scp.exe, ssh.exe）のみに対応しています。PuTTY PSCPには対応していません。
+
+### 2. SSH公開鍵認証の設定（推奨）
+
+#### 秘密鍵/公開鍵ペアの生成
+
+```cmd
+ssh-keygen -t rsa -b 4096 -f %USERPROFILE%\.ssh\id_rsa
+```
+
+#### 公開鍵をLinuxサーバーに配置
+
+```cmd
+type %USERPROFILE%\.ssh\id_rsa.pub | ssh user@hostname "cat >> ~/.ssh/authorized_keys"
+```
+
+または手動で:
+1. `%USERPROFILE%\.ssh\id_rsa.pub` の内容をコピー
+2. Linuxサーバーの `~/.ssh/authorized_keys` に追記
+
+### 3. スクリプトの設定
+
+`git-deploy-to-linux.bat` をテキストエディタで開き、設定セクションを編集:
+
+```powershell
+#region 設定 - ここを編集してください
+#==============================================================================
+
+# SSH接続情報
+$SSH_USER = "youruser"
+$SSH_HOST = "linux-server"
+$SSH_PORT = 22
+
+# SSH秘密鍵ファイル (公開鍵認証を使用する場合)
+# パスワード認証の場合は空文字列 ""
+$SSH_KEY = "$env:USERPROFILE\.ssh\id_rsa"
+
+# 作業ディレクトリ (プログラムが格納されているフォルダ)
+# 空文字列の場合は現在のディレクトリ
+# .git フォルダは親ディレクトリを自動検索します
+$GIT_ROOT = ""
+# 例: $GIT_ROOT = "C:\projects\myapp\src"
+
+# 共通グループ（Linux側の所有者設定用）
+$COMMON_GROUP = "common_group"
+
+# 転送対象の拡張子（空文字列の場合は全ファイル、複数指定可能）
+# 例: @(".c", ".pc", ".h")
+# 全ファイル: @()
+$TARGET_EXTENSIONS = @(".c", ".pc", ".h")
+
+# 環境設定（複数環境対応）
+# 環境名, 転送先パス, オーナー をハッシュテーブルで定義
+$ENVIRONMENTS = @(
+    @{
+        Name = "tst1t"
+        Path = "/path/to/tst1t/"
+        Owner = "tzy_tst13"
+    },
+    @{
+        Name = "tst2t"
+        Path = "/path/to/tst2t/"
+        Owner = "tzy_tst23"
+    },
+    @{
+        Name = "tst3t"
+        Path = "/path/to/tst3t/"
+        Owner = "tzy_tst33"
+    }
+)
+
+# Linux側のパーミッション設定
+$LINUX_CHMOD_DIR = "777"   # ディレクトリのパーミッション
+$LINUX_CHMOD_FILE = "777"  # ファイルのパーミッション
+
+#==============================================================================
+#endregion
+```
+
+## 使い方
+
+### 基本的な使い方
+
+1. Gitリポジトリのルートディレクトリに移動
+2. バッチファイルをダブルクリックまたはコマンドプロンプトから実行
+
+```cmd
+git-deploy-to-linux.bat
+```
+
+### 実行の流れ
+
+1. **環境選択**
+   ```
+   ================================================================
+   転送先環境を選択してください
+   ================================================================
+
+   1. tst1t
+   2. tst2t
+   3. tst3t
+
+   番号を入力 (1-3):
+   ```
+
+2. **転送モード選択**
+   ```
+   ================================================================
+   転送するファイルを選択
+   ================================================================
+
+   1. 変更されたファイルのみ (git status)
+   2. すべてのファイル
+
+   番号を入力 (1-2):
+   ```
+
+3. **ファイルリスト取得**
+   - 選択したモードに応じてファイルを取得
+   - 拡張子フィルタを適用（設定済みの場合）
+   - 削除されたファイルは自動的に除外
+
+4. **ファイルリスト表示**
+   ```
+   ================================================================
+   転送予定のファイル一覧
+   ================================================================
+     1. [変更]      src/main.c
+     2. [追加]      src/utils.c
+     3. [未追跡]    include/header.h
+   ```
+
+5. **転送確認**
+   ```
+   これらのファイルを転送しますか？
+
+     1. すべて転送
+     2. 個別に選択
+     3. キャンセル
+
+   番号を入力 (1-3):
+   ```
+
+6. **転送実行**
+   - **すべて転送 (1)**: 全ファイルを一括転送
+   - **個別選択 (2)**: 各ファイルごとに転送確認
+   - Linux側でディレクトリ自動作成・パーミッション設定
+
+### 個別選択モードの例
+
+```
+========================================
+個別ファイル選択
+========================================
+
+転送: src/main.py (y/n): y
+転送: src/utils.py (y/n): n
+転送: config/settings.json (y/n): y
+
+[選択] 2 個のファイルを転送します
+```
+
+## 実行例
+
+### 例1: すべて転送
+
+```
+========================================
+  Git Deploy to Linux
+========================================
+
+[情報] Gitリポジトリ: C:\Users\user\project
+[情報] 転送先: deploy@192.168.1.100:/var/www/html
+
+[実行] Git status を取得中...
+[成功] 3 個のファイルが見つかりました（削除ファイルを除く）
+
+========================================
+転送予定のファイル一覧
+========================================
+  1. [変更]      index.html
+  2. [変更]      style.css
+  3. [追加]      script.js
+
+これらのファイルを転送しますか？
+
+  1. すべて転送
+  2. 個別に選択
+  3. キャンセル
+
+番号を入力 (1-3): 1
+[選択] すべてのファイルを転送します
+
+[チェック] SCPコマンドを検出中...
+[検出] Windows OpenSSH Client (scp.exe)
+
+========================================
+  ファイル転送開始
+========================================
+
+[転送] index.html
+  ✓ 成功
+[転送] style.css
+  ✓ 成功
+[転送] script.js
+  ✓ 成功
+
+========================================
+  転送結果
+========================================
+
+成功: 3 個
+
+すべてのファイル転送が完了しました！
+```
+
+### 例2: 個別選択
+
+```
+これらのファイルを転送しますか？
+
+  1. すべて転送
+  2. 個別に選択
+  3. キャンセル
+
+番号を入力 (1-3): 2
+
+========================================
+個別ファイル選択
+========================================
+
+転送: index.html (y/n): y
+転送: style.css (y/n): y
+転送: script.js (y/n): n
+
+[選択] 2 個のファイルを転送します
+
+[転送] index.html
+  ✓ 成功
+[転送] style.css
+  ✓ 成功
+
+========================================
+  転送結果
+========================================
+
+成功: 2 個
+
+すべてのファイル転送が完了しました！
+```
+
+## 注意事項
+
+### Git Status の注意点
+
+- **ステージング不要**: `git add` していないファイルも転送対象になります
+- **削除ファイルは除外**: 以下のすべてのパターンが自動的に除外されます
+  - `D ` (ステージング済み削除)
+  - ` D` (ステージングされていない削除)
+  - `DD` (両方で削除)
+- **未追跡ファイルも対象**: 新規作成したファイルも転送対象に含まれます
+- **../パスは除外**: リポジトリ外のファイル（`../` で始まるパス）は自動的に除外されます
+
+### SSH接続の注意点
+
+- **初回接続**: 初回接続時にホスト鍵の確認が表示される場合があります
+- **パスワード認証**: 公開鍵認証が設定されていない場合、各ファイルごとにパスワード入力が必要です
+- **タイムアウト**: ネットワーク接続が不安定な場合、転送に失敗することがあります
+
+### ファイル転送の注意点
+
+- **ディレクトリ自動作成**: Linux側で必要なディレクトリは自動的に作成されます
+- **上書き**: 同名ファイルは上書きされます（確認なし）
+- **パーミッション**: chmod 777 / chown で自動設定されます（カスタマイズ可能）
+
+### スクリプトの動作
+
+- **終了時に一時停止**: すべての終了パターン（成功・失敗・エラー・キャンセル）で、画面を閉じる前に Enter キー入力を待ちます
+- **Gitリポジトリ検索**: `$GIT_ROOT` から親ディレクトリを辿って `.git` フォルダを自動検索します
+- **ネットワークパス対応**: UNCパス（`\\server\share`）上からバッチファイルを実行しても、ローカルのGitリポジトリを参照できます
+
+## トラブルシューティング
+
+### SCP/SSHコマンドが見つからない
+
+**エラー**:
+```
+[エラー] SCP/SSHコマンドが見つかりません
+```
+
+**解決方法**:
+Windows OpenSSH Client をインストールしてください：
+- 設定 > アプリ > オプション機能 > OpenSSH クライアント
+
+### SSH接続に失敗する
+
+**エラー**:
+```
+✗ 失敗 (終了コード: 255)
+```
+
+**原因**:
+- SSHホスト名/IPアドレスが間違っている
+- SSHポート番号が間違っている
+- ファイアウォールでブロックされている
+- SSH公開鍵認証が正しく設定されていない
+
+**解決方法**:
+1. SSH接続を手動でテスト:
+   ```cmd
+   ssh user@hostname
+   ```
+
+2. 設定を確認:
+   - `$SSH_USER`
+   - `$SSH_HOST`
+   - `$SSH_PORT`
+   - `$SSH_KEY` (公開鍵認証の場合)
+
+### Permission denied エラー
+
+**エラー**:
+```
+Permission denied (publickey,password)
+```
+
+**解決方法**:
+
+#### 公開鍵認証の場合
+1. 公開鍵がLinuxサーバーに登録されているか確認:
+   ```bash
+   cat ~/.ssh/authorized_keys
+   ```
+
+2. パーミッション確認:
+   ```bash
+   chmod 700 ~/.ssh
+   chmod 600 ~/.ssh/authorized_keys
+   ```
+
+#### パスワード認証の場合
+1. スクリプトの設定を変更:
+   ```powershell
+   $SSH_KEY = ""  # 空文字列に設定
+   ```
+
+### 転送先ディレクトリが存在しない
+
+**エラー**:
+```
+✗ 失敗: No such file or directory
+```
+
+**解決方法**:
+1. Linuxサーバーにログインしてディレクトリを作成:
+   ```bash
+   mkdir -p /path/to/destination
+   ```
+
+2. または `$REMOTE_DIR` の設定を確認
+
+### Git変更ファイルが検出されない
+
+**メッセージ**:
+```
+[情報] 転送するファイルがありません
+```
+
+**原因**:
+- 変更されたファイルがない
+- すべて削除されたファイル
+- Gitリポジトリではないディレクトリで実行している
+
+**解決方法**:
+1. Git statusを確認:
+   ```cmd
+   git status
+   ```
+
+2. Gitリポジトリのルートで実行しているか確認
+
+### ファイル転送が途中で失敗する
+
+**解決方法**:
+
+1. **ネットワーク接続を確認**: ping でサーバーに到達できるか確認
+2. **ディスク容量を確認**: 転送先のディスク容量が十分か確認
+3. **ファイルサイズを確認**: 大きなファイルはタイムアウトする可能性があります
+4. **個別選択モード**: 失敗したファイルのみ再転送
+
+## 応用例
+
+### 環境の追加
+
+新しい環境を追加する場合は、設定セクションの `$ENVIRONMENTS` 配列に追加します:
+
+```powershell
+$ENVIRONMENTS = @(
+    @{
+        Name = "tst1t"
+        Path = "/path/to/tst1t/"
+        Owner = "tzy_tst13"
+    },
+    @{
+        Name = "tst2t"
+        Path = "/path/to/tst2t/"
+        Owner = "tzy_tst23"
+    },
+    @{
+        Name = "tst3t"
+        Path = "/path/to/tst3t/"
+        Owner = "tzy_tst33"
+    },
+    @{
+        Name = "tst4t"
+        Path = "/path/to/tst4t/"
+        Owner = "tzy_tst43"
+    }
+)
+```
+
+### 拡張子フィルタのカスタマイズ
+
+転送対象の拡張子を変更する場合:
+
+```powershell
+# Java プロジェクトの場合
+$TARGET_EXTENSIONS = @(".java", ".xml", ".properties")
+
+# Webプロジェクトの場合
+$TARGET_EXTENSIONS = @(".html", ".css", ".js", ".php")
+
+# すべてのファイル（フィルタなし）
+$TARGET_EXTENSIONS = @()
+```
+
+### 別のGitリポジトリを指定して実行
+
+スクリプト内の `$GIT_ROOT` を変更:
+
+```powershell
+$GIT_ROOT = "C:\Users\user\another-project"
+```
+
+### 複数の転送先プロジェクトに対応
+
+プロジェクトごとにスクリプトをコピーして、それぞれ異なる設定にする:
+
+```
+project-a-deploy.bat   # プロジェクトA用
+project-b-deploy.bat   # プロジェクトB用
+project-c-deploy.bat   # プロジェクトC用
+```
+
+### パーミッションのカスタマイズ
+
+Linux側のパーミッション設定を変更する場合:
+
+```powershell
+# より制限的なパーミッション
+$LINUX_CHMOD_DIR = "755"   # rwxr-xr-x
+$LINUX_CHMOD_FILE = "644"  # rw-r--r--
+
+# 実行ファイルの場合
+$LINUX_CHMOD_FILE = "755"  # rwxr-xr-x
+```
+
+## ライセンス
+
+MIT License
+
+Copyright (c) 2025
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.

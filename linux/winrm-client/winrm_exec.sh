@@ -13,13 +13,48 @@
 # 使い方:
 #   1. このスクリプト内の設定セクションを編集
 #   2. 実行権限を付与: chmod +x winrm_exec.sh
-#   3. 実行: ./winrm_exec.sh
+#   3. 実行: ./winrm_exec.sh ENV
+#
+#   環境を引数で指定（必須）:
+#   ./winrm_exec.sh TST1T
+#   ./winrm_exec.sh TST2T
 #
 #   または環境変数で設定を上書き:
-#   WINRM_HOST=192.168.1.100 WINRM_USER=Admin WINRM_PASS=Pass123 ./winrm_exec.sh
+#   WINRM_HOST=192.168.1.100 WINRM_USER=Admin WINRM_PASS=Pass123 ./winrm_exec.sh TST1T
 #
 
 set -u  # 未定義変数の使用をエラーとする
+
+# 引数チェック
+if [ $# -eq 0 ]; then
+    echo "エラー: 環境を指定してください"
+    echo ""
+    echo "使い方: $0 ENV"
+    echo ""
+    echo "利用可能な環境:"
+    echo "  TST1T"
+    echo "  TST2T"
+    echo ""
+    echo "例:"
+    echo "  $0 TST1T"
+    echo "  $0 TST2T"
+    exit 1
+fi
+
+if [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
+    echo "使い方: $0 ENV"
+    echo ""
+    echo "引数:"
+    echo "  ENV    環境名 (TST1T, TST2T など)"
+    echo ""
+    echo "例:"
+    echo "  $0 TST1T"
+    echo "  $0 TST2T"
+    exit 0
+fi
+
+# 環境を引数から取得
+ENV_ARG="$1"
 
 # ==================== 設定セクション ====================
 # ここを編集して使用してください
@@ -30,8 +65,10 @@ WINRM_PORT="${WINRM_PORT:-5985}"                 # WinRMポート（HTTP: 5985, 
 WINRM_USER="${WINRM_USER:-Administrator}"        # Windowsユーザー名
 WINRM_PASS="${WINRM_PASS:-YourPassword}"         # Windowsパスワード
 
-# 環境フォルダ名（実行時に選択可能）
-ENV_FOLDER="${ENV_FOLDER:-TST1T}"                # デフォルト環境（TST1T または TST2T）
+# 環境フォルダ名のリスト（実行時に選択可能）
+# 新しい環境を追加する場合は、この配列に追加してください
+ENVIRONMENTS=("TST1T" "TST2T")                   # 利用可能な環境のリスト
+ENV_FOLDER="${ENV_FOLDER:-}"                     # デフォルト環境なし（実行時に必ず選択）
 
 # 実行するバッチファイル（Windows側のパス）
 # {ENV} は選択した環境フォルダ名に置換されます
@@ -83,25 +120,34 @@ select_environment() {
     echo "======================================"
     echo "  環境選択"
     echo "======================================"
-    echo "1. TST1T"
-    echo "2. TST2T"
+
+    # 環境リストを動的に表示
+    local i=1
+    for env in "${ENVIRONMENTS[@]}"; do
+        echo "${i}. ${env}"
+        i=$((i + 1))
+    done
+
     echo "======================================"
-    echo -n "環境を選択してください (1 または 2) [デフォルト: 1]: "
+    echo -n "環境を選択してください (1-${#ENVIRONMENTS[@]}): "
 
     read -r selection
 
-    case "$selection" in
-        1|"")
-            ENV_FOLDER="TST1T"
-            ;;
-        2)
-            ENV_FOLDER="TST2T"
-            ;;
-        *)
-            log_error "無効な選択です。1 または 2 を入力してください。"
-            return 1
-            ;;
-    esac
+    # 入力が数値かチェック
+    if ! [[ "$selection" =~ ^[0-9]+$ ]]; then
+        log_error "無効な選択です。数値を入力してください。"
+        return 1
+    fi
+
+    # 範囲チェック
+    if [ "$selection" -lt 1 ] || [ "$selection" -gt "${#ENVIRONMENTS[@]}" ]; then
+        log_error "無効な選択です。1-${#ENVIRONMENTS[@]} の範囲で入力してください。"
+        return 1
+    fi
+
+    # 配列は0始まりなので、選択番号から1を引く
+    local index=$((selection - 1))
+    ENV_FOLDER="${ENVIRONMENTS[$index]}"
 
     log_success "選択された環境: $ENV_FOLDER"
     echo
@@ -492,10 +538,24 @@ main() {
     echo "======================================"
     echo
 
-    # 環境選択
-    if ! select_environment; then
+    # 環境の有効性チェック
+    local valid=false
+    for env in "${ENVIRONMENTS[@]}"; do
+        if [ "$env" = "$ENV_ARG" ]; then
+            valid=true
+            break
+        fi
+    done
+
+    if [ "$valid" = "false" ]; then
+        log_error "無効な環境が指定されました: $ENV_ARG"
+        log_error "利用可能な環境: ${ENVIRONMENTS[*]}"
         exit 1
     fi
+
+    ENV_FOLDER="$ENV_ARG"
+    log_success "指定された環境: $ENV_FOLDER"
+    echo
 
     log_info "接続先: $(generate_endpoint)"
     log_info "ユーザー: $WINRM_USER"

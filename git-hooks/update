@@ -1,0 +1,85 @@
+#!/bin/bash
+#
+# Git Update Hook - master/mainブランチ保護
+#
+# このフックは以下を防止します：
+# 1. master/mainブランチの削除
+# 2. master/mainブランチへの直接プッシュ
+#
+# リモートリポジトリの .git/hooks/update に配置してください
+#
+
+# 引数
+refname="$1"      # 更新されるブランチ/タグの参照名
+oldrev="$2"       # 更新前のコミットハッシュ
+newrev="$3"       # 更新後のコミットハッシュ
+
+# 保護するブランチのリスト
+PROTECTED_BRANCHES=("refs/heads/master" "refs/heads/main")
+
+# ブランチ名を抽出
+branch_name=$(echo "$refname" | sed 's/refs\/heads\///')
+
+# 保護対象のブランチかチェック
+is_protected=false
+for protected in "${PROTECTED_BRANCHES[@]}"; do
+    if [ "$refname" = "$protected" ]; then
+        is_protected=true
+        break
+    fi
+done
+
+# 保護されていないブランチは通常通り処理
+if [ "$is_protected" = "false" ]; then
+    exit 0
+fi
+
+# ゼロハッシュ（ブランチ削除を示す）
+zero_hash="0000000000000000000000000000000000000000"
+
+# ブランチ削除の防止
+if [ "$newrev" = "$zero_hash" ]; then
+    echo "========================================" >&2
+    echo "エラー: ${branch_name} ブランチの削除は禁止されています" >&2
+    echo "========================================" >&2
+    echo "" >&2
+    echo "理由: ${branch_name} ブランチはプロジェクトの" >&2
+    echo "      メインブランチとして保護されています。" >&2
+    echo "" >&2
+    echo "対処方法:" >&2
+    echo "  このブランチを削除する必要がある場合は、" >&2
+    echo "  リポジトリ管理者に連絡してください。" >&2
+    echo "========================================" >&2
+    exit 1
+fi
+
+# ブランチ作成の場合は許可（初回プッシュ）
+if [ "$oldrev" = "$zero_hash" ]; then
+    exit 0
+fi
+
+# 直接プッシュの防止
+echo "========================================" >&2
+echo "エラー: ${branch_name} ブランチへの直接プッシュは禁止されています" >&2
+echo "========================================" >&2
+echo "" >&2
+echo "理由: ${branch_name} ブランチは保護されており、" >&2
+echo "      直接プッシュはできません。" >&2
+echo "" >&2
+echo "推奨ワークフロー:" >&2
+echo "  1. フィーチャーブランチを作成" >&2
+echo "     git checkout -b feature/your-feature" >&2
+echo "" >&2
+echo "  2. 変更をコミットしてプッシュ" >&2
+echo "     git add ." >&2
+echo "     git commit -m \"Your changes\"" >&2
+echo "     git push origin feature/your-feature" >&2
+echo "" >&2
+echo "  3. マージリクエストを作成するか、" >&2
+echo "     リポジトリ管理者にマージを依頼" >&2
+echo "" >&2
+echo "緊急の場合:" >&2
+echo "  リポジトリ管理者に連絡してください。" >&2
+echo "========================================" >&2
+
+exit 1

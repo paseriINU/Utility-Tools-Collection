@@ -14,7 +14,8 @@
 │   │   ├── winrm/           # WinRM版
 │   │   └── powershell-remoting/  # PowerShell Remoting版
 │   ├── git-diff-extract/    # Git差分ファイル抽出ツール
-│   └── git-branch-manager/  # Gitブランチ管理ツール
+│   ├── git-branch-manager/  # Gitブランチ管理ツール
+│   └── git-deploy/          # Git→Linux転送ツール
 │
 ├── vba/                     # Excel VBAマクロ
 │   └── excel-automation/    # Excel自動化ツール
@@ -53,6 +54,14 @@
   - リモート＆ローカル両方を一度に削除
   - main/master/develop は保護機能付き
   - 通常削除・強制削除を選択可能
+
+- **[Git-Deploy-to-Linux](batch/git-deploy/)**: Git変更ファイルをLinuxサーバーに転送
+  - 複数環境対応・拡張子フィルタ・削除ファイル除外
+  - すべて転送 or 個別選択の2つのモード
+  - Linux側の自動設定（mkdir/chmod/chown）
+  - SCP/SSH対応（Windows OpenSSH Client）
+  - ネットワークパス（UNCパス）からの実行対応
+  - ダブルクリックで実行可能
 
 ### VBA Macros
 *準備中 - 今後追加予定*

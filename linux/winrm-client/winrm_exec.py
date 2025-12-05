@@ -8,11 +8,12 @@ Linux（Red Hat等）からWindows Server 2022へWinRM接続してバッチを�
     Python 3.6以降（標準ライブラリのみ使用、追加パッケージ不要）
 
 使い方:
-    # スクリプト内の設定を編集してから実行
-    python3 winrm_exec.py
+    # 環境を引数で指定（必須）
+    python3 winrm_exec.py TST1T
+    python3 winrm_exec.py TST2T
 
-    # またはコマンドライン引数で指定
-    python3 winrm_exec.py --host 192.168.1.100 --user Administrator --password Pass123
+    # またはコマンドライン引数で詳細設定も指定
+    python3 winrm_exec.py TST1T --host 192.168.1.100 --user Administrator --password Pass123
 """
 
 import sys
@@ -35,8 +36,13 @@ WINDOWS_PORT = 5985                  # WinRMポート（HTTP: 5985, HTTPS: 5986�
 WINDOWS_USER = "Administrator"       # Windowsユーザー名
 WINDOWS_PASSWORD = "YourPassword"    # Windowsパスワード
 
+# 環境フォルダ名のリスト（実行時に選択可能）
+# 新しい環境を追加する場合は、このリストに追加してください
+ENVIRONMENTS = ["TST1T", "TST2T"]    # 利用可能な環境のリスト
+
 # 実行するバッチファイル（Windows側のパス）
-BATCH_FILE_PATH = r"C:\Scripts\test.bat"
+# {ENV} は選択した環境フォルダ名に置換されます
+BATCH_FILE_PATH = r"C:\Scripts\{ENV}\test.bat"
 
 # または直接コマンドを指定
 DIRECT_COMMAND = None  # 例: "echo Hello from WinRM"
@@ -433,12 +439,62 @@ def setup_logging(level):
     )
 
 
+def select_environment():
+    """
+    環境選択メニューを表示して、ユーザーに環境を選択させる
+
+    Returns:
+        選択された環境名（str）、またはキャンセル時はNone
+    """
+    print("=" * 40)
+    print("  環境選択")
+    print("=" * 40)
+
+    # 環境リストを動的に表示
+    for i, env in enumerate(ENVIRONMENTS, start=1):
+        print(f"{i}. {env}")
+
+    print("=" * 40)
+
+    while True:
+        try:
+            selection = input(f"環境を選択してください (1-{len(ENVIRONMENTS)}): ").strip()
+
+            # 空入力のチェック
+            if not selection:
+                print("[ERROR] 無効な選択です。数値を入力してください。")
+                continue
+
+            # 数値かチェック
+            selection_num = int(selection)
+
+            # 範囲チェック
+            if selection_num < 1 or selection_num > len(ENVIRONMENTS):
+                print(f"[ERROR] 無効な選択です。1-{len(ENVIRONMENTS)} の範囲で入力してください。")
+                continue
+
+            # 選択された環境を返す（リストは0始まりなので-1）
+            selected_env = ENVIRONMENTS[selection_num - 1]
+            print(f"[SUCCESS] 選択された環境: {selected_env}")
+            print()
+            return selected_env
+
+        except ValueError:
+            print("[ERROR] 無効な選択です。数値を入力してください。")
+        except KeyboardInterrupt:
+            print("\n[INFO] キャンセルされました")
+            return None
+
+
 def main():
     """メイン処理"""
     # コマンドライン引数のパース
     parser = argparse.ArgumentParser(
-        description='Linux to Windows WinRM Batch Executor (標準ライブラリのみ版)'
+        description='Linux to Windows WinRM Batch Executor (標準ライブラリのみ版)',
+        usage='%(prog)s ENV [オプション]'
     )
+    parser.add_argument('env', metavar='ENV',
+                        help='環境名 (例: TST1T, TST2T)')
     parser.add_argument('--host', default=WINDOWS_HOST,
                         help='Windows ServerのIPアドレスまたはホスト名')
     parser.add_argument('--port', type=int, default=WINDOWS_PORT,
@@ -468,6 +524,22 @@ def main():
     setup_logging(args.log_level)
 
     logging.info("=== WinRM Remote Batch Executor (標準ライブラリ版) ===")
+
+    # 環境の有効性チェック
+    if args.env not in ENVIRONMENTS:
+        logging.error(f"無効な環境が指定されました: {args.env}")
+        logging.error(f"利用可能な環境: {', '.join(ENVIRONMENTS)}")
+        return 1
+
+    selected_env = args.env
+    logging.info(f"指定された環境: {selected_env}")
+
+    # {ENV} プレースホルダーを置換
+    if args.batch and '{ENV}' in args.batch:
+        args.batch = args.batch.replace('{ENV}', selected_env)
+    if args.command and '{ENV}' in args.command:
+        args.command = args.command.replace('{ENV}', selected_env)
+
     logging.info(f"接続先: {args.host}:{args.port}")
     logging.info(f"ユーザー: {args.user}")
 
