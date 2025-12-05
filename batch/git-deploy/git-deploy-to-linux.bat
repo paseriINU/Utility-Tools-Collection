@@ -304,10 +304,10 @@ Write-Host ""
 $index = 1
 foreach ($file in $fileList) {
     $statusLabel = switch -Regex ($file.Status) {
-        '^M'  { "[変更]" }
-        '^A'  { "[追加]" }
-        '^\?\?' { "[未追跡]" }
-        '^R'  { "[リネーム]" }
+        'M'   { "[変更]" }
+        'A'   { "[追加]" }
+        '\?\?' { "[未追跡]" }
+        'R'   { "[リネーム]" }
         default { "[$($file.Status)]" }
     }
 
