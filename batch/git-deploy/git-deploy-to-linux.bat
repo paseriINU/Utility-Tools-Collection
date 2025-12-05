@@ -2,7 +2,9 @@
 @echo off
 setlocal
 powershell -NoProfile -ExecutionPolicy Bypass -Command "iex ((gc '%~f0') -join \"`n\")"
-exit /b %ERRORLEVEL%
+set EXITCODE=%ERRORLEVEL%
+pause
+exit /b %EXITCODE%
 : #>
 
 #==============================================================================
@@ -16,11 +18,11 @@ exit /b %ERRORLEVEL%
 #   4. 削除されたファイルは自動除外
 #   5. 全部転送 or 個別選択
 #   6. Linux側でディレクトリ自動作成・パーミッション設定
-#   7. SCP/PSCP 自動検出
+#   7. SCP対応
 #
 # 必要な環境:
 #   - Git がインストールされていること
-#   - SCP (Windows OpenSSH Client) または PSCP (PuTTY) が利用可能であること
+#   - SCP (Windows OpenSSH Client) が利用可能であること
 #   - SSH公開鍵認証が設定されていること（推奨）
 #
 #==============================================================================
@@ -105,8 +107,6 @@ $gitDir = git rev-parse --git-dir 2>&1
 if ($LASTEXITCODE -ne 0) {
     Write-Color "[エラー] Gitリポジトリではありません: $GIT_ROOT" "Red"
     Write-Color "       git rev-parse --git-dir の実行に失敗しました" "Red"
-    Write-Host ""
-    Read-Host "続行するには Enter キーを押してください..."
     exit 1
 }
 
@@ -200,8 +200,6 @@ if ($transferMode -eq "changed") {
     if ($LASTEXITCODE -ne 0) {
         Write-Color "[エラー] Git status の取得に失敗しました" "Red"
         Write-Host $gitStatusOutput
-        Write-Host ""
-        Read-Host "続行するには Enter キーを押してください..."
         exit 1
     }
 
@@ -276,8 +274,6 @@ if ($transferMode -eq "changed") {
 if ($fileList.Count -eq 0) {
     Write-Host ""
     Write-Color "[情報] 転送対象のファイルがありません" "Yellow"
-    Write-Host ""
-    Read-Host "続行するには Enter キーを押してください..."
     exit 0
 }
 
@@ -323,8 +319,6 @@ do {
 
 if ($choice -eq "3") {
     Write-Color "[キャンセル] 転送を中止しました" "Yellow"
-    Write-Host ""
-    Read-Host "続行するには Enter キーを押してください..."
     exit 0
 }
 
@@ -356,8 +350,6 @@ if ($choice -eq "1") {
 
     if ($filesToTransfer.Count -eq 0) {
         Write-Color "[情報] 転送するファイルが選択されませんでした" "Yellow"
-        Write-Host ""
-        Read-Host "続行するには Enter キーを押してください..."
         exit 0
     }
 
@@ -383,8 +375,6 @@ if (-not $scpExe -or -not $sshExe) {
     Write-Host ""
     Write-Host "Windows OpenSSH Client をインストールしてください："
     Write-Host "  設定 > アプリ > オプション機能 > OpenSSH クライアント"
-    Write-Host ""
-    Read-Host "続行するには Enter キーを押してください..."
     exit 1
 }
 
@@ -509,13 +499,9 @@ Write-Host ""
 
 if ($failCount -eq 0) {
     Write-Color "すべてのファイル転送が完了しました！" "Green"
-    Write-Host ""
-    Read-Host "続行するには Enter キーを押してください..."
     exit 0
 } else {
     Write-Color "一部のファイル転送に失敗しました" "Yellow"
-    Write-Host ""
-    Read-Host "続行するには Enter キーを押してください..."
     exit 1
 }
 #endregion
