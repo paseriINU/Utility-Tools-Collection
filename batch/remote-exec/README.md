@@ -2,225 +2,208 @@
 
 ## 概要
 
-リモートのWindowsサーバ上でバッチファイルをCMDから実行するためのツール集です。
-接続方法ごとに3つのバージョンを用意しています。
+リモートのWindowsサーバ上でバッチファイルをPowerShell Remotingで実行するツールです。
+ハイブリッド版として、.bat形式で保存されており、ダブルクリックで実行可能です。
 
-## 📁 フォルダ構成
+## ✨ 主な機能
+
+- ✅ **ダブルクリックで実行可能** - .bat形式のハイブリッドスクリプト
+- ✅ **管理者権限の自動昇格** - 必要に応じてUACプロンプトで再起動
+- ✅ **WinRM設定の自動構成と復元** - TrustedHostsの追加・削除を自動化
+- ✅ **環境選択機能** - tst1t/tst2t など複数環境に対応
+- ✅ **実行結果のリアルタイム表示** - 標準出力・エラー出力を画面表示
+- ✅ **終了コードの取得** - バッチの成功/失敗を判定可能
+- ✅ **引数のサポート** - バッチファイルに引数を渡すことが可能
+- ✅ **ログファイルの自動保存** - 実行結果を日時付きログに保存
+- ✅ **ネットワークパス対応** - UNCパスから実行可能
+
+## 📁 ファイル構成
 
 ```
 remote-exec/
-├── schtasks/                      # タスクスケジューラ版
-│   ├── remote_exec.bat            # 基本版（パラメータ直接編集）
-│   ├── remote_exec_config.bat     # 設定ファイル版
-│   ├── config.ini.sample          # 設定ファイルサンプル
-│   └── README.md                  # 詳細ドキュメント
-│
-├── winrm/                         # WinRM版（バッチ）
-│   ├── remote_exec_winrm.bat      # 基本版（パラメータ直接編集）
-│   ├── remote_exec_winrm_config.bat  # 設定ファイル版
-│   ├── config_winrm.ini.sample    # 設定ファイルサンプル
-│   └── README.md                  # 詳細ドキュメント
-│
-└── powershell-remoting/           # PowerShell Remoting版
-    ├── Invoke-RemoteBatch.ps1     # PowerShellスクリプト（本体）
-    ├── remote_exec_ps.bat         # バッチラッパー（基本版）
-    ├── remote_exec_ps_config.bat  # バッチラッパー（設定ファイル版）
-    ├── config_ps.ini.sample       # 設定ファイルサンプル
-    └── README.md                  # 詳細ドキュメント
+├── Invoke-RemoteBatch-Hybrid.bat  # リモートバッチ実行ツール（本体）
+├── README.md                      # このファイル
+├── README-RemoteBatch.md          # 詳細ドキュメント
+└── .gitignore                     # Git除外設定
 ```
-
-## 🔍 どれを使うべきか？
-
-### タスクスケジューラ版（schtasks/）
-
-**推奨ケース：**
-- ✅ **セットアップを簡単にしたい**
-- ✅ **実行するだけで結果は不要**（ログはリモートサーバで確認）
-- ✅ **WinRMの設定が難しい環境**
-
-**特徴：**
-- Windows標準のタスクスケジューラを使用
-- セットアップが簡単（サービスが標準で有効）
-- 実行結果はリアルタイムで取得できない
-
-**使用ポート：** TCP 135, 445
-
-📖 [詳細はこちら](schtasks/README.md)
-
----
-
-### WinRM版（winrm/）
-
-**推奨ケース：**
-- ✅ **実行結果をリアルタイムで確認したい**
-- ✅ **エラーを即座に把握したい**
-- ✅ **バッチファイルで完結させたい**
-
-**特徴：**
-- バッチファイル内でPowerShell Remotingを使用
-- 実行結果をリアルタイムで取得可能
-- セットアップがやや複雑（WinRM有効化が必要）
-
-**使用ポート：** TCP 5985 (HTTP) / 5986 (HTTPS)
-
-📖 [詳細はこちら](winrm/README.md)
-
----
-
-### PowerShell Remoting版（powershell-remoting/）
-
-**推奨ケース：**
-- ✅ **PowerShellの全機能を活用したい**
-- ✅ **終了コードを取得したい**
-- ✅ **引数を柔軟に渡したい**
-- ✅ **複数サーバへの並列実行など高度な処理をしたい**
-
-**特徴：**
-- 純粋なPowerShellスクリプト（.ps1）として実装
-- バッチファイル経由でも実行可能
-- 終了コード取得、詳細エラーハンドリング
-- Get-Credentialなどネイティブ機能を活用
-
-**使用ポート：** TCP 5985 (HTTP) / 5986 (HTTPS)
-
-📖 [詳細はこちら](powershell-remoting/README.md)
-
----
-
-## 📊 比較表
-
-| 項目 | タスクスケジューラ版 | WinRM版（バッチ） | PowerShell Remoting版 |
-|-----|------------------|----------------|---------------------|
-| **実行結果の取得** | ❌ 取得不可 | ✅ リアルタイム取得 | ✅ リアルタイム取得 |
-| **標準出力の表示** | ❌ 表示されない | ✅ 画面に表示 | ✅ 画面に表示 |
-| **終了コード取得** | ❌ 取得不可 | ❌ 取得不可 | ✅ 取得可能 |
-| **引数の柔軟性** | ⚠️ 基本的 | ⚠️ 基本的 | ✅ 完全対応 |
-| **実装言語** | バッチ | バッチ | PowerShell |
-| **カスタマイズ性** | ⭐⭐ | ⭐⭐⭐ | ⭐⭐⭐⭐⭐ |
-| **セットアップ難易度** | ⭐⭐ 簡単 | ⭐⭐⭐⭐ やや複雑 | ⭐⭐⭐⭐ やや複雑 |
-| **使用ポート** | 135, 445 | 5985, 5986 | 5985, 5986 |
-| **追加ツール** | 不要 | 不要 | 不要 |
-| **Windows標準機能** | ✅ | ✅ | ✅ |
 
 ## 🚀 クイックスタート
 
-### タスクスケジューラ版を使う場合
+### 1. リモートサーバの準備（初回のみ）
 
-1. `schtasks/` フォルダに移動
-2. `remote_exec.bat` を編集して設定を記入
-3. 実行
-
-```cmd
-cd schtasks
-notepad remote_exec.bat  # 設定を編集
-remote_exec.bat          # 実行
-```
-
-### WinRM版を使う場合
-
-1. **リモートサーバでWinRMを有効化**（初回のみ）
-   ```powershell
-   winrm quickconfig
-   ```
-
-2. `winrm/` フォルダに移動
-3. `remote_exec_winrm.bat` を編集して設定を記入
-4. 実行
-
-```cmd
-cd winrm
-notepad remote_exec_winrm.bat  # 設定を編集
-remote_exec_winrm.bat          # 実行
-```
-
-### PowerShell Remoting版を使う場合
-
-1. **リモートサーバでWinRMを有効化**（初回のみ）
-   ```powershell
-   winrm quickconfig
-   ```
-
-2. `powershell-remoting/` フォルダに移動
-3. PowerShellから直接実行、またはバッチファイル経由で実行
+リモートサーバでWinRMを有効化します：
 
 ```powershell
-# PowerShellから直接実行
-cd powershell-remoting
-.\Invoke-RemoteBatch.ps1 -ComputerName "192.168.1.100" -UserName "Administrator" -BatchPath "C:\Scripts\backup.bat"
+winrm quickconfig
 ```
 
-または
+### 2. スクリプトの編集
+
+`Invoke-RemoteBatch-Hybrid.bat` をテキストエディタで開き、設定セクションを編集：
+
+```powershell
+$Config = @{
+    # リモートサーバのIPアドレスまたはホスト名
+    ComputerName = "192.168.1.100"
+
+    # ユーザー名（空の場合は実行時に入力）
+    UserName = "Administrator"
+
+    # パスワード（空の場合は実行時に入力、推奨）
+    Password = ""
+
+    # 実行するバッチファイルのパス（リモートサーバ上）
+    # {env} は環境選択時に置換されます
+    BatchPath = "C:\Scripts\{env}\backup.bat"
+
+    # バッチファイルに渡す引数（オプション）
+    Arguments = ""
+
+    # HTTPS接続を使用する場合は $true
+    UseSSL = $false
+}
+```
+
+### 3. 実行
+
+ダブルクリックで実行：
 
 ```cmd
-# バッチファイル経由で実行
-cd powershell-remoting
-notepad remote_exec_ps.bat  # 設定を編集
-remote_exec_ps.bat          # 実行
+Invoke-RemoteBatch-Hybrid.bat
 ```
 
-## 💡 使い分けガイド
+または、コマンドプロンプトから：
 
-### ユースケース別推奨
+```cmd
+cd batch\remote-exec
+Invoke-RemoteBatch-Hybrid.bat
+```
 
-| やりたいこと | 推奨バージョン |
-|------------|--------------|
-| 定期バックアップスクリプトを起動 | タスクスケジューラ版 |
-| リモートでコマンド実行して結果を見たい | WinRM版 / PowerShell Remoting版 |
-| ログ収集スクリプトを実行（ログはリモートに保存） | タスクスケジューラ版 |
-| リモートサーバの状態確認スクリプトを実行 | PowerShell Remoting版 |
-| バッチ実行の成功/失敗を終了コードで判定したい | PowerShell Remoting版 |
-| 複数サーバへ並列実行したい | PowerShell Remoting版 |
-| PowerShellに精通していてフル活用したい | PowerShell Remoting版 |
-| バッチファイルで完結させたい | WinRM版 |
-| セットアップ時間を最小限にしたい | タスクスケジューラ版 |
+## 🔧 主な機能の詳細
+
+### 環境選択機能
+
+`BatchPath` に `{env}` を含めると、実行時に環境を選択できます：
+
+```powershell
+BatchPath = "C:\Scripts\{env}\backup.bat"
+```
+
+実行時の選択肢：
+1. tst1t
+2. tst2t
+
+選択すると、`{env}` が選択した環境名に置換されます。
+
+### WinRM設定の自動構成
+
+スクリプトは以下を自動的に行います：
+
+1. **WinRMサービスの起動確認** - 停止している場合は起動（終了時に停止）
+2. **TrustedHostsの設定** - 接続先をTrustedHostsに追加（終了時に復元）
+3. **設定の復元** - スクリプト終了時に元の状態に復元
+
+### ログファイルの保存
+
+実行結果は自動的にログファイルに保存されます：
+
+- **保存先**: `log\RemoteBatch_yyyyMMdd_HHmmss.log`
+- **UNCパスから実行時**: `%TEMP%\RemoteBatchLogs\RemoteBatch_yyyyMMdd_HHmmss.log`
+
+### 引数のサポート
+
+バッチファイルに引数を渡すことができます：
+
+```powershell
+Arguments = "/full /backup"
+```
+
+リモートサーバ上では以下のように実行されます：
+
+```cmd
+C:\Scripts\backup.bat /full /backup
+```
 
 ## ⚙️ 必要な環境
 
 ### ローカルPC（実行元）
 - Windows 10 / Windows 11 / Windows Server 2016以降
-- コマンドプロンプト（cmd.exe）
-- PowerShell 5.1以降（WinRM版のみ）
+- PowerShell 5.1以降
+- 管理者権限（WinRM設定のため）
 
 ### リモートサーバ（実行先）
-
-**タスクスケジューラ版：**
-- Task Schedulerサービスが起動していること
-- ファイアウォールでポート135, 445が開放
-
-**WinRM版 / PowerShell Remoting版：**
+- Windows Server 2012 R2以降 / Windows 10以降
 - WinRMサービスが有効化されていること
 - PowerShell Remotingが有効
-- ファイアウォールでポート5985（または5986）が開放
-
-### 共通
-- リモートサーバの**管理者権限**を持つアカウント
+- ファイアウォールでポート5985（HTTP）または5986（HTTPS）が開放
+- 管理者権限を持つアカウント
 
 ## 🔐 セキュリティ注意事項
 
 1. **パスワードの管理**
-   - 設定ファイルにパスワードを記載しないことを推奨
-   - 実行時に入力する方法を推奨
+   - スクリプト内にパスワードを記載しないことを強く推奨
+   - `Password = ""` のまま実行時に入力する方法を推奨
 
 2. **ネットワークセキュリティ**
    - 信頼できるネットワーク内でのみ使用
    - インターネット経由の場合はVPNを使用
-   - WinRM版でインターネット経由の場合はHTTPS（ポート5986）を使用
+   - インターネット経由の場合はHTTPS（ポート5986）を使用
 
-3. **.gitignore設定**
-   - `config.ini`, `config_winrm.ini`, `config_ps.ini` はGitにコミットしないように設定済み
+3. **管理者権限**
+   - このスクリプトは管理者権限で実行されます
+   - TrustedHosts設定を変更するため、信頼できる接続先のみ指定してください
+
+## 🐛 トラブルシューティング
+
+### エラー: "WinRM設定の自動構成に失敗しました"
+
+**原因**: 管理者権限で実行されていない
+
+**解決方法**:
+- スクリプトは自動的に管理者権限で再起動を試みます
+- UACプロンプトが表示されたら「はい」を選択してください
+
+### エラー: "リモート実行に失敗しました"
+
+**原因1**: リモートサーバでWinRMが有効化されていない
+
+**解決方法**:
+```powershell
+# リモートサーバで実行
+winrm quickconfig
+```
+
+**原因2**: ファイアウォールでポートが開いていない
+
+**解決方法**:
+- HTTP: ポート 5985 を開放
+- HTTPS: ポート 5986 を開放
+
+**原因3**: 認証情報が正しくない
+
+**解決方法**:
+- ユーザー名とパスワードを確認
+- リモートサーバの管理者アカウントを使用しているか確認
+
+### 接続テスト
+
+リモートサーバへの接続をテストするには：
+
+```powershell
+Test-WSMan -ComputerName 192.168.1.100
+```
+
+## 📖 詳細ドキュメント
+
+より詳細な情報は [README-RemoteBatch.md](README-RemoteBatch.md) を参照してください。
 
 ## 📝 ライセンス
 
 このツールはMITライセンスの下で公開されています。
 個人・商用問わず自由に使用・改変できます。
 
-## 🔗 関連リンク
-
-- [タスクスケジューラ版の詳細ドキュメント](schtasks/README.md)
-- [WinRM版（バッチ）の詳細ドキュメント](winrm/README.md)
-- [PowerShell Remoting版の詳細ドキュメント](powershell-remoting/README.md)
-
 ---
 
-**作成日:** 2025-12-01
-**バージョン:** 1.0
+**作成日:** 2025-12-05
+**バージョン:** 2.0
+**更新内容:** PowerShell Remoting版に統一、タスクスケジューラ版とWinRM版を削除

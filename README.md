@@ -9,10 +9,7 @@
 ├── batch/                    # Windowsバッチスクリプト
 │   ├── sync/                # 同期ツール
 │   │   └── TFS-Git-sync     # TFS→Git同期スクリプト
-│   ├── remote-exec/         # リモート実行ツール
-│   │   ├── schtasks/        # タスクスケジューラ版
-│   │   ├── winrm/           # WinRM版
-│   │   └── powershell-remoting/  # PowerShell Remoting版
+│   ├── remote-exec/         # リモート実行ツール（PowerShell Remoting）
 │   ├── git-diff-extract/    # Git差分ファイル抽出ツール
 │   ├── git-branch-manager/  # Gitブランチ管理ツール
 │   └── git-deploy/          # Git→Linux転送ツール
@@ -34,13 +31,13 @@
   - 自動的なファイル更新・追加・削除
   - 日本語ファイル名対応
 
-- **[Remote-Batch-Executor](batch/remote-exec/)**: リモートWindowsサーバでバッチファイルをCMDから実行
-  - **タスクスケジューラ版**: schtasksコマンドでリモート実行（セットアップ簡単）
-  - **WinRM版**: PowerShell Remotingで実行結果をリアルタイム取得
-  - **PowerShell Remoting版**: 純粋なPowerShellスクリプトで高度な制御
-  - Windows標準機能のみ使用（追加ツール不要）
-  - セキュアな環境対応
-  - 設定ファイル対応で複数サーバ管理が容易
+- **[Remote-Batch-Executor](batch/remote-exec/)**: リモートWindowsサーバでバッチファイルを実行（PowerShell Remoting）
+  - ダブルクリックで実行可能な.batハイブリッドスクリプト
+  - WinRM設定の自動構成と復元（TrustedHosts自動設定）
+  - 環境選択機能（tst1t/tst2t）
+  - 実行結果のリアルタイム表示と終了コード取得
+  - ログファイル自動保存
+  - ネットワークパス（UNCパス）対応
 
 - **[Git-Diff-Extract](batch/git-diff-extract/)**: Gitブランチ間の差分ファイルを抽出
   - フォルダ構造を保ったまま差分ファイルをコピー
