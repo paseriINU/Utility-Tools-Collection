@@ -47,10 +47,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 #### Batch Scripts (.bat / .ps1)
 - **バッチファイル (.bat)**:
-  - **エンコーディング**: UTF-8（BOMなし）で保存
+  - **エンコーディング**: 基本的にShift_JISで保存
   - 日本語のファイル名・パスに対応すること
   - コマンドプロンプトでの実行を想定
   - 先頭にスクリプトの目的をコメントで記載
+  - **文字コード対応**:
+    - **Shift_JIS互換文字のみ使用**: レ点チェックマーク（✓）は `[OK]`、バツ印（✗）は `[NG]` など、Shift_JISで表現できる文字のみを使用すること
+    - **UTF-8入力対応**: `git status` など外部コマンドからUTF-8で返ってくる文字がある場合は、スクリプト冒頭に `chcp 65001 >nul` を追加すること
+  - **タイトル表示**:
+    - すべてのプログラムにおいて、実行開始時にタイトルまたはヘッダーをコマンドプロンプトに表示すること
+    - 例: `title ツール名` または PowerShell の `Write-Host` でヘッダーを表示
 
 - **PowerShellスクリプト (.ps1) → ハイブリッド.bat形式を推奨**:
   - **重要**: PowerShellを使用する場合は、`.ps1`ファイルではなく、ポリグロットパターンを使用した`.bat`形式で作成すること
@@ -58,17 +64,29 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
     ```batch
     <# :
     @echo off
+    chcp 65001 >nul
+    title ツール名
     setlocal
     powershell -NoProfile -ExecutionPolicy Bypass -Command "iex ((gc '%~f0') -join \"`n\")"
-    exit /b %ERRORLEVEL%
+    set EXITCODE=%ERRORLEVEL%
+    pause
+    exit /b %EXITCODE%
     : #>
 
     # PowerShellコードはここから
+    # 最初にタイトルを表示
+    Write-Host ""
+    Write-Host "================================================================" -ForegroundColor Cyan
+    Write-Host "  ツール名" -ForegroundColor Cyan
+    Write-Host "================================================================" -ForegroundColor Cyan
+    Write-Host ""
     ```
   - ポリグロットパターン（管理者権限必須版）:
     ```batch
     <# :
     @echo off
+    chcp 65001 >nul
+    title ツール名
     setlocal
 
     rem 管理者権限チェック
@@ -80,10 +98,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
     )
 
     powershell -NoProfile -ExecutionPolicy Bypass -Command "$scriptDir=('%~dp0' -replace '\\$',''); iex ((gc '%~f0') -join \"`n\")"
-    exit /b %ERRORLEVEL%
+    set EXITCODE=%ERRORLEVEL%
+    pause
+    exit /b %EXITCODE%
     : #>
 
     # PowerShellコードはここから
+    # 最初にタイトルを表示
+    Write-Host ""
+    Write-Host "================================================================" -ForegroundColor Cyan
+    Write-Host "  ツール名" -ForegroundColor Cyan
+    Write-Host "================================================================" -ForegroundColor Cyan
+    Write-Host ""
+
     # $scriptDir 変数でバッチファイルのディレクトリパスが利用可能
     ```
   - PowerShell 5.1以降で動作すること
@@ -215,14 +242,22 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ### ブランチ戦略
 
-- 基本的に`main`ブランチで直接作業
-- 大きな変更の場合はフィーチャーブランチを作成することも可
+- **mainブランチへの直接プッシュは禁止**
+- **必ずフィーチャーブランチを作成してプルリクエスト（PR）を作成すること**
+- ブランチ命名規則: `claude/[機能名]-[session-id]`
+  - 例: `claude/remote-exec-consolidation-01BGfeHT5izXrCtTTXPVzWdZ`
+- 作業フロー:
+  1. フィーチャーブランチを作成: `git checkout -b claude/feature-name-sessionid`
+  2. 変更をコミット
+  3. リモートにプッシュ: `git push -u origin claude/feature-name-sessionid`
+  4. GitHubでプルリクエストを作成
+  5. レビュー後、mainにマージ
 
 ## Special Considerations
 
-- **個人用リポジトリ**: プルリクエストやイシュー管理は不要
+- **個人用リポジトリ**: mainブランチは保護されており、すべての変更はPRを通してマージ
 - **多言語対応**: ファイル名やコメントに日本語を使用可能
-- **エンコーディング注意**: 特にバッチファイルはUTF-8で保存
+- **エンコーディング注意**: 特にバッチファイルはShift_JISで保存（UTF-8入力がある場合は chcp 65001 使用）
 - **プライバシー**: 機密情報（パスワード、APIキーなど）をコミットしないこと
 
 ## Tools Currently Available
