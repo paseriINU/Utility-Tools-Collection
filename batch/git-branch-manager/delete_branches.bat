@@ -31,12 +31,6 @@ Write-Host ""
 # UTF-8出力設定
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
-# 環境変数PATHをシステム・ユーザーレベルから再読み込み（gitコマンドが見つからない問題対策）
-$machinePath = [System.Environment]::GetEnvironmentVariable("Path", "Machine")
-$userPath = [System.Environment]::GetEnvironmentVariable("Path", "User")
-if ($machinePath) { $env:Path = $machinePath }
-if ($userPath) { $env:Path += ";" + $userPath }
-
 # Gitコマンドの存在確認
 $gitCommand = Get-Command git -ErrorAction SilentlyContinue
 if (-not $gitCommand) {
