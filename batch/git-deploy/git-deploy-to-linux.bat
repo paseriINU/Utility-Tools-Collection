@@ -7,7 +7,7 @@ setlocal
 rem UNCパス対応（PushD/PopDで自動マッピング）
 pushd "%~dp0"
 
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$scriptDir=('%~dp0' -replace '\\$',''); try { iex ((gc '%~f0') -join \"`n\") } finally { Set-Location C:\ }"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$scriptDir=('%~dp0' -replace '\\$',''); try { iex ((gc '%~f0' -Encoding UTF8) -join \"`n\") } finally { Set-Location C:\ }"
 set EXITCODE=%ERRORLEVEL%
 
 popd
@@ -86,6 +86,34 @@ $LINUX_CHMOD_FILE = "777"  # ファイルのパーミッション
 #==============================================================================
 #endregion
 
+# UTF-8出力設定
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+
+# 環境変数PATHをシステム・ユーザーレベルから再読み込み（gitコマンドが見つからない問題対策）
+$machinePath = [System.Environment]::GetEnvironmentVariable("Path", "Machine")
+$userPath = [System.Environment]::GetEnvironmentVariable("Path", "User")
+if ($machinePath) { $env:Path = $machinePath }
+if ($userPath) { $env:Path += ";" + $userPath }
+
+# Gitコマンドの存在確認
+$gitCommand = Get-Command git -ErrorAction SilentlyContinue
+if (-not $gitCommand) {
+    Write-Host ""
+    Write-Host "========================================================================" -ForegroundColor Red
+    Write-Host "  [エラー] Gitがインストールされていません" -ForegroundColor Red
+    Write-Host "========================================================================" -ForegroundColor Red
+    Write-Host ""
+    Write-Host "このスクリプトを実行するには、Gitがインストールされている必要があります。" -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "Gitのインストール方法:" -ForegroundColor Cyan
+    Write-Host "  1. https://git-scm.com/download/win にアクセス" -ForegroundColor White
+    Write-Host "  2. 「Download for Windows」をクリック" -ForegroundColor White
+    Write-Host "  3. インストーラーをダウンロードして実行" -ForegroundColor White
+    Write-Host "  4. インストール後、コマンドプロンプトを再起動" -ForegroundColor White
+    Write-Host ""
+    exit 1
+}
+
 # 色付き出力
 function Write-Color {
     param(
@@ -129,14 +157,12 @@ if ($LASTEXITCODE -ne 0) {
 # Gitリポジトリのルートディレクトリを取得
 $gitRootDir = git rev-parse --show-toplevel 2>&1
 if ($LASTEXITCODE -eq 0) {
-    # Linuxパスの場合はWindowsパスに変換（WSL環境対応）
-    if ($gitRootDir -match '^/') {
-        # WSLパスの場合は変換しない
-        $gitRootDir = $gitRootDir.Replace("/", "\")
-    }
+    # Git形式（スラッシュ）をWindows形式（バックスラッシュ）に統一
+    $gitRootDir = $gitRootDir.Replace("/", "\")
     Write-Color "[情報] Gitリポジトリルート: $gitRootDir" "Green"
 }
 
+# 作業ディレクトリも同じ形式で表示（Windows形式に統一）
 Write-Color "[情報] 作業ディレクトリ: $GIT_ROOT" "Green"
 Write-Host ""
 

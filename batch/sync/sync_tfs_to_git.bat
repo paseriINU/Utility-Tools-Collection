@@ -7,7 +7,7 @@ setlocal
 rem UNCパス対応（PushD/PopDで自動マッピング）
 pushd "%~dp0"
 
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$scriptDir=('%~dp0' -replace '\\$',''); try { iex ((gc '%~f0') -join \"`n\") } finally { Set-Location C:\ }"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$scriptDir=('%~dp0' -replace '\\$',''); try { iex ((gc '%~f0' -Encoding UTF8) -join \"`n\") } finally { Set-Location C:\ }"
 set EXITCODE=%ERRORLEVEL%
 
 popd
@@ -30,6 +30,31 @@ Write-Host ""
 
 # UTF-8出力設定
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+
+# 環境変数PATHをシステム・ユーザーレベルから再読み込み（gitコマンドが見つからない問題対策）
+$machinePath = [System.Environment]::GetEnvironmentVariable("Path", "Machine")
+$userPath = [System.Environment]::GetEnvironmentVariable("Path", "User")
+if ($machinePath) { $env:Path = $machinePath }
+if ($userPath) { $env:Path += ";" + $userPath }
+
+# Gitコマンドの存在確認
+$gitCommand = Get-Command git -ErrorAction SilentlyContinue
+if (-not $gitCommand) {
+    Write-Host ""
+    Write-Host "========================================================================" -ForegroundColor Red
+    Write-Host "  [エラー] Gitがインストールされていません" -ForegroundColor Red
+    Write-Host "========================================================================" -ForegroundColor Red
+    Write-Host ""
+    Write-Host "このスクリプトを実行するには、Gitがインストールされている必要があります。" -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "Gitのインストール方法:" -ForegroundColor Cyan
+    Write-Host "  1. https://git-scm.com/download/win にアクセス" -ForegroundColor White
+    Write-Host "  2. 「Download for Windows」をクリック" -ForegroundColor White
+    Write-Host "  3. インストーラーをダウンロードして実行" -ForegroundColor White
+    Write-Host "  4. インストール後、コマンドプロンプトを再起動" -ForegroundColor White
+    Write-Host ""
+    exit 1
+}
 
 # Git日本語表示設定
 git config --global core.quotepath false 2>&1 | Out-Null
