@@ -37,6 +37,25 @@ $userPath = [System.Environment]::GetEnvironmentVariable("Path", "User")
 if ($machinePath) { $env:Path = $machinePath }
 if ($userPath) { $env:Path += ";" + $userPath }
 
+# Gitコマンドの存在確認
+$gitCommand = Get-Command git -ErrorAction SilentlyContinue
+if (-not $gitCommand) {
+    Write-Host ""
+    Write-Host "========================================================================" -ForegroundColor Red
+    Write-Host "  [エラー] Gitがインストールされていません" -ForegroundColor Red
+    Write-Host "========================================================================" -ForegroundColor Red
+    Write-Host ""
+    Write-Host "このスクリプトを実行するには、Gitがインストールされている必要があります。" -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "Gitのインストール方法:" -ForegroundColor Cyan
+    Write-Host "  1. https://git-scm.com/download/win にアクセス" -ForegroundColor White
+    Write-Host "  2. 「Download for Windows」をクリック" -ForegroundColor White
+    Write-Host "  3. インストーラーをダウンロードして実行" -ForegroundColor White
+    Write-Host "  4. インストール後、コマンドプロンプトを再起動" -ForegroundColor White
+    Write-Host ""
+    exit 1
+}
+
 # Git日本語表示設定
 git config --global core.quotepath false 2>&1 | Out-Null
 
