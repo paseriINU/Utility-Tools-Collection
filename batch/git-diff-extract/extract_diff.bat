@@ -31,12 +31,6 @@ Write-Host ""
 # UTF-8出力設定
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
-# 環境変数PATHをシステム・ユーザーレベルから再読み込み（gitコマンドが見つからない問題対策）
-$machinePath = [System.Environment]::GetEnvironmentVariable("Path", "Machine")
-$userPath = [System.Environment]::GetEnvironmentVariable("Path", "User")
-if ($machinePath) { $env:Path = $machinePath }
-if ($userPath) { $env:Path += ";" + $userPath }
-
 # Gitコマンドの存在確認
 $gitCommand = Get-Command git -ErrorAction SilentlyContinue
 if (-not $gitCommand) {
@@ -57,20 +51,11 @@ if (-not $gitCommand) {
 }
 
 #region 設定セクション
-# 比較元ブランチ（基準）
-$BASE_BRANCH = "main"
-
-# 比較先ブランチ（差分を取得したいブランチ）
-$TARGET_BRANCH = "develop"
-
-# 出力先フォルダ（相対パスまたは絶対パス）
-$OUTPUT_DIR = "diff_output"
+# Gitプロジェクトのパス
+$GIT_PROJECT_PATH = "C:\Users\$env:USERNAME\source\Git\project"
 
 # 削除されたファイルも含めるか（$true=含める, $false=含めない）
 $INCLUDE_DELETED = $false
-
-# Gitプロジェクトのパス
-$GIT_PROJECT_PATH = "C:\Users\$env:USERNAME\source\Git\project"
 #endregion
 
 #region Gitリポジトリ確認
@@ -98,26 +83,99 @@ $REPO_ROOT = git rev-parse --show-toplevel
 $REPO_ROOT = $REPO_ROOT -replace '/', '\'
 
 Write-Host "リポジトリルート: $REPO_ROOT" -ForegroundColor White
+Write-Host ""
+#endregion
+
+#region ブランチ選択
+# すべてのブランチ一覧を取得
+Write-Host "ブランチ一覧を取得中..." -ForegroundColor Yellow
+Write-Host ""
+
+$allBranches = git branch --format="%(refname:short)" | ForEach-Object { $_.Trim() }
+
+if ($allBranches.Count -eq 0) {
+    Write-Host "[エラー] ブランチが見つかりません" -ForegroundColor Red
+    exit 1
+}
+
+# 比較元ブランチの選択
+Write-Host "========================================================================" -ForegroundColor Cyan
+Write-Host "  比較元ブランチ（基準ブランチ）を選択してください" -ForegroundColor Cyan
+Write-Host "========================================================================" -ForegroundColor Cyan
+Write-Host ""
+
+for ($i = 0; $i -lt $allBranches.Count; $i++) {
+    $displayNum = $i + 1
+    $branchName = $allBranches[$i]
+    Write-Host " $displayNum. $branchName"
+}
+Write-Host ""
+
+$maxNum = $allBranches.Count
+$baseSelection = Read-Host "番号を選択してください (1-$maxNum)"
+
+# 入力検証
+if (-not $baseSelection -or $baseSelection -notmatch '^\d+$' -or [int]$baseSelection -lt 1 -or [int]$baseSelection -gt $maxNum) {
+    Write-Host "[エラー] 無効な選択です" -ForegroundColor Red
+    exit 1
+}
+
+$BASE_BRANCH = $allBranches[[int]$baseSelection - 1]
+Write-Host ""
+Write-Host "[選択] 比較元ブランチ: $BASE_BRANCH" -ForegroundColor Green
+Write-Host ""
+
+# 比較先ブランチの選択
+Write-Host "========================================================================" -ForegroundColor Cyan
+Write-Host "  比較先ブランチ（差分を取得したいブランチ）を選択してください" -ForegroundColor Cyan
+Write-Host "========================================================================" -ForegroundColor Cyan
+Write-Host ""
+
+for ($i = 0; $i -lt $allBranches.Count; $i++) {
+    $displayNum = $i + 1
+    $branchName = $allBranches[$i]
+
+    # 比較元ブランチと同じ場合はマーク
+    if ($branchName -eq $BASE_BRANCH) {
+        Write-Host " $displayNum. $branchName [比較元]" -ForegroundColor Gray
+    } else {
+        Write-Host " $displayNum. $branchName"
+    }
+}
+Write-Host ""
+
+$targetSelection = Read-Host "番号を選択してください (1-$maxNum)"
+
+# 入力検証
+if (-not $targetSelection -or $targetSelection -notmatch '^\d+$' -or [int]$targetSelection -lt 1 -or [int]$targetSelection -gt $maxNum) {
+    Write-Host "[エラー] 無効な選択です" -ForegroundColor Red
+    exit 1
+}
+
+$TARGET_BRANCH = $allBranches[[int]$targetSelection - 1]
+
+# 同じブランチが選択された場合の警告
+if ($BASE_BRANCH -eq $TARGET_BRANCH) {
+    Write-Host "[警告] 比較元と比較先が同じブランチです" -ForegroundColor Yellow
+    $continue = Read-Host "続行しますか? (y/n)"
+    if ($continue -ne "y") {
+        Write-Host "処理を中止しました" -ForegroundColor Yellow
+        exit 0
+    }
+}
+
+Write-Host ""
+Write-Host "[選択] 比較先ブランチ: $TARGET_BRANCH" -ForegroundColor Green
+Write-Host ""
+
+# 出力先フォルダ（デスクトップ + タイムスタンプ）
+$timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
+$OUTPUT_DIR = "$env:USERPROFILE\Desktop\git_diff_$timestamp"
+
 Write-Host "比較元ブランチ  : $BASE_BRANCH" -ForegroundColor White
 Write-Host "比較先ブランチ  : $TARGET_BRANCH" -ForegroundColor White
 Write-Host "出力先フォルダ  : $OUTPUT_DIR" -ForegroundColor White
 Write-Host ""
-#endregion
-
-#region ブランチ存在確認
-# 比較元ブランチ確認
-git rev-parse --verify $BASE_BRANCH 2>&1 | Out-Null
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "[エラー] ブランチ '$BASE_BRANCH' が見つかりません" -ForegroundColor Red
-    exit 1
-}
-
-# 比較先ブランチ確認
-git rev-parse --verify $TARGET_BRANCH 2>&1 | Out-Null
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "[エラー] ブランチ '$TARGET_BRANCH' が見つかりません" -ForegroundColor Red
-    exit 1
-}
 #endregion
 
 #region 出力先フォルダ確認
