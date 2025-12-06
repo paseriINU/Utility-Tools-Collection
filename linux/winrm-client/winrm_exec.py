@@ -439,51 +439,6 @@ def setup_logging(level):
     )
 
 
-def select_environment():
-    """
-    環境選択メニューを表示して、ユーザーに環境を選択させる
-
-    Returns:
-        選択された環境名（str）、またはキャンセル時はNone
-    """
-    print("=" * 40)
-    print("  環境選択")
-    print("=" * 40)
-
-    # 環境リストを動的に表示
-    for i, env in enumerate(ENVIRONMENTS, start=1):
-        print(f"{i}. {env}")
-
-    print("=" * 40)
-
-    while True:
-        try:
-            selection = input(f"環境を選択してください (1-{len(ENVIRONMENTS)}): ").strip()
-
-            # 空入力のチェック
-            if not selection:
-                print("[ERROR] 無効な選択です。数値を入力してください。")
-                continue
-
-            # 数値かチェック
-            selection_num = int(selection)
-
-            # 範囲チェック
-            if selection_num < 1 or selection_num > len(ENVIRONMENTS):
-                print(f"[ERROR] 無効な選択です。1-{len(ENVIRONMENTS)} の範囲で入力してください。")
-                continue
-
-            # 選択された環境を返す（リストは0始まりなので-1）
-            selected_env = ENVIRONMENTS[selection_num - 1]
-            print(f"[SUCCESS] 選択された環境: {selected_env}")
-            print()
-            return selected_env
-
-        except ValueError:
-            print("[ERROR] 無効な選択です。数値を入力してください。")
-        except KeyboardInterrupt:
-            print("\n[INFO] キャンセルされました")
-            return None
 
 
 def main():
@@ -523,7 +478,13 @@ def main():
     # ロギング設定
     setup_logging(args.log_level)
 
-    logging.info("=== WinRM Remote Batch Executor (標準ライブラリ版) ===")
+    # タイトル表示
+    print("")
+    print("=" * 72)
+    print("  WinRM Remote Batch Executor (Python)")
+    print("  標準ライブラリのみ版")
+    print("=" * 72)
+    print("")
 
     # 環境の有効性チェック
     if args.env not in ENVIRONMENTS:

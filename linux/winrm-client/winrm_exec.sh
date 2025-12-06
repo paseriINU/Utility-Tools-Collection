@@ -115,44 +115,6 @@ log_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
-# 環境選択メニュー
-select_environment() {
-    echo "======================================"
-    echo "  環境選択"
-    echo "======================================"
-
-    # 環境リストを動的に表示
-    local i=1
-    for env in "${ENVIRONMENTS[@]}"; do
-        echo "${i}. ${env}"
-        i=$((i + 1))
-    done
-
-    echo "======================================"
-    echo -n "環境を選択してください (1-${#ENVIRONMENTS[@]}): "
-
-    read -r selection
-
-    # 入力が数値かチェック
-    if ! [[ "$selection" =~ ^[0-9]+$ ]]; then
-        log_error "無効な選択です。数値を入力してください。"
-        return 1
-    fi
-
-    # 範囲チェック
-    if [ "$selection" -lt 1 ] || [ "$selection" -gt "${#ENVIRONMENTS[@]}" ]; then
-        log_error "無効な選択です。1-${#ENVIRONMENTS[@]} の範囲で入力してください。"
-        return 1
-    fi
-
-    # 配列は0始まりなので、選択番号から1を引く
-    local index=$((selection - 1))
-    ENV_FOLDER="${ENVIRONMENTS[$index]}"
-
-    log_success "選択された環境: $ENV_FOLDER"
-    echo
-    return 0
-}
 
 # WinRMエンドポイントURL生成
 generate_endpoint() {
@@ -532,11 +494,12 @@ delete_shell() {
 
 # メイン処理
 main() {
-    echo "======================================"
+    echo ""
+    echo "========================================================================"
     echo "  WinRM Remote Batch Executor (Bash)"
     echo "  標準コマンドのみ版"
-    echo "======================================"
-    echo
+    echo "========================================================================"
+    echo ""
 
     # 環境の有効性チェック
     local valid=false
