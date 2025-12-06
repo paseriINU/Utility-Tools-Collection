@@ -157,14 +157,12 @@ if ($LASTEXITCODE -ne 0) {
 # Gitリポジトリのルートディレクトリを取得
 $gitRootDir = git rev-parse --show-toplevel 2>&1
 if ($LASTEXITCODE -eq 0) {
-    # Linuxパスの場合はWindowsパスに変換（WSL環境対応）
-    if ($gitRootDir -match '^/') {
-        # WSLパスの場合は変換しない
-        $gitRootDir = $gitRootDir.Replace("/", "\")
-    }
+    # Git形式（スラッシュ）をWindows形式（バックスラッシュ）に統一
+    $gitRootDir = $gitRootDir.Replace("/", "\")
     Write-Color "[情報] Gitリポジトリルート: $gitRootDir" "Green"
 }
 
+# 作業ディレクトリも同じ形式で表示（Windows形式に統一）
 Write-Color "[情報] 作業ディレクトリ: $GIT_ROOT" "Green"
 Write-Host ""
 
