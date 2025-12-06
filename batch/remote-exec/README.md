@@ -23,8 +23,7 @@
 ```
 remote-exec/
 ├── Invoke-RemoteBatch-Hybrid.bat  # リモートバッチ実行ツール（本体）
-├── README.md                      # このファイル
-└── .gitignore                     # Git除外設定
+└── README.md                      # このファイル
 ```
 
 ## 🚀 クイックスタート

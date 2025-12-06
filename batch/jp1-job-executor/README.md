@@ -10,14 +10,13 @@
 
 ```
 jp1-job-executor/
-├── remote-exec/           # 方法1: リモート実行版
-│   ├── jp1_remote_start.bat
-│   └── config.ini.sample
+├── remote-exec/                   # 方法1: リモート実行版
+│   ├── jp1_remote_start.bat       # リモート実行版（スタンドアローン）
+│   └── README.md
 │
-└── rest-api/              # 方法2: REST API版
-    ├── Start-JP1Job.ps1
-    ├── jp1_start_api.bat
-    └── config.ini.sample
+└── rest-api/                      # 方法2: REST API版
+    ├── Start-JP1Job-Standalone.bat # REST API版（スタンドアローン）
+    └── README.md
 ```
 
 ---
@@ -120,8 +119,8 @@ jp1-job-executor/
 
 ### セキュリティ
 
-- **パスワード管理**: バッチファイル内にパスワードを直接記載しないことを推奨
-- **設定ファイル**: config.iniは`.gitignore`に追加してコミットしない
+- **パスワード管理**: バッチファイル内にパスワードを直接記載しないことを推奨（実行時入力を推奨）
+- **設定ファイル**: スタンドアローン版ではバッチファイル内に設定を記述
 - **権限管理**: ジョブネット実行権限を持つユーザーのみが使用すること
 
 ### JP1環境

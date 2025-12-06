@@ -9,7 +9,7 @@ TFS（Team Foundation Server）のローカルディレクトリとGitリポジ�
 - ✅ **Gitブランチ管理**: 実行前にブランチ確認・切り替えが可能
 - ✅ **日本語対応**: UTF-8モードで日本語のブランチ名・ファイル名に対応
 - ✅ **コミット機能**: 同期後にオプションでGitコミット可能
-- ✅ **モジュール構成**: PowerShellロジックを別ファイルに分離し、保守性向上
+- ✅ **ポリグロット形式**: .bat形式でPowerShellロジックを内包し、1ファイルで完結
 
 ## 動作の流れ
 
@@ -26,10 +26,11 @@ TFS（Team Foundation Server）のローカルディレクトリとGitリポジ�
 
 ```
 batch/sync/
-├── sync_tfs_to_git.bat   # メインのバッチスクリプト（UI・制御）
-├── sync_logic.ps1         # PowerShell同期ロジック
+├── sync_tfs_to_git.bat   # TFS-Git同期ツール（ポリグロット版）
 └── README.md              # このファイル
 ```
+
+**注**: このツールはポリグロット形式で、.batファイル内にPowerShellロジックが含まれています。1ファイルで完結します。
 
 ## 必要な環境
 
@@ -39,33 +40,33 @@ batch/sync/
 
 ## インストール
 
-1. `batch/sync/` フォルダ全体をダウンロード
-   - `sync_tfs_to_git.bat`（メインスクリプト）
-   - `sync_logic.ps1`（PowerShellロジック）
-2. **UTF-8エンコーディングで保存されていることを確認**
-   - VS Code: 右下の文字コード部分をクリック → UTF-8
-   - メモ帳: 名前を付けて保存 → エンコード: UTF-8
-3. **2つのファイルを同じフォルダに配置**
-   - バッチファイルが同じディレクトリの `.ps1` を自動検出します
+1. `sync_tfs_to_git.bat` をダウンロード
+2. 任意のフォルダに配置（TFSやGitリポジトリと同じ場所でなくてもOK）
+3. これで準備完了！
 
 ## 使い方
 
 ### 1. パスの設定
 
-バッチファイルの20-21行目を編集します:
+`sync_tfs_to_git.bat` をテキストエディタで開き、設定セクションを編集します:
 
-```batch
-set "TFS_DIR=C:\Path\To\TFS\Project"
-set "GIT_REPO_DIR=C:\Path\To\Git\Project"
+```powershell
+$Config = @{
+    # TFSディレクトリパス
+    TFS_DIR = "C:\Path\To\TFS\Project"
+
+    # Gitリポジトリディレクトリパス
+    GIT_REPO_DIR = "C:\Path\To\Git\Project"
+}
 ```
 
 **例:**
-```batch
-set "TFS_DIR=C:\Work\TFS\MyProject"
-set "GIT_REPO_DIR=D:\Repository\MyProject"
+```powershell
+$Config = @{
+    TFS_DIR = "C:\Work\TFS\MyProject"
+    GIT_REPO_DIR = "D:\Repository\MyProject"
+}
 ```
-
-**注意:** 変数名は`GIT_REPO_DIR`を使用してください（`GIT_DIR`はGitの環境変数と衝突します）
 
 ### 2. 実行
 

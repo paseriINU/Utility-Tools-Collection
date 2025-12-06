@@ -32,7 +32,7 @@ main ブランチと develop ブランチを比較
 
 ## 使い方
 
-### 方法1: 基本版（最も簡単）
+### 基本的な使い方
 
 1. **Gitリポジトリのルートフォルダ**にこのツールをコピー
    ```
@@ -44,42 +44,27 @@ main ブランチと develop ブランチを比較
    ```
 
 2. **`extract_diff.bat`** を編集して設定を変更（必要に応じて）
-   ```batch
-   rem 比較元ブランチ（基準）
-   set BASE_BRANCH=main
 
-   rem 比較先ブランチ（差分を取得したいブランチ）
-   set TARGET_BRANCH=develop
+   ファイルをテキストエディタで開き、設定セクションを編集：
+   ```powershell
+   $Config = @{
+       # 比較元ブランチ（基準）
+       BASE_BRANCH = "main"
 
-   rem 出力先フォルダ
-   set OUTPUT_DIR=diff_output
+       # 比較先ブランチ（差分を取得したいブランチ）
+       TARGET_BRANCH = "develop"
+
+       # 出力先フォルダ
+       OUTPUT_DIR = "diff_output"
+
+       # 削除されたファイルも含めるか（0=含めない, 1=含める）
+       INCLUDE_DELETED = 0
+   }
    ```
 
 3. **`extract_diff.bat`** をダブルクリックで実行
 
 4. 完了！`diff_output/` フォルダに差分ファイルがコピーされます
-
----
-
-### 方法2: 設定ファイル版
-
-1. **`config.ini.sample`** を **`config.ini`** にコピー
-   ```cmd
-   copy config.ini.sample config.ini
-   ```
-
-2. **`config.ini`** を編集
-   ```ini
-   [Branches]
-   BASE_BRANCH=main
-   TARGET_BRANCH=develop
-
-   [Output]
-   OUTPUT_DIR=diff_output
-   INCLUDE_DELETED=0
-   ```
-
-3. **`extract_diff_config.bat`** をダブルクリックで実行
 
 ---
 
@@ -167,10 +152,13 @@ Git差分ファイル抽出ツール
 
 ### 例1: リリース前の差分確認
 
-```batch
-set BASE_BRANCH=main
-set TARGET_BRANCH=develop
-set OUTPUT_DIR=release_diff
+```powershell
+$Config = @{
+    BASE_BRANCH = "main"
+    TARGET_BRANCH = "develop"
+    OUTPUT_DIR = "release_diff"
+    INCLUDE_DELETED = 0
+}
 ```
 
 **用途**: 次回リリースで変更されるファイルを確認
@@ -179,10 +167,13 @@ set OUTPUT_DIR=release_diff
 
 ### 例2: フィーチャーブランチの差分
 
-```batch
-set BASE_BRANCH=develop
-set TARGET_BRANCH=feature/new-login
-set OUTPUT_DIR=feature_diff
+```powershell
+$Config = @{
+    BASE_BRANCH = "develop"
+    TARGET_BRANCH = "feature/new-login"
+    OUTPUT_DIR = "feature_diff"
+    INCLUDE_DELETED = 0
+}
 ```
 
 **用途**: 特定の機能追加で変更されたファイルを確認
@@ -191,10 +182,13 @@ set OUTPUT_DIR=feature_diff
 
 ### 例3: タグ間の差分
 
-```batch
-set BASE_BRANCH=v1.0.0
-set TARGET_BRANCH=v2.0.0
-set OUTPUT_DIR=v1_to_v2_diff
+```powershell
+$Config = @{
+    BASE_BRANCH = "v1.0.0"
+    TARGET_BRANCH = "v2.0.0"
+    OUTPUT_DIR = "v1_to_v2_diff"
+    INCLUDE_DELETED = 0
+}
 ```
 
 **用途**: バージョン間の変更ファイルを確認
@@ -203,10 +197,13 @@ set OUTPUT_DIR=v1_to_v2_diff
 
 ### 例4: デプロイ用差分ファイル作成
 
-```batch
-set BASE_BRANCH=production
-set TARGET_BRANCH=staging
-set OUTPUT_DIR=C:\Deploy\差分ファイル_%DATE%
+```powershell
+$Config = @{
+    BASE_BRANCH = "production"
+    TARGET_BRANCH = "staging"
+    OUTPUT_DIR = "C:\Deploy\diff_files"
+    INCLUDE_DELETED = 0
+}
 ```
 
 **用途**: 本番環境へのデプロイ用に差分ファイルを準備
@@ -377,27 +374,30 @@ git config --global core.quotepath false
 
 ### 日付付きフォルダに出力
 
-```batch
-rem 現在の日時をフォルダ名に含める
-set OUTPUT_DIR=diff_%DATE:~0,4%%DATE:~5,2%%DATE:~8,2%_%TIME:~0,2%%TIME:~3,2%
+設定ファイル内で動的にフォルダ名を生成：
+
+```powershell
+$timestamp = Get-Date -Format "yyyyMMdd_HHmm"
+$Config = @{
+    BASE_BRANCH = "main"
+    TARGET_BRANCH = "develop"
+    OUTPUT_DIR = "diff_$timestamp"
+    INCLUDE_DELETED = 0
+}
 ```
 
-結果: `diff_20251201_1530/`
+結果: `diff_20251206_1530/`
 
 ---
 
 ### 複数ブランチの差分を一括抽出
 
-```batch
-rem extract_multiple.bat
-call extract_diff.bat
-ren diff_output diff_main_to_develop
+複数の設定を用意して、それぞれの`.bat`ファイルを作成：
 
-set BASE_BRANCH=develop
-set TARGET_BRANCH=feature/new-ui
-call extract_diff.bat
-ren diff_output diff_develop_to_feature
-```
+1. `extract_diff_main_develop.bat` - main→develop用
+2. `extract_diff_develop_feature.bat` - develop→feature用
+
+それぞれのファイルで設定を変更して実行
 
 ---
 
