@@ -15,7 +15,8 @@
 │   └── git-deploy/          # Git→Linux転送ツール
 │
 ├── vba/                     # Excel VBAマクロ
-│   └── excel-automation/    # Excel自動化ツール
+│   ├── excel-automation/    # Excel自動化ツール
+│   └── word-bookmark-organizer/  # Word文書しおり整理ツール
 │
 └── javascript/              # JavaScriptツール
     └── browser-automation/  # ブラウザ自動化スクリプト
@@ -61,7 +62,13 @@
   - ダブルクリックで実行可能
 
 ### VBA Macros
-*準備中 - 今後追加予定*
+
+- **[Word-Bookmark-Organizer](vba/word-bookmark-organizer/)**: Word文書のしおり（ブックマーク）整理とPDF出力
+  - ExcelからWordを操作し、スタイルに基づいてアウトラインレベルを自動設定
+  - 「表題1」「表題2」「表題3」などの独自スタイルに対応
+  - しおり付きPDFを自動出力（目次で適切な箇所に飛べる）
+  - ファイル選択ダイアログで簡単操作
+  - スタイル名のカスタマイズ可能
 
 ### JavaScript Tools
 *準備中 - 今後追加予定*
