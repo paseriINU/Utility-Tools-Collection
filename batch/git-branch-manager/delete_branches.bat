@@ -31,6 +31,12 @@ Write-Host ""
 # UTF-8出力設定
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
+# 環境変数PATHをシステム・ユーザーレベルから再読み込み（gitコマンドが見つからない問題対策）
+$machinePath = [System.Environment]::GetEnvironmentVariable("Path", "Machine")
+$userPath = [System.Environment]::GetEnvironmentVariable("Path", "User")
+if ($machinePath) { $env:Path = $machinePath }
+if ($userPath) { $env:Path += ";" + $userPath }
+
 #region 設定セクション
 # Gitプロジェクトのパス
 $GIT_PROJECT_PATH = "C:\Users\$env:USERNAME\source\Git\project"
