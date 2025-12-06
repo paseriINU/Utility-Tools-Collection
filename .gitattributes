@@ -1,8 +1,19 @@
-# バッチファイルをUTF-8として扱う
-*.bat text eol=crlf working-tree-encoding=UTF-8
+# バッチファイル（Shift_JIS基準）
+# ポリグロットパターン（PowerShell埋め込み）で日本語を含む場合は
+# UTF-8（BOM付き）で保存すること（Gitが自動検出）
+*.bat text eol=crlf
+
+# Pythonファイル
+*.py text eol=lf
 
 # マークダウンファイル
 *.md text eol=lf
 
 # ライセンスファイル
 LICENSE text eol=lf
+
+# 画像ファイル（バイナリ）
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
