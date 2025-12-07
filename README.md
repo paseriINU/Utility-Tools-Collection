@@ -16,7 +16,8 @@
 │
 ├── vba/                     # Excel VBAマクロ
 │   ├── excel-automation/    # Excel自動化ツール
-│   └── word-bookmark-organizer/  # Word文書しおり整理ツール
+│   ├── word-bookmark-organizer/  # Word文書しおり整理ツール
+│   └── git-log-visualizer/  # Git Log 可視化ツール
 │
 └── javascript/              # JavaScriptツール
     └── browser-automation/  # ブラウザ自動化スクリプト
@@ -67,8 +68,16 @@
   - ExcelからWordを操作し、スタイルに基づいてアウトラインレベルを自動設定
   - 「表題1」「表題2」「表題3」などの独自スタイルに対応
   - しおり付きPDFを自動出力（目次で適切な箇所に飛べる）
-  - ファイル選択ダイアログで簡単操作
+  - Input/Output方式でファイル管理が明確
   - スタイル名のカスタマイズ可能
+
+- **[Git-Log-Visualizer](vba/git-log-visualizer/)**: Gitコミット履歴の可視化ツール
+  - Excelから実行し、git logを表形式・統計・グラフで視覚化
+  - 4つのシート：Dashboard、CommitHistory、Statistics、Charts
+  - 作者別・日別の統計情報を自動集計
+  - 全ブランチ対応で最近のN件を取得
+  - コミットメッセージ・変更行数も表示
+  - フィルター機能でデータを絞り込み
 
 ### JavaScript Tools
 *準備中 - 今後追加予定*
