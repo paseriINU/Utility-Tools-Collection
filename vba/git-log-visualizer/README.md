@@ -82,40 +82,48 @@ git logの出力を見やすく整理し、プロジェクトの開発状況を�
 3. `GitLogVisualizer.bas` を選択してインポート
 4. 標準モジュール「GitLogVisualizer」が追加されたことを確認
 
-### 3. リポジトリパスを設定
+### 3. リポジトリパス設定（オプション）
 
-VBAコード内の設定を変更します。
+**デフォルト設定**: このツールは既存のbatファイルと同じリポジトリパスを使用します。
+
+- **デフォルトパス**: `C:\Users\%USERNAME%\source\Git\project`
+- 環境変数 `%USERNAME%` が自動的に展開されます
+
+**別のリポジトリを使用する場合**は、VBAコードを編集してください:
 
 1. VBAエディタで「GitLogVisualizer」モジュールをダブルクリック
-2. 以下の設定セクションを編集:
+2. `GetDefaultRepoPath()` 関数を編集:
 
 ```vba
 '==============================================================================
-' 設定: ここを編集してください
+' デフォルトのGitリポジトリパスを取得
 '==============================================================================
-' Gitリポジトリのパス（例: C:\Users\YourName\MyProject）
-Private Const GIT_REPO_PATH As String = "C:\Users\YourName\MyProject"
-
-' 取得するコミット数（最近のN件）
-Private Const COMMIT_COUNT As Long = 100
-
-' Gitコマンドのパス（通常は "git" でOK。パスが通っていない場合はフルパス指定）
-Private Const GIT_COMMAND As String = "git"
+Private Function GetDefaultRepoPath() As String
+    ' 既存のbatファイルと同じパスを使用
+    ' C:\Users\%USERNAME%\source\Git\project
+    GetDefaultRepoPath = "C:\Users\" & Environ("USERNAME") & "\source\Git\project"
+End Function
 ```
 
-**設定項目**:
+**変更例**:
 
-- **GIT_REPO_PATH**: 可視化したいGitリポジトリのフルパス
-  - 例: `C:\Users\YourName\Documents\MyProject`
-  - UNCパス（ネットワークパス）も使用可能
+```vba
+' 例: 別のリポジトリを使用する場合
+Private Function GetDefaultRepoPath() As String
+    GetDefaultRepoPath = "C:\MyProjects\AnotherRepo"
+End Function
+```
+
+**その他の設定項目**:
+
 - **COMMIT_COUNT**: 取得するコミット数（最近のN件）
-  - 例: `100` → 最近の100件を取得
+  - デフォルト: `100`
   - 例: `500` → 最近の500件を取得
 - **GIT_COMMAND**: Gitコマンドのパス
-  - 通常は `"git"` のままでOK
+  - デフォルト: `"git"`
   - パスが通っていない場合は `"C:\Program Files\Git\bin\git.exe"` のようにフルパスを指定
 
-3. `Ctrl + S` で保存
+編集後は `Ctrl + S` で保存してください。
 
 ### 4. 実行ボタンを追加（オプション）
 
@@ -239,16 +247,36 @@ Git Log 可視化処理を開始します
 
 ### リポジトリパスの指定方法
 
+**デフォルトの動作**:
+- 既存のbatファイルと同じパス `C:\Users\%USERNAME%\source\Git\project` を使用
+- 環境変数が自動的に展開されます
+
+**パスを変更する場合は `GetDefaultRepoPath()` 関数を編集**:
+
 **正しい例**:
 ```vba
-Private Const GIT_REPO_PATH As String = "C:\Users\YourName\MyProject"
-Private Const GIT_REPO_PATH As String = "\\server\share\project"  ' UNCパス
+Private Function GetDefaultRepoPath() As String
+    GetDefaultRepoPath = "C:\Users\YourName\MyProject"
+End Function
+
+' または環境変数を使用
+Private Function GetDefaultRepoPath() As String
+    GetDefaultRepoPath = "C:\Users\" & Environ("USERNAME") & "\Documents\MyProject"
+End Function
+
+' UNCパスも使用可能
+Private Function GetDefaultRepoPath() As String
+    GetDefaultRepoPath = "\\server\share\project"
+End Function
 ```
 
 **誤った例**:
 ```vba
-Private Const GIT_REPO_PATH As String = "C:\Users\YourName\MyProject\"  ' 末尾の \ は不要
-Private Const GIT_REPO_PATH As String = "C:/Users/YourName/MyProject"   ' スラッシュは不可
+' 末尾の \ は不要
+GetDefaultRepoPath = "C:\Users\YourName\MyProject\"
+
+' スラッシュは不可（バックスラッシュを使用）
+GetDefaultRepoPath = "C:/Users/YourName/MyProject"
 ```
 
 ### Gitコマンドのパス
@@ -276,11 +304,12 @@ Private Const GIT_COMMAND As String = "C:\Program Files\Git\bin\git.exe"
 
 ### 2. 「指定されたパスがGitリポジトリではありません」エラー
 
-**原因**: 指定したパスにGitリポジトリが存在しない
+**原因**: デフォルトのリポジトリパス `C:\Users\%USERNAME%\source\Git\project` にGitリポジトリが存在しない
 
 **解決方法**:
-- リポジトリパスを確認（`.git` フォルダがあるディレクトリを指定）
+- デフォルトパスを確認: `C:\Users\[あなたのユーザー名]\source\Git\project` に `.git` フォルダが存在するか
 - エクスプローラーで実際にパスが存在するか確認
+- 別のリポジトリを使用する場合は `GetDefaultRepoPath()` 関数を編集して正しいパスを指定
 
 ### 3. グラフが表示されない
 

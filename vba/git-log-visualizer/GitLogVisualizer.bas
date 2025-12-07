@@ -24,14 +24,20 @@ Option Explicit
 '==============================================================================
 ' 設定: ここを編集してください
 '==============================================================================
-' Gitリポジトリのパス（例: C:\Users\YourName\MyProject）
-Private Const GIT_REPO_PATH As String = "C:\Users\YourName\MyProject"
-
 ' 取得するコミット数（最近のN件）
 Private Const COMMIT_COUNT As Long = 100
 
 ' Gitコマンドのパス（通常は "git" でOK。パスが通っていない場合はフルパス指定）
 Private Const GIT_COMMAND As String = "git"
+
+'==============================================================================
+' デフォルトのGitリポジトリパスを取得
+'==============================================================================
+Private Function GetDefaultRepoPath() As String
+    ' 既存のbatファイルと同じパスを使用
+    ' C:\Users\%USERNAME%\source\Git\project
+    GetDefaultRepoPath = "C:\Users\" & Environ("USERNAME") & "\source\Git\project"
+End Function
 
 '==============================================================================
 ' データ構造
@@ -56,20 +62,17 @@ Public Sub VisualizeGitLog()
     Dim commits() As CommitInfo
     Dim commitCount As Long
     Dim i As Long
+    Dim gitRepoPath As String
 
-    ' 設定チェック
-    If GIT_REPO_PATH = "C:\Users\YourName\MyProject" Then
-        MsgBox "設定が必要です。" & vbCrLf & vbCrLf & _
-               "VBAエディタでこのモジュールを開き、" & vbCrLf & _
-               "「設定」セクションの GIT_REPO_PATH を" & vbCrLf & _
-               "実際のGitリポジトリパスに変更してください。", vbExclamation, "設定エラー"
-        Exit Sub
-    End If
+    ' デフォルトのリポジトリパスを取得
+    gitRepoPath = GetDefaultRepoPath()
 
     ' リポジトリの存在確認
-    If Dir(GIT_REPO_PATH & "\.git", vbDirectory) = "" Then
+    If Dir(gitRepoPath & "\.git", vbDirectory) = "" Then
         MsgBox "指定されたパスがGitリポジトリではありません: " & vbCrLf & vbCrLf & _
-               GIT_REPO_PATH, vbCritical, "エラー"
+               gitRepoPath & vbCrLf & vbCrLf & _
+               "batファイルと同じパスを使用しています。" & vbCrLf & _
+               "パスを変更する場合は、GetDefaultRepoPath() 関数を編集してください。", vbCritical, "エラー"
         Exit Sub
     End If
 
@@ -81,13 +84,13 @@ Public Sub VisualizeGitLog()
 
     Debug.Print "========================================="
     Debug.Print "Git Log 可視化処理を開始します"
-    Debug.Print "リポジトリ: " & GIT_REPO_PATH
+    Debug.Print "リポジトリ: " & gitRepoPath
     Debug.Print "取得件数: " & COMMIT_COUNT & " 件"
     Debug.Print "========================================="
 
     ' Git Logを取得
     Debug.Print "コミット履歴を取得しています..."
-    commits = GetGitLog(GIT_REPO_PATH, COMMIT_COUNT)
+    commits = GetGitLog(gitRepoPath, COMMIT_COUNT)
     commitCount = UBound(commits) - LBound(commits) + 1
 
     If commitCount = 0 Then
@@ -104,7 +107,7 @@ Public Sub VisualizeGitLog()
 
     ' ダッシュボードシートを作成
     Debug.Print "ダッシュボードを作成しています..."
-    CreateDashboard commits, commitCount
+    CreateDashboard commits, commitCount, gitRepoPath
 
     ' コミット履歴シートを作成
     Debug.Print "コミット履歴シートを作成しています..."
@@ -310,7 +313,7 @@ End Sub
 '==============================================================================
 ' ダッシュボードシートを作成
 '==============================================================================
-Private Sub CreateDashboard(ByRef commits() As CommitInfo, ByVal commitCount As Long)
+Private Sub CreateDashboard(ByRef commits() As CommitInfo, ByVal commitCount As Long, ByVal repoPath As String)
     Dim ws As Worksheet
     Set ws = Sheets("Dashboard")
 
@@ -322,7 +325,7 @@ Private Sub CreateDashboard(ByRef commits() As CommitInfo, ByVal commitCount As 
 
         ' リポジトリ情報
         .Range("A3").Value = "リポジトリパス:"
-        .Range("B3").Value = GIT_REPO_PATH
+        .Range("B3").Value = repoPath
         .Range("A4").Value = "取得コミット数:"
         .Range("B4").Value = commitCount
         .Range("A5").Value = "最新コミット:"
