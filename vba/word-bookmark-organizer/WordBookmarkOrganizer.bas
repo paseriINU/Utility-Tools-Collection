@@ -22,36 +22,46 @@ Public Sub OrganizeWordBookmarks()
     Dim wordDoc As Object           ' Word.Document
     Dim para As Object              ' Word.Paragraph
     Dim filePath As String
-    Dim pdfPath As String
-    Dim fileDialog As FileDialog
+    Dim outputWordPath As String
+    Dim outputPdfPath As String
     Dim processedCount As Long
     Dim styleName As String
     Dim outlineLevel As Long
+    Dim baseDir As String
+    Dim inputDir As String
+    Dim outputDir As String
 
-    ' ファイル選択ダイアログを表示
-    Set fileDialog = Application.FileDialog(msoFileDialogFilePicker)
-    With fileDialog
-        .Title = "しおりを整理するWord文書を選択してください"
-        .Filters.Clear
-        .Filters.Add "Word文書", "*.docx;*.doc"
-        .AllowMultiSelect = False
+    ' マクロのあるフォルダを基準にする
+    baseDir = ThisWorkbook.Path
+    If Right(baseDir, 1) <> "\" Then baseDir = baseDir & "\"
 
-        If .Show = -1 Then
-            filePath = .SelectedItems(1)
-        Else
-            MsgBox "ファイルが選択されませんでした。処理を中止します。", vbExclamation
-            Exit Sub
-        End If
-    End With
+    inputDir = baseDir & "Input\"
+    outputDir = baseDir & "Output\"
 
-    ' Word文書が存在するか確認
-    If Dir(filePath) = "" Then
-        MsgBox "指定されたファイルが見つかりません: " & vbCrLf & filePath, vbCritical
+    ' Inputフォルダの存在確認と作成
+    If Dir(inputDir, vbDirectory) = "" Then
+        MkDir inputDir
+        MsgBox "Inputフォルダを作成しました: " & vbCrLf & inputDir & vbCrLf & vbCrLf & _
+               "このフォルダに処理したいWord文書を配置してください。", vbInformation
         Exit Sub
     End If
 
-    ' PDF出力パスを設定（同じフォルダ）
-    pdfPath = Left(filePath, InStrRev(filePath, ".") - 1) & ".pdf"
+    ' Outputフォルダの存在確認と作成
+    If Dir(outputDir, vbDirectory) = "" Then
+        MkDir outputDir
+    End If
+
+    ' Inputフォルダから処理対象のWord文書を選択
+    filePath = SelectWordFileFromInput(inputDir)
+    If filePath = "" Then
+        Exit Sub
+    End If
+
+    ' 出力ファイルパスを設定（Outputフォルダ）
+    Dim fileName As String
+    fileName = Mid(filePath, InStrRev(filePath, "\") + 1)
+    outputWordPath = outputDir & fileName
+    outputPdfPath = outputDir & Left(fileName, InStrRev(fileName, ".") - 1) & ".pdf"
 
     On Error GoTo ErrorHandler
 
@@ -104,20 +114,21 @@ Public Sub OrganizeWordBookmarks()
         End If
     Next para
 
-    ' 変更を保存
-    wordDoc.Save
+    ' Outputフォルダに名前を付けて保存
+    wordDoc.SaveAs2 outputWordPath
 
     ' PDFとしてエクスポート
     Debug.Print "========================================="
     Debug.Print "PDFをエクスポートしています..."
     wordDoc.ExportAsFixedFormat _
-        OutputFileName:=pdfPath, _
+        OutputFileName:=outputPdfPath, _
         ExportFormat:=17, _
         OpenAfterExport:=False, _
         OptimizeFor:=0, _
         CreateBookmarks:=1
 
-    Debug.Print "PDFを出力しました: " & pdfPath
+    Debug.Print "Word文書を出力しました: " & outputWordPath
+    Debug.Print "PDFを出力しました: " & outputPdfPath
     Debug.Print "========================================="
     Debug.Print "処理完了: " & processedCount & " 個の見出しを処理しました"
     Debug.Print "========================================="
@@ -132,7 +143,8 @@ Public Sub OrganizeWordBookmarks()
     ' 完了メッセージ
     MsgBox "しおりの整理とPDF出力が完了しました。" & vbCrLf & vbCrLf & _
            "処理件数: " & processedCount & " 個" & vbCrLf & _
-           "出力先: " & pdfPath, vbInformation, "処理完了"
+           "Word出力先: " & outputWordPath & vbCrLf & _
+           "PDF出力先: " & outputPdfPath, vbInformation, "処理完了"
 
     Exit Sub
 
@@ -154,6 +166,97 @@ ErrorHandler:
     Set wordApp = Nothing
     On Error GoTo 0
 End Sub
+
+'==============================================================================
+' Inputフォルダから処理対象のWord文書を選択
+'==============================================================================
+Private Function SelectWordFileFromInput(ByVal inputDir As String) As String
+    Dim fileList() As String
+    Dim fileCount As Long
+    Dim fileName As String
+    Dim i As Long
+    Dim selectedIndex As Long
+    Dim msg As String
+
+    ' 配列の初期化
+    fileCount = 0
+    ReDim fileList(0 To 99)  ' 最大100ファイルまで対応
+
+    ' .docxファイルを検索
+    fileName = Dir(inputDir & "*.docx")
+    Do While fileName <> ""
+        fileList(fileCount) = fileName
+        fileCount = fileCount + 1
+        fileName = Dir()
+    Loop
+
+    ' .docファイルを検索
+    fileName = Dir(inputDir & "*.doc")
+    Do While fileName <> ""
+        ' .docxと重複しないようにチェック
+        Dim isDuplicate As Boolean
+        isDuplicate = False
+        For i = 0 To fileCount - 1
+            If Left(fileList(i), Len(fileList(i)) - 1) = fileName Then
+                isDuplicate = True
+                Exit For
+            End If
+        Next i
+
+        If Not isDuplicate Then
+            fileList(fileCount) = fileName
+            fileCount = fileCount + 1
+        End If
+        fileName = Dir()
+    Loop
+
+    ' ファイルが見つからない場合
+    If fileCount = 0 Then
+        MsgBox "Inputフォルダ内にWord文書(.docx/.doc)が見つかりませんでした。" & vbCrLf & vbCrLf & _
+               "フォルダ: " & inputDir, vbExclamation, "ファイルなし"
+        SelectWordFileFromInput = ""
+        Exit Function
+    End If
+
+    ' ファイルが1つだけの場合は自動選択
+    If fileCount = 1 Then
+        SelectWordFileFromInput = inputDir & fileList(0)
+        Exit Function
+    End If
+
+    ' 複数ファイルがある場合は選択させる
+    msg = "処理するWord文書を選択してください:" & vbCrLf & vbCrLf
+    For i = 0 To fileCount - 1
+        msg = msg & (i + 1) & ". " & fileList(i) & vbCrLf
+    Next i
+    msg = msg & vbCrLf & "番号を入力してください (1-" & fileCount & "):"
+
+    Dim userInput As String
+    userInput = InputBox(msg, "ファイル選択", "1")
+
+    ' キャンセルされた場合
+    If userInput = "" Then
+        SelectWordFileFromInput = ""
+        Exit Function
+    End If
+
+    ' 入力値の検証
+    If Not IsNumeric(userInput) Then
+        MsgBox "無効な入力です。数値を入力してください。", vbExclamation
+        SelectWordFileFromInput = ""
+        Exit Function
+    End If
+
+    selectedIndex = CLng(userInput) - 1
+    If selectedIndex < 0 Or selectedIndex >= fileCount Then
+        MsgBox "無効な番号です。1から" & fileCount & "の間で入力してください。", vbExclamation
+        SelectWordFileFromInput = ""
+        Exit Function
+    End If
+
+    ' 選択されたファイルのフルパスを返す
+    SelectWordFileFromInput = inputDir & fileList(selectedIndex)
+End Function
 
 '==============================================================================
 ' テスト用: イミディエイトウィンドウに情報を出力
