@@ -84,7 +84,7 @@ git logの出力を見やすく整理し、プロジェクトの開発状況を�
 
 ### 3. リポジトリパス設定（オプション）
 
-**デフォルト設定**: このツールは既存のbatファイルと同じリポジトリパスを使用します。
+**デフォルト設定**:
 
 - **デフォルトパス**: `C:\Users\%USERNAME%\source\Git\project`
 - 環境変数 `%USERNAME%` が自動的に展開されます
@@ -99,7 +99,6 @@ git logの出力を見やすく整理し、プロジェクトの開発状況を�
 ' デフォルトのGitリポジトリパスを取得
 '==============================================================================
 Private Function GetDefaultRepoPath() As String
-    ' 既存のbatファイルと同じパスを使用
     ' C:\Users\%USERNAME%\source\Git\project
     GetDefaultRepoPath = "C:\Users\" & Environ("USERNAME") & "\source\Git\project"
 End Function
@@ -248,7 +247,7 @@ Git Log 可視化処理を開始します
 ### リポジトリパスの指定方法
 
 **デフォルトの動作**:
-- 既存のbatファイルと同じパス `C:\Users\%USERNAME%\source\Git\project` を使用
+- デフォルトパス: `C:\Users\%USERNAME%\source\Git\project`
 - 環境変数が自動的に展開されます
 
 **パスを変更する場合は `GetDefaultRepoPath()` 関数を編集**:
@@ -304,10 +303,10 @@ Private Const GIT_COMMAND As String = "C:\Program Files\Git\bin\git.exe"
 
 ### 2. 「指定されたパスがGitリポジトリではありません」エラー
 
-**原因**: デフォルトのリポジトリパス `C:\Users\%USERNAME%\source\Git\project` にGitリポジトリが存在しない
+**原因**: リポジトリパス `C:\Users\%USERNAME%\source\Git\project` にGitリポジトリが存在しない
 
 **解決方法**:
-- デフォルトパスを確認: `C:\Users\[あなたのユーザー名]\source\Git\project` に `.git` フォルダが存在するか
+- パスを確認: `C:\Users\[あなたのユーザー名]\source\Git\project` に `.git` フォルダが存在するか
 - エクスプローラーで実際にパスが存在するか確認
 - 別のリポジトリを使用する場合は `GetDefaultRepoPath()` 関数を編集して正しいパスを指定
 

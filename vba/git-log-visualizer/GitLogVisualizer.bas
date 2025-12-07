@@ -34,7 +34,6 @@ Private Const GIT_COMMAND As String = "git"
 ' デフォルトのGitリポジトリパスを取得
 '==============================================================================
 Private Function GetDefaultRepoPath() As String
-    ' 既存のbatファイルと同じパスを使用
     ' C:\Users\%USERNAME%\source\Git\project
     GetDefaultRepoPath = "C:\Users\" & Environ("USERNAME") & "\source\Git\project"
 End Function
@@ -71,7 +70,6 @@ Public Sub VisualizeGitLog()
     If Dir(gitRepoPath & "\.git", vbDirectory) = "" Then
         MsgBox "指定されたパスがGitリポジトリではありません: " & vbCrLf & vbCrLf & _
                gitRepoPath & vbCrLf & vbCrLf & _
-               "batファイルと同じパスを使用しています。" & vbCrLf & _
                "パスを変更する場合は、GetDefaultRepoPath() 関数を編集してください。", vbCritical, "エラー"
         Exit Sub
     End If
