@@ -49,6 +49,8 @@ Private Type CommitInfo
     CommitDate As Date      ' コミット日時
     Subject As String       ' コミットメッセージ（件名）
     RefNames As String      ' ブランチ・タグ名
+    ParentHashes As String  ' 親コミットハッシュ（スペース区切り）
+    ParentCount As Long     ' 親コミット数（0=初期, 1=通常, 2+=マージ）
     FilesChanged As Long    ' 変更ファイル数
     Insertions As Long      ' 追加行数
     Deletions As Long       ' 削除行数
@@ -127,6 +129,10 @@ Public Sub VisualizeGitLog()
     Debug.Print "グラフシートを作成しています..."
     CreateChartsSheet commits, commitCount
 
+    ' ブランチグラフシートを作成
+    Debug.Print "ブランチグラフを作成しています..."
+    CreateBranchGraphSheet commits, commitCount, gitRepoPath
+
     ' ダッシュボードシートをアクティブに
     Sheets("Dashboard").Select
 
@@ -196,10 +202,10 @@ Private Function GetGitLog(ByVal repoPath As String, ByVal maxCount As Long) As 
     Set wsh = CreateObject("WScript.Shell")
 
     ' Git Log コマンド（全ブランチ、カスタムフォーマット）
-    ' フォーマット: ハッシュ|フルハッシュ|作者|メール|日付|件名|ref名
+    ' フォーマット: ハッシュ|フルハッシュ|親ハッシュ|作者|メール|日付|件名|ref名
     command = "cmd /c cd /d """ & repoPath & """ && " & _
               GIT_COMMAND & " log --all -n " & maxCount & _
-              " --pretty=format:""%h|%H|%an|%ae|%ai|%s|%d"" --numstat"
+              " --pretty=format:""%h|%H|%P|%an|%ae|%ai|%s|%d"" --numstat"
 
     ' コマンド実行
     Set exec = wsh.exec(command)
@@ -234,16 +240,18 @@ Private Function GetGitLog(ByVal repoPath As String, ByVal maxCount As Long) As 
         If InStr(line, "|") > 0 Then
             parts = Split(line, "|")
 
-            If UBound(parts) >= 5 Then
+            If UBound(parts) >= 6 Then
                 ' コミット情報を格納
                 With commits(commitIndex)
                     .Hash = parts(0)
                     .FullHash = parts(1)
-                    .Author = parts(2)
-                    .AuthorEmail = parts(3)
-                    .CommitDate = ParseGitDate(parts(4))
-                    .Subject = parts(5)
-                    .RefNames = If(UBound(parts) >= 6, Trim(Replace(Replace(parts(6), "(", ""), ")", "")), "")
+                    .ParentHashes = parts(2) ' 親コミットハッシュ（スペース区切り）
+                    .ParentCount = IIf(Len(Trim(parts(2))) = 0, 0, UBound(Split(Trim(parts(2)), " ")) + 1)
+                    .Author = parts(3)
+                    .AuthorEmail = parts(4)
+                    .CommitDate = ParseGitDate(parts(5))
+                    .Subject = parts(6)
+                    .RefNames = If(UBound(parts) >= 7, Trim(Replace(Replace(parts(7), "(", ""), ")", "")), "")
                     .FilesChanged = 0
                     .Insertions = 0
                     .Deletions = 0
@@ -320,7 +328,7 @@ Private Sub ClearAllSheets()
     Dim sheetName As Variant
     Dim ws As Worksheet
 
-    sheetNames = Array("Dashboard", "CommitHistory", "Statistics", "Charts")
+    sheetNames = Array("Dashboard", "CommitHistory", "Statistics", "Charts", "BranchGraph")
 
     ' シートが存在しない場合は作成、存在する場合はクリア
     For Each sheetName In sheetNames
@@ -613,6 +621,172 @@ Private Sub CreateChartsSheet(ByRef commits() As CommitInfo, ByVal commitCount A
             .Axes(xlValue).AxisTitle.Text = "コミット数"
         End With
     End If
+End Sub
+
+'==============================================================================
+' ブランチグラフシートを作成
+'==============================================================================
+Private Sub CreateBranchGraphSheet(ByRef commits() As CommitInfo, ByVal commitCount As Long, ByVal repoPath As String)
+    Dim ws As Worksheet
+    Set ws = Sheets("BranchGraph")
+
+    ' シートの図形をすべて削除
+    Dim shp As Shape
+    For Each shp In ws.Shapes
+        shp.Delete
+    Next shp
+
+    With ws
+        ' タイトル
+        .Range("A1").Value = "Git ブランチグラフ"
+        .Range("A1").Font.Size = 18
+        .Range("A1").Font.Bold = True
+
+        ' 説明
+        .Range("A2").Value = "リポジトリ: " & repoPath
+        .Range("A3").Value = "コミット数: " & commitCount
+
+        ' グラフ描画エリアの設定
+        Dim startRow As Long
+        Dim startCol As Long
+        Dim nodeSize As Double
+        Dim vSpacing As Double
+        Dim hSpacing As Double
+
+        startRow = 5 ' 開始行
+        startCol = 2 ' 開始列（B列）
+        nodeSize = 12 ' ノードの直径（ポイント）
+        vSpacing = 25 ' 垂直方向の間隔
+        hSpacing = 60 ' 水平方向の間隔
+
+        ' コミットハッシュとインデックスのマッピング
+        Dim commitIndexMap As Object
+        Set commitIndexMap = CreateObject("Scripting.Dictionary")
+
+        Dim i As Long
+        For i = 0 To commitCount - 1
+            commitIndexMap.Add commits(i).Hash, i
+        Next i
+
+        ' ブランチレーン（水平位置）の割り当て
+        Dim lanes() As String
+        ReDim lanes(0 To 9) ' 最大10ブランチまで対応
+        Dim laneCount As Long
+        laneCount = 0
+
+        Dim commitLanes() As Long
+        ReDim commitLanes(0 To commitCount - 1)
+
+        ' 各コミットのレーンを決定
+        For i = 0 To commitCount - 1
+            Dim lane As Long
+            lane = -1
+
+            ' 親コミットのレーンを探す
+            If commits(i).ParentCount > 0 Then
+                Dim parentHashes() As String
+                parentHashes = Split(Trim(commits(i).ParentHashes), " ")
+
+                Dim p As Long
+                For p = 0 To UBound(parentHashes)
+                    Dim parentHash As String
+                    parentHash = Trim(parentHashes(p))
+
+                    If Len(parentHash) > 0 Then
+                        ' 親コミットのレーンを探す
+                        Dim j As Long
+                        For j = i + 1 To commitCount - 1
+                            If commits(j).Hash = parentHash Then
+                                lane = commitLanes(j)
+                                Exit For
+                            End If
+                        Next j
+
+                        If lane >= 0 Then Exit For
+                    End If
+                Next p
+            End If
+
+            ' レーンが見つからない場合は新しいレーンを割り当て
+            If lane < 0 Then
+                lane = laneCount
+                If laneCount < 10 Then laneCount = laneCount + 1
+            End If
+
+            commitLanes(i) = lane
+        Next i
+
+        ' コミットノードと接続線を描画
+        For i = 0 To commitCount - 1
+            Dim y As Double
+            Dim x As Double
+
+            y = .Cells(startRow + i, 1).Top
+            x = .Cells(startRow, startCol + commitLanes(i)).Left
+
+            ' コミットノード（円）を描画
+            Dim nodeColor As Long
+            If commits(i).ParentCount = 0 Then
+                nodeColor = RGB(255, 0, 0) ' 初期コミット=赤
+            ElseIf commits(i).ParentCount >= 2 Then
+                nodeColor = RGB(0, 255, 0) ' マージコミット=緑
+            Else
+                nodeColor = RGB(0, 128, 255) ' 通常コミット=青
+            End If
+
+            Dim node As Shape
+            Set node = .Shapes.AddShape(msoShapeOval, x, y, nodeSize, nodeSize)
+            node.Fill.ForeColor.RGB = nodeColor
+            node.Line.ForeColor.RGB = RGB(0, 0, 0)
+            node.Line.Weight = 1
+            node.Name = "Node_" & commits(i).Hash
+
+            ' ツールチップ用にテキストボックスを追加
+            Dim tooltip As Shape
+            Set tooltip = .Shapes.AddTextbox(msoTextOrientationHorizontal, x + nodeSize + 5, y - 3, 300, 15)
+            tooltip.TextFrame.Characters.Text = commits(i).Hash & " " & commits(i).Subject
+            tooltip.TextFrame.Characters.Font.Size = 8
+            tooltip.Line.Visible = msoFalse
+            tooltip.Fill.Visible = msoFalse
+
+            ' 親コミットへの線を描画
+            If commits(i).ParentCount > 0 Then
+                Dim parentHashes2() As String
+                parentHashes2 = Split(Trim(commits(i).ParentHashes), " ")
+
+                Dim k As Long
+                For k = 0 To UBound(parentHashes2)
+                    Dim parentHash2 As String
+                    parentHash2 = Trim(parentHashes2(k))
+
+                    If Len(parentHash2) > 0 And commitIndexMap.exists(parentHash2) Then
+                        Dim parentIndex As Long
+                        parentIndex = commitIndexMap(parentHash2)
+
+                        Dim y2 As Double
+                        Dim x2 As Double
+
+                        y2 = .Cells(startRow + parentIndex, 1).Top
+                        x2 = .Cells(startRow, startCol + commitLanes(parentIndex)).Left
+
+                        ' 線を描画
+                        Dim line As Shape
+                        Set line = .Shapes.AddLine(x + nodeSize / 2, y + nodeSize / 2, x2 + nodeSize / 2, y2 + nodeSize / 2)
+                        line.Line.ForeColor.RGB = RGB(128, 128, 128)
+                        line.Line.Weight = 1.5
+                        line.ZOrder msoSendToBack ' 線を背面に
+                    End If
+                Next k
+            End If
+        Next i
+
+        ' 列幅調整
+        .Columns("A").ColumnWidth = 3
+        .Columns("B:K").ColumnWidth = 10
+
+        ' 行の高さ調整
+        .Rows(startRow & ":" & (startRow + commitCount)).RowHeight = 20
+    End With
 End Sub
 
 '==============================================================================
