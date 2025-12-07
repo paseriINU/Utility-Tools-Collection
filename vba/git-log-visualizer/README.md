@@ -298,16 +298,16 @@ Private Const GIT_COMMAND As String = "C:\Program Files\Git\bin\git.exe"
 
 **解決方法**:
 - コマンドプロンプトで `git --version` が実行できるか確認
-- リポジトリパスが正しいか確認（`.git` フォルダが存在するか）
+- リポジトリパスが正しいか確認
 - GIT_COMMAND にフルパスを指定してみる
 
-### 2. 「指定されたパスがGitリポジトリではありません」エラー
+### 2. 「指定されたパスがGitリポジトリ管理下にありません」エラー
 
-**原因**: リポジトリパス `C:\Users\%USERNAME%\source\Git\project` にGitリポジトリが存在しない
+**原因**: リポジトリパス `C:\Users\%USERNAME%\source\Git\project` がGit管理下にない
 
 **解決方法**:
-- パスを確認: `C:\Users\[あなたのユーザー名]\source\Git\project` に `.git` フォルダが存在するか
-- エクスプローラーで実際にパスが存在するか確認
+- パスを確認: `C:\Users\[あなたのユーザー名]\source\Git\project` が存在するか
+- コマンドプロンプトで該当フォルダに移動し、`git status` が実行できるか確認
 - 別のリポジトリを使用する場合は `GetDefaultRepoPath()` 関数を編集して正しいパスを指定
 
 ### 3. グラフが表示されない

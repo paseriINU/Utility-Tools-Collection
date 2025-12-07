@@ -66,9 +66,17 @@ Public Sub VisualizeGitLog()
     ' デフォルトのリポジトリパスを取得
     gitRepoPath = GetDefaultRepoPath()
 
-    ' リポジトリの存在確認
-    If Dir(gitRepoPath & "\.git", vbDirectory) = "" Then
-        MsgBox "指定されたパスがGitリポジトリではありません: " & vbCrLf & vbCrLf & _
+    ' パスの存在確認
+    If Dir(gitRepoPath, vbDirectory) = "" Then
+        MsgBox "指定されたパスが存在しません: " & vbCrLf & vbCrLf & _
+               gitRepoPath & vbCrLf & vbCrLf & _
+               "パスを変更する場合は、GetDefaultRepoPath() 関数を編集してください。", vbCritical, "エラー"
+        Exit Sub
+    End If
+
+    ' Gitリポジトリの確認（git rev-parse コマンドを使用）
+    If Not IsGitRepository(gitRepoPath) Then
+        MsgBox "指定されたパスがGitリポジトリ管理下にありません: " & vbCrLf & vbCrLf & _
                gitRepoPath & vbCrLf & vbCrLf & _
                "パスを変更する場合は、GetDefaultRepoPath() 関数を編集してください。", vbCritical, "エラー"
         Exit Sub
@@ -143,6 +151,32 @@ ErrorHandler:
            "エラー番号: " & Err.Number & vbCrLf & _
            "エラー内容: " & Err.Description, vbCritical, "エラー"
 End Sub
+
+'==============================================================================
+' Gitリポジトリかどうかを確認
+'==============================================================================
+Private Function IsGitRepository(ByVal repoPath As String) As Boolean
+    Dim wsh As Object
+    Dim exec As Object
+    Dim command As String
+
+    ' WScript.Shell を作成
+    Set wsh = CreateObject("WScript.Shell")
+
+    ' git rev-parse --git-dir コマンドを実行（リポジトリかどうかを確認）
+    command = "cmd /c cd /d """ & repoPath & """ && " & GIT_COMMAND & " rev-parse --git-dir >nul 2>&1"
+
+    ' コマンド実行
+    Set exec = wsh.exec(command)
+
+    ' 実行完了まで待機
+    Do While exec.Status = 0
+        DoEvents
+    Loop
+
+    ' 終了コードが0ならGitリポジトリ
+    IsGitRepository = (exec.ExitCode = 0)
+End Function
 
 '==============================================================================
 ' Git Log を取得
