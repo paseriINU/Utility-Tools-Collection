@@ -101,20 +101,38 @@ Public Sub VisualizeGitLog()
 
     ' Git Logを取得
     Debug.Print "コミット履歴を取得しています..."
-    commits = GetGitLog(gitRepoPath, COMMIT_COUNT)
 
-    ' コミット数を計算（配列が空の場合はエラー回避）
-    On Error Resume Next
+    ' コミット数を初期化
     commitCount = 0
-    If IsArray(commits) Then
-        If UBound(commits) >= LBound(commits) Then
-            ' 最初の要素が空でないかチェック
-            If Len(commits(LBound(commits)).Hash) > 0 Then
-                commitCount = UBound(commits) - LBound(commits) + 1
-            End If
-        End If
+
+    ' GetGitLogを呼び出し（エラー時は空配列）
+    On Error Resume Next
+    commits = GetGitLog(gitRepoPath, COMMIT_COUNT)
+    If Err.Number <> 0 Then
+        Debug.Print "GetGitLogでエラー発生: " & Err.Description
+        Err.Clear
+        GoTo CheckCommitCount
+    End If
+
+    ' 配列の要素数をチェック
+    Dim lowerBound As Long
+    Dim upperBound As Long
+    lowerBound = LBound(commits)
+    upperBound = UBound(commits)
+
+    If Err.Number <> 0 Then
+        ' 配列が初期化されていない
+        Err.Clear
+        GoTo CheckCommitCount
+    End If
+
+    ' 最初の要素が有効かチェック
+    If Len(commits(lowerBound).Hash) > 0 Then
+        commitCount = upperBound - lowerBound + 1
     End If
     On Error GoTo ErrorHandler
+
+CheckCommitCount:
 
     If commitCount = 0 Then
         MsgBox "コミットが取得できませんでした。" & vbCrLf & _
