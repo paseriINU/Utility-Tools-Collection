@@ -170,8 +170,8 @@ send_soap_request() {
 
     if [ "$DEBUG" = "true" ]; then
         log_info "送信XML:"
-        echo "$soap_envelope"
-        echo ""
+        echo "$soap_envelope" >&2
+        echo "" >&2
     fi
 
     # curl オプションの構築
@@ -238,8 +238,8 @@ send_soap_request() {
 
     if [ "$DEBUG" = "true" ]; then
         log_info "受信XML:"
-        echo "$response"
-        echo ""
+        echo "$response" >&2
+        echo "" >&2
     fi
 
     echo "$response"
