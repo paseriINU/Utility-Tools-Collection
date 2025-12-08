@@ -295,17 +295,7 @@ python3 winrm_exec.py --batch "C:\Scripts\test.bat"
 
 **注意**: このプログラムは**標準Cライブラリのみ**を使用します。外部ライブラリ不要でNTLM認証を自前実装しています。
 
-#### 1. コンパイル
-
-```bash
-# 基本コンパイル
-gcc -o winrm_exec winrm_exec.c
-
-# 警告を確認する場合
-gcc -Wall -o winrm_exec winrm_exec.c
-```
-
-#### 2. ソースファイル内の設定を編集
+#### 1. ソースファイル内の設定を編集
 
 `winrm_exec.c` の設定セクションを編集します：
 
@@ -316,6 +306,16 @@ gcc -Wall -o winrm_exec winrm_exec.c
 #define DEFAULT_PASS "YourPassword"       /* Windowsパスワード */
 #define DEFAULT_DOMAIN ""                 /* ドメイン名（空 = ローカル認証） */
 #define DEFAULT_PORT 5985                 /* WinRMポート */
+```
+
+#### 2. コンパイル
+
+```bash
+# 基本コンパイル
+gcc -o winrm_exec winrm_exec.c
+
+# 警告を確認する場合
+gcc -Wall -o winrm_exec winrm_exec.c
 ```
 
 #### 3. 実行
