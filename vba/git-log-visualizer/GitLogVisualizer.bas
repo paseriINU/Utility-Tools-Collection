@@ -244,11 +244,32 @@ Private Function GetGitLog(ByVal repoPath As String, ByVal maxCount As Long) As 
     ' コマンド実行
     Set exec = wsh.exec(command)
 
-    ' 出力を取得
+    ' 出力を取得（バッファ溢れ防止のため、ループ内で読み取り）
+    Dim stdOutText As String
+    Dim stdErrText As String
+    stdOutText = ""
+    stdErrText = ""
+
     Do While exec.Status = 0
+        ' バッファが溜まらないよう、ループ内で読み取る
+        If Not exec.StdOut.AtEndOfStream Then
+            stdOutText = stdOutText & exec.StdOut.ReadAll
+        End If
+        If Not exec.StdErr.AtEndOfStream Then
+            stdErrText = stdErrText & exec.StdErr.ReadAll
+        End If
         DoEvents
     Loop
-    output = exec.StdOut.ReadAll
+
+    ' 残りの出力を読み取り
+    If Not exec.StdOut.AtEndOfStream Then
+        stdOutText = stdOutText & exec.StdOut.ReadAll
+    End If
+    If Not exec.StdErr.AtEndOfStream Then
+        stdErrText = stdErrText & exec.StdErr.ReadAll
+    End If
+
+    output = stdOutText
 
     If Len(output) = 0 Then
         ReDim commits(0 To 0)
