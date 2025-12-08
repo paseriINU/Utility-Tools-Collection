@@ -6,7 +6,7 @@ Linux（Red Hat等）からWindows Server 2022へWinRM（Windows Remote Manageme
 
 ✅ **追加パッケージ不要** - Python標準ライブラリのみで動作（pywinrm不要）
 ✅ **IT制限環境対応** - インターネット接続やpipインストールが制限されている環境でも使用可能
-✅ **2つの実装** - Python版とBash版を提供
+✅ **3つの実装** - Python版・Bash版・C言語版を提供
 ✅ **完全なWinRM実装** - WinRMプロトコルをフルサポート
 
 ## 概要
@@ -29,6 +29,13 @@ Linux（Red Hat等）からWindows Server 2022へWinRM（Windows Remote Manageme
   - バッチファイル実行
   - コマンド実行
   - WinRMプロトコル完全実装
+
+- **winrm_exec.c** - C言語版
+  - **標準Cライブラリ + libcurl**のみ使用
+  - 高速・軽量な実装
+  - バッチファイル実行
+  - コマンド実行
+  - 組み込み環境やスクリプト言語が使用できない環境向け
 
 ## 必要な環境
 
@@ -69,6 +76,23 @@ sudo yum install curl
 # Debian/Ubuntu系
 sudo apt install curl
 ```
+
+#### C言語版を使用する場合
+- GCCコンパイラ（標準でインストール済み、またはインストール可能）
+- 標準Cライブラリ（glibc）
+
+```bash
+# GCCがない場合のみインストール
+# Red Hat系
+sudo yum install gcc
+
+# Debian/Ubuntu系
+sudo apt install gcc
+```
+
+**動作確認済み**:
+- ✅ GCC 4.8以降（RHEL 7 / CentOS 7標準）
+- ✅ GCC 8以降
 
 ### Windows側（サーバ）
 
@@ -208,64 +232,96 @@ Set-Item WSMan:\localhost\Service\Auth\Negotiate -Value $true
 ```python
 # Windows接続情報
 WINDOWS_HOST = "192.168.1.100"      # Windows ServerのIPアドレス
-WINDOWS_PORT = 5985                  # WinRMポート（HTTP）
+WINDOWS_PORT = 5985                  # WinRMポート（HTTP: 5985, HTTPS: 5986）
 WINDOWS_USER = "Administrator"       # Windowsユーザー名
 WINDOWS_PASSWORD = "YourPassword"    # Windowsパスワード
 
-# 実行するバッチファイル
-BATCH_FILE_PATH = r"C:\Scripts\test.bat"
+# 利用可能な環境のリスト
+ENVIRONMENTS = ["TST1T", "TST2T"]
+
+# 実行するバッチファイル（{ENV}は環境名に置換されます）
+BATCH_FILE_PATH = r"C:\Scripts\{ENV}\test.bat"
 ```
 
 #### 2. 実行
 
 ```bash
-# スクリプト内の設定で実行（pip installは不要）
-python3 winrm_exec.py
+# 環境を引数で指定して実行（必須）
+python3 winrm_exec.py TST1T
+python3 winrm_exec.py TST2T
 
-# またはコマンドライン引数で設定を上書き
-python3 winrm_exec.py --host 192.168.1.100 --user Administrator --password Pass123
+# コマンドライン引数で設定を上書き
+python3 winrm_exec.py TST1T --host 192.168.1.100 --user Administrator --password Pass123
 
 # バッチファイルを指定して実行
-python3 winrm_exec.py --host 192.168.1.100 --user Admin --password Pass123 \
-    --batch "C:\Scripts\backup.bat"
+python3 winrm_exec.py TST1T --batch "C:\Scripts\backup.bat"
 
 # 直接コマンドを実行
-python3 winrm_exec.py --host 192.168.1.100 --user Admin --password Pass123 \
-    --command "echo Hello from Linux"
-
-# HTTPS接続を使用
-python3 winrm_exec.py --host 192.168.1.100 --user Admin --password Pass123 \
-    --https --port 5986 --batch "C:\Scripts\test.bat"
+python3 winrm_exec.py TST1T --command "echo Hello from Linux"
 
 # ログレベルを指定
-python3 winrm_exec.py --log-level DEBUG --batch "C:\Scripts\test.bat"
-```
-
-#### 3. 環境変数で設定
-
-```bash
-# 環境変数で設定（パスワードをコマンドラインに残さない）
-export WINRM_HOST=192.168.1.100
-export WINRM_USER=Administrator
-export WINRM_PASSWORD=SecretPassword
-
-python3 winrm_exec.py --batch "C:\Scripts\test.bat"
+python3 winrm_exec.py TST1T --log-level DEBUG
 ```
 
 #### オプション一覧
 
 ```
+ENV             環境名（TST1T, TST2T など）※必須
 --host          Windows ServerのIPアドレスまたはホスト名
 --port          WinRMポート（デフォルト: 5985）
 --user          Windowsユーザー名
 --password      Windowsパスワード
+--domain        ドメイン名（ローカル認証の場合は空）
 --batch         実行するバッチファイル（Windows側のパス）
 --command       直接実行するコマンド
---https         HTTPS接続を使用
---no-cert-check 証明書検証を無効化（自己署名証明書の場合）
 --timeout       タイムアウト（秒）（デフォルト: 300）
 --log-level     ログレベル（DEBUG, INFO, WARNING, ERROR）
 ```
+
+### C言語版の使い方
+
+**注意**: このプログラムは**標準Cライブラリのみ**を使用します。外部ライブラリ不要でNTLM認証を自前実装しています。
+
+#### 1. ソースファイル内の設定を編集
+
+`winrm_exec.c` の設定セクションを編集します：
+
+```c
+/* --- Windows接続情報 --- */
+#define DEFAULT_HOST "192.168.1.100"     /* Windows ServerのIPアドレス */
+#define DEFAULT_USER "Administrator"      /* Windowsユーザー名 */
+#define DEFAULT_PASS "YourPassword"       /* Windowsパスワード */
+#define DEFAULT_DOMAIN ""                 /* ドメイン名（空 = ローカル認証） */
+#define DEFAULT_PORT 5985                 /* WinRMポート */
+```
+
+#### 2. コンパイル
+
+```bash
+# 基本コンパイル
+gcc -o winrm_exec winrm_exec.c
+
+# 警告を確認する場合
+gcc -Wall -o winrm_exec winrm_exec.c
+```
+
+#### 3. 実行
+
+```bash
+# 環境を引数で指定して実行（必須）
+./winrm_exec TST1T
+./winrm_exec TST2T
+
+# 環境変数で設定を上書き
+WINRM_HOST=192.168.1.100 WINRM_USER=Admin WINRM_PASS=Pass123 ./winrm_exec TST1T
+```
+
+#### C言語版の特徴
+
+- **NTLM v2認証を自前実装** - MD4、MD5、HMAC-MD5を含む完全実装
+- **Windows側の設定変更不要** - デフォルトのNTLM認証を使用
+- **高速・軽量** - スクリプト言語より高速に動作
+- **組み込み環境向け** - Python/Bashが使用できない環境でも動作
 
 ### Bashシェルスクリプト版の使い方
 
@@ -277,22 +333,26 @@ python3 winrm_exec.py --batch "C:\Scripts\test.bat"
 
 ```bash
 # Windows接続情報
-WINRM_HOST="${WINRM_HOST:-192.168.1.100}"
+_DEFAULT_HOST='192.168.1.100'
+_DEFAULT_USER='Administrator'
+_DEFAULT_PASS='YourPassword'
+WINRM_HOST="${WINRM_HOST:-$_DEFAULT_HOST}"
 WINRM_PORT="${WINRM_PORT:-5985}"
-WINRM_USER="${WINRM_USER:-Administrator}"
-WINRM_PASS="${WINRM_PASS:-YourPassword}"
+WINRM_USER="${WINRM_USER:-$_DEFAULT_USER}"
+WINRM_PASS="${WINRM_PASS:-$_DEFAULT_PASS}"
 
-# 環境フォルダ名（実行時に選択可能）
-ENV_FOLDER="${ENV_FOLDER:-TST1T}"
+# 利用可能な環境のリスト
+ENVIRONMENTS=("TST1T" "TST2T")
 
-# 実行するバッチファイル（{ENV}は選択した環境に置換されます）
-BATCH_FILE_PATH="${BATCH_FILE_PATH:-C:\\Scripts\\{ENV}\\test.bat}"
+# 実行するバッチファイル（{ENV}は環境名に置換されます）
+_DEFAULT_BATCH_PATH='C:\Scripts\{ENV}\test.bat'
+BATCH_FILE_PATH="${BATCH_FILE_PATH:-$_DEFAULT_BATCH_PATH}"
 ```
 
 **環境選択機能**:
-- スクリプト実行時に TST1T または TST2T を選択できます
-- `{ENV}` プレースホルダーが選択した環境名に置換されます
-- 例: TST1T を選択すると `C:\Scripts\TST1T\test.bat` が実行されます
+- 環境名を引数で指定します（必須）
+- `{ENV}` プレースホルダーが指定した環境名に置換されます
+- 例: TST1T を指定すると `C:\Scripts\TST1T\test.bat` が実行されます
 
 #### 2. 実行権限の付与
 
@@ -303,23 +363,15 @@ chmod +x winrm_exec.sh
 #### 3. 実行
 
 ```bash
-# スクリプト内の設定で実行（環境選択メニューが表示されます）
-./winrm_exec.sh
+# 環境を引数で指定して実行（必須）
+./winrm_exec.sh TST1T
+./winrm_exec.sh TST2T
 
-# 実行時の環境選択例:
-# ======================================
-#   環境選択
-# ======================================
-# 1. TST1T
-# 2. TST2T
-# ======================================
-# 環境を選択してください (1 または 2) [デフォルト: 1]: 1
-
-# または環境変数で設定を上書き
-WINRM_HOST=192.168.1.100 WINRM_USER=Admin WINRM_PASS=Pass123 ./winrm_exec.sh
+# 環境変数で設定を上書き
+WINRM_HOST=192.168.1.100 WINRM_USER=Admin WINRM_PASS=Pass123 ./winrm_exec.sh TST1T
 
 # デバッグモードで実行
-DEBUG=true ./winrm_exec.sh
+DEBUG=true ./winrm_exec.sh TST1T
 ```
 
 ## 実行例
@@ -327,14 +379,13 @@ DEBUG=true ./winrm_exec.sh
 ### Python版の実行例
 
 ```bash
-$ python3 winrm_exec.py --host 192.168.1.100 --user Administrator --password Pass123 \
-    --batch "C:\Scripts\hello.bat"
+$ python3 winrm_exec.py TST1T
 
 2025-01-15 10:30:45 [INFO] === WinRM Remote Batch Executor (標準ライブラリ版) ===
 2025-01-15 10:30:45 [INFO] 接続先: 192.168.1.100:5985
 2025-01-15 10:30:45 [INFO] ユーザー: Administrator
 2025-01-15 10:30:45 [INFO] WinRMエンドポイント: http://192.168.1.100:5985/wsman
-2025-01-15 10:30:45 [INFO] バッチファイル実行: C:\Scripts\hello.bat
+2025-01-15 10:30:45 [INFO] バッチファイル実行: C:\Scripts\TST1T\test.bat
 2025-01-15 10:30:45 [INFO] シェル作成中...
 2025-01-15 10:30:46 [INFO] シェル作成成功: xxx-xxx-xxx
 2025-01-15 10:30:46 [INFO] コマンド実行中...
@@ -418,18 +469,18 @@ netstat -an | findstr :5985
 
 #### エラー: "401 Unauthorized" または認証エラー
 
-**原因**: 認証情報が正しくない、またはBasic認証が無効
+**原因**: 認証情報が正しくない、またはNTLM/Negotiate認証が無効
 
 **解決策**:
 ```powershell
-# Windows側でBasic認証が有効か確認
-Get-Item WSMan:\localhost\Service\Auth\Basic
+# Windows側でNegotiate認証が有効か確認
+Get-Item WSMan:\localhost\Service\Auth\Negotiate
 
-# 無効の場合は有効化（現在の実装ではBasic認証を使用）
-Set-Item WSMan:\localhost\Service\Auth\Basic -Value $true
+# 無効の場合は有効化（本ツールはNTLM認証を使用）
+Set-Item WSMan:\localhost\Service\Auth\Negotiate -Value $true
 ```
 
-**注意**: 現在の実装では**Basic認証**を使用しています。セキュリティを考慮してHTTPS接続を使用することを推奨します。
+**注意**: 本ツールのすべての実装（Python版・C言語版・Bash版）は**NTLM認証**を使用しています。Windows側でBasic認証を有効化する必要はありません。
 
 #### エラー: "403 Forbidden"
 

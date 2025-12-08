@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 #
 # WinRM Executor 呼び出し例
-# winrm_exec.sh / winrm_exec.py を引数で環境を指定して呼び出す
+# winrm_exec.sh / winrm_exec.py / winrm_exec を引数で環境を指定して呼び出す
 #
 
 # スクリプトのディレクトリを取得
@@ -10,6 +10,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PARENT_DIR="$(dirname "$SCRIPT_DIR")"
 
 # 色付き出力用
+RED='\033[0;31m'
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
@@ -25,9 +26,9 @@ echo -e "${BLUE}[例1] Bash版で TST1T 環境を指定して実行${NC}"
 
 # 実行結果をチェック
 if [ $? -eq 0 ]; then
-    echo -e "${GREEN}✓ Bash版 TST1T 環境の実行が完了しました${NC}"
+    echo -e "${GREEN}[OK] Bash版 TST1T 環境の実行が完了しました${NC}"
 else
-    echo -e "${RED}✗ Bash版 TST1T 環境の実行が失敗しました${NC}"
+    echo -e "${RED}[NG] Bash版 TST1T 環境の実行が失敗しました${NC}"
 fi
 echo
 
@@ -36,9 +37,9 @@ echo -e "${BLUE}[例2] Bash版で TST2T 環境を指定して実行${NC}"
 "${PARENT_DIR}/winrm_exec.sh" TST2T
 
 if [ $? -eq 0 ]; then
-    echo -e "${GREEN}✓ Bash版 TST2T 環境の実行が完了しました${NC}"
+    echo -e "${GREEN}[OK] Bash版 TST2T 環境の実行が完了しました${NC}"
 else
-    echo -e "${RED}✗ Bash版 TST2T 環境の実行が失敗しました${NC}"
+    echo -e "${RED}[NG] Bash版 TST2T 環境の実行が失敗しました${NC}"
 fi
 echo
 
@@ -47,9 +48,9 @@ echo -e "${BLUE}[例3] Python版で TST1T 環境を指定して実行${NC}"
 python3 "${PARENT_DIR}/winrm_exec.py" TST1T
 
 if [ $? -eq 0 ]; then
-    echo -e "${GREEN}✓ Python版 TST1T 環境の実行が完了しました${NC}"
+    echo -e "${GREEN}[OK] Python版 TST1T 環境の実行が完了しました${NC}"
 else
-    echo -e "${RED}✗ Python版 TST1T 環境の実行が失敗しました${NC}"
+    echo -e "${RED}[NG] Python版 TST1T 環境の実行が失敗しました${NC}"
 fi
 echo
 
@@ -58,9 +59,31 @@ echo -e "${BLUE}[例4] Python版で TST2T 環境を指定して実行${NC}"
 python3 "${PARENT_DIR}/winrm_exec.py" TST2T
 
 if [ $? -eq 0 ]; then
-    echo -e "${GREEN}✓ Python版 TST2T 環境の実行が完了しました${NC}"
+    echo -e "${GREEN}[OK] Python版 TST2T 環境の実行が完了しました${NC}"
 else
-    echo -e "${RED}✗ Python版 TST2T 環境の実行が失敗しました${NC}"
+    echo -e "${RED}[NG] Python版 TST2T 環境の実行が失敗しました${NC}"
+fi
+echo
+
+# 使用例5: C言語版を使って TST1T 環境で実行
+echo -e "${BLUE}[例5] C言語版で TST1T 環境を指定して実行${NC}"
+"${PARENT_DIR}/winrm_exec" TST1T
+
+if [ $? -eq 0 ]; then
+    echo -e "${GREEN}[OK] C言語版 TST1T 環境の実行が完了しました${NC}"
+else
+    echo -e "${RED}[NG] C言語版 TST1T 環境の実行が失敗しました${NC}"
+fi
+echo
+
+# 使用例6: C言語版を使って TST2T 環境で実行
+echo -e "${BLUE}[例6] C言語版で TST2T 環境を指定して実行${NC}"
+"${PARENT_DIR}/winrm_exec" TST2T
+
+if [ $? -eq 0 ]; then
+    echo -e "${GREEN}[OK] C言語版 TST2T 環境の実行が完了しました${NC}"
+else
+    echo -e "${RED}[NG] C言語版 TST2T 環境の実行が失敗しました${NC}"
 fi
 echo
 
