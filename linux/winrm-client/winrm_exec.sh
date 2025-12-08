@@ -390,10 +390,10 @@ get_command_output() {
     local stderr_all=""
     local exit_code=0
     local command_done=false
-    local max_attempts=60  # 最大60回試行（タイムアウト対策）
+    local max_attempts=$((TIMEOUT * 2))  # TIMEOUT秒待機（0.5秒ごとにチェック）
     local attempt=0
 
-    log_info "コマンド出力取得中..."
+    log_info "コマンド出力取得中...（最大${TIMEOUT}秒待機）"
 
     while [ "$command_done" = "false" ] && [ $attempt -lt $max_attempts ]; do
         local uuid=$(generate_uuid)
