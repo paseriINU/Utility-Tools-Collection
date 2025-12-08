@@ -232,61 +232,48 @@ Set-Item WSMan:\localhost\Service\Auth\Negotiate -Value $true
 ```python
 # Windows接続情報
 WINDOWS_HOST = "192.168.1.100"      # Windows ServerのIPアドレス
-WINDOWS_PORT = 5985                  # WinRMポート（HTTP）
+WINDOWS_PORT = 5985                  # WinRMポート（HTTP: 5985, HTTPS: 5986）
 WINDOWS_USER = "Administrator"       # Windowsユーザー名
 WINDOWS_PASSWORD = "YourPassword"    # Windowsパスワード
 
-# 実行するバッチファイル
-BATCH_FILE_PATH = r"C:\Scripts\test.bat"
+# 利用可能な環境のリスト
+ENVIRONMENTS = ["TST1T", "TST2T"]
+
+# 実行するバッチファイル（{ENV}は環境名に置換されます）
+BATCH_FILE_PATH = r"C:\Scripts\{ENV}\test.bat"
 ```
 
 #### 2. 実行
 
 ```bash
-# スクリプト内の設定で実行（pip installは不要）
-python3 winrm_exec.py
+# 環境を引数で指定して実行（必須）
+python3 winrm_exec.py TST1T
+python3 winrm_exec.py TST2T
 
-# またはコマンドライン引数で設定を上書き
-python3 winrm_exec.py --host 192.168.1.100 --user Administrator --password Pass123
+# コマンドライン引数で設定を上書き
+python3 winrm_exec.py TST1T --host 192.168.1.100 --user Administrator --password Pass123
 
 # バッチファイルを指定して実行
-python3 winrm_exec.py --host 192.168.1.100 --user Admin --password Pass123 \
-    --batch "C:\Scripts\backup.bat"
+python3 winrm_exec.py TST1T --batch "C:\Scripts\backup.bat"
 
 # 直接コマンドを実行
-python3 winrm_exec.py --host 192.168.1.100 --user Admin --password Pass123 \
-    --command "echo Hello from Linux"
-
-# HTTPS接続を使用
-python3 winrm_exec.py --host 192.168.1.100 --user Admin --password Pass123 \
-    --https --port 5986 --batch "C:\Scripts\test.bat"
+python3 winrm_exec.py TST1T --command "echo Hello from Linux"
 
 # ログレベルを指定
-python3 winrm_exec.py --log-level DEBUG --batch "C:\Scripts\test.bat"
-```
-
-#### 3. 環境変数で設定
-
-```bash
-# 環境変数で設定（パスワードをコマンドラインに残さない）
-export WINRM_HOST=192.168.1.100
-export WINRM_USER=Administrator
-export WINRM_PASSWORD=SecretPassword
-
-python3 winrm_exec.py --batch "C:\Scripts\test.bat"
+python3 winrm_exec.py TST1T --log-level DEBUG
 ```
 
 #### オプション一覧
 
 ```
+ENV             環境名（TST1T, TST2T など）※必須
 --host          Windows ServerのIPアドレスまたはホスト名
 --port          WinRMポート（デフォルト: 5985）
 --user          Windowsユーザー名
 --password      Windowsパスワード
+--domain        ドメイン名（ローカル認証の場合は空）
 --batch         実行するバッチファイル（Windows側のパス）
 --command       直接実行するコマンド
---https         HTTPS接続を使用
---no-cert-check 証明書検証を無効化（自己署名証明書の場合）
 --timeout       タイムアウト（秒）（デフォルト: 300）
 --log-level     ログレベル（DEBUG, INFO, WARNING, ERROR）
 ```
@@ -346,22 +333,26 @@ WINRM_HOST=192.168.1.100 WINRM_USER=Admin WINRM_PASS=Pass123 ./winrm_exec TST1T
 
 ```bash
 # Windows接続情報
-WINRM_HOST="${WINRM_HOST:-192.168.1.100}"
+_DEFAULT_HOST='192.168.1.100'
+_DEFAULT_USER='Administrator'
+_DEFAULT_PASS='YourPassword'
+WINRM_HOST="${WINRM_HOST:-$_DEFAULT_HOST}"
 WINRM_PORT="${WINRM_PORT:-5985}"
-WINRM_USER="${WINRM_USER:-Administrator}"
-WINRM_PASS="${WINRM_PASS:-YourPassword}"
+WINRM_USER="${WINRM_USER:-$_DEFAULT_USER}"
+WINRM_PASS="${WINRM_PASS:-$_DEFAULT_PASS}"
 
-# 環境フォルダ名（実行時に選択可能）
-ENV_FOLDER="${ENV_FOLDER:-TST1T}"
+# 利用可能な環境のリスト
+ENVIRONMENTS=("TST1T" "TST2T")
 
-# 実行するバッチファイル（{ENV}は選択した環境に置換されます）
-BATCH_FILE_PATH="${BATCH_FILE_PATH:-C:\\Scripts\\{ENV}\\test.bat}"
+# 実行するバッチファイル（{ENV}は環境名に置換されます）
+_DEFAULT_BATCH_PATH='C:\Scripts\{ENV}\test.bat'
+BATCH_FILE_PATH="${BATCH_FILE_PATH:-$_DEFAULT_BATCH_PATH}"
 ```
 
 **環境選択機能**:
-- スクリプト実行時に TST1T または TST2T を選択できます
-- `{ENV}` プレースホルダーが選択した環境名に置換されます
-- 例: TST1T を選択すると `C:\Scripts\TST1T\test.bat` が実行されます
+- 環境名を引数で指定します（必須）
+- `{ENV}` プレースホルダーが指定した環境名に置換されます
+- 例: TST1T を指定すると `C:\Scripts\TST1T\test.bat` が実行されます
 
 #### 2. 実行権限の付与
 
@@ -372,23 +363,15 @@ chmod +x winrm_exec.sh
 #### 3. 実行
 
 ```bash
-# スクリプト内の設定で実行（環境選択メニューが表示されます）
-./winrm_exec.sh
+# 環境を引数で指定して実行（必須）
+./winrm_exec.sh TST1T
+./winrm_exec.sh TST2T
 
-# 実行時の環境選択例:
-# ======================================
-#   環境選択
-# ======================================
-# 1. TST1T
-# 2. TST2T
-# ======================================
-# 環境を選択してください (1 または 2) [デフォルト: 1]: 1
-
-# または環境変数で設定を上書き
-WINRM_HOST=192.168.1.100 WINRM_USER=Admin WINRM_PASS=Pass123 ./winrm_exec.sh
+# 環境変数で設定を上書き
+WINRM_HOST=192.168.1.100 WINRM_USER=Admin WINRM_PASS=Pass123 ./winrm_exec.sh TST1T
 
 # デバッグモードで実行
-DEBUG=true ./winrm_exec.sh
+DEBUG=true ./winrm_exec.sh TST1T
 ```
 
 ## 実行例
@@ -396,14 +379,13 @@ DEBUG=true ./winrm_exec.sh
 ### Python版の実行例
 
 ```bash
-$ python3 winrm_exec.py --host 192.168.1.100 --user Administrator --password Pass123 \
-    --batch "C:\Scripts\hello.bat"
+$ python3 winrm_exec.py TST1T
 
 2025-01-15 10:30:45 [INFO] === WinRM Remote Batch Executor (標準ライブラリ版) ===
 2025-01-15 10:30:45 [INFO] 接続先: 192.168.1.100:5985
 2025-01-15 10:30:45 [INFO] ユーザー: Administrator
 2025-01-15 10:30:45 [INFO] WinRMエンドポイント: http://192.168.1.100:5985/wsman
-2025-01-15 10:30:45 [INFO] バッチファイル実行: C:\Scripts\hello.bat
+2025-01-15 10:30:45 [INFO] バッチファイル実行: C:\Scripts\TST1T\test.bat
 2025-01-15 10:30:45 [INFO] シェル作成中...
 2025-01-15 10:30:46 [INFO] シェル作成成功: xxx-xxx-xxx
 2025-01-15 10:30:46 [INFO] コマンド実行中...
