@@ -251,7 +251,7 @@ Private Function GetGitLog(ByVal repoPath As String, ByVal maxCount As Long) As 
                     .AuthorEmail = parts(4)
                     .CommitDate = ParseGitDate(parts(5))
                     .Subject = parts(6)
-                    .RefNames = If(UBound(parts) >= 7, Trim(Replace(Replace(parts(7), "(", ""), ")", "")), "")
+                    .RefNames = IIf(UBound(parts) >= 7, Trim(Replace(Replace(parts(7), "(", ""), ")", "")), "")
                     .FilesChanged = 0
                     .Insertions = 0
                     .Deletions = 0
