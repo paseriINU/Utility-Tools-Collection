@@ -218,7 +218,8 @@ Private Function GetGitLog(ByVal repoPath As String, ByVal maxCount As Long) As 
 
     ' Git Log コマンド（全ブランチ、カスタムフォーマット）
     ' フォーマット: ハッシュ|フルハッシュ|親ハッシュ|作者|メール|日付|件名|ref名
-    command = "cmd /c cd /d """ & repoPath & """ && " & _
+    ' chcp 65001でUTF-8に設定し、文字化けを防止
+    command = "cmd /c chcp 65001 >nul && cd /d """ & repoPath & """ && " & _
               GIT_COMMAND & " log --all -n " & maxCount & _
               " --pretty=format:""%h|%H|%P|%an|%ae|%ai|%s|%d"" --numstat"
 
