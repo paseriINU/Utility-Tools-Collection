@@ -7,20 +7,23 @@
 ```
 .
 ├── batch/                    # Windowsバッチスクリプト
-│   ├── sync/                # 同期ツール
-│   │   └── TFS-Git-sync     # TFS→Git同期スクリプト
+│   ├── sync/                # 同期ツール（TFS→Git同期）
 │   ├── remote-exec/         # リモート実行ツール（PowerShell Remoting）
 │   ├── git-diff-extract/    # Git差分ファイル抽出ツール
 │   ├── git-branch-manager/  # Gitブランチ管理ツール
-│   └── git-deploy/          # Git→Linux転送ツール
+│   ├── git-deploy/          # Git→Linux転送ツール
+│   └── jp1-job-executor/    # JP1ジョブネット起動ツール
+│
+├── linux/                   # Linuxスクリプト
+│   └── winrm-client/        # WinRMクライアント（Python/Bash/C）
 │
 ├── vba/                     # Excel VBAマクロ
-│   ├── excel-automation/    # Excel自動化ツール
 │   ├── word-bookmark-organizer/  # Word文書しおり整理ツール
 │   └── git-log-visualizer/  # Git Log 可視化ツール
 │
-└── javascript/              # JavaScriptツール
-    └── browser-automation/  # ブラウザ自動化スクリプト
+├── git-hooks/               # Git Hooks（ブランチ保護等）
+│
+└── javascript/              # JavaScriptツール（準備中）
 ```
 
 ## 🛠️ 現在利用可能なツール
@@ -61,6 +64,25 @@
   - SCP/SSH対応（Windows OpenSSH Client）
   - ネットワークパス（UNCパス）からの実行対応
   - ダブルクリックで実行可能
+
+- **[JP1-Job-Executor](batch/jp1-job-executor/)**: JP1/AJS3ジョブネットを起動
+  - リモート実行版（PowerShell Remoting）とREST API版の2種類
+  - ローカルPCにJP1インストール不要
+  - ダブルクリックで実行可能なスタンドアローン版
+
+### Linux Tools
+
+- **[WinRM-Client](linux/winrm-client/)**: LinuxからWindowsへWinRM接続してコマンド実行
+  - Python版・Bash版・C言語版の3種類を提供
+  - 追加パッケージ不要（標準ライブラリのみ）
+  - IT制限環境対応
+
+### Git Hooks
+
+- **[Git-Hooks](git-hooks/)**: リモートリポジトリ保護設定
+  - master/mainブランチへの直接プッシュ防止
+  - 機密情報・大きなファイルの検出
+  - コミットメッセージ品質チェック
 
 ### VBA Macros
 

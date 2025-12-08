@@ -6,7 +6,7 @@ Linux（Red Hat等）からWindows Server 2022へWinRM（Windows Remote Manageme
 
 ✅ **追加パッケージ不要** - Python標準ライブラリのみで動作（pywinrm不要）
 ✅ **IT制限環境対応** - インターネット接続やpipインストールが制限されている環境でも使用可能
-✅ **2つの実装** - Python版とBash版を提供
+✅ **3つの実装** - Python版・Bash版・C言語版を提供
 ✅ **完全なWinRM実装** - WinRMプロトコルをフルサポート
 
 ## 概要
@@ -29,6 +29,13 @@ Linux（Red Hat等）からWindows Server 2022へWinRM（Windows Remote Manageme
   - バッチファイル実行
   - コマンド実行
   - WinRMプロトコル完全実装
+
+- **winrm_exec.c** - C言語版
+  - **標準Cライブラリ + libcurl**のみ使用
+  - 高速・軽量な実装
+  - バッチファイル実行
+  - コマンド実行
+  - 組み込み環境やスクリプト言語が使用できない環境向け
 
 ## 必要な環境
 

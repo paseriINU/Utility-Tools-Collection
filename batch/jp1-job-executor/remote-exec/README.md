@@ -344,11 +344,10 @@ jp1_remote_server3.bat  → JP1_SERVER=192.168.1.102
 
 ## 🔗 関連ツール
 
-このリポジトリの他のリモート実行ツールも参照：
+このリポジトリの他のツールも参照：
 
-- [batch/remote-exec/schtasks/](../../remote-exec/schtasks/) - タスクスケジューラ版
-- [batch/remote-exec/winrm/](../../remote-exec/winrm/) - WinRM版
-- [batch/remote-exec/powershell-remoting/](../../remote-exec/powershell-remoting/) - PowerShell Remoting版
+- [batch/remote-exec/](../../remote-exec/) - リモートバッチ実行ツール（PowerShell Remoting）
+- [batch/jp1-job-executor/rest-api/](../rest-api/) - JP1ジョブネット起動ツール（REST API版）
 
 ---
 
