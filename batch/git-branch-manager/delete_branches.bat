@@ -79,7 +79,7 @@ if ($LASTEXITCODE -ne 0) {
 
 #region 関数: リモートブランチ削除
 function Delete-RemoteBranch {
-    Clear-Host
+    Write-Host ""
     Write-Host "========================================================================" -ForegroundColor Cyan
     Write-Host "  リモートブランチ削除" -ForegroundColor Cyan
     Write-Host "========================================================================" -ForegroundColor Cyan
@@ -162,7 +162,7 @@ function Delete-RemoteBranch {
 
 #region 関数: ローカルブランチ削除
 function Delete-LocalBranch {
-    Clear-Host
+    Write-Host ""
     Write-Host "========================================================================" -ForegroundColor Cyan
     Write-Host "  ローカルブランチ削除" -ForegroundColor Cyan
     Write-Host "========================================================================" -ForegroundColor Cyan
@@ -276,7 +276,7 @@ function Delete-LocalBranch {
 
 #region 関数: リモート＆ローカル両方削除
 function Delete-BothBranches {
-    Clear-Host
+    Write-Host ""
     Write-Host "========================================================================" -ForegroundColor Cyan
     Write-Host "  リモート＆ローカルブランチ両方削除" -ForegroundColor Cyan
     Write-Host "========================================================================" -ForegroundColor Cyan
@@ -391,7 +391,7 @@ function Delete-BothBranches {
 
 #region メインメニュー
 while ($true) {
-    Clear-Host
+    Write-Host ""
     Write-Host "========================================================================" -ForegroundColor Cyan
     Write-Host "  Git ブランチ削除ツール - メインメニュー" -ForegroundColor Cyan
     Write-Host "========================================================================" -ForegroundColor Cyan
