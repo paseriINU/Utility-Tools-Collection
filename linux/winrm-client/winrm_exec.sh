@@ -91,10 +91,11 @@ DIRECT_COMMAND="${DIRECT_COMMAND:-$_DEFAULT_DIRECT_CMD}"  # 例: 'echo {ENV} env
 # HTTPS接続を使用する場合は"true"に設定
 USE_HTTPS="${USE_HTTPS:-false}"
 
-# 認証方式（"ntlm" または "basic"）
-# NTLM: Windows標準、Basic認証が無効でも使用可能（推奨）
-# Basic: シンプルだがWindows側でBasic認証を有効にする必要あり
-AUTH_METHOD="${AUTH_METHOD:-ntlm}"
+# 認証方式（"negotiate", "ntlm", または "basic"）
+# negotiate: Windows標準のSPNEGO認証（NTLM/Kerberos自動選択、推奨）
+# ntlm: NTLM認証を強制
+# basic: シンプルだがWindows側でBasic認証を有効にする必要あり
+AUTH_METHOD="${AUTH_METHOD:-negotiate}"
 
 # 証明書検証を無効にする場合は"true"（自己署名証明書の場合）
 DISABLE_CERT_VALIDATION="${DISABLE_CERT_VALIDATION:-true}"
@@ -197,9 +198,15 @@ send_soap_request() {
     fi
 
     # 認証方式の設定
-    if [ "$AUTH_METHOD" = "ntlm" ]; then
-        curl_opts+=(--ntlm)  # NTLM認証（Windows標準）
-    fi
+    case "$AUTH_METHOD" in
+        negotiate)
+            curl_opts+=(--negotiate)  # SPNEGO認証（NTLM/Kerberos自動選択）
+            ;;
+        ntlm)
+            curl_opts+=(--ntlm)  # NTLM認証を強制
+            ;;
+        # basic: 追加オプションなし
+    esac
     curl_opts+=(--user "${WINRM_USER}:${WINRM_PASS}")
 
     # HTTPヘッダー
@@ -266,11 +273,16 @@ send_soap_request() {
         401)
             log_error "認証に失敗しました (HTTP 401)"
             log_error "ユーザー名とパスワードを確認してください"
-            if [ "$AUTH_METHOD" = "basic" ]; then
-                log_error "Windows側でBasic認証が有効か確認: winrm get winrm/config/service/auth"
-            else
-                log_error "NTLM認証を使用中。ドメインユーザーの場合は 'DOMAIN\\username' 形式で指定してください"
-            fi
+            case "$AUTH_METHOD" in
+                basic)
+                    log_error "Windows側でBasic認証が有効か確認: winrm get winrm/config/service/auth"
+                    ;;
+                negotiate|ntlm)
+                    log_error "Negotiate/NTLM認証を使用中"
+                    log_error "ドメインユーザーの場合は 'DOMAIN\\username' 形式で指定してください"
+                    log_error "Windows側でNegotiate認証が有効か確認: winrm get winrm/config/service/auth"
+                    ;;
+            esac
             return 1
             ;;
         500)
