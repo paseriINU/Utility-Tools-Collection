@@ -109,21 +109,21 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# ログ関数（printfを使用してバックスラッシュのエスケープを防止）
+# ログ関数（stderrに出力して関数の戻り値キャプチャに影響しないようにする）
 log_info() {
-    printf "${BLUE}[INFO]${NC} %s\n" "$1"
+    printf "${BLUE}[INFO]${NC} %s\n" "$1" >&2
 }
 
 log_success() {
-    printf "${GREEN}[SUCCESS]${NC} %s\n" "$1"
+    printf "${GREEN}[SUCCESS]${NC} %s\n" "$1" >&2
 }
 
 log_warn() {
-    printf "${YELLOW}[WARN]${NC} %s\n" "$1"
+    printf "${YELLOW}[WARN]${NC} %s\n" "$1" >&2
 }
 
 log_error() {
-    printf "${RED}[ERROR]${NC} %s\n" "$1"
+    printf "${RED}[ERROR]${NC} %s\n" "$1" >&2
 }
 
 
@@ -314,7 +314,7 @@ create_shell() {
         return 1
     fi
 
-    printf "${GREEN}[SUCCESS]${NC} シェル作成成功: %s\n" "$shell_id"
+    printf "${GREEN}[SUCCESS]${NC} シェル作成成功: %s\n" "$shell_id" >&2
     echo "$shell_id"
 }
 
@@ -376,7 +376,7 @@ run_command() {
         return 1
     fi
 
-    printf "${GREEN}[SUCCESS]${NC} コマンド実行開始: %s\n" "$command_id"
+    printf "${GREEN}[SUCCESS]${NC} コマンド実行開始: %s\n" "$command_id" >&2
     echo "$command_id"
 }
 
@@ -462,7 +462,7 @@ get_command_output() {
         log_warn "コマンド完了待機がタイムアウトしました"
     fi
 
-    printf "${GREEN}[SUCCESS]${NC} コマンド完了 (終了コード: %s)\n" "$exit_code"
+    printf "${GREEN}[SUCCESS]${NC} コマンド完了 (終了コード: %s)\n" "$exit_code" >&2
 
     # 出力を一時ファイルに保存（改行を保持）
     echo "$stdout_all" > /tmp/winrm_stdout_$$
@@ -500,7 +500,7 @@ delete_shell() {
 
     log_info "シェル削除中..."
     send_soap_request "$soap_envelope" > /dev/null
-    printf "${GREEN}[SUCCESS]${NC} シェル削除完了\n"
+    printf "${GREEN}[SUCCESS]${NC} シェル削除完了\n" >&2
 }
 
 # メイン処理
