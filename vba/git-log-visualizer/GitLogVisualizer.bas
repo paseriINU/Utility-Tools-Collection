@@ -222,7 +222,7 @@ End Function
 '==============================================================================
 Private Function GetGitLog(ByVal repoPath As String, ByVal maxCount As Long) As CommitInfo()
     Dim wsh As Object
-    Dim exec As Object
+    Dim fso As Object
     Dim command As String
     Dim output As String
     Dim lines() As String
@@ -230,46 +230,54 @@ Private Function GetGitLog(ByVal repoPath As String, ByVal maxCount As Long) As 
     Dim i As Long
     Dim commitIndex As Long
     Dim parts() As String
+    Dim tempFile As String
+    Dim stream As Object
 
-    ' WScript.Shell を作成
+    ' WScript.Shell と FileSystemObject を作成
     Set wsh = CreateObject("WScript.Shell")
+    Set fso = CreateObject("Scripting.FileSystemObject")
+
+    ' 一時ファイルパスを生成
+    tempFile = fso.GetSpecialFolder(2) & "\gitlog_" & fso.GetTempName & ".txt"
 
     ' Git Log コマンド（全ブランチ、カスタムフォーマット）
     ' フォーマット: ハッシュ|フルハッシュ|親ハッシュ|作者|メール|日付|件名|ref名
-    ' chcp 65001でUTF-8に設定し、文字化けを防止
+    ' UTF-8で一時ファイルに出力
     command = "cmd /c chcp 65001 >nul && cd /d """ & repoPath & """ && " & _
               GIT_COMMAND & " log --all -n " & maxCount & _
-              " --pretty=format:""%h|%H|%P|%an|%ae|%ai|%s|%d"" --numstat"
+              " --pretty=format:""%h|%H|%P|%an|%ae|%ai|%s|%d"" --numstat > """ & tempFile & """ 2>&1"
 
-    ' コマンド実行
-    Set exec = wsh.exec(command)
+    ' コマンド実行（同期実行）
+    wsh.Run command, 0, True
 
-    ' 出力を取得（バッファ溢れ防止のため、ループ内で読み取り）
-    Dim stdOutText As String
-    Dim stdErrText As String
-    stdOutText = ""
-    stdErrText = ""
-
-    Do While exec.Status = 0
-        ' バッファが溜まらないよう、ループ内で読み取る
-        If Not exec.StdOut.AtEndOfStream Then
-            stdOutText = stdOutText & exec.StdOut.ReadAll
-        End If
-        If Not exec.StdErr.AtEndOfStream Then
-            stdErrText = stdErrText & exec.StdErr.ReadAll
-        End If
-        DoEvents
-    Loop
-
-    ' 残りの出力を読み取り
-    If Not exec.StdOut.AtEndOfStream Then
-        stdOutText = stdOutText & exec.StdOut.ReadAll
-    End If
-    If Not exec.StdErr.AtEndOfStream Then
-        stdErrText = stdErrText & exec.StdErr.ReadAll
+    ' 一時ファイルが存在するか確認
+    If Not fso.FileExists(tempFile) Then
+        ReDim commits(0 To 0)
+        GetGitLog = commits
+        Exit Function
     End If
 
-    output = stdOutText
+    ' ADODB.Streamを使用してUTF-8でファイルを読み込み
+    On Error Resume Next
+    Set stream = CreateObject("ADODB.Stream")
+    If stream Is Nothing Then
+        ' ADODB.Streamが使えない場合は通常の方法で読み込み
+        output = fso.OpenTextFile(tempFile, 1, False, -1).ReadAll
+    Else
+        stream.Type = 2 ' adTypeText
+        stream.Charset = "UTF-8"
+        stream.Open
+        stream.LoadFromFile tempFile
+        output = stream.ReadText
+        stream.Close
+        Set stream = Nothing
+    End If
+    On Error GoTo 0
+
+    ' 一時ファイルを削除
+    On Error Resume Next
+    fso.DeleteFile tempFile
+    On Error GoTo 0
 
     If Len(output) = 0 Then
         ReDim commits(0 To 0)
