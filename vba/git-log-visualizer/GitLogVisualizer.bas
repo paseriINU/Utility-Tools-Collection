@@ -102,7 +102,19 @@ Public Sub VisualizeGitLog()
     ' Git Logを取得
     Debug.Print "コミット履歴を取得しています..."
     commits = GetGitLog(gitRepoPath, COMMIT_COUNT)
-    commitCount = UBound(commits) - LBound(commits) + 1
+
+    ' コミット数を計算（配列が空の場合はエラー回避）
+    On Error Resume Next
+    commitCount = 0
+    If IsArray(commits) Then
+        If UBound(commits) >= LBound(commits) Then
+            ' 最初の要素が空でないかチェック
+            If Len(commits(LBound(commits)).Hash) > 0 Then
+                commitCount = UBound(commits) - LBound(commits) + 1
+            End If
+        End If
+    End If
+    On Error GoTo ErrorHandler
 
     If commitCount = 0 Then
         MsgBox "コミットが取得できませんでした。" & vbCrLf & _
@@ -330,26 +342,41 @@ Private Sub ClearAllSheets()
     Dim sheetNames As Variant
     Dim sheetName As Variant
     Dim ws As Worksheet
+    Dim sheetExists As Boolean
 
     sheetNames = Array("Dashboard", "CommitHistory", "Statistics", "Charts", "BranchGraph")
 
     ' シートが存在しない場合は作成、存在する場合はクリア
     For Each sheetName In sheetNames
-        On Error Resume Next
-        Set ws = Sheets(CStr(sheetName))
+        sheetExists = False
+        Set ws = Nothing
 
-        If ws Is Nothing Then
-            ' シートを新規作成
-            Set ws = Sheets.Add(After:=Sheets(Sheets.Count))
-            ws.Name = CStr(sheetName)
-        Else
+        ' シートの存在確認
+        On Error Resume Next
+        Set ws = ThisWorkbook.Sheets(CStr(sheetName))
+        If Not ws Is Nothing Then
+            sheetExists = True
+        End If
+        Err.Clear
+        On Error GoTo 0
+
+        If sheetExists Then
             ' 既存シートをクリア
             ws.Cells.Clear
+            On Error Resume Next
             ws.Cells.Interior.ColorIndex = xlNone
+            On Error GoTo 0
+        Else
+            ' シートを新規作成
+            On Error Resume Next
+            Set ws = ThisWorkbook.Sheets.Add(After:=ThisWorkbook.Sheets(ThisWorkbook.Sheets.Count))
+            If Not ws Is Nothing Then
+                ws.Name = CStr(sheetName)
+            End If
+            On Error GoTo 0
         End If
 
         Set ws = Nothing
-        On Error GoTo 0
     Next sheetName
 End Sub
 
