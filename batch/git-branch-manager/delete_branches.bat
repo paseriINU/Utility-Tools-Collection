@@ -77,33 +77,6 @@ if ($LASTEXITCODE -ne 0) {
 }
 #endregion
 
-#region メインメニュー
-while ($true) {
-    Clear-Host
-    Write-Host "========================================================================" -ForegroundColor Cyan
-    Write-Host "  Git ブランチ削除ツール - メインメニュー" -ForegroundColor Cyan
-    Write-Host "========================================================================" -ForegroundColor Cyan
-    Write-Host ""
-    Write-Host " 1. リモートブランチを削除"
-    Write-Host " 2. ローカルブランチを削除"
-    Write-Host " 3. リモート＆ローカル両方を削除"
-    Write-Host " 4. 終了"
-    Write-Host ""
-    $choice = Read-Host "選択してください (1-4)"
-
-    switch ($choice) {
-        "1" { Delete-RemoteBranch }
-        "2" { Delete-LocalBranch }
-        "3" { Delete-BothBranches }
-        "4" { exit 0 }
-        default {
-            Write-Host "無効な選択です" -ForegroundColor Red
-            Start-Sleep -Seconds 1
-        }
-    }
-}
-#endregion
-
 #region 関数: リモートブランチ削除
 function Delete-RemoteBranch {
     Clear-Host
@@ -412,6 +385,33 @@ function Delete-BothBranches {
     } else {
         Write-Host "無効な番号です" -ForegroundColor Red
         Read-Host "Enterキーで戻る"
+    }
+}
+#endregion
+
+#region メインメニュー
+while ($true) {
+    Clear-Host
+    Write-Host "========================================================================" -ForegroundColor Cyan
+    Write-Host "  Git ブランチ削除ツール - メインメニュー" -ForegroundColor Cyan
+    Write-Host "========================================================================" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host " 1. リモートブランチを削除"
+    Write-Host " 2. ローカルブランチを削除"
+    Write-Host " 3. リモート＆ローカル両方を削除"
+    Write-Host " 4. 終了"
+    Write-Host ""
+    $choice = Read-Host "選択してください (1-4)"
+
+    switch ($choice) {
+        "1" { Delete-RemoteBranch }
+        "2" { Delete-LocalBranch }
+        "3" { Delete-BothBranches }
+        "4" { exit 0 }
+        default {
+            Write-Host "無効な選択です" -ForegroundColor Red
+            Start-Sleep -Seconds 1
+        }
     }
 }
 #endregion
