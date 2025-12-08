@@ -88,9 +88,19 @@ BATCH_FILE_PATH="${BATCH_FILE_PATH:-$_DEFAULT_BATCH_PATH}"
 _DEFAULT_DIRECT_CMD=''
 DIRECT_COMMAND="${DIRECT_COMMAND:-$_DEFAULT_DIRECT_CMD}"  # 例: 'echo {ENV} environment'
 
-# HTTPS接続を使用（デフォルト: true）
+# HTTPS接続を使用（デフォルト: ポート番号に応じて自動判定）
+# ポート5985の場合は自動的にHTTP、ポート5986の場合は自動的にHTTPS
 # AllowUnencrypted=falseの環境ではHTTPSが必須
-USE_HTTPS="${USE_HTTPS:-true}"
+# 明示的にUSE_HTTPSを設定した場合はそちらを優先
+if [ -z "${USE_HTTPS+x}" ]; then
+    if [ "$WINRM_PORT" = "5985" ]; then
+        USE_HTTPS="false"
+    else
+        USE_HTTPS="true"
+    fi
+else
+    USE_HTTPS="${USE_HTTPS}"
+fi
 
 # 認証方式（"negotiate", "ntlm", または "basic"）
 # negotiate: Windows標準のSPNEGO認証（NTLM/Kerberos自動選択、推奨）
