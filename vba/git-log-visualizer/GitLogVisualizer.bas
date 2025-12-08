@@ -630,33 +630,35 @@ Private Sub CreateStatisticsSheet(ByRef commits() As CommitInfo, ByVal commitCou
         End With
 
         ' 日付でソート（キーを配列に変換してソート）
-        Dim dateKeys() As String
-        ReDim dateKeys(0 To dates.Count - 1)
-        i = 0
-        For Each dateKey In dates.Keys
-            dateKeys(i) = dateKey
-            i = i + 1
-        Next dateKey
+        If dates.Count > 0 Then
+            Dim dateKeys() As String
+            ReDim dateKeys(0 To dates.Count - 1)
+            i = 0
+            For Each dateKey In dates.Keys
+                dateKeys(i) = dateKey
+                i = i + 1
+            Next dateKey
 
-        ' 簡易ソート（バブルソート）
-        Dim j As Long
-        Dim temp As String
-        For i = 0 To UBound(dateKeys) - 1
-            For j = i + 1 To UBound(dateKeys)
-                If dateKeys(i) > dateKeys(j) Then
-                    temp = dateKeys(i)
-                    dateKeys(i) = dateKeys(j)
-                    dateKeys(j) = temp
-                End If
-            Next j
-        Next i
+            ' 簡易ソート（バブルソート）
+            Dim j As Long
+            Dim temp As String
+            For i = 0 To UBound(dateKeys) - 1
+                For j = i + 1 To UBound(dateKeys)
+                    If dateKeys(i) > dateKeys(j) Then
+                        temp = dateKeys(i)
+                        dateKeys(i) = dateKeys(j)
+                        dateKeys(j) = temp
+                    End If
+                Next j
+            Next i
 
-        row = 4
-        For i = 0 To UBound(dateKeys)
-            .Cells(row, 4).Value = dateKeys(i)
-            .Cells(row, 5).Value = dates(dateKeys(i))
-            row = row + 1
-        Next i
+            row = 4
+            For i = 0 To UBound(dateKeys)
+                .Cells(row, 4).Value = dateKeys(i)
+                .Cells(row, 5).Value = dates(dateKeys(i))
+                row = row + 1
+            Next i
+        End If
 
         ' 列幅調整
         .Columns("A:B").AutoFit
@@ -830,7 +832,7 @@ Private Sub CreateBranchGraphSheet(ByRef commits() As CommitInfo, ByVal commitCo
             node.Name = "Node_" & commits(i).Hash
 
             ' ツールチップ用にテキストボックスを追加
-            Dim tooltip As Shape
+            Dim tooltip As Object  ' Shape
             Set tooltip = .Shapes.AddTextbox(msoTextOrientationHorizontal, x + nodeSize + 5, y - 3, 300, 15)
             tooltip.TextFrame.Characters.Text = commits(i).Hash & " " & commits(i).Subject
             tooltip.TextFrame.Characters.Font.Size = 8
@@ -858,11 +860,11 @@ Private Sub CreateBranchGraphSheet(ByRef commits() As CommitInfo, ByVal commitCo
                         x2 = .Cells(startRow, startCol + commitLanes(parentIndex)).Left
 
                         ' 線を描画
-                        Dim line As Shape
-                        Set line = .Shapes.AddLine(x + nodeSize / 2, y + nodeSize / 2, x2 + nodeSize / 2, y2 + nodeSize / 2)
-                        line.Line.ForeColor.RGB = RGB(128, 128, 128)
-                        line.Line.Weight = 1.5
-                        line.ZOrder msoSendToBack ' 線を背面に
+                        Dim lineShape As Object  ' Shape（lineは予約語のため変数名変更）
+                        Set lineShape = .Shapes.AddLine(x + nodeSize / 2, y + nodeSize / 2, x2 + nodeSize / 2, y2 + nodeSize / 2)
+                        lineShape.Line.ForeColor.RGB = RGB(128, 128, 128)
+                        lineShape.Line.Weight = 1.5
+                        lineShape.ZOrder msoSendToBack ' 線を背面に
                     End If
                 Next k
             End If
