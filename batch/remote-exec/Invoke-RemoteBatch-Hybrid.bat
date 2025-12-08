@@ -41,9 +41,9 @@ exit /b %EXITCODE%
     2. このファイルをダブルクリックで実行（.bat として実行されます）
 #>
 
-# ==============================================================================
+# ======================================================================================================
 # ■ 設定セクション（ここを編集してください）
-# ==============================================================================
+# ======================================================================================================
 
 # リモートサーバの設定
 $Config = @{
@@ -70,9 +70,9 @@ $Config = @{
     UseSSL = $false
 }
 
-# ==============================================================================
+# ======================================================================================================
 # ■ メイン処理（以下は編集不要）
-# ==============================================================================
+# ======================================================================================================
 
 # エラー時は停止
 $ErrorActionPreference = "Stop"
@@ -106,9 +106,10 @@ if (-not (Test-Path $logDir)) {
 $OutputLog = "$logDir\RemoteBatch_$timestamp.log"
 
 # ヘッダー表示
-Write-Host "========================================" -ForegroundColor Cyan
-Write-Host "PowerShell Remoting - リモートバッチ実行" -ForegroundColor Cyan
-Write-Host "========================================" -ForegroundColor Cyan
+Write-Host ""
+Write-Host "========================================================================================" -ForegroundColor Cyan
+Write-Host "  PowerShell Remoting - リモートバッチ実行" -ForegroundColor Cyan
+Write-Host "========================================================================================" -ForegroundColor Cyan
 Write-Host ""
 
 #region 環境選択
@@ -197,9 +198,9 @@ try {
     Write-Host ""
 } catch {
     Write-Host ""
-    Write-Host "========================================" -ForegroundColor Red
+    Write-Host "================================================================" -ForegroundColor Red
     Write-Host "[エラー] WinRM設定の自動構成に失敗しました" -ForegroundColor Red
-    Write-Host "========================================" -ForegroundColor Red
+    Write-Host "================================================================" -ForegroundColor Red
     Write-Host ""
     Write-Host "エラー詳細:" -ForegroundColor Yellow
     Write-Host $_.Exception.Message -ForegroundColor Red
@@ -276,9 +277,9 @@ try {
     #endregion
 
     #region バッチファイルの実行
-    Write-Host "========================================" -ForegroundColor Yellow
+    Write-Host "================================================================" -ForegroundColor Yellow
     Write-Host "バッチファイル実行中..." -ForegroundColor Yellow
-    Write-Host "========================================" -ForegroundColor Yellow
+    Write-Host "================================================================" -ForegroundColor Yellow
     Write-Host ""
 
     $scriptBlock = {
@@ -314,10 +315,10 @@ try {
     }
 
     Write-Host ""
-    Write-Host "========================================" -ForegroundColor Yellow
+    Write-Host "================================================================" -ForegroundColor Yellow
     Write-Host "実行完了" -ForegroundColor Green
     Write-Host "終了コード: $($result.ExitCode)" -ForegroundColor $(if ($result.ExitCode -eq 0) { "Green" } else { "Red" })
-    Write-Host "========================================" -ForegroundColor Yellow
+    Write-Host "================================================================" -ForegroundColor Yellow
     #endregion
 
     #region ログファイル保存
@@ -325,9 +326,9 @@ try {
     Write-Host "実行結果をログファイルに保存中..." -ForegroundColor Cyan
 
     $logContent = @"
-========================================
+================================================================
 PowerShell Remoting - リモートバッチ実行結果
-========================================
+================================================================
 実行日時: $(Get-Date -Format "yyyy/MM/dd HH:mm:ss")
 リモートサーバ: $($Config.ComputerName)
 実行ユーザー: $($Credential.UserName)
@@ -335,9 +336,9 @@ PowerShell Remoting - リモートバッチ実行結果
 引数: $($Config.Arguments)
 終了コード: $($result.ExitCode)
 
-========================================
+================================================================
 実行結果:
-========================================
+================================================================
 $($result.Output | Out-String)
 "@
 
@@ -356,9 +357,9 @@ $($result.Output | Out-String)
 
 } catch {
     Write-Host ""
-    Write-Host "========================================" -ForegroundColor Red
+    Write-Host "================================================================" -ForegroundColor Red
     Write-Host "[エラー] リモート実行に失敗しました" -ForegroundColor Red
-    Write-Host "========================================" -ForegroundColor Red
+    Write-Host "================================================================" -ForegroundColor Red
     Write-Host ""
     Write-Host "エラー詳細:" -ForegroundColor Yellow
     Write-Host $_.Exception.Message -ForegroundColor Red
@@ -370,9 +371,9 @@ $($result.Output | Out-String)
     }
 
     Write-Host ""
-    Write-Host "========================================" -ForegroundColor Yellow
+    Write-Host "================================================================" -ForegroundColor Yellow
     Write-Host "トラブルシューティング:" -ForegroundColor Yellow
-    Write-Host "========================================" -ForegroundColor Yellow
+    Write-Host "================================================================" -ForegroundColor Yellow
     Write-Host ""
     Write-Host "1. リモートサーバでWinRMが有効か確認:" -ForegroundColor White
     Write-Host "   winrm quickconfig" -ForegroundColor Gray
