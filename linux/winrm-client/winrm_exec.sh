@@ -72,6 +72,8 @@ ENV_FOLDER="${ENV_FOLDER:-}"                     # デフォルト環境なし�
 
 # 実行するバッチファイル（Windows側のパス）
 # {ENV} は選択した環境フォルダ名に置換されます
+# 同じパス内で複数回使用可能:
+#   例: C:\\Scripts\\{ENV}\\{ENV}_deploy.bat → C:\\Scripts\\TST1T\\TST1T_deploy.bat
 BATCH_FILE_PATH="${BATCH_FILE_PATH:-C:\\Scripts\\{ENV}\\test.bat}"
 
 # または直接コマンドを指定
