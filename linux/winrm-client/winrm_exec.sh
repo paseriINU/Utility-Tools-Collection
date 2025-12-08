@@ -73,11 +73,14 @@ ENV_FOLDER="${ENV_FOLDER:-}"                     # デフォルト環境なし�
 # 実行するバッチファイル（Windows側のパス）
 # {ENV} は選択した環境フォルダ名に置換されます
 # 同じパス内で複数回使用可能:
-#   例: C:\\Scripts\\{ENV}\\{ENV}_deploy.bat → C:\\Scripts\\TST1T\\TST1T_deploy.bat
-BATCH_FILE_PATH="${BATCH_FILE_PATH:-C:\\Scripts\\{ENV}\\test.bat}"
+#   例: C:\Scripts\{ENV}\{ENV}_deploy.bat → C:\Scripts\TST1T\TST1T_deploy.bat
+# 注意: シングルクォートで囲むこと（ダブルクォートだと{ENV}がBashで展開される）
+_DEFAULT_BATCH_PATH='C:\Scripts\{ENV}\test.bat'
+BATCH_FILE_PATH="${BATCH_FILE_PATH:-$_DEFAULT_BATCH_PATH}"
 
-# または直接コマンドを指定
-DIRECT_COMMAND="${DIRECT_COMMAND:-}"  # 例: "echo Hello from WinRM"
+# または直接コマンドを指定（シングルクォートで{ENV}を含める）
+_DEFAULT_DIRECT_CMD=''
+DIRECT_COMMAND="${DIRECT_COMMAND:-$_DEFAULT_DIRECT_CMD}"  # 例: 'echo {ENV} environment'
 
 # HTTPS接続を使用する場合は"true"に設定
 USE_HTTPS="${USE_HTTPS:-false}"
