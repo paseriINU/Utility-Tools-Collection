@@ -412,7 +412,8 @@ $failCount = 0
 $failedFiles = @()
 
 foreach ($file in $filesToTransfer) {
-    $localPath = Join-Path $GIT_ROOT $file.Path
+    # ローカルパスはGitリポジトリルートからの相対パスで計算
+    $localPath = Join-Path $gitRootDir $file.Path
 
     # Windowsのパス区切り(\)をLinux形式(/)に変換
     $linuxPath = $file.Path.Replace("\", "/")
