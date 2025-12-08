@@ -56,6 +56,9 @@ $GIT_PROJECT_PATH = "C:\Users\$env:USERNAME\source\Git\project"
 
 # 削除されたファイルも含めるか（$true=含める, $false=含めない）
 $INCLUDE_DELETED = $false
+
+# WinMergeのパス（空文字列の場合は自動検出）
+$WINMERGE_PATH = ""
 #endregion
 
 #region Gitリポジトリ確認
@@ -181,14 +184,14 @@ Write-Host ""
 # 出力先フォルダ（デスクトップ + タイムスタンプ）
 $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
 $OUTPUT_DIR = "$env:USERPROFILE\Desktop\git_diff_$timestamp"
-$OUTPUT_DIR_BEFORE = "$OUTPUT_DIR\01_変更前"
-$OUTPUT_DIR_AFTER = "$OUTPUT_DIR\02_変更後"
+$OUTPUT_DIR_BEFORE = "$OUTPUT_DIR\01_修正前"
+$OUTPUT_DIR_AFTER = "$OUTPUT_DIR\02_修正後"
 
 Write-Host "比較元ブランチ  : $BASE_BRANCH" -ForegroundColor White
 Write-Host "比較先ブランチ  : $TARGET_BRANCH" -ForegroundColor White
 Write-Host "出力先フォルダ  : $OUTPUT_DIR" -ForegroundColor White
-Write-Host "  01_変更前     : 比較元($BASE_BRANCH)のファイル" -ForegroundColor Gray
-Write-Host "  02_変更後     : 比較先($TARGET_BRANCH)のファイル" -ForegroundColor Gray
+Write-Host "  01_修正前     : 比較元($BASE_BRANCH)のファイル" -ForegroundColor Gray
+Write-Host "  02_修正後     : 比較先($TARGET_BRANCH)のファイル" -ForegroundColor Gray
 Write-Host ""
 #endregion
 
@@ -278,7 +281,7 @@ foreach ($fileObj in $filteredFiles) {
 
     Write-Host "[処理] $relativePath" -ForegroundColor Cyan
 
-    # 01_変更前（比較元ブランチ）のファイルをコピー
+    # 01_修正前（比較元ブランチ）のファイルをコピー
     $destFileBefore = Join-Path $OUTPUT_DIR_BEFORE $relativePathWin
     $destDirBefore = Split-Path -Path $destFileBefore -Parent
     if (-not (Test-Path $destDirBefore)) {
@@ -289,17 +292,17 @@ foreach ($fileObj in $filteredFiles) {
         $contentBefore = git show "${BASE_BRANCH}:${originalPath}" 2>&1
         if ($LASTEXITCODE -eq 0) {
             [System.IO.File]::WriteAllText($destFileBefore, ($contentBefore -join "`n"), [System.Text.Encoding]::UTF8)
-            Write-Host "  [01_変更前] コピー完了" -ForegroundColor Green
+            Write-Host "  [01_修正前] コピー完了" -ForegroundColor Green
             $COPY_COUNT_BEFORE++
         } else {
-            Write-Host "  [01_変更前] 新規ファイル（比較元に存在しない）" -ForegroundColor Gray
+            Write-Host "  [01_修正前] 新規ファイル（比較元に存在しない）" -ForegroundColor Gray
         }
     } catch {
-        Write-Host "  [01_変更前] エラー: $($_.Exception.Message)" -ForegroundColor Red
+        Write-Host "  [01_修正前] エラー: $($_.Exception.Message)" -ForegroundColor Red
         $ERROR_COUNT++
     }
 
-    # 02_変更後（比較先ブランチ）のファイルをコピー
+    # 02_修正後（比較先ブランチ）のファイルをコピー
     $destFileAfter = Join-Path $OUTPUT_DIR_AFTER $relativePathWin
     $destDirAfter = Split-Path -Path $destFileAfter -Parent
     if (-not (Test-Path $destDirAfter)) {
@@ -310,13 +313,13 @@ foreach ($fileObj in $filteredFiles) {
         $contentAfter = git show "${TARGET_BRANCH}:${originalPath}" 2>&1
         if ($LASTEXITCODE -eq 0) {
             [System.IO.File]::WriteAllText($destFileAfter, ($contentAfter -join "`n"), [System.Text.Encoding]::UTF8)
-            Write-Host "  [02_変更後] コピー完了" -ForegroundColor Green
+            Write-Host "  [02_修正後] コピー完了" -ForegroundColor Green
             $COPY_COUNT_AFTER++
         } else {
-            Write-Host "  [02_変更後] 削除済みファイル（比較先に存在しない）" -ForegroundColor Gray
+            Write-Host "  [02_修正後] 削除済みファイル（比較先に存在しない）" -ForegroundColor Gray
         }
     } catch {
-        Write-Host "  [02_変更後] エラー: $($_.Exception.Message)" -ForegroundColor Red
+        Write-Host "  [02_修正後] エラー: $($_.Exception.Message)" -ForegroundColor Red
         $ERROR_COUNT++
     }
 }
@@ -328,8 +331,8 @@ Write-Host "====================================================================
 Write-Host " 処理完了" -ForegroundColor Cyan
 Write-Host "========================================================================" -ForegroundColor Cyan
 Write-Host ""
-Write-Host "01_変更前 コピー数: $COPY_COUNT_BEFORE 個" -ForegroundColor Green
-Write-Host "02_変更後 コピー数: $COPY_COUNT_AFTER 個" -ForegroundColor Green
+Write-Host "01_修正前 コピー数: $COPY_COUNT_BEFORE 個" -ForegroundColor Green
+Write-Host "02_修正後 コピー数: $COPY_COUNT_AFTER 個" -ForegroundColor Green
 
 if ($ERROR_COUNT -gt 0) {
     Write-Host "エラー            : $ERROR_COUNT 個" -ForegroundColor Red
@@ -337,12 +340,46 @@ if ($ERROR_COUNT -gt 0) {
 
 Write-Host ""
 Write-Host "出力先: $OUTPUT_DIR" -ForegroundColor White
-Write-Host "  01_変更前: 比較元($BASE_BRANCH)のファイル" -ForegroundColor Gray
-Write-Host "  02_変更後: 比較先($TARGET_BRANCH)のファイル" -ForegroundColor Gray
+Write-Host "  01_修正前: 比較元($BASE_BRANCH)のファイル" -ForegroundColor Gray
+Write-Host "  02_修正後: 比較先($TARGET_BRANCH)のファイル" -ForegroundColor Gray
 Write-Host ""
 
 # 出力先フォルダを開く
 explorer $OUTPUT_DIR
+#endregion
+
+#region WinMerge比較
+Write-Host ""
+
+# WinMergeのパスを検出
+$winmergePath = $WINMERGE_PATH
+if ($winmergePath -eq "") {
+    # 自動検出（一般的なインストールパス）
+    $possiblePaths = @(
+        "${env:ProgramFiles}\WinMerge\WinMergeU.exe",
+        "${env:ProgramFiles(x86)}\WinMerge\WinMergeU.exe",
+        "${env:LOCALAPPDATA}\Programs\WinMerge\WinMergeU.exe"
+    )
+    foreach ($path in $possiblePaths) {
+        if (Test-Path $path) {
+            $winmergePath = $path
+            break
+        }
+    }
+}
+
+if ($winmergePath -ne "" -and (Test-Path $winmergePath)) {
+    $openWinMerge = Read-Host "WinMergeで比較しますか? (y/n)"
+    if ($openWinMerge -eq "y") {
+        Write-Host ""
+        Write-Host "WinMergeを起動中..." -ForegroundColor Cyan
+        # WinMergeでフォルダ比較（/r: 再帰的比較）
+        & $winmergePath "/r" $OUTPUT_DIR_BEFORE $OUTPUT_DIR_AFTER
+    }
+} else {
+    Write-Host "[情報] WinMergeが見つかりません。手動で比較してください。" -ForegroundColor Yellow
+    Write-Host "  WinMergeをインストールするか、設定セクションの WINMERGE_PATH を設定してください。" -ForegroundColor Gray
+}
 #endregion
 
 exit 0
