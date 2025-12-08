@@ -1,6 +1,6 @@
-Attribute VB_Name = "GitLogVisualizer"
 '==============================================================================
 ' Git Log 可視化ツール
+' モジュール名: GitLogVisualizer
 '==============================================================================
 ' 概要:
 '   Excelから実行し、Gitリポジトリのコミット履歴を取得して、
@@ -30,16 +30,12 @@ Private Const COMMIT_COUNT As Long = 100
 ' Gitコマンドのパス（通常は "git" でOK。パスが通っていない場合はフルパス指定）
 Private Const GIT_COMMAND As String = "git"
 
-'==============================================================================
-' デフォルトのGitリポジトリパスを取得
-'==============================================================================
-Private Function GetDefaultRepoPath() As String
-    ' C:\Users\%USERNAME%\source\Git\project
-    GetDefaultRepoPath = "C:\Users\" & Environ("USERNAME") & "\source\Git\project"
-End Function
+' デフォルトのGitリポジトリパス
+' C:\Users\%USERNAME%\source\Git\project 形式で設定
+Private Const DEFAULT_REPO_PATH_TEMPLATE As String = "C:\Users\{USER}\source\Git\project"
 
 '==============================================================================
-' データ構造
+' データ構造（※Type定義はFunction/Subより前に記述する必要があります）
 '==============================================================================
 Private Type CommitInfo
     Hash As String          ' コミットハッシュ（短縮）
@@ -55,6 +51,13 @@ Private Type CommitInfo
     Insertions As Long      ' 追加行数
     Deletions As Long       ' 削除行数
 End Type
+
+'==============================================================================
+' デフォルトのGitリポジトリパスを取得
+'==============================================================================
+Private Function GetDefaultRepoPath() As String
+    GetDefaultRepoPath = Replace(DEFAULT_REPO_PATH_TEMPLATE, "{USER}", Environ("USERNAME"))
+End Function
 
 '==============================================================================
 ' メインプロシージャ: Git Log を可視化
@@ -98,8 +101,38 @@ Public Sub VisualizeGitLog()
 
     ' Git Logを取得
     Debug.Print "コミット履歴を取得しています..."
+
+    ' コミット数を初期化
+    commitCount = 0
+
+    ' GetGitLogを呼び出し（エラー時は空配列）
+    On Error Resume Next
     commits = GetGitLog(gitRepoPath, COMMIT_COUNT)
-    commitCount = UBound(commits) - LBound(commits) + 1
+    If Err.Number <> 0 Then
+        Debug.Print "GetGitLogでエラー発生: " & Err.Description
+        Err.Clear
+        GoTo CheckCommitCount
+    End If
+
+    ' 配列の要素数をチェック
+    Dim lowerBound As Long
+    Dim upperBound As Long
+    lowerBound = LBound(commits)
+    upperBound = UBound(commits)
+
+    If Err.Number <> 0 Then
+        ' 配列が初期化されていない
+        Err.Clear
+        GoTo CheckCommitCount
+    End If
+
+    ' 最初の要素が有効かチェック
+    If Len(commits(lowerBound).Hash) > 0 Then
+        commitCount = upperBound - lowerBound + 1
+    End If
+    On Error GoTo ErrorHandler
+
+CheckCommitCount:
 
     If commitCount = 0 Then
         MsgBox "コミットが取得できませんでした。" & vbCrLf & _
@@ -189,7 +222,7 @@ End Function
 '==============================================================================
 Private Function GetGitLog(ByVal repoPath As String, ByVal maxCount As Long) As CommitInfo()
     Dim wsh As Object
-    Dim exec As Object
+    Dim fso As Object
     Dim command As String
     Dim output As String
     Dim lines() As String
@@ -197,24 +230,54 @@ Private Function GetGitLog(ByVal repoPath As String, ByVal maxCount As Long) As 
     Dim i As Long
     Dim commitIndex As Long
     Dim parts() As String
+    Dim tempFile As String
+    Dim stream As Object
 
-    ' WScript.Shell を作成
+    ' WScript.Shell と FileSystemObject を作成
     Set wsh = CreateObject("WScript.Shell")
+    Set fso = CreateObject("Scripting.FileSystemObject")
+
+    ' 一時ファイルパスを生成
+    tempFile = fso.GetSpecialFolder(2) & "\gitlog_" & fso.GetTempName & ".txt"
 
     ' Git Log コマンド（全ブランチ、カスタムフォーマット）
     ' フォーマット: ハッシュ|フルハッシュ|親ハッシュ|作者|メール|日付|件名|ref名
-    command = "cmd /c cd /d """ & repoPath & """ && " & _
+    ' UTF-8で一時ファイルに出力
+    command = "cmd /c chcp 65001 >nul && cd /d """ & repoPath & """ && " & _
               GIT_COMMAND & " log --all -n " & maxCount & _
-              " --pretty=format:""%h|%H|%P|%an|%ae|%ai|%s|%d"" --numstat"
+              " --pretty=format:""%h|%H|%P|%an|%ae|%ai|%s|%d"" --numstat > """ & tempFile & """ 2>&1"
 
-    ' コマンド実行
-    Set exec = wsh.exec(command)
+    ' コマンド実行（同期実行）
+    wsh.Run command, 0, True
 
-    ' 出力を取得
-    Do While exec.Status = 0
-        DoEvents
-    Loop
-    output = exec.StdOut.ReadAll
+    ' 一時ファイルが存在するか確認
+    If Not fso.FileExists(tempFile) Then
+        ReDim commits(0 To 0)
+        GetGitLog = commits
+        Exit Function
+    End If
+
+    ' ADODB.Streamを使用してUTF-8でファイルを読み込み
+    On Error Resume Next
+    Set stream = CreateObject("ADODB.Stream")
+    If stream Is Nothing Then
+        ' ADODB.Streamが使えない場合は通常の方法で読み込み
+        output = fso.OpenTextFile(tempFile, 1, False, -1).ReadAll
+    Else
+        stream.Type = 2 ' adTypeText
+        stream.Charset = "UTF-8"
+        stream.Open
+        stream.LoadFromFile tempFile
+        output = stream.ReadText
+        stream.Close
+        Set stream = Nothing
+    End If
+    On Error GoTo 0
+
+    ' 一時ファイルを削除
+    On Error Resume Next
+    fso.DeleteFile tempFile
+    On Error GoTo 0
 
     If Len(output) = 0 Then
         ReDim commits(0 To 0)
@@ -246,12 +309,22 @@ Private Function GetGitLog(ByVal repoPath As String, ByVal maxCount As Long) As 
                     .Hash = parts(0)
                     .FullHash = parts(1)
                     .ParentHashes = parts(2) ' 親コミットハッシュ（スペース区切り）
-                    .ParentCount = IIf(Len(Trim(parts(2))) = 0, 0, UBound(Split(Trim(parts(2)), " ")) + 1)
+                    ' 親コミット数を計算
+                    If Len(Trim(parts(2))) = 0 Then
+                        .ParentCount = 0
+                    Else
+                        .ParentCount = UBound(Split(Trim(parts(2)), " ")) + 1
+                    End If
                     .Author = parts(3)
                     .AuthorEmail = parts(4)
                     .CommitDate = ParseGitDate(parts(5))
                     .Subject = parts(6)
-                    .RefNames = If(UBound(parts) >= 7, Trim(Replace(Replace(parts(7), "(", ""), ")", "")), "")
+                    ' RefNames（parts(7)）は存在する場合のみ取得
+                    If UBound(parts) >= 7 Then
+                        .RefNames = Trim(Replace(Replace(parts(7), "(", ""), ")", ""))
+                    Else
+                        .RefNames = ""
+                    End If
                     .FilesChanged = 0
                     .Insertions = 0
                     .Deletions = 0
@@ -327,26 +400,41 @@ Private Sub ClearAllSheets()
     Dim sheetNames As Variant
     Dim sheetName As Variant
     Dim ws As Worksheet
+    Dim sheetExists As Boolean
 
     sheetNames = Array("Dashboard", "CommitHistory", "Statistics", "Charts", "BranchGraph")
 
     ' シートが存在しない場合は作成、存在する場合はクリア
     For Each sheetName In sheetNames
-        On Error Resume Next
-        Set ws = Sheets(CStr(sheetName))
+        sheetExists = False
+        Set ws = Nothing
 
-        If ws Is Nothing Then
-            ' シートを新規作成
-            Set ws = Sheets.Add(After:=Sheets(Sheets.Count))
-            ws.Name = CStr(sheetName)
-        Else
+        ' シートの存在確認
+        On Error Resume Next
+        Set ws = ThisWorkbook.Sheets(CStr(sheetName))
+        If Not ws Is Nothing Then
+            sheetExists = True
+        End If
+        Err.Clear
+        On Error GoTo 0
+
+        If sheetExists Then
             ' 既存シートをクリア
             ws.Cells.Clear
+            On Error Resume Next
             ws.Cells.Interior.ColorIndex = xlNone
+            On Error GoTo 0
+        Else
+            ' シートを新規作成
+            On Error Resume Next
+            Set ws = ThisWorkbook.Sheets.Add(After:=ThisWorkbook.Sheets(ThisWorkbook.Sheets.Count))
+            If Not ws Is Nothing Then
+                ws.Name = CStr(sheetName)
+            End If
+            On Error GoTo 0
         End If
 
         Set ws = Nothing
-        On Error GoTo 0
     Next sheetName
 End Sub
 
@@ -542,33 +630,35 @@ Private Sub CreateStatisticsSheet(ByRef commits() As CommitInfo, ByVal commitCou
         End With
 
         ' 日付でソート（キーを配列に変換してソート）
-        Dim dateKeys() As String
-        ReDim dateKeys(0 To dates.Count - 1)
-        i = 0
-        For Each dateKey In dates.Keys
-            dateKeys(i) = dateKey
-            i = i + 1
-        Next dateKey
+        If dates.Count > 0 Then
+            Dim dateKeys() As String
+            ReDim dateKeys(0 To dates.Count - 1)
+            i = 0
+            For Each dateKey In dates.Keys
+                dateKeys(i) = dateKey
+                i = i + 1
+            Next dateKey
 
-        ' 簡易ソート（バブルソート）
-        Dim j As Long
-        Dim temp As String
-        For i = 0 To UBound(dateKeys) - 1
-            For j = i + 1 To UBound(dateKeys)
-                If dateKeys(i) > dateKeys(j) Then
-                    temp = dateKeys(i)
-                    dateKeys(i) = dateKeys(j)
-                    dateKeys(j) = temp
-                End If
-            Next j
-        Next i
+            ' 簡易ソート（バブルソート）
+            Dim j As Long
+            Dim temp As String
+            For i = 0 To UBound(dateKeys) - 1
+                For j = i + 1 To UBound(dateKeys)
+                    If dateKeys(i) > dateKeys(j) Then
+                        temp = dateKeys(i)
+                        dateKeys(i) = dateKeys(j)
+                        dateKeys(j) = temp
+                    End If
+                Next j
+            Next i
 
-        row = 4
-        For i = 0 To UBound(dateKeys)
-            .Cells(row, 4).Value = dateKeys(i)
-            .Cells(row, 5).Value = dates(dateKeys(i))
-            row = row + 1
-        Next i
+            row = 4
+            For i = 0 To UBound(dateKeys)
+                .Cells(row, 4).Value = dateKeys(i)
+                .Cells(row, 5).Value = dates(dateKeys(i))
+                row = row + 1
+            Next i
+        End If
 
         ' 列幅調整
         .Columns("A:B").AutoFit
@@ -582,7 +672,7 @@ End Sub
 Private Sub CreateChartsSheet(ByRef commits() As CommitInfo, ByVal commitCount As Long)
     Dim ws As Worksheet
     Dim statsWs As Worksheet
-    Dim chartObj As ChartObject
+    Dim chartObj As Object  ' ChartObject - 遅延バインディングで参照エラー回避
 
     Set ws = Sheets("Charts")
     Set statsWs = Sheets("Statistics")
@@ -631,7 +721,7 @@ Private Sub CreateBranchGraphSheet(ByRef commits() As CommitInfo, ByVal commitCo
     Set ws = Sheets("BranchGraph")
 
     ' シートの図形をすべて削除
-    Dim shp As Shape
+    Dim shp As Object  ' Shape - 遅延バインディングで参照エラー回避
     For Each shp In ws.Shapes
         shp.Delete
     Next shp
@@ -734,7 +824,7 @@ Private Sub CreateBranchGraphSheet(ByRef commits() As CommitInfo, ByVal commitCo
                 nodeColor = RGB(0, 128, 255) ' 通常コミット=青
             End If
 
-            Dim node As Shape
+            Dim node As Object  ' Shape
             Set node = .Shapes.AddShape(msoShapeOval, x, y, nodeSize, nodeSize)
             node.Fill.ForeColor.RGB = nodeColor
             node.Line.ForeColor.RGB = RGB(0, 0, 0)
@@ -742,7 +832,7 @@ Private Sub CreateBranchGraphSheet(ByRef commits() As CommitInfo, ByVal commitCo
             node.Name = "Node_" & commits(i).Hash
 
             ' ツールチップ用にテキストボックスを追加
-            Dim tooltip As Shape
+            Dim tooltip As Object  ' Shape
             Set tooltip = .Shapes.AddTextbox(msoTextOrientationHorizontal, x + nodeSize + 5, y - 3, 300, 15)
             tooltip.TextFrame.Characters.Text = commits(i).Hash & " " & commits(i).Subject
             tooltip.TextFrame.Characters.Font.Size = 8
@@ -770,11 +860,11 @@ Private Sub CreateBranchGraphSheet(ByRef commits() As CommitInfo, ByVal commitCo
                         x2 = .Cells(startRow, startCol + commitLanes(parentIndex)).Left
 
                         ' 線を描画
-                        Dim line As Shape
-                        Set line = .Shapes.AddLine(x + nodeSize / 2, y + nodeSize / 2, x2 + nodeSize / 2, y2 + nodeSize / 2)
-                        line.Line.ForeColor.RGB = RGB(128, 128, 128)
-                        line.Line.Weight = 1.5
-                        line.ZOrder msoSendToBack ' 線を背面に
+                        Dim lineShape As Object  ' Shape（lineは予約語のため変数名変更）
+                        Set lineShape = .Shapes.AddLine(x + nodeSize / 2, y + nodeSize / 2, x2 + nodeSize / 2, y2 + nodeSize / 2)
+                        lineShape.Line.ForeColor.RGB = RGB(128, 128, 128)
+                        lineShape.Line.Weight = 1.5
+                        lineShape.ZOrder msoSendToBack ' 線を背面に
                     End If
                 Next k
             End If

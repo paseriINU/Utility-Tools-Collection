@@ -158,6 +158,16 @@ if ($LASTEXITCODE -eq 0) {
 
 # 作業ディレクトリも同じ形式で表示（Windows形式に統一）
 Write-Color "[情報] 作業ディレクトリ: $GIT_ROOT" "Green"
+
+# $GIT_ROOT から $gitRootDir への相対パス（サブディレクトリパス）を計算
+# 例: $gitRootDir = C:\repo, $GIT_ROOT = C:\repo\src → $subDirPath = src
+$subDirPath = ""
+$gitRootNormalized = $gitRootDir.TrimEnd("\")
+$workDirNormalized = "$GIT_ROOT".TrimEnd("\")
+if ($workDirNormalized.StartsWith($gitRootNormalized + "\")) {
+    $subDirPath = $workDirNormalized.Substring($gitRootNormalized.Length + 1)
+    Write-Color "[情報] 転送対象サブディレクトリ: $subDirPath" "Green"
+}
 Write-Host ""
 
 #region 環境選択
@@ -167,13 +177,18 @@ Write-Color "================================================================" "
 Write-Host ""
 
 for ($i = 0; $i -lt $ENVIRONMENTS.Count; $i++) {
-    Write-Host "$($i + 1). $($ENVIRONMENTS[$i].Name)"
+    Write-Host " $($i + 1). $($ENVIRONMENTS[$i].Name)"
 }
-
+Write-Host ""
+Write-Host " 0. キャンセル"
 Write-Host ""
 
 do {
-    $envChoice = Read-Host "番号を入力 (1-$($ENVIRONMENTS.Count))"
+    $envChoice = Read-Host "番号を入力 (0-$($ENVIRONMENTS.Count))"
+    if ($envChoice -eq "0") {
+        Write-Color "[キャンセル] 処理を中止しました" "Yellow"
+        exit 0
+    }
     $envIndex = [int]$envChoice - 1
 } while ($envIndex -lt 0 -or $envIndex -ge $ENVIRONMENTS.Count)
 
@@ -193,12 +208,18 @@ Write-Color "================================================================" "
 Write-Color "転送するファイルを選択" "Cyan"
 Write-Color "================================================================" "Cyan"
 Write-Host ""
-Write-Host "1. 変更されたファイルのみ (git status)"
-Write-Host "2. すべてのファイル"
+Write-Host " 1. 変更されたファイルのみ (git status)"
+Write-Host " 2. すべてのファイル"
+Write-Host ""
+Write-Host " 0. キャンセル"
 Write-Host ""
 
 do {
-    $modeChoice = Read-Host "番号を入力 (1-2)"
+    $modeChoice = Read-Host "番号を入力 (0-2)"
+    if ($modeChoice -eq "0") {
+        Write-Color "[キャンセル] 処理を中止しました" "Yellow"
+        exit 0
+    }
 } while ($modeChoice -notin @("1", "2"))
 
 $transferMode = if ($modeChoice -eq "1") { "changed" } else { "all" }
@@ -262,6 +283,18 @@ if ($transferMode -eq "changed") {
         # ../ で始まるパスを除外
         if ($filePath -match '^\.\./') {
             return
+        }
+
+        # サブディレクトリパスを除去（配下フォルダからの相対パスに変換）
+        # 例: $subDirPath = "src", $filePath = "src/main.c" → $filePath = "main.c"
+        if ($subDirPath -ne "") {
+            $subDirPathLinux = $subDirPath.Replace("\", "/")
+            if ($filePath.StartsWith($subDirPathLinux + "/")) {
+                $filePath = $filePath.Substring($subDirPathLinux.Length + 1)
+            } else {
+                # 配下フォルダ外のファイルは除外
+                return
+            }
         }
 
         # 拡張子フィルタ
@@ -348,16 +381,17 @@ Write-Host ""
 #region 転送確認
 Write-Color "これらのファイルを転送しますか？" "Yellow"
 Write-Host ""
-Write-Host "  1. すべて転送"
-Write-Host "  2. 個別に選択"
-Write-Host "  3. キャンセル"
+Write-Host " 1. すべて転送"
+Write-Host " 2. 個別に選択"
+Write-Host ""
+Write-Host " 0. キャンセル"
 Write-Host ""
 
 do {
-    $choice = Read-Host "番号を入力 (1-3)"
-} while ($choice -notin @("1", "2", "3"))
+    $choice = Read-Host "番号を入力 (0-2)"
+} while ($choice -notin @("0", "1", "2"))
 
-if ($choice -eq "3") {
+if ($choice -eq "0") {
     Write-Color "[キャンセル] 転送を中止しました" "Yellow"
     exit 0
 }
@@ -412,13 +446,18 @@ $failCount = 0
 $failedFiles = @()
 
 foreach ($file in $filesToTransfer) {
+    # ローカルパスは配下フォルダ（$GIT_ROOT）からの相対パスで計算
     $localPath = Join-Path $GIT_ROOT $file.Path
 
     # Windowsのパス区切り(\)をLinux形式(/)に変換
     $linuxPath = $file.Path.Replace("\", "/")
+
+    # リモートパスを計算（$file.Pathは既に配下フォルダからの相対パス）
     $remotePath = "${REMOTE_DIR}${linuxPath}"
 
     Write-Color "[転送] $($file.Path)" "Cyan"
+    Write-Host "  ローカル: $localPath"
+    Write-Host "  リモート: ${SSH_USER}@${SSH_HOST}:${remotePath}"
 
     # Linux側で親ディレクトリを作成
     $parentDir = Split-Path $linuxPath -Parent

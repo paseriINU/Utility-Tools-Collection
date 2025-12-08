@@ -77,36 +77,9 @@ if ($LASTEXITCODE -ne 0) {
 }
 #endregion
 
-#region メインメニュー
-while ($true) {
-    Clear-Host
-    Write-Host "========================================================================" -ForegroundColor Cyan
-    Write-Host "  Git ブランチ削除ツール - メインメニュー" -ForegroundColor Cyan
-    Write-Host "========================================================================" -ForegroundColor Cyan
-    Write-Host ""
-    Write-Host " 1. リモートブランチを削除"
-    Write-Host " 2. ローカルブランチを削除"
-    Write-Host " 3. リモート＆ローカル両方を削除"
-    Write-Host " 4. 終了"
-    Write-Host ""
-    $choice = Read-Host "選択してください (1-4)"
-
-    switch ($choice) {
-        "1" { Delete-RemoteBranch }
-        "2" { Delete-LocalBranch }
-        "3" { Delete-BothBranches }
-        "4" { exit 0 }
-        default {
-            Write-Host "無効な選択です" -ForegroundColor Red
-            Start-Sleep -Seconds 1
-        }
-    }
-}
-#endregion
-
 #region 関数: リモートブランチ削除
 function Delete-RemoteBranch {
-    Clear-Host
+    Write-Host ""
     Write-Host "========================================================================" -ForegroundColor Cyan
     Write-Host "  リモートブランチ削除" -ForegroundColor Cyan
     Write-Host "========================================================================" -ForegroundColor Cyan
@@ -126,7 +99,7 @@ function Delete-RemoteBranch {
     Write-Host ""
 
     # リモートブランチ一覧取得（HEAD除外）
-    $remoteBranches = git branch -r | Where-Object { $_ -notlike "*HEAD*" } | ForEach-Object { $_.Trim() }
+    $remoteBranches = @(git branch -r | Where-Object { $_ -notlike "*HEAD*" } | ForEach-Object { $_.Trim() })
 
     if ($remoteBranches.Count -eq 0) {
         Write-Host "リモートブランチが見つかりません" -ForegroundColor Yellow
@@ -144,7 +117,7 @@ function Delete-RemoteBranch {
     Write-Host ""
 
     $maxNum = $remoteBranches.Count
-    $selection = Read-Host "削除するブランチ番号を入力 (1-$maxNum, 0=キャンセル)"
+    $selection = Read-Host "削除するブランチ番号を入力 (0-$maxNum)"
 
     if ($selection -eq "0") { return }
 
@@ -189,7 +162,7 @@ function Delete-RemoteBranch {
 
 #region 関数: ローカルブランチ削除
 function Delete-LocalBranch {
-    Clear-Host
+    Write-Host ""
     Write-Host "========================================================================" -ForegroundColor Cyan
     Write-Host "  ローカルブランチ削除" -ForegroundColor Cyan
     Write-Host "========================================================================" -ForegroundColor Cyan
@@ -203,27 +176,34 @@ function Delete-LocalBranch {
     Write-Host "ローカルブランチ一覧:" -ForegroundColor Yellow
     Write-Host ""
 
-    # ローカルブランチ一覧取得（現在のブランチ除外）
-    $localBranches = git branch --format="%(refname:short)" | Where-Object { $_ -ne $currentBranch }
+    # ローカルブランチ一覧取得（現在のブランチも含む、保護ブランチは除外）
+    $localBranches = @(git branch --format="%(refname:short)" | Where-Object {
+        $ProtectedBranches -notcontains $_
+    })
 
     if ($localBranches.Count -eq 0) {
         Write-Host "削除可能なローカルブランチがありません" -ForegroundColor Yellow
-        Write-Host "（現在のブランチ以外のブランチがありません）" -ForegroundColor Yellow
         Read-Host "Enterキーで戻る"
         return
     }
 
-    # ブランチを番号付きで表示
+    # ブランチを番号付きで表示（現在のブランチには印を付ける）
     for ($i = 0; $i -lt $localBranches.Count; $i++) {
         $displayNum = $i + 1
-        Write-Host " $displayNum. $($localBranches[$i])"
+        $branchName = $localBranches[$i]
+        if ($branchName -eq $currentBranch) {
+            Write-Host " $displayNum. $branchName " -NoNewline
+            Write-Host "[現在のブランチ]" -ForegroundColor Yellow
+        } else {
+            Write-Host " $displayNum. $branchName"
+        }
     }
     Write-Host ""
     Write-Host " 0. キャンセル"
     Write-Host ""
 
     $maxNum = $localBranches.Count
-    $selection = Read-Host "削除するブランチ番号を入力 (1-$maxNum, 0=キャンセル)"
+    $selection = Read-Host "削除するブランチ番号を入力 (0-$maxNum)"
 
     if ($selection -eq "0") { return }
 
@@ -243,12 +223,67 @@ function Delete-LocalBranch {
             return
         }
 
+        # 現在のブランチを削除しようとしている場合、切り替え処理
+        if ($selectedBranch -eq $currentBranch) {
+            Write-Host "[注意] 現在のブランチを削除するには、別のブランチに切り替える必要があります" -ForegroundColor Yellow
+            Write-Host ""
+
+            # 切り替え可能なブランチを取得（削除対象以外）
+            $switchableBranches = @(git branch --format="%(refname:short)" | Where-Object {
+                $_ -ne $selectedBranch
+            })
+
+            if ($switchableBranches.Count -eq 0) {
+                Write-Host "[エラー] 切り替え可能なブランチがありません" -ForegroundColor Red
+                Read-Host "Enterキーで戻る"
+                return
+            }
+
+            Write-Host "切り替え先のブランチを選択してください:" -ForegroundColor Cyan
+            Write-Host ""
+            for ($i = 0; $i -lt $switchableBranches.Count; $i++) {
+                $displayNum = $i + 1
+                Write-Host " $displayNum. $($switchableBranches[$i])"
+            }
+            Write-Host ""
+            Write-Host " 0. キャンセル"
+            Write-Host ""
+
+            $switchMaxNum = $switchableBranches.Count
+            $switchSelection = Read-Host "切り替え先番号を入力 (0-$switchMaxNum)"
+
+            if ($switchSelection -eq "0") { return }
+
+            if ($switchSelection -match '^\d+$' -and [int]$switchSelection -ge 1 -and [int]$switchSelection -le $switchMaxNum) {
+                $switchToBranch = $switchableBranches[[int]$switchSelection - 1]
+
+                Write-Host ""
+                Write-Host "ブランチを切り替え中: $currentBranch -> $switchToBranch" -ForegroundColor Yellow
+                git checkout $switchToBranch
+
+                if ($LASTEXITCODE -ne 0) {
+                    Write-Host ""
+                    Write-Host "[エラー] ブランチの切り替えに失敗しました" -ForegroundColor Red
+                    Read-Host "Enterキーで戻る"
+                    return
+                }
+
+                Write-Host "ブランチを切り替えました: $switchToBranch" -ForegroundColor Green
+                Write-Host ""
+            } else {
+                Write-Host "無効な番号です" -ForegroundColor Red
+                Read-Host "Enterキーで戻る"
+                return
+            }
+        }
+
         Write-Host "このブランチの削除方法を選択してください:" -ForegroundColor Cyan
         Write-Host " 1. 通常の削除 (マージ済みブランチのみ)"
         Write-Host " 2. 強制削除 (マージされていなくても削除)"
+        Write-Host ""
         Write-Host " 0. キャンセル"
         Write-Host ""
-        $deleteMode = Read-Host "選択 (1-2, 0=キャンセル)"
+        $deleteMode = Read-Host "選択 (0-2)"
 
         if ($deleteMode -eq "0") { return }
 
@@ -303,7 +338,7 @@ function Delete-LocalBranch {
 
 #region 関数: リモート＆ローカル両方削除
 function Delete-BothBranches {
-    Clear-Host
+    Write-Host ""
     Write-Host "========================================================================" -ForegroundColor Cyan
     Write-Host "  リモート＆ローカルブランチ両方削除" -ForegroundColor Cyan
     Write-Host "========================================================================" -ForegroundColor Cyan
@@ -326,18 +361,18 @@ function Delete-BothBranches {
     Write-Host "共通するブランチを検索中..." -ForegroundColor Yellow
     Write-Host ""
 
-    # ローカルブランチ一覧
-    $localBranches = git branch --format="%(refname:short)" | Where-Object {
-        $_ -ne $currentBranch -and $ProtectedBranches -notcontains $_
-    }
+    # ローカルブランチ一覧（現在のブランチも含む、保護ブランチは除外）
+    $localBranches = @(git branch --format="%(refname:short)" | Where-Object {
+        $ProtectedBranches -notcontains $_
+    })
 
     # リモートブランチ一覧
-    $remoteBranches = git branch -r | Where-Object { $_ -notlike "*HEAD*" } | ForEach-Object {
+    $remoteBranches = @(git branch -r | Where-Object { $_ -notlike "*HEAD*" } | ForEach-Object {
         ($_ -replace "$remoteName/", "").Trim()
-    }
+    })
 
     # 共通ブランチを検索
-    $commonBranches = $localBranches | Where-Object { $remoteBranches -contains $_ }
+    $commonBranches = @($localBranches | Where-Object { $remoteBranches -contains $_ })
 
     if ($commonBranches.Count -eq 0) {
         Write-Host "削除可能な共通ブランチがありません" -ForegroundColor Yellow
@@ -345,17 +380,23 @@ function Delete-BothBranches {
         return
     }
 
-    # ブランチを番号付きで表示
+    # ブランチを番号付きで表示（現在のブランチには印を付ける）
     for ($i = 0; $i -lt $commonBranches.Count; $i++) {
         $displayNum = $i + 1
-        Write-Host " $displayNum. $($commonBranches[$i]) (ローカル＆リモート)"
+        $branchName = $commonBranches[$i]
+        if ($branchName -eq $currentBranch) {
+            Write-Host " $displayNum. $branchName (ローカル＆リモート) " -NoNewline
+            Write-Host "[現在のブランチ]" -ForegroundColor Yellow
+        } else {
+            Write-Host " $displayNum. $branchName (ローカル＆リモート)"
+        }
     }
     Write-Host ""
     Write-Host " 0. キャンセル"
     Write-Host ""
 
     $maxNum = $commonBranches.Count
-    $selection = Read-Host "削除するブランチ番号を入力 (1-$maxNum, 0=キャンセル)"
+    $selection = Read-Host "削除するブランチ番号を入力 (0-$maxNum)"
 
     if ($selection -eq "0") { return }
 
@@ -370,48 +411,132 @@ function Delete-BothBranches {
         Write-Host " ローカル: $selectedBranch"
         Write-Host ""
 
+        # 現在のブランチを削除しようとしている場合、切り替え処理
+        if ($selectedBranch -eq $currentBranch) {
+            Write-Host "[注意] 現在のブランチを削除するには、別のブランチに切り替える必要があります" -ForegroundColor Yellow
+            Write-Host ""
+
+            # 切り替え可能なブランチを取得（削除対象以外）
+            $switchableBranches = @(git branch --format="%(refname:short)" | Where-Object {
+                $_ -ne $selectedBranch
+            })
+
+            if ($switchableBranches.Count -eq 0) {
+                Write-Host "[エラー] 切り替え可能なブランチがありません" -ForegroundColor Red
+                Read-Host "Enterキーで戻る"
+                return
+            }
+
+            Write-Host "切り替え先のブランチを選択してください:" -ForegroundColor Cyan
+            Write-Host ""
+            for ($i = 0; $i -lt $switchableBranches.Count; $i++) {
+                $displayNum = $i + 1
+                Write-Host " $displayNum. $($switchableBranches[$i])"
+            }
+            Write-Host ""
+            Write-Host " 0. キャンセル"
+            Write-Host ""
+
+            $switchMaxNum = $switchableBranches.Count
+            $switchSelection = Read-Host "切り替え先番号を入力 (0-$switchMaxNum)"
+
+            if ($switchSelection -eq "0") { return }
+
+            if ($switchSelection -match '^\d+$' -and [int]$switchSelection -ge 1 -and [int]$switchSelection -le $switchMaxNum) {
+                $switchToBranch = $switchableBranches[[int]$switchSelection - 1]
+
+                Write-Host ""
+                Write-Host "ブランチを切り替え中: $currentBranch -> $switchToBranch" -ForegroundColor Yellow
+                git checkout $switchToBranch
+
+                if ($LASTEXITCODE -ne 0) {
+                    Write-Host ""
+                    Write-Host "[エラー] ブランチの切り替えに失敗しました" -ForegroundColor Red
+                    Read-Host "Enterキーで戻る"
+                    return
+                }
+
+                Write-Host "ブランチを切り替えました: $switchToBranch" -ForegroundColor Green
+                Write-Host ""
+            } else {
+                Write-Host "無効な番号です" -ForegroundColor Red
+                Read-Host "Enterキーで戻る"
+                return
+            }
+        }
+
         Write-Host "このブランチの削除方法を選択してください:" -ForegroundColor Cyan
         Write-Host " 1. 通常の削除 (ローカルはマージ済みのみ)"
         Write-Host " 2. 強制削除 (ローカルはマージされていなくても削除)"
+        Write-Host ""
         Write-Host " 0. キャンセル"
         Write-Host ""
-        $deleteMode = Read-Host "選択 (1-2, 0=キャンセル)"
+        $deleteMode = Read-Host "選択 (0-2)"
 
         if ($deleteMode -eq "0") { return }
 
         $forceLocal = ($deleteMode -eq "2")
 
-        $confirm = Read-Host "リモート＆ローカルブランチを削除しますか? (y/n)"
+        $confirm = Read-Host "ローカル＆リモートブランチを削除しますか? (y/n)"
         if ($confirm -eq "y") {
             Write-Host ""
-            Write-Host "リモートブランチを削除中..." -ForegroundColor Yellow
-            git push $remoteName --delete $selectedBranch
+            Write-Host "ローカルブランチを削除中..." -ForegroundColor Yellow
+            if ($forceLocal) {
+                git branch -D $selectedBranch
+            } else {
+                git branch -d $selectedBranch
+            }
 
             if ($LASTEXITCODE -eq 0) {
-                Write-Host "ローカルブランチを削除中..." -ForegroundColor Yellow
-                if ($forceLocal) {
-                    git branch -D $selectedBranch
-                } else {
-                    git branch -d $selectedBranch
-                }
+                Write-Host "リモートブランチを削除中..." -ForegroundColor Yellow
+                git push $remoteName --delete $selectedBranch
 
                 if ($LASTEXITCODE -eq 0) {
                     Write-Host ""
-                    Write-Host "リモート＆ローカルブランチを削除しました: $selectedBranch" -ForegroundColor Green
+                    Write-Host "ローカル＆リモートブランチを削除しました: $selectedBranch" -ForegroundColor Green
                 } else {
                     Write-Host ""
-                    Write-Host "[エラー] ローカルブランチの削除に失敗しました" -ForegroundColor Red
-                    Write-Host "リモートブランチは削除されましたが、ローカルブランチはマージされていない可能性があります" -ForegroundColor Yellow
+                    Write-Host "[エラー] リモートブランチの削除に失敗しました" -ForegroundColor Red
+                    Write-Host "ローカルブランチは削除されましたが、リモートブランチの削除に失敗しました" -ForegroundColor Yellow
                 }
             } else {
                 Write-Host ""
-                Write-Host "[エラー] リモートブランチの削除に失敗しました" -ForegroundColor Red
+                Write-Host "[エラー] ローカルブランチの削除に失敗しました" -ForegroundColor Red
+                Write-Host "このブランチはマージされていない可能性があります" -ForegroundColor Yellow
             }
             Read-Host "Enterキーで戻る"
         }
     } else {
         Write-Host "無効な番号です" -ForegroundColor Red
         Read-Host "Enterキーで戻る"
+    }
+}
+#endregion
+
+#region メインメニュー
+while ($true) {
+    Write-Host ""
+    Write-Host "========================================================================" -ForegroundColor Cyan
+    Write-Host "  Git ブランチ削除ツール - メインメニュー" -ForegroundColor Cyan
+    Write-Host "========================================================================" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host " 1. リモートブランチを削除"
+    Write-Host " 2. ローカルブランチを削除"
+    Write-Host " 3. リモート＆ローカル両方を削除"
+    Write-Host ""
+    Write-Host " 0. 終了"
+    Write-Host ""
+    $choice = Read-Host "選択 (0-3)"
+
+    switch ($choice) {
+        "0" { exit 0 }
+        "1" { Delete-RemoteBranch }
+        "2" { Delete-LocalBranch }
+        "3" { Delete-BothBranches }
+        default {
+            Write-Host "無効な選択です" -ForegroundColor Red
+            Start-Sleep -Seconds 1
+        }
     }
 }
 #endregion

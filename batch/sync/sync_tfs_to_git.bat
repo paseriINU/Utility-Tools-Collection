@@ -106,18 +106,23 @@ git branch
 Write-Host ""
 
 # ブランチ操作メニュー
-while ($true) {
+:branchLoop while ($true) {
     Write-Host "ブランチ操作を選択してください:" -ForegroundColor Cyan
     Write-Host " 1. このまま続行"
     Write-Host " 2. ブランチを切り替える"
-    Write-Host " 3. 終了"
     Write-Host ""
-    $branchChoice = Read-Host "選択 (1-3)"
+    Write-Host " 0. 終了"
+    Write-Host ""
+    $branchChoice = Read-Host "選択 (0-2)"
 
     switch ($branchChoice) {
+        "0" {
+            # 終了
+            exit 0
+        }
         "1" {
             # 同期処理へ
-            break
+            break branchLoop
         }
         "2" {
             Write-Host ""
@@ -163,9 +168,6 @@ while ($true) {
                 Write-Host ""
             }
         }
-        "3" {
-            exit 0
-        }
         default {
             Write-Host "無効な選択です。" -ForegroundColor Red
         }
@@ -176,11 +178,11 @@ while ($true) {
 #region 同期処理
 Write-Host ""
 Write-Host "========================================================================" -ForegroundColor Cyan
-Write-Host " 同期処理を開始します" -ForegroundColor Cyan
+Write-Host " 差分チェックを開始します" -ForegroundColor Cyan
 Write-Host "========================================================================" -ForegroundColor Cyan
 Write-Host ""
 
-Write-Host "差分チェック中..." -ForegroundColor Cyan
+Write-Host "ファイルをスキャン中..." -ForegroundColor Cyan
 Write-Host ""
 
 # TFSとGitのファイル一覧を取得
@@ -205,13 +207,11 @@ foreach ($file in $gitFiles) {
     $gitFileDict[$relativePath] = $file
 }
 
-# 統計カウンタ
-$copiedCount = 0
-$deletedCount = 0
+# 差分を格納する配列
+$newFiles = @()      # TFSにあってGitにない（新規追加）
+$updateFiles = @()   # 両方にあるが内容が異なる（更新）
+$deleteFiles = @()   # GitにあってTFSにない（削除対象）
 $identicalCount = 0
-
-Write-Host "=== ファイル差分チェック ===" -ForegroundColor Yellow
-Write-Host ""
 
 # TFSファイルをチェック（更新 & 新規追加）
 foreach ($relativePath in $tfsFileDict.Keys) {
@@ -225,17 +225,12 @@ foreach ($relativePath in $tfsFileDict.Keys) {
             $gitHash = (Get-FileHash -Path $gitFilePath -Algorithm MD5).Hash
 
             if ($tfsHash -ne $gitHash) {
-                # ハッシュが異なる → 更新
-                Write-Host "[更新] " -ForegroundColor Yellow -NoNewline
-                Write-Host $relativePath
-
-                $targetDir = Split-Path -Path $gitFilePath -Parent
-                if (-not (Test-Path $targetDir)) {
-                    New-Item -ItemType Directory -Path $targetDir -Force | Out-Null
+                # ハッシュが異なる → 更新対象
+                $updateFiles += [PSCustomObject]@{
+                    RelativePath = $relativePath
+                    TfsFile = $tfsFile
+                    GitFilePath = $gitFilePath
                 }
-
-                Copy-Item -Path $tfsFile.FullName -Destination $gitFilePath -Force
-                $copiedCount++
             } else {
                 # ハッシュが同じ → 変更なし
                 $identicalCount++
@@ -244,37 +239,144 @@ foreach ($relativePath in $tfsFileDict.Keys) {
             Write-Warning "ファイルハッシュ取得エラー: $relativePath - $_"
         }
     } else {
-        # Gitに存在しない → 新規追加
-        Write-Host "[新規] " -ForegroundColor Green -NoNewline
-        Write-Host $relativePath
-
-        $targetDir = Split-Path -Path $gitFilePath -Parent
-        if (-not (Test-Path $targetDir)) {
-            New-Item -ItemType Directory -Path $targetDir -Force | Out-Null
+        # Gitに存在しない → 新規追加対象
+        $newFiles += [PSCustomObject]@{
+            RelativePath = $relativePath
+            TfsFile = $tfsFile
+            GitFilePath = $gitFilePath
         }
-
-        Copy-Item -Path $tfsFile.FullName -Destination $gitFilePath -Force
-        $copiedCount++
     }
 }
 
-Write-Host ""
-Write-Host "=== Gitのみに存在するファイル (削除対象) ===" -ForegroundColor Yellow
-Write-Host ""
-
-# Gitのみのファイルをチェック（削除）
+# Gitのみのファイルをチェック（削除対象）
 foreach ($relativePath in $gitFileDict.Keys) {
     if (-not $tfsFileDict.ContainsKey($relativePath)) {
         $gitFile = $gitFileDict[$relativePath]
-        Write-Host "[削除] " -ForegroundColor Red -NoNewline
-        Write-Host $relativePath
-
-        try {
-            Remove-Item -Path $gitFile.FullName -Force
-            $deletedCount++
-        } catch {
-            Write-Warning "ファイル削除エラー: $relativePath - $_"
+        $deleteFiles += [PSCustomObject]@{
+            RelativePath = $relativePath
+            GitFile = $gitFile
         }
+    }
+}
+
+# 差分サマリー表示
+Write-Host "========================================================================" -ForegroundColor Yellow
+Write-Host " 差分サマリー" -ForegroundColor Yellow
+Write-Host "========================================================================" -ForegroundColor Yellow
+Write-Host ""
+Write-Host "新規ファイル (TFS → Git): " -NoNewline -ForegroundColor Green
+Write-Host "$($newFiles.Count) 件"
+Write-Host "更新ファイル (TFS → Git): " -NoNewline -ForegroundColor Yellow
+Write-Host "$($updateFiles.Count) 件"
+Write-Host "削除対象 (Gitのみ):       " -NoNewline -ForegroundColor Red
+Write-Host "$($deleteFiles.Count) 件"
+Write-Host "変更なし:                 " -NoNewline -ForegroundColor Gray
+Write-Host "$identicalCount 件"
+Write-Host ""
+
+# 差分がない場合は終了
+if ($newFiles.Count -eq 0 -and $updateFiles.Count -eq 0 -and $deleteFiles.Count -eq 0) {
+    Write-Host "差分はありません。ファイルは同期されています。" -ForegroundColor Green
+    Write-Host ""
+    exit 0
+}
+
+# 差分詳細を表示
+Write-Host "------------------------------------------------------------------------" -ForegroundColor Yellow
+Write-Host " 差分詳細" -ForegroundColor Yellow
+Write-Host "------------------------------------------------------------------------" -ForegroundColor Yellow
+Write-Host ""
+
+if ($newFiles.Count -gt 0) {
+    Write-Host "=== 新規ファイル (TFSからGitへコピー) ===" -ForegroundColor Green
+    foreach ($file in $newFiles) {
+        Write-Host "  [新規] $($file.RelativePath)" -ForegroundColor Green
+    }
+    Write-Host ""
+}
+
+if ($updateFiles.Count -gt 0) {
+    Write-Host "=== 更新ファイル (TFSの内容でGitを上書き) ===" -ForegroundColor Yellow
+    foreach ($file in $updateFiles) {
+        Write-Host "  [更新] $($file.RelativePath)" -ForegroundColor Yellow
+    }
+    Write-Host ""
+}
+
+if ($deleteFiles.Count -gt 0) {
+    Write-Host "=== 削除対象ファイル (Gitから削除) ===" -ForegroundColor Red
+    foreach ($file in $deleteFiles) {
+        Write-Host "  [削除] $($file.RelativePath)" -ForegroundColor Red
+    }
+    Write-Host ""
+}
+
+# マージ確認
+Write-Host "------------------------------------------------------------------------" -ForegroundColor Cyan
+Write-Host " 上記の変更をGitに反映しますか？" -ForegroundColor Cyan
+Write-Host " ※ TFSの内容でGitを同期します（TFS → Git）" -ForegroundColor White
+Write-Host "------------------------------------------------------------------------" -ForegroundColor Cyan
+Write-Host ""
+Write-Host " 1. はい、同期を実行する"
+Write-Host " 2. いいえ、キャンセルする"
+Write-Host ""
+$syncChoice = Read-Host "選択 (1-2)"
+
+if ($syncChoice -ne "1") {
+    Write-Host ""
+    Write-Host "同期をキャンセルしました。" -ForegroundColor Yellow
+    exit 0
+}
+
+# 同期実行
+Write-Host ""
+Write-Host "========================================================================" -ForegroundColor Cyan
+Write-Host " 同期を実行中..." -ForegroundColor Cyan
+Write-Host "========================================================================" -ForegroundColor Cyan
+Write-Host ""
+
+# 統計カウンタ
+$copiedCount = 0
+$deletedCount = 0
+
+# 新規ファイルをコピー
+foreach ($file in $newFiles) {
+    try {
+        $targetDir = Split-Path -Path $file.GitFilePath -Parent
+        if (-not (Test-Path $targetDir)) {
+            New-Item -ItemType Directory -Path $targetDir -Force | Out-Null
+        }
+        Copy-Item -Path $file.TfsFile.FullName -Destination $file.GitFilePath -Force
+        Write-Host "[コピー完了] $($file.RelativePath)" -ForegroundColor Green
+        $copiedCount++
+    } catch {
+        Write-Warning "コピーエラー: $($file.RelativePath) - $_"
+    }
+}
+
+# 更新ファイルをコピー
+foreach ($file in $updateFiles) {
+    try {
+        $targetDir = Split-Path -Path $file.GitFilePath -Parent
+        if (-not (Test-Path $targetDir)) {
+            New-Item -ItemType Directory -Path $targetDir -Force | Out-Null
+        }
+        Copy-Item -Path $file.TfsFile.FullName -Destination $file.GitFilePath -Force
+        Write-Host "[更新完了] $($file.RelativePath)" -ForegroundColor Yellow
+        $copiedCount++
+    } catch {
+        Write-Warning "更新エラー: $($file.RelativePath) - $_"
+    }
+}
+
+# 削除ファイルを削除
+foreach ($file in $deleteFiles) {
+    try {
+        Remove-Item -Path $file.GitFile.FullName -Force
+        Write-Host "[削除完了] $($file.RelativePath)" -ForegroundColor Red
+        $deletedCount++
+    } catch {
+        Write-Warning "削除エラー: $($file.RelativePath) - $_"
     }
 }
 
@@ -283,9 +385,8 @@ Write-Host "====================================================================
 Write-Host " 同期完了" -ForegroundColor Cyan
 Write-Host "========================================================================" -ForegroundColor Cyan
 Write-Host ""
-Write-Host "更新/新規ファイル: $copiedCount" -ForegroundColor Green
+Write-Host "コピー/更新ファイル: $copiedCount" -ForegroundColor Green
 Write-Host "削除ファイル: $deletedCount" -ForegroundColor Red
-Write-Host "変更なし: $identicalCount" -ForegroundColor Gray
 Write-Host ""
 #endregion
 
@@ -299,9 +400,16 @@ Write-Host ""
 Write-Host "------------------------------------------------------------------------" -ForegroundColor Yellow
 Write-Host "次の操作を選択してください:" -ForegroundColor Cyan
 Write-Host " 1. 変更をコミットする"
-Write-Host " 2. 何もせず終了"
+Write-Host ""
+Write-Host " 0. 何もせず終了"
 Write-Host "------------------------------------------------------------------------" -ForegroundColor Yellow
-$commitChoice = Read-Host "選択 (1-2)"
+$commitChoice = Read-Host "選択 (0-1)"
+
+if ($commitChoice -eq "0") {
+    Write-Host ""
+    Write-Host "処理を終了します。" -ForegroundColor Yellow
+    exit 0
+}
 
 if ($commitChoice -eq "1") {
     Write-Host ""

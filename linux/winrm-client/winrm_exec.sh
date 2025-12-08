@@ -58,12 +58,18 @@ ENV_ARG="$1"
 
 # ==================== 設定セクション ====================
 # ここを編集して使用してください
+# 注意: バックスラッシュ(\)を含む値はシングルクォートで囲むこと
+#       例: _DEFAULT_USER='DOMAIN\username'
 
 # Windows接続情報
-WINRM_HOST="${WINRM_HOST:-192.168.1.100}"        # Windows ServerのIPアドレスまたはホスト名
-WINRM_PORT="${WINRM_PORT:-5985}"                 # WinRMポート（HTTP: 5985, HTTPS: 5986）
-WINRM_USER="${WINRM_USER:-Administrator}"        # Windowsユーザー名
-WINRM_PASS="${WINRM_PASS:-YourPassword}"         # Windowsパスワード
+# ドメインユーザーの場合: 'DOMAIN\username' または 'username@domain.local'
+_DEFAULT_HOST='192.168.1.100'
+_DEFAULT_USER='Administrator'
+_DEFAULT_PASS='YourPassword'
+WINRM_HOST="${WINRM_HOST:-$_DEFAULT_HOST}"        # Windows ServerのIPアドレスまたはホスト名
+WINRM_PORT="${WINRM_PORT:-5986}"                  # WinRMポート（HTTP: 5985, HTTPS: 5986）
+WINRM_USER="${WINRM_USER:-$_DEFAULT_USER}"        # Windowsユーザー名
+WINRM_PASS="${WINRM_PASS:-$_DEFAULT_PASS}"        # Windowsパスワード
 
 # 環境フォルダ名のリスト（実行時に選択可能）
 # 新しい環境を追加する場合は、この配列に追加してください
@@ -72,13 +78,25 @@ ENV_FOLDER="${ENV_FOLDER:-}"                     # デフォルト環境なし�
 
 # 実行するバッチファイル（Windows側のパス）
 # {ENV} は選択した環境フォルダ名に置換されます
-BATCH_FILE_PATH="${BATCH_FILE_PATH:-C:\\Scripts\\{ENV}\\test.bat}"
+# 同じパス内で複数回使用可能:
+#   例: C:\Scripts\{ENV}\{ENV}_deploy.bat → C:\Scripts\TST1T\TST1T_deploy.bat
+# 注意: シングルクォートで囲むこと（ダブルクォートだと{ENV}がBashで展開される）
+_DEFAULT_BATCH_PATH='C:\Scripts\{ENV}\test.bat'
+BATCH_FILE_PATH="${BATCH_FILE_PATH:-$_DEFAULT_BATCH_PATH}"
 
-# または直接コマンドを指定
-DIRECT_COMMAND="${DIRECT_COMMAND:-}"  # 例: "echo Hello from WinRM"
+# または直接コマンドを指定（シングルクォートで{ENV}を含める）
+_DEFAULT_DIRECT_CMD=''
+DIRECT_COMMAND="${DIRECT_COMMAND:-$_DEFAULT_DIRECT_CMD}"  # 例: 'echo {ENV} environment'
 
-# HTTPS接続を使用する場合は"true"に設定
-USE_HTTPS="${USE_HTTPS:-false}"
+# HTTPS接続を使用（デフォルト: true）
+# AllowUnencrypted=falseの環境ではHTTPSが必須
+USE_HTTPS="${USE_HTTPS:-true}"
+
+# 認証方式（"negotiate", "ntlm", または "basic"）
+# negotiate: Windows標準のSPNEGO認証（NTLM/Kerberos自動選択、推奨）
+# ntlm: NTLM認証を強制
+# basic: シンプルだがWindows側でBasic認証を有効にする必要あり
+AUTH_METHOD="${AUTH_METHOD:-negotiate}"
 
 # 証明書検証を無効にする場合は"true"（自己署名証明書の場合）
 DISABLE_CERT_VALIDATION="${DISABLE_CERT_VALIDATION:-true}"
@@ -98,21 +116,21 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# ログ関数
+# ログ関数（stderrに出力して関数の戻り値キャプチャに影響しないようにする）
 log_info() {
-    echo -e "${BLUE}[INFO]${NC} $1"
+    printf "${BLUE}[INFO]${NC} %s\n" "$1" >&2
 }
 
 log_success() {
-    echo -e "${GREEN}[SUCCESS]${NC} $1"
+    printf "${GREEN}[SUCCESS]${NC} %s\n" "$1" >&2
 }
 
 log_warn() {
-    echo -e "${YELLOW}[WARN]${NC} $1"
+    printf "${YELLOW}[WARN]${NC} %s\n" "$1" >&2
 }
 
 log_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
+    printf "${RED}[ERROR]${NC} %s\n" "$1" >&2
 }
 
 
@@ -159,18 +177,37 @@ send_soap_request() {
 
     if [ "$DEBUG" = "true" ]; then
         log_info "送信XML:"
-        echo "$soap_envelope"
-        echo ""
+        echo "$soap_envelope" >&2
+        echo "" >&2
+        log_info "接続先: $endpoint"
+        log_info "ユーザー: $WINRM_USER"
+        log_info "認証方式: $AUTH_METHOD"
     fi
 
     # curl オプションの構築
-    local curl_opts=(-s -S --max-time "$TIMEOUT")
+    local curl_opts=(--max-time "$TIMEOUT")
+
+    # DEBUGモードでは詳細出力
+    if [ "$DEBUG" = "true" ]; then
+        curl_opts+=(-v)  # 詳細出力（stderrへ）
+    else
+        curl_opts+=(-s -S)  # サイレントモード
+    fi
 
     if [ "$DISABLE_CERT_VALIDATION" = "true" ]; then
         curl_opts+=(-k)  # 証明書検証を無効化
     fi
 
-    # Basic認証
+    # 認証方式の設定
+    case "$AUTH_METHOD" in
+        negotiate)
+            curl_opts+=(--negotiate)  # SPNEGO認証（NTLM/Kerberos自動選択）
+            ;;
+        ntlm)
+            curl_opts+=(--ntlm)  # NTLM認証を強制
+            ;;
+        # basic: 追加オプションなし
+    esac
     curl_opts+=(--user "${WINRM_USER}:${WINRM_PASS}")
 
     # HTTPヘッダー
@@ -179,10 +216,27 @@ send_soap_request() {
     # データ送信
     curl_opts+=(--data-binary "$soap_envelope")
 
-    # リクエスト送信
+    # HTTPステータスコードも取得
+    curl_opts+=(-w "\n%{http_code}")
+
+    # リクエスト送信（stderrは画面に表示、stdoutをキャプチャ）
     local response
-    response=$(curl "${curl_opts[@]}" "$endpoint" 2>&1)
+    local http_code
+    if [ "$DEBUG" = "true" ]; then
+        # DEBUGモード: curlの詳細出力をstderrに表示
+        response=$(curl "${curl_opts[@]}" "$endpoint" 2>&2)
+    else
+        response=$(curl "${curl_opts[@]}" "$endpoint" 2>&1)
+    fi
     local exit_code=$?
+
+    # HTTPステータスコードを抽出（最後の行）
+    http_code=$(echo "$response" | tail -1)
+    response=$(echo "$response" | sed '$d')  # 最後の行を削除
+
+    if [ "$DEBUG" = "true" ]; then
+        log_info "HTTPステータスコード: $http_code"
+    fi
 
     if [ $exit_code -ne 0 ]; then
         log_error "curlコマンドが失敗しました (終了コード: $exit_code)"
@@ -212,23 +266,48 @@ send_soap_request() {
         return 1
     fi
 
-    # HTTPエラーレスポンスのチェック
-    if echo "$response" | grep -q "HTTP/1.1 401"; then
-        log_error "認証に失敗しました"
-        log_error "ユーザー名とパスワードを確認してください"
-        return 1
-    fi
-
-    if echo "$response" | grep -q "HTTP/1.1 500"; then
-        log_error "サーバー内部エラーが発生しました"
-        log_error "WinRM設定またはコマンド内容を確認してください"
-        return 1
-    fi
+    # HTTPステータスコードのチェック
+    case "$http_code" in
+        200)
+            # 成功
+            ;;
+        401)
+            log_error "認証に失敗しました (HTTP 401)"
+            log_error "ユーザー名とパスワードを確認してください"
+            case "$AUTH_METHOD" in
+                basic)
+                    log_error "Windows側でBasic認証が有効か確認: winrm get winrm/config/service/auth"
+                    ;;
+                negotiate|ntlm)
+                    log_error "Negotiate/NTLM認証を使用中"
+                    log_error "ドメインユーザーの場合は 'DOMAIN\\username' 形式で指定してください"
+                    log_error "Windows側でNegotiate認証が有効か確認: winrm get winrm/config/service/auth"
+                    ;;
+            esac
+            return 1
+            ;;
+        500)
+            log_error "サーバー内部エラーが発生しました (HTTP 500)"
+            log_error "WinRM設定またはコマンド内容を確認してください"
+            if [ -n "$response" ]; then
+                log_error "サーバー応答: $response"
+            fi
+            return 1
+            ;;
+        "")
+            log_error "HTTPステータスコードを取得できませんでした"
+            log_error "接続に失敗しているか、サーバーが応答していません"
+            return 1
+            ;;
+        *)
+            log_warn "予期しないHTTPステータスコード: $http_code"
+            ;;
+    esac
 
     if [ "$DEBUG" = "true" ]; then
         log_info "受信XML:"
-        echo "$response"
-        echo ""
+        echo "$response" >&2
+        echo "" >&2
     fi
 
     echo "$response"
@@ -303,7 +382,7 @@ create_shell() {
         return 1
     fi
 
-    echo -e "${GREEN}[SUCCESS]${NC} シェル作成成功: $shell_id"
+    printf "${GREEN}[SUCCESS]${NC} シェル作成成功: %s\n" "$shell_id" >&2
     echo "$shell_id"
 }
 
@@ -365,7 +444,7 @@ run_command() {
         return 1
     fi
 
-    echo -e "${GREEN}[SUCCESS]${NC} コマンド実行開始: $command_id"
+    printf "${GREEN}[SUCCESS]${NC} コマンド実行開始: %s\n" "$command_id" >&2
     echo "$command_id"
 }
 
@@ -379,10 +458,10 @@ get_command_output() {
     local stderr_all=""
     local exit_code=0
     local command_done=false
-    local max_attempts=60  # 最大60回試行（タイムアウト対策）
+    local max_attempts=$((TIMEOUT * 2))  # TIMEOUT秒待機（0.5秒ごとにチェック）
     local attempt=0
 
-    log_info "コマンド出力取得中..."
+    log_info "コマンド出力取得中...（最大${TIMEOUT}秒待機）"
 
     while [ "$command_done" = "false" ] && [ $attempt -lt $max_attempts ]; do
         local uuid=$(generate_uuid)
@@ -451,7 +530,7 @@ get_command_output() {
         log_warn "コマンド完了待機がタイムアウトしました"
     fi
 
-    echo -e "${GREEN}[SUCCESS]${NC} コマンド完了 (終了コード: $exit_code)"
+    printf "${GREEN}[SUCCESS]${NC} コマンド完了 (終了コード: %s)\n" "$exit_code" >&2
 
     # 出力を一時ファイルに保存（改行を保持）
     echo "$stdout_all" > /tmp/winrm_stdout_$$
@@ -489,7 +568,7 @@ delete_shell() {
 
     log_info "シェル削除中..."
     send_soap_request "$soap_envelope" > /dev/null
-    echo -e "${GREEN}[SUCCESS]${NC} シェル削除完了"
+    printf "${GREEN}[SUCCESS]${NC} シェル削除完了\n" >&2
 }
 
 # メイン処理
@@ -522,6 +601,7 @@ main() {
 
     log_info "接続先: $(generate_endpoint)"
     log_info "ユーザー: $WINRM_USER"
+    log_info "認証方式: $AUTH_METHOD"
 
     # 実行するコマンドの決定
     local command=""
