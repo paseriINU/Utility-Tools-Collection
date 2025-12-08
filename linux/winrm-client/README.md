@@ -77,6 +77,23 @@ sudo yum install curl
 sudo apt install curl
 ```
 
+#### C言語版を使用する場合
+- GCCコンパイラ（標準でインストール済み、またはインストール可能）
+- 標準Cライブラリ（glibc）
+
+```bash
+# GCCがない場合のみインストール
+# Red Hat系
+sudo yum install gcc
+
+# Debian/Ubuntu系
+sudo apt install gcc
+```
+
+**動作確認済み**:
+- ✅ GCC 4.8以降（RHEL 7 / CentOS 7標準）
+- ✅ GCC 8以降
+
 ### Windows側（サーバ）
 
 - Windows Server 2022（または Windows 10/11）
@@ -273,6 +290,51 @@ python3 winrm_exec.py --batch "C:\Scripts\test.bat"
 --timeout       タイムアウト（秒）（デフォルト: 300）
 --log-level     ログレベル（DEBUG, INFO, WARNING, ERROR）
 ```
+
+### C言語版の使い方
+
+**注意**: このプログラムは**標準Cライブラリのみ**を使用します。外部ライブラリ不要でNTLM認証を自前実装しています。
+
+#### 1. コンパイル
+
+```bash
+# 基本コンパイル
+gcc -o winrm_exec winrm_exec.c
+
+# 警告を確認する場合
+gcc -Wall -o winrm_exec winrm_exec.c
+```
+
+#### 2. ソースファイル内の設定を編集
+
+`winrm_exec.c` の設定セクションを編集します：
+
+```c
+/* --- Windows接続情報 --- */
+#define DEFAULT_HOST "192.168.1.100"     /* Windows ServerのIPアドレス */
+#define DEFAULT_USER "Administrator"      /* Windowsユーザー名 */
+#define DEFAULT_PASS "YourPassword"       /* Windowsパスワード */
+#define DEFAULT_DOMAIN ""                 /* ドメイン名（空 = ローカル認証） */
+#define DEFAULT_PORT 5985                 /* WinRMポート */
+```
+
+#### 3. 実行
+
+```bash
+# 環境を引数で指定して実行（必須）
+./winrm_exec TST1T
+./winrm_exec TST2T
+
+# 環境変数で設定を上書き
+WINRM_HOST=192.168.1.100 WINRM_USER=Admin WINRM_PASS=Pass123 ./winrm_exec TST1T
+```
+
+#### C言語版の特徴
+
+- **NTLM v2認証を自前実装** - MD4、MD5、HMAC-MD5を含む完全実装
+- **Windows側の設定変更不要** - デフォルトのNTLM認証を使用
+- **高速・軽量** - スクリプト言語より高速に動作
+- **組み込み環境向け** - Python/Bashが使用できない環境でも動作
 
 ### Bashシェルスクリプト版の使い方
 
