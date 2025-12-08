@@ -172,10 +172,19 @@ send_soap_request() {
         log_info "送信XML:"
         echo "$soap_envelope" >&2
         echo "" >&2
+        log_info "接続先: $endpoint"
+        log_info "ユーザー: $WINRM_USER"
     fi
 
     # curl オプションの構築
-    local curl_opts=(-s -S --max-time "$TIMEOUT")
+    local curl_opts=(--max-time "$TIMEOUT")
+
+    # DEBUGモードでは詳細出力
+    if [ "$DEBUG" = "true" ]; then
+        curl_opts+=(-v)  # 詳細出力（stderrへ）
+    else
+        curl_opts+=(-s -S)  # サイレントモード
+    fi
 
     if [ "$DISABLE_CERT_VALIDATION" = "true" ]; then
         curl_opts+=(-k)  # 証明書検証を無効化
@@ -190,10 +199,27 @@ send_soap_request() {
     # データ送信
     curl_opts+=(--data-binary "$soap_envelope")
 
-    # リクエスト送信
+    # HTTPステータスコードも取得
+    curl_opts+=(-w "\n%{http_code}")
+
+    # リクエスト送信（stderrは画面に表示、stdoutをキャプチャ）
     local response
-    response=$(curl "${curl_opts[@]}" "$endpoint" 2>&1)
+    local http_code
+    if [ "$DEBUG" = "true" ]; then
+        # DEBUGモード: curlの詳細出力をstderrに表示
+        response=$(curl "${curl_opts[@]}" "$endpoint" 2>&2)
+    else
+        response=$(curl "${curl_opts[@]}" "$endpoint" 2>&1)
+    fi
     local exit_code=$?
+
+    # HTTPステータスコードを抽出（最後の行）
+    http_code=$(echo "$response" | tail -1)
+    response=$(echo "$response" | sed '$d')  # 最後の行を削除
+
+    if [ "$DEBUG" = "true" ]; then
+        log_info "HTTPステータスコード: $http_code"
+    fi
 
     if [ $exit_code -ne 0 ]; then
         log_error "curlコマンドが失敗しました (終了コード: $exit_code)"
@@ -223,18 +249,34 @@ send_soap_request() {
         return 1
     fi
 
-    # HTTPエラーレスポンスのチェック
-    if echo "$response" | grep -q "HTTP/1.1 401"; then
-        log_error "認証に失敗しました"
-        log_error "ユーザー名とパスワードを確認してください"
-        return 1
-    fi
-
-    if echo "$response" | grep -q "HTTP/1.1 500"; then
-        log_error "サーバー内部エラーが発生しました"
-        log_error "WinRM設定またはコマンド内容を確認してください"
-        return 1
-    fi
+    # HTTPステータスコードのチェック
+    case "$http_code" in
+        200)
+            # 成功
+            ;;
+        401)
+            log_error "認証に失敗しました (HTTP 401)"
+            log_error "ユーザー名とパスワードを確認してください"
+            log_error "Windows側でBasic認証が有効か確認: winrm get winrm/config/service/auth"
+            return 1
+            ;;
+        500)
+            log_error "サーバー内部エラーが発生しました (HTTP 500)"
+            log_error "WinRM設定またはコマンド内容を確認してください"
+            if [ -n "$response" ]; then
+                log_error "サーバー応答: $response"
+            fi
+            return 1
+            ;;
+        "")
+            log_error "HTTPステータスコードを取得できませんでした"
+            log_error "接続に失敗しているか、サーバーが応答していません"
+            return 1
+            ;;
+        *)
+            log_warn "予期しないHTTPステータスコード: $http_code"
+            ;;
+    esac
 
     if [ "$DEBUG" = "true" ]; then
         log_info "受信XML:"
