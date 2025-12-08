@@ -1,105 +1,223 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-WinRM Remote Batch Executor for Linux (標準ライブラリのみ - NTLM認証版)
-Linux（Red Hat等）からWindows Server 2022へWinRM接続してバッチを実行
+================================================================================
+WinRM Remote Batch Executor for Linux (Python版 - 標準ライブラリのみ)
+================================================================================
 
-必要な環境:
-    Python 3.6以降（標準ライブラリのみ使用、追加パッケージ不要）
-    外部ライブラリ不要 - MD4/NTLM認証を自前実装
+【概要】
+このプログラムは、LinuxからWindows ServerへWinRM (Windows Remote Management)
+プロトコルを使用してリモート接続し、バッチファイルを実行するツールです。
 
-使い方:
-    # 環境を引数で指定（必須）
-    python3 winrm_exec_ntlm.py TST1T
-    python3 winrm_exec_ntlm.py TST2T
+【特徴】
+- 標準ライブラリのみ使用（pip install不要）
+- NTLM v2認証を自前実装（MD4を含む）
+- IT制限環境でも動作可能（外部パッケージ不要）
+- Windows側の設定変更不要（デフォルトのNTLM認証を使用）
 
-    # またはコマンドライン引数で詳細設定も指定
-    python3 winrm_exec_ntlm.py TST1T --host 192.168.1.100 --user Administrator --password Pass123
+【なぜ標準ライブラリのみで実装するのか】
+企業のIT制限環境では、外部ライブラリのインストールが禁止されていることが多い。
+このプログラムは、そのような環境でも確実に動作するよう設計されている。
+- requests, pywinrm等の外部パッケージは使用しない
+- MD4はPython標準ライブラリに含まれていないため自前実装
+
+【NTLM認証の仕組み】
+NTLM認証は3段階のハンドシェイクで構成される：
+  1. Type 1 (Negotiate): クライアントが認証開始を宣言
+  2. Type 2 (Challenge): サーバーがランダムなチャレンジを返送
+  3. Type 3 (Authenticate): クライアントがチャレンジに対する応答を送信
+
+【WinRMプロトコルの流れ】
+  1. シェル作成 (Create): リモートシェルセッションを開始
+  2. コマンド実行 (Command): バッチファイルを実行
+  3. 出力取得 (Receive): 標準出力・標準エラーを取得
+  4. シェル削除 (Delete): セッションをクリーンアップ
+
+【必要な環境】
+- Linux（Red Hat, CentOS, Ubuntu等）
+- Python 3.6以降
+- ネットワーク接続（ポート5985/HTTP または 5986/HTTPS）
+
+【使い方】
+  1. このソースファイル内の設定セクションを編集
+  2. 実行: python3 winrm_exec.py ENV
+
+  環境を引数で指定（必須）:
+    python3 winrm_exec.py TST1T
+    python3 winrm_exec.py TST2T
+
+  コマンドライン引数で詳細設定も指定可能:
+    python3 winrm_exec.py TST1T --host 192.168.1.100 --user Administrator --password Pass123
+
+【セキュリティに関する注意】
+- パスワードはソースコード内に記載するため、適切なファイル権限を設定すること
+- 本番環境ではコマンドライン引数での上書きを推奨
+
+================================================================================
 """
 
-import sys
-import argparse
-import logging
-import base64
-import uuid
-import socket
-import struct
-import time
-import hashlib
-import hmac
-import os
-from xml.etree import ElementTree as ET
+# ==============================================================================
+# インポート（すべて標準ライブラリ - 外部パッケージ不要）
+# ==============================================================================
 
-# ==================== 設定セクション ====================
-# ここを編集して使用してください
+import sys              # システム関連: コマンドライン引数、終了コード
+import argparse         # コマンドライン引数のパース
+import logging          # ログ出力
+import base64           # Base64エンコード/デコード（NTLMメッセージ用）
+import uuid             # UUID生成（SOAPメッセージID用）
+import socket           # ソケット通信（HTTP接続用）
+import struct           # バイナリデータのパック/アンパック
+import time             # 時間関連（タイムスタンプ、スリープ）
+import hashlib          # MD5ハッシュ（HMAC-MD5用）
+import hmac             # HMAC計算（NTLMv2認証用）
+import os               # OS機能（乱数生成: os.urandom）
+from xml.etree import ElementTree as ET  # XML解析（SOAPレスポンス用）
 
-# Windows接続情報
+# ==============================================================================
+# 設定セクション（ユーザー編集エリア）
+# ==============================================================================
+#
+# 【使用方法】
+# 1. 以下の設定値を環境に合わせて編集してください
+# 2. 実行: python3 winrm_exec.py TST1T
+#
+# 【設定の優先順位】
+# コマンドライン引数 > ソースコード内の設定
+# 例: python3 winrm_exec.py TST1T --host 10.0.0.1
+#     → コマンドライン引数の値が優先される
+# ==============================================================================
+
+# --- Windows接続情報 ---
 WINDOWS_HOST = "192.168.1.100"      # Windows ServerのIPアドレスまたはホスト名
-WINDOWS_PORT = 5985                  # WinRMポート（HTTP: 5985, HTTPS: 5986）
-WINDOWS_USER = "Administrator"       # Windowsユーザー名
-WINDOWS_PASSWORD = "YourPassword"    # Windowsパスワード
-WINDOWS_DOMAIN = ""                  # ドメイン（空文字列でローカル認証）
+WINDOWS_PORT = 5985                  # WinRMポート: HTTP=5985, HTTPS=5986
+WINDOWS_USER = "Administrator"       # Windowsのログインユーザー名
+WINDOWS_PASSWORD = "YourPassword"    # Windowsのログインパスワード
+WINDOWS_DOMAIN = ""                  # ドメイン名（空文字列 = ローカル認証）
 
-# 環境フォルダ名のリスト（実行時に選択可能）
-# 新しい環境を追加する場合は、このリストに追加してください
-ENVIRONMENTS = ["TST1T", "TST2T"]    # 利用可能な環境のリスト
+# --- 利用可能な環境のリスト ---
+# コマンドライン引数で指定可能な環境名を定義
+# 新しい環境を追加する場合はこのリストに追加してください
+ENVIRONMENTS = ["TST1T", "TST2T"]
 
-# 実行するバッチファイル（Windows側のパス）
-# {ENV} は選択した環境フォルダ名に置換されます
+# --- 実行するバッチファイル ---
+# {ENV} プレースホルダは実行時に環境名（TST1T等）に置換されます
+# 例: "C:\Scripts\{ENV}\test.bat" → "C:\Scripts\TST1T\test.bat"
+# 注: {ENV}は複数箇所に使用可能（すべて置換される）
 BATCH_FILE_PATH = r"C:\Scripts\{ENV}\test.bat"
 
-# または直接コマンドを指定
+# --- 直接コマンド実行 ---
+# バッチファイルではなく直接コマンドを実行する場合に設定
+# Noneの場合はBATCH_FILE_PATHが使用される
 DIRECT_COMMAND = None  # 例: "echo Hello from WinRM"
 
-# タイムアウト（秒）
+# --- タイムアウト設定 ---
+# コマンド実行の最大待機時間（秒）
+# バッチ処理が長時間かかる場合は増やしてください
 TIMEOUT = 300
 
-# ログレベル（DEBUG, INFO, WARNING, ERROR）
+# --- ログレベル ---
+# DEBUG: 詳細なデバッグ情報（トラブルシューティング用）
+# INFO:  通常の動作情報（推奨）
+# WARNING: 警告のみ
+# ERROR: エラーのみ
 LOG_LEVEL = "INFO"
 
-# =========================================================
+# ==============================================================================
 
+# ==============================================================================
 # XML名前空間の定義
+# ==============================================================================
+# WinRMはSOAP/XMLプロトコルを使用するため、名前空間の定義が必要
+# これらはWS-Management (WS-Man) 仕様で定義されている
+# ==============================================================================
 NAMESPACES = {
-    's': 'http://www.w3.org/2003/05/soap-envelope',
-    'a': 'http://schemas.xmlsoap.org/ws/2004/08/addressing',
-    'w': 'http://schemas.dmtf.org/wbem/wsman/1/wsman.xsd',
-    'rsp': 'http://schemas.microsoft.com/wbem/wsman/1/windows/shell',
-    'p': 'http://schemas.microsoft.com/wbem/wsman/1/wsman.xsd'
+    's': 'http://www.w3.org/2003/05/soap-envelope',           # SOAPエンベロープ
+    'a': 'http://schemas.xmlsoap.org/ws/2004/08/addressing',  # WS-Addressing
+    'w': 'http://schemas.dmtf.org/wbem/wsman/1/wsman.xsd',    # WS-Management
+    'rsp': 'http://schemas.microsoft.com/wbem/wsman/1/windows/shell',  # WinRS (シェル)
+    'p': 'http://schemas.microsoft.com/wbem/wsman/1/wsman.xsd'  # WS-Man (Microsoft)
 }
 
 
-# ==================== MD4実装（標準ライブラリにないため自前実装） ====================
+# ==============================================================================
+# MD4ハッシュアルゴリズム実装
+# ==============================================================================
+#
+# 【なぜMD4を自前実装するのか】
+# - MD4はNTLM認証でパスワードハッシュの計算に必須
+# - Python標準ライブラリ(hashlib)にはMD4が含まれていない
+# - OpenSSLのMD4は多くのディストリビューションで非推奨/削除済み
+# - 外部ライブラリに依存せずIT制限環境で動作させるため
+#
+# 【MD4アルゴリズムの概要】
+# - 入力: 任意長のデータ
+# - 出力: 128ビット（16バイト）のハッシュ値
+# - RFC 1320で定義
+# - 3ラウンド×16ステップ = 48ステップの処理
+#
+# 【セキュリティ上の注意】
+# MD4は暗号学的に破られており、新規開発には推奨されない。
+# ただし、NTLMプロトコルとの互換性のために使用が必要。
+# ==============================================================================
+
 
 class MD4:
-    """MD4ハッシュアルゴリズムの実装"""
+    """
+    MD4ハッシュアルゴリズムの実装
+
+    NTLM認証でパスワードのNTハッシュを計算するために使用。
+    計算式: NT_Hash = MD4(UTF-16LE(Password))
+    """
 
     def __init__(self):
-        self.A = 0x67452301
-        self.B = 0xefcdab89
-        self.C = 0x98badcfe
-        self.D = 0x10325476
-        self.count = 0
-        self.buffer = b''
+        """
+        MD4ハッシュ計算の初期化
+
+        A, B, C, Dは128ビットの状態を表す4つの32ビットレジスタ
+        初期値はRFC 1320で定義されている
+        """
+        self.A = 0x67452301  # 状態レジスタA
+        self.B = 0xefcdab89  # 状態レジスタB
+        self.C = 0x98badcfe  # 状態レジスタC
+        self.D = 0x10325476  # 状態レジスタD
+        self.count = 0       # 処理済みバイト数
+        self.buffer = b''    # 未処理のデータバッファ
 
     @staticmethod
     def _left_rotate(x, n):
+        """左循環シフト（ローテート）: ビットを左にn個回転"""
         return ((x << n) | (x >> (32 - n))) & 0xffffffff
 
     @staticmethod
     def _F(x, y, z):
+        """Round 1用: 条件選択関数 - xが1のビットはyを、0のビットはzを選択"""
         return (x & y) | (~x & z)
 
     @staticmethod
     def _G(x, y, z):
+        """Round 2用: 多数決関数 - 3つの入力のうち2つ以上が1なら1"""
         return (x & y) | (x & z) | (y & z)
 
     @staticmethod
     def _H(x, y, z):
+        """Round 3用: パリティ関数 - XOR演算"""
         return x ^ y ^ z
 
     def _process_block(self, block):
-        """64バイトブロックを処理"""
+        """
+        64バイト（512ビット）のブロックを処理
+
+        Args:
+            block: 処理する64バイトのデータ
+
+        処理内容:
+        1. ブロックを16個の32ビットワードに分割
+        2. Round 1: F関数を使用した16ステップ
+        3. Round 2: G関数を使用した16ステップ
+        4. Round 3: H関数を使用した16ステップ
+        5. 結果を状態レジスタに加算
+        """
+        # リトルエンディアンで16個の32ビット整数としてアンパック
         M = struct.unpack('<16I', block)
 
         A, B, C, D = self.A, self.B, self.C, self.D
@@ -131,19 +249,37 @@ class MD4:
         self.D = (self.D + D) & 0xffffffff
 
     def update(self, data):
-        """データを追加"""
+        """
+        ハッシュ計算にデータを追加
+
+        Args:
+            data: 追加するデータ（bytes or str）
+
+        データをバッファに追加し、64バイト以上になったら処理を実行
+        """
         if isinstance(data, str):
             data = data.encode('utf-8')
 
         self.buffer += data
         self.count += len(data)
 
+        # バッファが64バイト以上あれば処理
         while len(self.buffer) >= 64:
             self._process_block(self.buffer[:64])
             self.buffer = self.buffer[64:]
 
     def digest(self):
-        """ハッシュ値を取得"""
+        """
+        最終的なハッシュ値を取得
+
+        Returns:
+            bytes: 16バイトのMD4ハッシュ値
+
+        処理内容:
+        1. パディングの追加（1ビットの1 + 0の列 + 64ビットの長さ）
+        2. 残りのブロックを処理
+        3. 状態レジスタから結果を生成
+        """
         # パディング
         msg = self.buffer
         msg_len = self.count
@@ -167,89 +303,231 @@ class MD4:
 
 
 def md4_hash(data):
-    """MD4ハッシュを計算"""
+    """
+    MD4ハッシュを計算するヘルパー関数
+
+    Args:
+        data: ハッシュ対象のデータ（bytes or str）
+
+    Returns:
+        bytes: 16バイトのMD4ハッシュ値
+    """
     hasher = MD4()
     hasher.update(data)
     return hasher.digest()
 
 
-# ==================== NTLM認証実装 ====================
+# ==============================================================================
+# NTLM認証実装
+# ==============================================================================
+#
+# 【NTLMv2認証の流れ】
+#
+# 1. NT Hashの生成
+#    NT_Hash = MD4(UTF-16LE(Password))
+#
+# 2. NTLMv2 Hashの生成
+#    NTLMv2_Hash = HMAC-MD5(NT_Hash, UTF-16LE(Username.upper() + Domain))
+#
+# 3. Type 1メッセージ（Negotiate）の送信
+#    - 使用可能な認証方式を通知
+#    - サポートするフラグを送信
+#
+# 4. Type 2メッセージ（Challenge）の受信
+#    - サーバーから8バイトのチャレンジを受信
+#    - TargetInfo構造体を受信（オプション）
+#
+# 5. Type 3メッセージ（Authenticate）の送信
+#    - NTProofStr = HMAC-MD5(NTLMv2_Hash, ServerChallenge + Blob)
+#    - NTResponse = NTProofStr + Blob
+#    - Blobにはタイムスタンプ、クライアントチャレンジ等を含む
+#
+# 【セキュリティ考慮】
+# - NTLMv2は、NTLMv1より安全（リプレイ攻撃耐性あり）
+# - タイムスタンプにより時間制限付きの認証が可能
+# - クライアントチャレンジにより、サーバー側のなりすましを防止
+# ==============================================================================
+
 
 class NTLMAuth:
-    """NTLMv2認証の実装"""
+    """
+    NTLMv2認証の実装
 
-    NTLMSSP_NEGOTIATE_UNICODE = 0x00000001
-    NTLMSSP_NEGOTIATE_NTLM = 0x00000200
-    NTLMSSP_NEGOTIATE_ALWAYS_SIGN = 0x00008000
-    NTLMSSP_NEGOTIATE_EXTENDED_SESSIONSECURITY = 0x00080000
-    NTLMSSP_REQUEST_TARGET = 0x00000004
-    NTLMSSP_NEGOTIATE_TARGET_INFO = 0x00800000
+    Windows環境でデフォルトで有効なNTLM認証を実装。
+    外部ライブラリを使用せず、標準ライブラリのみで動作。
+    """
+
+    # NTLMネゴシエーションフラグ
+    # クライアントとサーバー間で使用する機能を交渉するためのビットフラグ
+    NTLMSSP_NEGOTIATE_UNICODE = 0x00000001           # Unicode文字列を使用
+    NTLMSSP_NEGOTIATE_NTLM = 0x00000200              # NTLM認証を使用
+    NTLMSSP_NEGOTIATE_ALWAYS_SIGN = 0x00008000       # 常に署名を使用
+    NTLMSSP_NEGOTIATE_EXTENDED_SESSIONSECURITY = 0x00080000  # NTLMv2セッションセキュリティ
+    NTLMSSP_REQUEST_TARGET = 0x00000004              # ターゲット情報を要求
+    NTLMSSP_NEGOTIATE_TARGET_INFO = 0x00800000       # TargetInfo構造体を含む
 
     def __init__(self, username, password, domain=''):
+        """
+        NTLMAuthの初期化
+
+        Args:
+            username: Windowsユーザー名
+            password: パスワード
+            domain: ドメイン名（ローカル認証時は空文字列）
+        """
         self.username = username
         self.password = password
         self.domain = domain
 
     @staticmethod
     def _utf16le(s):
-        """文字列をUTF-16LEに変換"""
+        """
+        文字列をUTF-16LE（Little Endian）に変換
+
+        Args:
+            s: 変換する文字列
+
+        Returns:
+            bytes: UTF-16LEエンコードされたバイト列
+
+        WindowsはUTF-16LEを内部文字コードとして使用するため、
+        NTLM認証でもこの形式でエンコードする必要がある。
+        """
         return s.encode('utf-16-le')
 
     def _nt_hash(self):
-        """NTハッシュを計算（パスワードのMD4ハッシュ）"""
+        """
+        NTハッシュを計算（パスワードのMD4ハッシュ）
+
+        Returns:
+            bytes: 16バイトのNTハッシュ
+
+        計算式: NT_Hash = MD4(UTF-16LE(Password))
+        """
         return md4_hash(self._utf16le(self.password))
 
     def _ntlmv2_hash(self):
-        """NTLMv2ハッシュを計算"""
+        """
+        NTLMv2ハッシュを計算
+
+        Returns:
+            bytes: 16バイトのNTLMv2ハッシュ
+
+        計算式: NTLMv2_Hash = HMAC-MD5(NT_Hash, UTF-16LE(Username.upper() + Domain))
+        注: ユーザー名は大文字に変換されるが、ドメイン名はそのまま使用
+        """
         nt_hash = self._nt_hash()
         user_domain = (self.username.upper() + self.domain).encode('utf-16-le')
         return hmac.new(nt_hash, user_domain, hashlib.md5).digest()
 
     def create_type1_message(self):
-        """Type 1メッセージ（Negotiate）を生成"""
+        """
+        Type 1メッセージ（Negotiate）を生成
+
+        Returns:
+            str: Base64エンコードされたType 1メッセージ
+
+        Type 1メッセージ構造:
+        - Signature (8バイト): "NTLMSSP\0"
+        - MessageType (4バイト): 0x00000001
+        - NegotiateFlags (4バイト): サポートする機能フラグ
+        - DomainNameFields (8バイト): ドメイン名（空）
+        - WorkstationFields (8バイト): ワークステーション名（空）
+        """
+        # サポートする機能をフラグで指定
         flags = (self.NTLMSSP_NEGOTIATE_UNICODE |
                  self.NTLMSSP_NEGOTIATE_NTLM |
                  self.NTLMSSP_NEGOTIATE_ALWAYS_SIGN |
                  self.NTLMSSP_NEGOTIATE_EXTENDED_SESSIONSECURITY |
                  self.NTLMSSP_REQUEST_TARGET)
 
-        message = b'NTLMSSP\x00'  # Signature
-        message += struct.pack('<I', 1)  # Type 1
-        message += struct.pack('<I', flags)  # Flags
-        message += struct.pack('<HHI', 0, 0, 0)  # Domain (empty)
-        message += struct.pack('<HHI', 0, 0, 0)  # Workstation (empty)
+        message = b'NTLMSSP\x00'  # Signature: 固定文字列
+        message += struct.pack('<I', 1)  # Type: 1 (Negotiate)
+        message += struct.pack('<I', flags)  # Flags: ネゴシエーションフラグ
+        message += struct.pack('<HHI', 0, 0, 0)  # Domain: 長さ, 最大長, オフセット (空)
+        message += struct.pack('<HHI', 0, 0, 0)  # Workstation: 長さ, 最大長, オフセット (空)
 
+        # HTTPヘッダで送信するためBase64エンコード
         return base64.b64encode(message).decode('ascii')
 
     def parse_type2_message(self, type2_b64):
-        """Type 2メッセージ（Challenge）を解析"""
+        """
+        Type 2メッセージ（Challenge）を解析
+
+        Args:
+            type2_b64: Base64エンコードされたType 2メッセージ
+
+        Returns:
+            tuple: (challenge, flags, target_info)
+                - challenge: 8バイトのサーバーチャレンジ
+                - flags: ネゴシエートフラグ
+                - target_info: TargetInfo構造体
+
+        Type 2メッセージ構造:
+        - Signature (8バイト): "NTLMSSP\0"
+        - MessageType (4バイト): 0x00000002
+        - TargetNameFields (8バイト)
+        - NegotiateFlags (4バイト)
+        - ServerChallenge (8バイト): ← 重要: 認証に使用
+        - Reserved (8バイト)
+        - TargetInfoFields (8バイト)
+        - [TargetInfo]: サーバー情報
+        """
         message = base64.b64decode(type2_b64)
 
+        # 署名の検証
         if message[:8] != b'NTLMSSP\x00':
             raise ValueError("Invalid NTLM signature")
 
+        # メッセージタイプの検証
         msg_type = struct.unpack('<I', message[8:12])[0]
         if msg_type != 2:
             raise ValueError(f"Expected Type 2 message, got Type {msg_type}")
 
-        # Challengeを取得（オフセット24から8バイト）
+        # サーバーチャレンジを取得（オフセット24から8バイト）
+        # これが認証の核となる値
         challenge = message[24:32]
 
-        # フラグを取得
+        # ネゴシエートフラグを取得
         flags = struct.unpack('<I', message[20:24])[0]
 
-        # TargetInfoを取得（フラグにNTLMSSP_NEGOTIATE_TARGET_INFOが含まれている場合）
+        # TargetInfoを取得（フラグで含まれている場合のみ）
         target_info = b''
         if flags & self.NTLMSSP_NEGOTIATE_TARGET_INFO:
-            ti_len = struct.unpack('<H', message[40:42])[0]
-            ti_offset = struct.unpack('<I', message[44:48])[0]
+            ti_len = struct.unpack('<H', message[40:42])[0]    # 長さ
+            ti_offset = struct.unpack('<I', message[44:48])[0]  # オフセット
             if ti_offset + ti_len <= len(message):
                 target_info = message[ti_offset:ti_offset + ti_len]
 
         return challenge, flags, target_info
 
     def create_type3_message(self, challenge, target_info):
-        """Type 3メッセージ（Authenticate）を生成"""
+        """
+        Type 3メッセージ（Authenticate）を生成
+
+        Args:
+            challenge: サーバーから受信した8バイトのチャレンジ
+            target_info: サーバーから受信したTargetInfo
+
+        Returns:
+            str: Base64エンコードされたType 3メッセージ
+
+        Type 3メッセージ構造:
+        - Signature (8バイト): "NTLMSSP\0"
+        - MessageType (4バイト): 0x00000003
+        - LmChallengeResponseFields (8バイト): LMv2レスポンス（空）
+        - NtChallengeResponseFields (8バイト): NTLMv2レスポンス
+        - DomainNameFields (8バイト)
+        - UserNameFields (8バイト)
+        - WorkstationFields (8バイト)
+        - EncryptedRandomSessionKeyFields (8バイト)
+        - NegotiateFlags (4バイト)
+        - [データ部分]: 各フィールドの実データ
+
+        NTLMv2レスポンスの計算:
+        - NTProofStr = HMAC-MD5(NTLMv2Hash, ServerChallenge + Blob)
+        - NTResponse = NTProofStr + Blob
+        """
         ntlmv2_hash = self._ntlmv2_hash()
 
         # クライアントチャレンジ（ランダム8バイト）
@@ -350,25 +628,72 @@ class NTLMAuth:
         return base64.b64encode(message).decode('ascii')
 
 
-# ==================== HTTP通信（ソケット直接使用） ====================
+# ==============================================================================
+# HTTP通信（ソケット直接使用）
+# ==============================================================================
+#
+# 【なぜrequestsライブラリを使わないのか】
+# - IT制限環境では外部パッケージのインストールが禁止されていることが多い
+# - 標準ライブラリのsocketモジュールのみで実装
+# - NTLM認証のハンドシェイクを完全に制御可能
+#
+# 【HTTP通信の流れ】
+# 1. TCPソケットを作成・接続
+# 2. HTTPリクエストを送信（POST /wsman）
+# 3. HTTPレスポンスを受信・解析
+# 4. ソケットをクローズ
+#
+# 【NTLM認証のHTTPでの流れ】
+# 1. Type 1メッセージを含むリクエスト送信 → 401応答受信
+# 2. 401のWWW-AuthenticateヘッダからType 2メッセージ取得
+# 3. Type 3メッセージを含むリクエスト送信 → 200応答受信（認証成功）
+# ==============================================================================
+
 
 class HTTPClient:
-    """ソケットを使用したHTTPクライアント"""
+    """
+    ソケットを使用したHTTPクライアント
+
+    requestsライブラリを使用せず、標準ライブラリのsocketのみで実装。
+    NTLM認証のための複数リクエスト処理をサポート。
+    """
 
     def __init__(self, host, port, timeout=300):
+        """
+        HTTPClientの初期化
+
+        Args:
+            host: 接続先ホスト名/IPアドレス
+            port: 接続先ポート番号
+            timeout: ソケットタイムアウト（秒）
+        """
         self.host = host
         self.port = port
         self.timeout = timeout
 
     def _create_socket(self):
-        """ソケットを作成"""
+        """
+        TCPソケットを作成して接続
+
+        Returns:
+            socket: 接続済みのソケットオブジェクト
+        """
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.settimeout(self.timeout)
         sock.connect((self.host, self.port))
         return sock
 
     def _send_request(self, sock, method, path, headers, body):
-        """HTTPリクエストを送信"""
+        """
+        HTTPリクエストを送信
+
+        Args:
+            sock: ソケットオブジェクト
+            method: HTTPメソッド（POST等）
+            path: リクエストパス（/wsman等）
+            headers: HTTPヘッダの辞書
+            body: リクエスト本文
+        """
         request = f"{method} {path} HTTP/1.1\r\n"
         request += f"Host: {self.host}:{self.port}\r\n"
         for key, value in headers.items():
@@ -493,18 +818,57 @@ class HTTPClient:
         return resp_body
 
 
-# ==================== WinRMクライアント ====================
+# ==============================================================================
+# WinRMクライアント
+# ==============================================================================
+#
+# 【WinRM (Windows Remote Management) とは】
+# Microsoftが開発したリモート管理プロトコル。
+# WS-Management（Web Services for Management）仕様に基づく。
+#
+# 【WinRMセッションの流れ】
+# 1. Create: リモートシェル（cmd.exe）を作成
+#    → ShellIdを取得
+#
+# 2. Command: シェル上でコマンドを実行
+#    → CommandIdを取得
+#
+# 3. Receive: コマンドの出力（stdout/stderr）を取得
+#    → 出力はBase64エンコードされて返される
+#    → CommandState/Doneになるまでポーリング
+#
+# 4. Delete: シェルを削除（リソース解放）
+#
+# 【SOAPメッセージ形式】
+# <?xml version="1.0" encoding="UTF-8"?>
+# <s:Envelope xmlns:s="..." xmlns:a="..." ...>
+#   <s:Header>
+#     <a:Action>...</a:Action>
+#     <w:ResourceURI>...</w:ResourceURI>
+#     ...
+#   </s:Header>
+#   <s:Body>
+#     ... 操作固有のXML ...
+#   </s:Body>
+# </s:Envelope>
+# ==============================================================================
+
 
 class WinRMClient:
-    """WinRMプロトコルを実装したクライアント（NTLM認証版）"""
+    """
+    WinRMプロトコルを実装したクライアント（NTLM認証版）
+
+    pywinrmライブラリを使用せず、標準ライブラリのみで実装。
+    SOAP/XMLメッセージを直接構築してWinRM操作を実行。
+    """
 
     def __init__(self, host, port, username, password, domain='', timeout=300):
         """
         WinRMクライアントの初期化
 
         Args:
-            host: WindowsサーバのIPアドレスまたはホスト名
-            port: WinRMポート
+            host: Windows ServerのIPアドレスまたはホスト名
+            port: WinRMポート（HTTP: 5985, HTTPS: 5986）
             username: Windowsユーザー名
             password: Windowsパスワード
             domain: ドメイン名（空文字列でローカル認証）
@@ -516,13 +880,21 @@ class WinRMClient:
         self.password = password
         self.domain = domain
         self.timeout = timeout
-        self.endpoint = f"http://{host}:{port}/wsman"
-        self.http_client = HTTPClient(host, port, timeout)
+        self.endpoint = f"http://{host}:{port}/wsman"  # WinRMエンドポイントURL
+        self.http_client = HTTPClient(host, port, timeout)  # HTTP通信クライアント
 
         logging.info(f"WinRMエンドポイント: {self.endpoint}")
 
     def _send_soap_request(self, soap_envelope):
-        """SOAPリクエストを送信（NTLM認証付き）"""
+        """
+        SOAPリクエストを送信（NTLM認証付き）
+
+        Args:
+            soap_envelope: 送信するSOAP XMLエンベロープ
+
+        Returns:
+            str: レスポンスの本文（XML）
+        """
         logging.debug("SOAPリクエスト送信")
         return self.http_client.request_with_ntlm(
             '/wsman',
@@ -533,7 +905,14 @@ class WinRMClient:
         )
 
     def _create_shell(self):
-        """リモートシェルを作成"""
+        """
+        リモートシェル（cmd.exe）を作成
+
+        Returns:
+            str: ShellId（後続のコマンド実行に使用）
+
+        WS-Transfer Createアクションを使用してリモートシェルを作成。
+        """
         action = "http://schemas.xmlsoap.org/ws/2004/09/transfer/Create"
         resource_uri = "http://schemas.microsoft.com/wbem/wsman/1/windows/shell/cmd"
 
@@ -579,7 +958,18 @@ class WinRMClient:
         return shell_id_value
 
     def _run_command(self, shell_id, command):
-        """シェル上でコマンドを実行"""
+        """
+        シェル上でコマンドを実行
+
+        Args:
+            shell_id: 対象のShellId
+            command: 実行するコマンド文字列
+
+        Returns:
+            str: CommandId（出力取得に使用）
+
+        WinRS Commandアクションを使用してコマンドを実行。
+        """
         action = "http://schemas.microsoft.com/wbem/wsman/1/windows/shell/Command"
         resource_uri = "http://schemas.microsoft.com/wbem/wsman/1/windows/shell/cmd"
 
@@ -625,7 +1015,20 @@ class WinRMClient:
         return command_id_value
 
     def _get_command_output(self, shell_id, command_id):
-        """コマンドの出力を取得"""
+        """
+        コマンドの出力を取得
+
+        Args:
+            shell_id: 対象のShellId
+            command_id: 対象のCommandId
+
+        Returns:
+            tuple: (exit_code, stdout, stderr)
+
+        WinRS Receiveアクションを使用して出力を取得。
+        CommandState/Doneになるまでポーリングを繰り返す。
+        出力はBase64エンコードされているためデコードが必要。
+        """
         action = "http://schemas.microsoft.com/wbem/wsman/1/windows/shell/Receive"
         resource_uri = "http://schemas.microsoft.com/wbem/wsman/1/windows/shell/cmd"
 
@@ -697,7 +1100,15 @@ class WinRMClient:
         return exit_code, stdout, stderr
 
     def _delete_shell(self, shell_id):
-        """シェルを削除"""
+        """
+        リモートシェルを削除
+
+        Args:
+            shell_id: 削除対象のShellId
+
+        WS-Transfer Deleteアクションを使用してシェルを削除。
+        リソース解放のため、コマンド完了後は必ず呼び出すこと。
+        """
         action = "http://schemas.xmlsoap.org/ws/2004/09/transfer/Delete"
         resource_uri = "http://schemas.microsoft.com/wbem/wsman/1/windows/shell/cmd"
 
@@ -728,7 +1139,21 @@ class WinRMClient:
         logging.info("シェル削除完了")
 
     def execute_command(self, command):
-        """コマンドを実行"""
+        """
+        コマンドを実行する（メインAPI）
+
+        Args:
+            command: 実行するコマンド文字列
+
+        Returns:
+            tuple: (exit_code, stdout, stderr)
+
+        処理フロー:
+        1. シェルを作成（_create_shell）
+        2. コマンドを実行（_run_command）
+        3. 出力を取得（_get_command_output）
+        4. シェルを削除（_delete_shell）- finally句で確実に実行
+        """
         shell_id = None
         try:
             shell_id = self._create_shell()
@@ -736,6 +1161,7 @@ class WinRMClient:
             exit_code, stdout, stderr = self._get_command_output(shell_id, command_id)
             return exit_code, stdout, stderr
         finally:
+            # エラー発生時もシェルを削除してリソース解放
             if shell_id:
                 try:
                     self._delete_shell(shell_id)
@@ -743,13 +1169,33 @@ class WinRMClient:
                     logging.warning(f"シェル削除時にエラー: {e}")
 
     def execute_batch_file(self, batch_path):
-        """バッチファイルを実行"""
+        """
+        バッチファイルを実行する
+
+        Args:
+            batch_path: 実行するバッチファイルのWindowsパス
+
+        Returns:
+            tuple: (exit_code, stdout, stderr)
+
+        cmd.exe /c を使用してバッチファイルを実行。
+        """
         command = f'cmd.exe /c "{batch_path}"'
         return self.execute_command(command)
 
 
+# ==============================================================================
+# メイン処理
+# ==============================================================================
+
+
 def setup_logging(level):
-    """ロギングの設定"""
+    """
+    ロギングの設定
+
+    Args:
+        level: ログレベル文字列（DEBUG, INFO, WARNING, ERROR）
+    """
     numeric_level = getattr(logging, level.upper(), None)
     if not isinstance(numeric_level, int):
         raise ValueError(f'Invalid log level: {level}')
@@ -762,7 +1208,21 @@ def setup_logging(level):
 
 
 def main():
-    """メイン処理"""
+    """
+    メインエントリーポイント
+
+    処理フロー:
+    1. コマンドライン引数のパース
+    2. ログ設定
+    3. 環境名の有効性チェック
+    4. {ENV}プレースホルダの置換
+    5. WinRMクライアント作成・接続
+    6. コマンド/バッチファイル実行
+    7. 結果表示
+
+    Returns:
+        int: 終了コード（成功時0、エラー時1以上）
+    """
     parser = argparse.ArgumentParser(
         description='Linux to Windows WinRM Batch Executor (NTLM認証版)',
         usage='%(prog)s ENV [オプション]'
