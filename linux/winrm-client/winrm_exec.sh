@@ -67,7 +67,7 @@ _DEFAULT_HOST='192.168.1.100'
 _DEFAULT_USER='Administrator'
 _DEFAULT_PASS='YourPassword'
 WINRM_HOST="${WINRM_HOST:-$_DEFAULT_HOST}"        # Windows ServerのIPアドレスまたはホスト名
-WINRM_PORT="${WINRM_PORT:-5986}"                  # WinRMポート（HTTP: 5985, HTTPS: 5986）
+WINRM_PORT="${WINRM_PORT:-5985}"                  # WinRMポート（HTTP: 5985, HTTPS: 5986）
 WINRM_USER="${WINRM_USER:-$_DEFAULT_USER}"        # Windowsユーザー名
 WINRM_PASS="${WINRM_PASS:-$_DEFAULT_PASS}"        # Windowsパスワード
 
