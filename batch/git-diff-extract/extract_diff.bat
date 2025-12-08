@@ -123,9 +123,17 @@ for ($i = 0; $i -lt $allBranches.Count; $i++) {
     Write-Host " $displayNum. $branchName"
 }
 Write-Host ""
+Write-Host " 0. キャンセル"
+Write-Host ""
 
 $maxNum = $allBranches.Count
-$baseSelection = Read-Host "番号を選択してください (1-$maxNum)"
+$baseSelection = Read-Host "番号を選択してください (0-$maxNum)"
+
+# キャンセル処理
+if ($baseSelection -eq "0") {
+    Write-Host "[キャンセル] 処理を中止しました" -ForegroundColor Yellow
+    exit 0
+}
 
 # 入力検証
 if (-not $baseSelection -or $baseSelection -notmatch '^\d+$' -or [int]$baseSelection -lt 1 -or [int]$baseSelection -gt $maxNum) {
@@ -156,8 +164,16 @@ for ($i = 0; $i -lt $allBranches.Count; $i++) {
     }
 }
 Write-Host ""
+Write-Host " 0. キャンセル"
+Write-Host ""
 
-$targetSelection = Read-Host "番号を選択してください (1-$maxNum)"
+$targetSelection = Read-Host "番号を選択してください (0-$maxNum)"
+
+# キャンセル処理
+if ($targetSelection -eq "0") {
+    Write-Host "[キャンセル] 処理を中止しました" -ForegroundColor Yellow
+    exit 0
+}
 
 # 入力検証
 if (-not $targetSelection -or $targetSelection -notmatch '^\d+$' -or [int]$targetSelection -lt 1 -or [int]$targetSelection -gt $maxNum) {

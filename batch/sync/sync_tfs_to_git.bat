@@ -110,11 +110,16 @@ Write-Host ""
     Write-Host "ブランチ操作を選択してください:" -ForegroundColor Cyan
     Write-Host " 1. このまま続行"
     Write-Host " 2. ブランチを切り替える"
-    Write-Host " 3. 終了"
     Write-Host ""
-    $branchChoice = Read-Host "選択 (1-3)"
+    Write-Host " 0. 終了"
+    Write-Host ""
+    $branchChoice = Read-Host "選択 (0-2)"
 
     switch ($branchChoice) {
+        "0" {
+            # 終了
+            exit 0
+        }
         "1" {
             # 同期処理へ
             break branchLoop
@@ -162,9 +167,6 @@ Write-Host ""
                 Write-Host "[エラー] 無効な番号です" -ForegroundColor Red
                 Write-Host ""
             }
-        }
-        "3" {
-            exit 0
         }
         default {
             Write-Host "無効な選択です。" -ForegroundColor Red
@@ -299,9 +301,16 @@ Write-Host ""
 Write-Host "------------------------------------------------------------------------" -ForegroundColor Yellow
 Write-Host "次の操作を選択してください:" -ForegroundColor Cyan
 Write-Host " 1. 変更をコミットする"
-Write-Host " 2. 何もせず終了"
+Write-Host ""
+Write-Host " 0. 何もせず終了"
 Write-Host "------------------------------------------------------------------------" -ForegroundColor Yellow
-$commitChoice = Read-Host "選択 (1-2)"
+$commitChoice = Read-Host "選択 (0-1)"
+
+if ($commitChoice -eq "0") {
+    Write-Host ""
+    Write-Host "処理を終了します。" -ForegroundColor Yellow
+    exit 0
+}
 
 if ($commitChoice -eq "1") {
     Write-Host ""
