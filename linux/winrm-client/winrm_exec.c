@@ -1,139 +1,279 @@
 /*
+ * ============================================================================
  * WinRM Remote Batch Executor for Linux (C言語版 - 標準ライブラリのみ)
- * Linux（Red Hat等）からWindows Server 2022へWinRM接続してバッチを実行
- * NTLM認証を標準ライブラリのみで実装
+ * ============================================================================
  *
- * 必要なライブラリ: なし（標準ライブラリのみ）
+ * 【概要】
+ * このプログラムは、LinuxからWindows ServerへWinRM (Windows Remote Management)
+ * プロトコルを使用してリモート接続し、バッチファイルを実行するツールです。
  *
- * コンパイル:
- *   gcc -o winrm_exec_ntlm winrm_exec_ntlm.c
+ * 【特徴】
+ * - 標準ライブラリのみ使用（外部ライブラリ不要）
+ * - NTLM v2認証を自前実装（MD4, MD5, HMAC-MD5を含む）
+ * - IT制限環境でも動作可能（pip/yum等のパッケージ管理不要）
+ * - Windows側の設定変更不要（デフォルトのNTLM認証を使用）
  *
- * 使い方:
+ * 【なぜ標準ライブラリのみで実装するのか】
+ * 企業のIT制限環境では、外部ライブラリのインストールが禁止されていることが多い。
+ * このプログラムは、そのような環境でも確実に動作するよう設計されている。
+ *
+ * 【NTLM認証の仕組み】
+ * NTLM認証は3段階のハンドシェイクで構成される：
+ *   1. Type 1 (Negotiate): クライアントが認証開始を宣言
+ *   2. Type 2 (Challenge): サーバーがランダムなチャレンジを返送
+ *   3. Type 3 (Authenticate): クライアントがチャレンジに対する応答を送信
+ *
+ * 【WinRMプロトコルの流れ】
+ *   1. シェル作成 (Create): リモートシェルセッションを開始
+ *   2. コマンド実行 (Command): バッチファイルを実行
+ *   3. 出力取得 (Receive): 標準出力・標準エラーを取得
+ *   4. シェル削除 (Delete): セッションをクリーンアップ
+ *
+ * 【必要な環境】
+ * - Linux（Red Hat, CentOS, Ubuntu等）
+ * - GCCコンパイラ
+ * - ネットワーク接続（ポート5985/HTTP または 5986/HTTPS）
+ *
+ * 【コンパイル方法】
+ *   gcc -o winrm_exec winrm_exec.c
+ *   # 警告を確認する場合
+ *   gcc -Wall -o winrm_exec winrm_exec.c
+ *
+ * 【使い方】
  *   1. このソースファイル内の設定セクションを編集
- *   2. コンパイル: gcc -o winrm_exec_ntlm winrm_exec_ntlm.c
- *   3. 実行: ./winrm_exec_ntlm ENV
+ *   2. コンパイル: gcc -o winrm_exec winrm_exec.c
+ *   3. 実行: ./winrm_exec ENV
  *
  *   環境を引数で指定（必須）:
- *   ./winrm_exec_ntlm TST1T
- *   ./winrm_exec_ntlm TST2T
+ *   ./winrm_exec TST1T
+ *   ./winrm_exec TST2T
  *
  *   または環境変数で設定を上書き:
- *   WINRM_HOST=192.168.1.100 WINRM_USER=Admin WINRM_PASS=Pass123 ./winrm_exec_ntlm TST1T
+ *   WINRM_HOST=192.168.1.100 WINRM_USER=Admin WINRM_PASS=Pass123 ./winrm_exec TST1T
+ *
+ * 【セキュリティに関する注意】
+ * - パスワードはソースコード内に記載するため、適切なファイル権限を設定すること
+ * - 本番環境では環境変数での上書きを推奨
+ *
+ * ============================================================================
  */
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <stdbool.h>
-#include <stdint.h>
-#include <time.h>
-#include <unistd.h>
-#include <sys/socket.h>
-#include <sys/time.h>
-#include <netinet/in.h>
-#include <netdb.h>
-#include <errno.h>
-#include <fcntl.h>
+/* ============================================================================
+ * インクルードファイル
+ * すべて標準ライブラリのみを使用（外部依存なし）
+ * ============================================================================ */
 
-/* ==================== 設定セクション ====================
- * ここを編集して使用してください
- */
+#include <stdio.h>      /* 標準入出力: printf, fprintf, fopen等 */
+#include <stdlib.h>     /* 標準ユーティリティ: malloc, free, getenv, atoi等 */
+#include <string.h>     /* 文字列操作: strcpy, strcat, strlen, memcpy等 */
+#include <stdbool.h>    /* ブール型: true, false */
+#include <stdint.h>     /* 固定幅整数型: uint8_t, uint16_t, uint32_t, uint64_t */
+#include <time.h>       /* 時間関連: time, srand */
+#include <unistd.h>     /* POSIX API: close, usleep, read, write */
+#include <sys/socket.h> /* ソケットAPI: socket, connect, send, recv */
+#include <sys/time.h>   /* 時間構造体: gettimeofday, timeval */
+#include <netinet/in.h> /* インターネットアドレス: sockaddr_in, htons */
+#include <netdb.h>      /* ネットワークデータベース: gethostbyname, hostent */
+#include <errno.h>      /* エラー番号: errno */
+#include <fcntl.h>      /* ファイル制御: open, O_RDONLY等 */
 
-/* Windows接続情報 */
-#define DEFAULT_HOST "192.168.1.100"
-#define DEFAULT_USER "Administrator"
-#define DEFAULT_PASS "YourPassword"
-#define DEFAULT_DOMAIN ""                /* ドメイン（空文字列でローカル認証） */
-#define DEFAULT_PORT 5985                /* WinRMポート（HTTP: 5985, HTTPS: 5986） */
+/* ============================================================================
+ * 設定セクション（ユーザー編集エリア）
+ * ============================================================================
+ *
+ * 【使用方法】
+ * 1. 以下の設定値を環境に合わせて編集してください
+ * 2. コンパイルして実行: gcc -o winrm_exec winrm_exec.c && ./winrm_exec TST1T
+ *
+ * 【設定の優先順位】
+ * 環境変数 > ソースコード内の設定
+ * 例: WINRM_HOST=10.0.0.1 ./winrm_exec TST1T
+ *     → 環境変数の値が優先される
+ * ============================================================================ */
 
-/* 実行するバッチファイル（Windows側のパス）
- * {ENV} は選択した環境フォルダ名に置換されます */
+/* --- Windows接続情報 --- */
+#define DEFAULT_HOST "192.168.1.100"     /* Windows ServerのIPアドレスまたはホスト名 */
+#define DEFAULT_USER "Administrator"      /* Windowsのログインユーザー名 */
+#define DEFAULT_PASS "YourPassword"       /* Windowsのログインパスワード */
+#define DEFAULT_DOMAIN ""                 /* ドメイン名（空文字列 = ローカル認証） */
+#define DEFAULT_PORT 5985                 /* WinRMポート: HTTP=5985, HTTPS=5986 */
+
+/* --- 実行するバッチファイル ---
+ * {ENV} プレースホルダは実行時に環境名（TST1T等）に置換されます
+ * 例: "C:\\Scripts\\{ENV}\\test.bat" → "C:\\Scripts\\TST1T\\test.bat"
+ * 注: {ENV}は複数箇所に使用可能（whileループで全て置換） */
 #define DEFAULT_BATCH_PATH "C:\\Scripts\\{ENV}\\test.bat"
 
-/* 利用可能な環境のリスト */
+/* --- 利用可能な環境のリスト ---
+ * コマンドライン引数で指定可能な環境名を定義
+ * 新しい環境を追加する場合はこのリストに追加してください
+ * 最後は必ずNULLで終端すること */
 static const char *ENVIRONMENTS[] = {"TST1T", "TST2T", NULL};
 
-/* タイムアウト（秒） */
+/* --- タイムアウト設定 ---
+ * コマンド実行の最大待機時間（秒）
+ * バッチ処理が長時間かかる場合は増やしてください */
 #define TIMEOUT 300
 
-/* デバッグモード（1にするとXML送受信を表示） */
+/* --- デバッグモード ---
+ * 1: 送受信するSOAP XMLを表示（トラブルシューティング用）
+ * 0: 通常モード（本番運用時はこちら） */
 #define DEBUG 0
 
-/* ========================================================= */
+/* ============================================================================ */
 
-/* 色付き出力用 */
-#define COLOR_RED     "\033[0;31m"
-#define COLOR_GREEN   "\033[0;32m"
-#define COLOR_YELLOW  "\033[1;33m"
-#define COLOR_BLUE    "\033[0;34m"
-#define COLOR_RESET   "\033[0m"
+/* ============================================================================
+ * 定数定義
+ * ============================================================================ */
 
-/* バッファサイズ */
-#define MAX_BUFFER_SIZE 65536
-#define MAX_HEADER_SIZE 4096
-#define MAX_URL_SIZE 512
-#define MAX_UUID_SIZE 64
-#define MAX_ENVELOPE_SIZE 8192
+/* --- コンソール色付き出力用ANSIエスケープシーケンス ---
+ * Linuxターミナルでログメッセージを色分け表示するために使用 */
+#define COLOR_RED     "\033[0;31m"  /* エラーメッセージ用（赤） */
+#define COLOR_GREEN   "\033[0;32m"  /* 成功メッセージ用（緑） */
+#define COLOR_YELLOW  "\033[1;33m"  /* 警告メッセージ用（黄） */
+#define COLOR_BLUE    "\033[0;34m"  /* 情報メッセージ用（青） */
+#define COLOR_RESET   "\033[0m"     /* 色をリセット */
 
-/* NTLM定数 */
+/* --- バッファサイズ定義 ---
+ * 各種データ格納用のバッファサイズを定義
+ * 大きなXMLレスポンスを扱うため、十分なサイズを確保 */
+#define MAX_BUFFER_SIZE 65536   /* HTTPレスポンス受信用バッファ（64KB） */
+#define MAX_HEADER_SIZE 4096    /* HTTPヘッダー用バッファ（4KB） */
+#define MAX_URL_SIZE 512        /* URL文字列用バッファ */
+#define MAX_UUID_SIZE 64        /* UUID文字列用バッファ */
+#define MAX_ENVELOPE_SIZE 8192  /* SOAP XMLエンベロープ用バッファ（8KB） */
+
+/* ============================================================================
+ * NTLM認証プロトコル定数
+ * ============================================================================
+ *
+ * NTLM (NT LAN Manager) は、Microsoftが開発したチャレンジ・レスポンス認証プロトコル。
+ * Windows環境でデフォルトで有効になっており、設定変更なしで使用可能。
+ *
+ * 【認証フロー】
+ * クライアント                    サーバー
+ *     |--- Type 1 (Negotiate) --->|  認証開始を宣言
+ *     |<-- Type 2 (Challenge) ----|  8バイトのランダムチャレンジを送信
+ *     |--- Type 3 (Authenticate)->|  チャレンジに対する暗号化応答
+ *     |<-- 認証成功/失敗 ---------|
+ * ============================================================================ */
+
+/* NTLM署名: すべてのNTLMメッセージの先頭に配置される固定文字列 */
 #define NTLM_SIGNATURE "NTLMSSP\0"
-#define NTLM_TYPE1 1
-#define NTLM_TYPE2 2
-#define NTLM_TYPE3 3
 
-/* NTLMフラグ */
-#define NTLMSSP_NEGOTIATE_UNICODE          0x00000001
-#define NTLMSSP_NEGOTIATE_OEM              0x00000002
-#define NTLMSSP_REQUEST_TARGET             0x00000004
-#define NTLMSSP_NEGOTIATE_NTLM             0x00000200
-#define NTLMSSP_NEGOTIATE_ALWAYS_SIGN      0x00008000
-#define NTLMSSP_NEGOTIATE_EXTENDED_SESSIONSECURITY 0x00080000
-#define NTLMSSP_NEGOTIATE_TARGET_INFO      0x00800000
+/* NTLMメッセージタイプ */
+#define NTLM_TYPE1 1  /* Negotiate: クライアント→サーバー（認証開始） */
+#define NTLM_TYPE2 2  /* Challenge: サーバー→クライアント（チャレンジ送信） */
+#define NTLM_TYPE3 3  /* Authenticate: クライアント→サーバー（認証応答） */
 
-/* グローバル設定（環境変数で上書き可能） */
-static char g_host[256];
-static char g_user[256];
-static char g_pass[256];
-static char g_domain[256];
-static int g_port;
-static char g_batch_path[512];
-static char g_env_folder[64];
+/* NTLMネゴシエーションフラグ
+ * クライアントとサーバー間で使用する機能を交渉するためのビットフラグ */
+#define NTLMSSP_NEGOTIATE_UNICODE          0x00000001  /* Unicode文字列を使用 */
+#define NTLMSSP_NEGOTIATE_OEM              0x00000002  /* OEM文字列を使用 */
+#define NTLMSSP_REQUEST_TARGET             0x00000004  /* ターゲット情報を要求 */
+#define NTLMSSP_NEGOTIATE_NTLM             0x00000200  /* NTLM認証を使用 */
+#define NTLMSSP_NEGOTIATE_ALWAYS_SIGN      0x00008000  /* 常に署名を使用 */
+#define NTLMSSP_NEGOTIATE_EXTENDED_SESSIONSECURITY 0x00080000  /* NTLMv2セッションセキュリティ */
+#define NTLMSSP_NEGOTIATE_TARGET_INFO      0x00800000  /* TargetInfo構造体を含む */
 
-/* ログ関数 */
+/* ============================================================================
+ * グローバル変数
+ * ============================================================================
+ * 実行時に設定される接続情報を保持する変数群
+ * load_config()関数で初期化され、環境変数での上書きも可能
+ * ============================================================================ */
+static char g_host[256];        /* 接続先ホスト名/IPアドレス */
+static char g_user[256];        /* 認証ユーザー名 */
+static char g_pass[256];        /* 認証パスワード */
+static char g_domain[256];      /* ドメイン名（ローカル認証時は空） */
+static int g_port;              /* WinRMポート番号 */
+static char g_batch_path[512];  /* 実行するバッチファイルのパス */
+static char g_env_folder[64];   /* 選択された環境フォルダ名 */
+
+/* ============================================================================
+ * ログ出力関数
+ * ============================================================================
+ * コンソールに色付きでログメッセージを出力するユーティリティ関数群
+ * 標準エラー出力(stderr)を使用することで、標準出力と分離可能
+ * ============================================================================ */
+
+/* 情報メッセージ（青）: 処理の進行状況等を通知 */
 static void log_info(const char *msg) {
     fprintf(stderr, "%s[INFO]%s %s\n", COLOR_BLUE, COLOR_RESET, msg);
 }
 
+/* 成功メッセージ（緑）: 処理が正常に完了したことを通知 */
 static void log_success(const char *msg) {
     fprintf(stderr, "%s[SUCCESS]%s %s\n", COLOR_GREEN, COLOR_RESET, msg);
 }
 
+/* 警告メッセージ（黄）: 注意が必要だが処理は継続可能 */
 static void log_warn(const char *msg) {
     fprintf(stderr, "%s[WARN]%s %s\n", COLOR_YELLOW, COLOR_RESET, msg);
 }
 
+/* エラーメッセージ（赤）: 処理が失敗したことを通知 */
 static void log_error(const char *msg) {
     fprintf(stderr, "%s[ERROR]%s %s\n", COLOR_RED, COLOR_RESET, msg);
 }
 
-/* ==================== MD4実装 ==================== */
+/* ============================================================================
+ * MD4ハッシュアルゴリズム実装
+ * ============================================================================
+ *
+ * 【なぜMD4を自前実装するのか】
+ * - MD4はNTLM認証でパスワードハッシュの計算に必須
+ * - OpenSSLのMD4は多くのディストリビューションで非推奨/削除済み
+ * - 標準ライブラリにはMD4が含まれていない
+ * - 外部ライブラリに依存せずIT制限環境で動作させるため
+ *
+ * 【MD4アルゴリズムの概要】
+ * - 入力: 任意長のデータ
+ * - 出力: 128ビット（16バイト）のハッシュ値
+ * - RFC 1320で定義
+ * - 3ラウンド×16ステップ = 48ステップの処理
+ *
+ * 【セキュリティ上の注意】
+ * MD4は暗号学的に破られており、新規開発には推奨されない。
+ * ただし、NTLMプロトコルとの互換性のために使用が必要。
+ * ============================================================================ */
 
+/* --- MD4補助関数 ---
+ * 各ラウンドで使用される非線形関数 */
+
+/* Round 1用: 条件選択関数 - xが1のビットはyを、0のビットはzを選択 */
 static uint32_t md4_F(uint32_t x, uint32_t y, uint32_t z) {
     return (x & y) | (~x & z);
 }
 
+/* Round 2用: 多数決関数 - 3つの入力のうち2つ以上が1なら1 */
 static uint32_t md4_G(uint32_t x, uint32_t y, uint32_t z) {
     return (x & y) | (x & z) | (y & z);
 }
 
+/* Round 3用: パリティ関数 - XOR演算 */
 static uint32_t md4_H(uint32_t x, uint32_t y, uint32_t z) {
     return x ^ y ^ z;
 }
 
+/* 左循環シフト（ローテート）: ビットを左にn個回転 */
 static uint32_t md4_rotate_left(uint32_t x, int n) {
     return (x << n) | (x >> (32 - n));
 }
 
+/*
+ * md4_hash - MD4ハッシュを計算
+ *
+ * @input:  ハッシュ対象のデータ
+ * @len:    データの長さ（バイト）
+ * @output: ハッシュ値の出力先（16バイト以上必要）
+ *
+ * 処理の流れ:
+ * 1. メッセージのパディング（512ビットの倍数に調整）
+ * 2. 64バイトブロックごとに処理
+ * 3. 各ブロックで3ラウンド×16ステップの変換
+ * 4. 最終的な状態を出力
+ */
 static void md4_hash(const uint8_t *input, size_t len, uint8_t *output) {
     uint32_t a0 = 0x67452301;
     uint32_t b0 = 0xefcdab89;
@@ -222,8 +362,23 @@ static void md4_hash(const uint8_t *input, size_t len, uint8_t *output) {
     memcpy(output + 12, &d0, 4);
 }
 
-/* ==================== MD5実装 ==================== */
+/* ============================================================================
+ * MD5ハッシュアルゴリズム実装
+ * ============================================================================
+ *
+ * 【MD5の役割】
+ * NTLMv2認証では、MD5がHMAC-MD5の内部アルゴリズムとして使用される。
+ * - NTProofStr（認証応答）の計算
+ * - セッションキーの導出
+ *
+ * 【MD5アルゴリズムの概要】
+ * - 入力: 任意長のデータ
+ * - 出力: 128ビット（16バイト）のハッシュ値
+ * - RFC 1321で定義
+ * - 4ラウンド×16ステップ = 64ステップの処理
+ * ============================================================================ */
 
+/* MD5定数テーブル: sin関数から導出された64個の定数 */
 static const uint32_t md5_k[] = {
     0xd76aa478, 0xe8c7b756, 0x242070db, 0xc1bdceee,
     0xf57c0faf, 0x4787c62a, 0xa8304613, 0xfd469501,
@@ -243,13 +398,21 @@ static const uint32_t md5_k[] = {
     0xf7537e82, 0xbd3af235, 0x2ad7d2bb, 0xeb86d391
 };
 
+/* MD5シフト量テーブル: 各ステップでの左循環シフト量 */
 static const uint32_t md5_s[] = {
-    7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22,
-    5, 9, 14, 20, 5, 9, 14, 20, 5, 9, 14, 20, 5, 9, 14, 20,
-    4, 11, 16, 23, 4, 11, 16, 23, 4, 11, 16, 23, 4, 11, 16, 23,
-    6, 10, 15, 21, 6, 10, 15, 21, 6, 10, 15, 21, 6, 10, 15, 21
+    7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22,  /* Round 1 */
+    5, 9, 14, 20, 5, 9, 14, 20, 5, 9, 14, 20, 5, 9, 14, 20,      /* Round 2 */
+    4, 11, 16, 23, 4, 11, 16, 23, 4, 11, 16, 23, 4, 11, 16, 23,  /* Round 3 */
+    6, 10, 15, 21, 6, 10, 15, 21, 6, 10, 15, 21, 6, 10, 15, 21   /* Round 4 */
 };
 
+/*
+ * md5_hash - MD5ハッシュを計算
+ *
+ * @input:  ハッシュ対象のデータ
+ * @len:    データの長さ（バイト）
+ * @output: ハッシュ値の出力先（16バイト以上必要）
+ */
 static void md5_hash(const uint8_t *input, size_t len, uint8_t *output) {
     uint32_t a0 = 0x67452301;
     uint32_t b0 = 0xefcdab89;
@@ -304,8 +467,36 @@ static void md5_hash(const uint8_t *input, size_t len, uint8_t *output) {
     memcpy(output + 12, &d0, 4);
 }
 
-/* ==================== HMAC-MD5実装 ==================== */
+/* ============================================================================
+ * HMAC-MD5実装
+ * ============================================================================
+ *
+ * 【HMAC (Hash-based Message Authentication Code) とは】
+ * 秘密鍵を使用してメッセージの認証コードを生成するアルゴリズム。
+ * RFC 2104で定義。
+ *
+ * 【NTLMv2での用途】
+ * - NTLMv2ハッシュの生成: HMAC-MD5(NT_Hash, Username.upper() + Domain)
+ * - NTProofStrの生成: HMAC-MD5(NTLMv2Hash, ServerChallenge + Blob)
+ * - セッションキーの生成: HMAC-MD5(NTLMv2Hash, NTProofStr)
+ *
+ * 【計算式】
+ * HMAC(K, m) = H((K' XOR opad) || H((K' XOR ipad) || m))
+ * - K': 鍵（64バイトにパディング）
+ * - ipad: 0x36を64回繰り返し
+ * - opad: 0x5cを64回繰り返し
+ * - H: ハッシュ関数（ここではMD5）
+ * ============================================================================ */
 
+/*
+ * hmac_md5 - HMAC-MD5を計算
+ *
+ * @key:      秘密鍵
+ * @key_len:  秘密鍵の長さ
+ * @data:     認証対象のデータ
+ * @data_len: データの長さ
+ * @output:   HMAC値の出力先（16バイト）
+ */
 static void hmac_md5(const uint8_t *key, size_t key_len,
                      const uint8_t *data, size_t data_len,
                      uint8_t *output) {
@@ -339,11 +530,38 @@ static void hmac_md5(const uint8_t *key, size_t key_len,
     md5_hash(outer, 80, output);
 }
 
-/* ==================== Base64実装 ==================== */
+/* ============================================================================
+ * Base64エンコード/デコード実装
+ * ============================================================================
+ *
+ * 【Base64とは】
+ * バイナリデータをASCII文字列として表現するためのエンコード方式。
+ * RFC 4648で定義。
+ *
+ * 【NTLMでの用途】
+ * HTTPヘッダでNTLMメッセージをやり取りする際に使用。
+ * バイナリのNTLMメッセージをテキストとして送受信可能にする。
+ *
+ * 例: Authorization: NTLM TlRMTVNTUAABAAAABzIAAAYABgAoAAAA...
+ *
+ * 【エンコード方式】
+ * 3バイト（24ビット）を4文字（6ビット×4）に変換。
+ * 64種類の文字（A-Z, a-z, 0-9, +, /）を使用。
+ * パディングには'='を使用。
+ * ============================================================================ */
 
+/* Base64文字セット */
 static const char base64_chars[] =
     "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
+/*
+ * base64_encode - バイナリデータをBase64文字列にエンコード
+ *
+ * @input:  エンコード対象のバイナリデータ
+ * @len:    データの長さ
+ * @output: 出力先バッファ（入力の約1.4倍のサイズが必要）
+ * @return: 出力された文字数
+ */
 static size_t base64_encode(const uint8_t *input, size_t len, char *output) {
     size_t out_len = 0;
 
@@ -364,6 +582,14 @@ static size_t base64_encode(const uint8_t *input, size_t len, char *output) {
     return out_len;
 }
 
+/*
+ * base64_decode - Base64文字列をバイナリデータにデコード
+ *
+ * @input:       デコード対象のBase64文字列
+ * @output:      出力先バッファ
+ * @output_size: 出力バッファのサイズ
+ * @return:      デコードされたバイト数
+ */
 static size_t base64_decode(const char *input, uint8_t *output, size_t output_size) {
     size_t input_len = strlen(input);
     size_t output_len = 0;
@@ -388,9 +614,32 @@ static size_t base64_decode(const char *input, uint8_t *output, size_t output_si
     return output_len;
 }
 
-/* ==================== Unicode変換 ==================== */
+/* ============================================================================
+ * Unicode変換
+ * ============================================================================
+ *
+ * 【なぜUTF-16LEが必要か】
+ * WindowsはUTF-16LE（Little Endian）を内部文字コードとして使用。
+ * NTLM認証でもパスワードやユーザー名はUTF-16LEでエンコードする必要がある。
+ *
+ * 【LinuxとWindowsの文字コードの違い】
+ * - Linux: UTF-8が標準
+ * - Windows: UTF-16LE（内部）、Shift_JIS（日本語環境）
+ *
+ * 【UTF-8からUTF-16LEへの変換ルール】
+ * - 1バイト文字（ASCII）: 0x00-0x7F → 1バイト + 0x00
+ * - 2バイト文字: 110xxxxx 10xxxxxx → 2バイトLE
+ * - 3バイト文字: 1110xxxx 10xxxxxx 10xxxxxx → 2バイトLE
+ * ============================================================================ */
 
-/* UTF-8からUTF-16LEへ変換 */
+/*
+ * utf8_to_utf16le - UTF-8文字列をUTF-16LEに変換
+ *
+ * @utf8:       変換元のUTF-8文字列
+ * @utf16:      変換先のUTF-16LEバッファ
+ * @utf16_size: 出力バッファのサイズ
+ * @return:     変換後のバイト数
+ */
 static size_t utf8_to_utf16le(const char *utf8, uint8_t *utf16, size_t utf16_size) {
     size_t out_len = 0;
     const uint8_t *p = (const uint8_t *)utf8;
@@ -421,16 +670,63 @@ static size_t utf8_to_utf16le(const char *utf8, uint8_t *utf16, size_t utf16_siz
     return out_len;
 }
 
-/* ==================== NTLM認証実装 ==================== */
+/* ============================================================================
+ * NTLM認証実装
+ * ============================================================================
+ *
+ * 【NTLMv2認証の流れ】
+ *
+ * 1. NT Hashの生成
+ *    NT_Hash = MD4(UTF-16LE(Password))
+ *
+ * 2. NTLMv2 Hashの生成
+ *    NTLMv2_Hash = HMAC-MD5(NT_Hash, UTF-16LE(Username.upper() + Domain))
+ *
+ * 3. Type 1メッセージ（Negotiate）の送信
+ *    - 使用可能な認証方式を通知
+ *    - サポートするフラグを送信
+ *
+ * 4. Type 2メッセージ（Challenge）の受信
+ *    - サーバーから8バイトのチャレンジを受信
+ *    - TargetInfo構造体を受信（オプション）
+ *
+ * 5. Type 3メッセージ（Authenticate）の送信
+ *    - NTProofStr = HMAC-MD5(NTLMv2_Hash, ServerChallenge + Blob)
+ *    - NTResponse = NTProofStr + Blob
+ *    - Blobにはタイムスタンプ、クライアントチャレンジ等を含む
+ *
+ * 【セキュリティ考慮】
+ * - NTLMv2は、NTLMv1より安全（リプレイ攻撃耐性あり）
+ * - タイムスタンプにより時間制限付きの認証が可能
+ * - クライアントチャレンジにより、サーバー側のなりすましを防止
+ * ============================================================================ */
 
-/* NTLMハッシュを生成（パスワードからNTハッシュを計算） */
+/*
+ * ntlm_hash - NTハッシュを生成（パスワードのMD4ハッシュ）
+ *
+ * @password: パスワード（UTF-8）
+ * @hash:     出力先（16バイト）
+ *
+ * 計算式: NT_Hash = MD4(UTF-16LE(Password))
+ */
 static void ntlm_hash(const char *password, uint8_t *hash) {
     uint8_t utf16_pass[512];
     size_t utf16_len = utf8_to_utf16le(password, utf16_pass, sizeof(utf16_pass));
     md4_hash(utf16_pass, utf16_len, hash);
 }
 
-/* NTLMv2ハッシュを生成 */
+/*
+ * ntlmv2_hash - NTLMv2ハッシュを生成
+ *
+ * @password: パスワード（UTF-8）
+ * @user:     ユーザー名（UTF-8）
+ * @domain:   ドメイン名（UTF-8）
+ * @hash:     出力先（16バイト）
+ *
+ * 計算式: NTLMv2_Hash = HMAC-MD5(NT_Hash, UTF-16LE(Username.upper() + Domain))
+ *
+ * 注: ユーザー名は大文字に変換されるが、ドメイン名はそのまま使用
+ */
 static void ntlmv2_hash(const char *password, const char *user, const char *domain,
                         uint8_t *hash) {
     uint8_t nt_hash[16];
@@ -450,7 +746,20 @@ static void ntlmv2_hash(const char *password, const char *user, const char *doma
     hmac_md5(nt_hash, 16, utf16_ud, utf16_len, hash);
 }
 
-/* Type 1メッセージ（Negotiate）を生成 */
+/*
+ * ntlm_create_type1 - Type 1メッセージ（Negotiate）を生成
+ *
+ * @buffer:      出力バッファ
+ * @buffer_size: バッファサイズ
+ * @return:      生成されたメッセージのサイズ
+ *
+ * Type 1メッセージ構造:
+ * - Signature (8バイト): "NTLMSSP\0"
+ * - MessageType (4バイト): 0x00000001
+ * - NegotiateFlags (4バイト): サポートする機能フラグ
+ * - DomainNameFields (8バイト): ドメイン名（空）
+ * - WorkstationFields (8バイト): ワークステーション名（空）
+ */
 static size_t ntlm_create_type1(uint8_t *buffer, size_t buffer_size) {
     if (buffer_size < 32) return 0;
 
@@ -470,7 +779,27 @@ static size_t ntlm_create_type1(uint8_t *buffer, size_t buffer_size) {
     return 32;
 }
 
-/* Type 2メッセージ（Challenge）を解析 */
+/*
+ * ntlm_parse_type2 - Type 2メッセージ（Challenge）を解析
+ *
+ * @buffer:          受信したメッセージ
+ * @len:             メッセージ長
+ * @challenge:       サーバーチャレンジの出力先（8バイト）
+ * @flags:           ネゴシエートフラグの出力先
+ * @target_info:     TargetInfo構造体の出力先
+ * @target_info_len: TargetInfoの長さの出力先
+ * @return:          成功時true
+ *
+ * Type 2メッセージ構造:
+ * - Signature (8バイト): "NTLMSSP\0"
+ * - MessageType (4バイト): 0x00000002
+ * - TargetNameFields (8バイト)
+ * - NegotiateFlags (4バイト)
+ * - ServerChallenge (8バイト): ランダムなチャレンジ値 ← 重要
+ * - Reserved (8バイト)
+ * - TargetInfoFields (8バイト)
+ * - [TargetInfo]: サーバー情報（オプション）
+ */
 static bool ntlm_parse_type2(const uint8_t *buffer, size_t len,
                              uint8_t *challenge, uint32_t *flags,
                              uint8_t *target_info, size_t *target_info_len) {
@@ -499,7 +828,35 @@ static bool ntlm_parse_type2(const uint8_t *buffer, size_t len,
     return true;
 }
 
-/* Type 3メッセージ（Authenticate）を生成 */
+/*
+ * ntlm_create_type3 - Type 3メッセージ（Authenticate）を生成
+ *
+ * @user:            ユーザー名
+ * @password:        パスワード
+ * @domain:          ドメイン名
+ * @challenge:       サーバーから受信したチャレンジ（8バイト）
+ * @target_info:     サーバーから受信したTargetInfo
+ * @target_info_len: TargetInfoの長さ
+ * @buffer:          出力バッファ
+ * @buffer_size:     バッファサイズ
+ * @return:          生成されたメッセージのサイズ
+ *
+ * Type 3メッセージ構造:
+ * - Signature (8バイト): "NTLMSSP\0"
+ * - MessageType (4バイト): 0x00000003
+ * - LmChallengeResponseFields (8バイト): LMv2レスポンス（空）
+ * - NtChallengeResponseFields (8バイト): NTLMv2レスポンス
+ * - DomainNameFields (8バイト)
+ * - UserNameFields (8バイト)
+ * - WorkstationFields (8バイト)
+ * - EncryptedRandomSessionKeyFields (8バイト)
+ * - NegotiateFlags (4バイト)
+ * - [データ部分]: 各フィールドの実データ
+ *
+ * NTLMv2レスポンスの構造:
+ * - NTProofStr (16バイト): HMAC-MD5(NTLMv2Hash, ServerChallenge + Blob)
+ * - Blob: タイムスタンプ、クライアントチャレンジ、TargetInfo等
+ */
 static size_t ntlm_create_type3(const char *user, const char *password,
                                 const char *domain, const uint8_t *challenge,
                                 const uint8_t *target_info, size_t target_info_len,
@@ -618,9 +975,37 @@ static size_t ntlm_create_type3(const char *user, const char *password,
     return offset;
 }
 
-/* ==================== HTTP通信 ==================== */
+/* ============================================================================
+ * HTTP通信
+ * ============================================================================
+ *
+ * 【WinRMのトランスポート】
+ * WinRMはHTTP/HTTPSをトランスポートとして使用。
+ * - ポート5985: HTTP（暗号化なし、ただしNTLM認証あり）
+ * - ポート5986: HTTPS（SSL/TLS暗号化）
+ *
+ * 【HTTPリクエスト形式】
+ * POST /wsman HTTP/1.1
+ * Host: server:5985
+ * Authorization: NTLM <Base64エンコードされたNTLMメッセージ>
+ * Content-Type: application/soap+xml;charset=UTF-8
+ * Content-Length: <本文の長さ>
+ *
+ * <SOAP XMLエンベロープ>
+ *
+ * 【NTLM認証のHTTPでの流れ】
+ * 1. Type 1メッセージを含むリクエスト送信 → 401応答受信
+ * 2. 401のWWW-AuthenticateヘッダからType 2メッセージ取得
+ * 3. Type 3メッセージを含むリクエスト送信 → 200応答受信（認証成功）
+ * ============================================================================ */
 
-/* ソケット接続 */
+/*
+ * connect_to_host - サーバーへのTCPソケット接続を確立
+ *
+ * @host: ホスト名またはIPアドレス
+ * @port: ポート番号
+ * @return: ソケットファイルディスクリプタ（エラー時は-1）
+ */
 static int connect_to_host(const char *host, int port) {
     struct hostent *he;
     struct sockaddr_in server_addr;
@@ -661,7 +1046,22 @@ static int connect_to_host(const char *host, int port) {
     return sock;
 }
 
-/* HTTPレスポンスを受信 */
+/*
+ * recv_http_response - HTTPレスポンスを受信・解析
+ *
+ * @sock:        ソケットファイルディスクリプタ
+ * @buffer:      受信データ格納バッファ
+ * @buffer_size: バッファサイズ
+ * @http_code:   HTTPステータスコード出力先
+ * @auth_header: WWW-AuthenticateヘッダのNTLM部分出力先
+ * @return:      受信したバイト数
+ *
+ * 処理内容:
+ * 1. ヘッダ終端（\r\n\r\n）まで受信
+ * 2. HTTPステータスコードを抽出
+ * 3. WWW-AuthenticateヘッダからNTLMチャレンジを抽出
+ * 4. Content-Lengthに基づいて本文を受信
+ */
 static size_t recv_http_response(int sock, char *buffer, size_t buffer_size,
                                  int *http_code, char *auth_header) {
     size_t total = 0;
@@ -724,7 +1124,23 @@ static size_t recv_http_response(int sock, char *buffer, size_t buffer_size,
     return total;
 }
 
-/* NTLM認証付きHTTPリクエスト送信 */
+/*
+ * send_http_with_ntlm - NTLM認証を行いHTTP POSTリクエストを送信
+ *
+ * @host:          接続先ホスト
+ * @port:          接続先ポート
+ * @body:          リクエスト本文（SOAP XML）
+ * @response:      レスポンス本文格納バッファ
+ * @response_size: バッファサイズ
+ * @return:        成功時true
+ *
+ * 処理フロー:
+ * 1. Type 1メッセージを送信（認証開始）
+ * 2. 401応答からType 2メッセージ（チャレンジ）を取得
+ * 3. Type 2をデコード・解析
+ * 4. Type 3メッセージ（認証応答）を生成・送信
+ * 5. 200応答で認証成功、レスポンス本文を返却
+ */
 static bool send_http_with_ntlm(const char *host, int port, const char *body,
                                 char *response, size_t response_size) {
     int sock;
@@ -850,9 +1266,19 @@ static bool send_http_with_ntlm(const char *host, int port, const char *body,
     return true;
 }
 
-/* ==================== ユーティリティ関数 ==================== */
+/* ============================================================================
+ * ユーティリティ関数
+ * ============================================================================ */
 
-/* UUID生成 */
+/*
+ * generate_uuid - UUIDを生成
+ *
+ * @uuid: 出力バッファ
+ * @size: バッファサイズ
+ *
+ * WinRMのSOAPメッセージには各リクエストにユニークなMessageIDが必要。
+ * Linuxの /proc/sys/kernel/random/uuid を使用（利用可能な場合）。
+ */
 static void generate_uuid(char *uuid, size_t size) {
     FILE *fp = fopen("/proc/sys/kernel/random/uuid", "r");
     if (fp) {
@@ -868,7 +1294,16 @@ static void generate_uuid(char *uuid, size_t size) {
     }
 }
 
-/* XML特殊文字のエスケープ */
+/*
+ * xml_escape - XML特殊文字をエスケープ
+ *
+ * @src:      入力文字列
+ * @dst:      出力バッファ
+ * @dst_size: バッファサイズ
+ *
+ * SOAPメッセージに含めるコマンド文字列内の特殊文字を
+ * XMLエンティティに変換（例: & → &amp;）
+ */
 static void xml_escape(const char *src, char *dst, size_t dst_size) {
     size_t j = 0;
     for (size_t i = 0; src[i] && j < dst_size - 6; i++) {
@@ -884,7 +1319,18 @@ static void xml_escape(const char *src, char *dst, size_t dst_size) {
     dst[j] = '\0';
 }
 
-/* 文字列置換 */
+/*
+ * str_replace - 文字列内のすべての出現箇所を置換
+ *
+ * @str:     置換対象の文字列（直接変更される）
+ * @old:     検索文字列
+ * @new_str: 置換文字列
+ *
+ * 【重要】whileループを使用しているため、{ENV}が複数箇所にあっても
+ * すべて置換される。
+ *
+ * 例: "C:\\{ENV}\\sub\\{ENV}\\test.bat" → "C:\\TST1T\\sub\\TST1T\\test.bat"
+ */
 static void str_replace(char *str, const char *old, const char *new_str) {
     char buffer[MAX_BUFFER_SIZE];
     char *pos;
@@ -899,7 +1345,18 @@ static void str_replace(char *str, const char *old, const char *new_str) {
     }
 }
 
-/* XMLからタグの値を抽出 */
+/*
+ * extract_xml_value - XMLから指定タグの値を抽出
+ *
+ * @xml:        XML文字列
+ * @tag:        抽出するタグ名（例: "rsp:ShellId"）
+ * @value:      値の出力バッファ
+ * @value_size: バッファサイズ
+ * @return:     成功時true
+ *
+ * 単純な文字列検索で実装（完全なXMLパーサーは使用しない）。
+ * WinRMレスポンスからShellIdやCommandId等を抽出するために使用。
+ */
 static bool extract_xml_value(const char *xml, const char *tag, char *value, size_t value_size) {
     char open_tag[128], close_tag[128];
     snprintf(open_tag, sizeof(open_tag), "<%s>", tag);
@@ -920,9 +1377,49 @@ static bool extract_xml_value(const char *xml, const char *tag, char *value, siz
     return true;
 }
 
-/* ==================== WinRM操作 ==================== */
+/* ============================================================================
+ * WinRM操作
+ * ============================================================================
+ *
+ * 【WinRM (Windows Remote Management) とは】
+ * Microsoftが開発したリモート管理プロトコル。
+ * WS-Management（Web Services for Management）仕様に基づく。
+ *
+ * 【WinRMセッションの流れ】
+ * 1. Create: リモートシェル（cmd.exe）を作成
+ *    → ShellIdを取得
+ *
+ * 2. Command: シェル上でコマンドを実行
+ *    → CommandIdを取得
+ *
+ * 3. Receive: コマンドの出力（stdout/stderr）を取得
+ *    → 出力はBase64エンコードされて返される
+ *    → CommandState/Doneになるまでポーリング
+ *
+ * 4. Delete: シェルを削除（リソース解放）
+ *
+ * 【SOAPメッセージ形式】
+ * <?xml version="1.0" encoding="UTF-8"?>
+ * <s:Envelope xmlns:s="..." xmlns:a="..." ...>
+ *   <s:Header>
+ *     <a:Action>...</a:Action>
+ *     <w:ResourceURI>...</w:ResourceURI>
+ *     ...
+ *   </s:Header>
+ *   <s:Body>
+ *     ... 操作固有のXML ...
+ *   </s:Body>
+ * </s:Envelope>
+ * ============================================================================ */
 
-/* SOAPリクエスト送信 */
+/*
+ * send_soap_request - SOAPリクエストを送信
+ *
+ * @soap_envelope: 送信するSOAP XMLエンベロープ
+ * @response:      レスポンス格納バッファ
+ * @response_size: バッファサイズ
+ * @return:        成功時true
+ */
 static bool send_soap_request(const char *soap_envelope, char *response, size_t response_size) {
     if (DEBUG) {
         log_info("送信XML:");
@@ -937,7 +1434,16 @@ static bool send_soap_request(const char *soap_envelope, char *response, size_t 
     return send_http_with_ntlm(g_host, g_port, soap_envelope, response, response_size);
 }
 
-/* シェル作成 */
+/*
+ * create_shell - リモートシェル（cmd.exe）を作成
+ *
+ * @shell_id:      ShellIdの出力バッファ
+ * @shell_id_size: バッファサイズ
+ * @return:        成功時true
+ *
+ * WS-Transfer Createアクションを使用してリモートシェルを作成。
+ * 成功すると、後続のコマンド実行に使用するShellIdが返される。
+ */
 static bool create_shell(char *shell_id, size_t shell_id_size) {
     char url[MAX_URL_SIZE];
     char uuid[MAX_UUID_SIZE];
@@ -997,7 +1503,18 @@ static bool create_shell(char *shell_id, size_t shell_id_size) {
     return true;
 }
 
-/* コマンド実行 */
+/*
+ * run_command - シェル上でコマンドを実行
+ *
+ * @shell_id:        対象のShellId
+ * @command:         実行するコマンド文字列
+ * @command_id:      CommandIdの出力バッファ
+ * @command_id_size: バッファサイズ
+ * @return:          成功時true
+ *
+ * WinRS Commandアクションを使用してコマンドを実行。
+ * 成功すると、出力取得に使用するCommandIdが返される。
+ */
 static bool run_command(const char *shell_id, const char *command,
                         char *command_id, size_t command_id_size) {
     char url[MAX_URL_SIZE];
@@ -1058,7 +1575,22 @@ static bool run_command(const char *shell_id, const char *command,
     return true;
 }
 
-/* コマンド出力取得 */
+/*
+ * get_command_output - コマンドの出力を取得
+ *
+ * @shell_id:    対象のShellId
+ * @command_id:  対象のCommandId
+ * @stdout_buf:  標準出力の格納バッファ
+ * @stdout_size: 標準出力バッファサイズ
+ * @stderr_buf:  標準エラー出力の格納バッファ
+ * @stderr_size: 標準エラーバッファサイズ
+ * @exit_code:   終了コードの出力先
+ * @return:      成功時true
+ *
+ * WinRS Receiveアクションを使用して出力を取得。
+ * CommandState/Doneになるまでポーリングを繰り返す。
+ * 出力はBase64エンコードされているためデコードが必要。
+ */
 static bool get_command_output(const char *shell_id, const char *command_id,
                                char *stdout_buf, size_t stdout_size,
                                char *stderr_buf, size_t stderr_size,
@@ -1179,7 +1711,14 @@ static bool get_command_output(const char *shell_id, const char *command_id,
     return true;
 }
 
-/* シェル削除 */
+/*
+ * delete_shell - リモートシェルを削除
+ *
+ * @shell_id: 削除対象のShellId
+ *
+ * WS-Transfer Deleteアクションを使用してシェルを削除。
+ * リソース解放のため、コマンド完了後は必ず呼び出すこと。
+ */
 static void delete_shell(const char *shell_id) {
     char url[MAX_URL_SIZE];
     char uuid[MAX_UUID_SIZE];
@@ -1218,9 +1757,16 @@ static void delete_shell(const char *shell_id) {
     log_success("シェル削除完了");
 }
 
-/* ==================== メイン ==================== */
+/* ============================================================================
+ * メイン処理
+ * ============================================================================ */
 
-/* 環境変数から設定を読み込み */
+/*
+ * load_config - 設定を読み込み
+ *
+ * デフォルト値を設定し、環境変数があれば上書き。
+ * 環境変数: WINRM_HOST, WINRM_USER, WINRM_PASS, WINRM_DOMAIN, WINRM_PORT
+ */
 static void load_config(void) {
     const char *env;
 
@@ -1243,7 +1789,11 @@ static void load_config(void) {
     strncpy(g_batch_path, env ? env : DEFAULT_BATCH_PATH, sizeof(g_batch_path) - 1);
 }
 
-/* ヘルプ表示 */
+/*
+ * print_help - 使い方を表示
+ *
+ * @prog_name: プログラム名（argv[0]）
+ */
 static void print_help(const char *prog_name) {
     printf("使い方: %s ENV\n\n", prog_name);
     printf("引数:\n");
@@ -1261,7 +1811,23 @@ static void print_help(const char *prog_name) {
     printf("  WINRM_HOST, WINRM_PORT, WINRM_USER, WINRM_PASS, WINRM_DOMAIN\n");
 }
 
+/*
+ * main - メインエントリーポイント
+ *
+ * 処理フロー:
+ * 1. 引数チェック（環境名の指定が必須）
+ * 2. 設定読み込み（デフォルト値 + 環境変数）
+ * 3. 環境名の有効性チェック
+ * 4. バッチファイルパスの{ENV}プレースホルダ置換
+ * 5. WinRM接続・コマンド実行
+ * 6. 結果表示
+ *
+ * @argc: 引数の数
+ * @argv: 引数配列
+ * @return: 終了コード（成功時0、エラー時1以上）
+ */
 int main(int argc, char *argv[]) {
+    /* 乱数シード初期化（クライアントチャレンジ生成用） */
     srand(time(NULL));
 
     /* 引数チェック */
