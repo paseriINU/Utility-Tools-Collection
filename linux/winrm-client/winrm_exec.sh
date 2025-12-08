@@ -58,12 +58,18 @@ ENV_ARG="$1"
 
 # ==================== 設定セクション ====================
 # ここを編集して使用してください
+# 注意: バックスラッシュ(\)を含む値はシングルクォートで囲むこと
+#       例: _DEFAULT_USER='DOMAIN\username'
 
 # Windows接続情報
-WINRM_HOST="${WINRM_HOST:-192.168.1.100}"        # Windows ServerのIPアドレスまたはホスト名
-WINRM_PORT="${WINRM_PORT:-5985}"                 # WinRMポート（HTTP: 5985, HTTPS: 5986）
-WINRM_USER="${WINRM_USER:-Administrator}"        # Windowsユーザー名
-WINRM_PASS="${WINRM_PASS:-YourPassword}"         # Windowsパスワード
+# ドメインユーザーの場合: 'DOMAIN\username' または 'username@domain.local'
+_DEFAULT_HOST='192.168.1.100'
+_DEFAULT_USER='Administrator'
+_DEFAULT_PASS='YourPassword'
+WINRM_HOST="${WINRM_HOST:-$_DEFAULT_HOST}"        # Windows ServerのIPアドレスまたはホスト名
+WINRM_PORT="${WINRM_PORT:-5985}"                  # WinRMポート（HTTP: 5985, HTTPS: 5986）
+WINRM_USER="${WINRM_USER:-$_DEFAULT_USER}"        # Windowsユーザー名
+WINRM_PASS="${WINRM_PASS:-$_DEFAULT_PASS}"        # Windowsパスワード
 
 # 環境フォルダ名のリスト（実行時に選択可能）
 # 新しい環境を追加する場合は、この配列に追加してください
