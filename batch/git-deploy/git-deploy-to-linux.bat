@@ -158,6 +158,16 @@ if ($LASTEXITCODE -eq 0) {
 
 # 作業ディレクトリも同じ形式で表示（Windows形式に統一）
 Write-Color "[情報] 作業ディレクトリ: $GIT_ROOT" "Green"
+
+# $GIT_ROOT から $gitRootDir への相対パス（サブディレクトリパス）を計算
+# 例: $gitRootDir = C:\repo, $GIT_ROOT = C:\repo\src → $subDirPath = src
+$subDirPath = ""
+$gitRootNormalized = $gitRootDir.TrimEnd("\")
+$workDirNormalized = "$GIT_ROOT".TrimEnd("\")
+if ($workDirNormalized.StartsWith($gitRootNormalized + "\")) {
+    $subDirPath = $workDirNormalized.Substring($gitRootNormalized.Length + 1)
+    Write-Color "[情報] 転送対象サブディレクトリ: $subDirPath" "Green"
+}
 Write-Host ""
 
 #region 環境選択
@@ -417,12 +427,24 @@ foreach ($file in $filesToTransfer) {
 
     # Windowsのパス区切り(\)をLinux形式(/)に変換
     $linuxPath = $file.Path.Replace("\", "/")
-    $remotePath = "${REMOTE_DIR}${linuxPath}"
+
+    # サブディレクトリパスを除去してリモートパスを計算
+    # 例: $subDirPath = "src", $linuxPath = "src/main.c" → $remoteRelPath = "main.c"
+    $remoteRelPath = $linuxPath
+    if ($subDirPath -ne "") {
+        $subDirPathLinux = $subDirPath.Replace("\", "/")
+        if ($linuxPath.StartsWith($subDirPathLinux + "/")) {
+            $remoteRelPath = $linuxPath.Substring($subDirPathLinux.Length + 1)
+        }
+    }
+    $remotePath = "${REMOTE_DIR}${remoteRelPath}"
 
     Write-Color "[転送] $($file.Path)" "Cyan"
+    Write-Host "  ローカル: $localPath"
+    Write-Host "  リモート: ${SSH_USER}@${SSH_HOST}:${remotePath}"
 
-    # Linux側で親ディレクトリを作成
-    $parentDir = Split-Path $linuxPath -Parent
+    # Linux側で親ディレクトリを作成（サブディレクトリ除去後のパスで計算）
+    $parentDir = Split-Path $remoteRelPath -Parent
     if ($parentDir) {
         $parentDir = $parentDir.Replace("\", "/")
         $remoteParentDir = "${REMOTE_DIR}${parentDir}"
