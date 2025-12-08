@@ -117,7 +117,7 @@ function Delete-RemoteBranch {
     Write-Host ""
 
     $maxNum = $remoteBranches.Count
-    $selection = Read-Host "削除するブランチ番号を入力 (1-$maxNum, 0=キャンセル)"
+    $selection = Read-Host "削除するブランチ番号を入力 (0-$maxNum)"
 
     if ($selection -eq "0") { return }
 
@@ -203,7 +203,7 @@ function Delete-LocalBranch {
     Write-Host ""
 
     $maxNum = $localBranches.Count
-    $selection = Read-Host "削除するブランチ番号を入力 (1-$maxNum, 0=キャンセル)"
+    $selection = Read-Host "削除するブランチ番号を入力 (0-$maxNum)"
 
     if ($selection -eq "0") { return }
 
@@ -250,7 +250,7 @@ function Delete-LocalBranch {
             Write-Host ""
 
             $switchMaxNum = $switchableBranches.Count
-            $switchSelection = Read-Host "切り替え先番号を入力 (1-$switchMaxNum, 0=キャンセル)"
+            $switchSelection = Read-Host "切り替え先番号を入力 (0-$switchMaxNum)"
 
             if ($switchSelection -eq "0") { return }
 
@@ -396,7 +396,7 @@ function Delete-BothBranches {
     Write-Host ""
 
     $maxNum = $commonBranches.Count
-    $selection = Read-Host "削除するブランチ番号を入力 (1-$maxNum, 0=キャンセル)"
+    $selection = Read-Host "削除するブランチ番号を入力 (0-$maxNum)"
 
     if ($selection -eq "0") { return }
 
@@ -438,7 +438,7 @@ function Delete-BothBranches {
             Write-Host ""
 
             $switchMaxNum = $switchableBranches.Count
-            $switchSelection = Read-Host "切り替え先番号を入力 (1-$switchMaxNum, 0=キャンセル)"
+            $switchSelection = Read-Host "切り替え先番号を入力 (0-$switchMaxNum)"
 
             if ($switchSelection -eq "0") { return }
 
@@ -477,31 +477,32 @@ function Delete-BothBranches {
 
         $forceLocal = ($deleteMode -eq "2")
 
-        $confirm = Read-Host "リモート＆ローカルブランチを削除しますか? (y/n)"
+        $confirm = Read-Host "ローカル＆リモートブランチを削除しますか? (y/n)"
         if ($confirm -eq "y") {
             Write-Host ""
-            Write-Host "リモートブランチを削除中..." -ForegroundColor Yellow
-            git push $remoteName --delete $selectedBranch
+            Write-Host "ローカルブランチを削除中..." -ForegroundColor Yellow
+            if ($forceLocal) {
+                git branch -D $selectedBranch
+            } else {
+                git branch -d $selectedBranch
+            }
 
             if ($LASTEXITCODE -eq 0) {
-                Write-Host "ローカルブランチを削除中..." -ForegroundColor Yellow
-                if ($forceLocal) {
-                    git branch -D $selectedBranch
-                } else {
-                    git branch -d $selectedBranch
-                }
+                Write-Host "リモートブランチを削除中..." -ForegroundColor Yellow
+                git push $remoteName --delete $selectedBranch
 
                 if ($LASTEXITCODE -eq 0) {
                     Write-Host ""
-                    Write-Host "リモート＆ローカルブランチを削除しました: $selectedBranch" -ForegroundColor Green
+                    Write-Host "ローカル＆リモートブランチを削除しました: $selectedBranch" -ForegroundColor Green
                 } else {
                     Write-Host ""
-                    Write-Host "[エラー] ローカルブランチの削除に失敗しました" -ForegroundColor Red
-                    Write-Host "リモートブランチは削除されましたが、ローカルブランチはマージされていない可能性があります" -ForegroundColor Yellow
+                    Write-Host "[エラー] リモートブランチの削除に失敗しました" -ForegroundColor Red
+                    Write-Host "ローカルブランチは削除されましたが、リモートブランチの削除に失敗しました" -ForegroundColor Yellow
                 }
             } else {
                 Write-Host ""
-                Write-Host "[エラー] リモートブランチの削除に失敗しました" -ForegroundColor Red
+                Write-Host "[エラー] ローカルブランチの削除に失敗しました" -ForegroundColor Red
+                Write-Host "このブランチはマージされていない可能性があります" -ForegroundColor Yellow
             }
             Read-Host "Enterキーで戻る"
         }
