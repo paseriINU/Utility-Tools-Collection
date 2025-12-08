@@ -106,7 +106,7 @@ git branch
 Write-Host ""
 
 # ブランチ操作メニュー
-while ($true) {
+:branchLoop while ($true) {
     Write-Host "ブランチ操作を選択してください:" -ForegroundColor Cyan
     Write-Host " 1. このまま続行"
     Write-Host " 2. ブランチを切り替える"
@@ -117,7 +117,7 @@ while ($true) {
     switch ($branchChoice) {
         "1" {
             # 同期処理へ
-            break
+            break branchLoop
         }
         "2" {
             Write-Host ""
