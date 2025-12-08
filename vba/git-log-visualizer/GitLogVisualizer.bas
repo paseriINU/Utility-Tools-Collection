@@ -30,16 +30,12 @@ Private Const COMMIT_COUNT As Long = 100
 ' Gitコマンドのパス（通常は "git" でOK。パスが通っていない場合はフルパス指定）
 Private Const GIT_COMMAND As String = "git"
 
-'==============================================================================
-' デフォルトのGitリポジトリパスを取得
-'==============================================================================
-Private Function GetDefaultRepoPath() As String
-    ' C:\Users\%USERNAME%\source\Git\project
-    GetDefaultRepoPath = "C:\Users\" & Environ("USERNAME") & "\source\Git\project"
-End Function
+' デフォルトのGitリポジトリパス
+' C:\Users\%USERNAME%\source\Git\project 形式で設定
+Private Const DEFAULT_REPO_PATH_TEMPLATE As String = "C:\Users\{USER}\source\Git\project"
 
 '==============================================================================
-' データ構造
+' データ構造（※Type定義はFunction/Subより前に記述する必要があります）
 '==============================================================================
 Private Type CommitInfo
     Hash As String          ' コミットハッシュ（短縮）
@@ -55,6 +51,13 @@ Private Type CommitInfo
     Insertions As Long      ' 追加行数
     Deletions As Long       ' 削除行数
 End Type
+
+'==============================================================================
+' デフォルトのGitリポジトリパスを取得
+'==============================================================================
+Private Function GetDefaultRepoPath() As String
+    GetDefaultRepoPath = Replace(DEFAULT_REPO_PATH_TEMPLATE, "{USER}", Environ("USERNAME"))
+End Function
 
 '==============================================================================
 ' メインプロシージャ: Git Log を可視化
