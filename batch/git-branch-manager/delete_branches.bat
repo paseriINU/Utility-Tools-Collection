@@ -399,15 +399,16 @@ while ($true) {
     Write-Host " 1. リモートブランチを削除"
     Write-Host " 2. ローカルブランチを削除"
     Write-Host " 3. リモート＆ローカル両方を削除"
-    Write-Host " 4. 終了"
     Write-Host ""
-    $choice = Read-Host "選択してください (1-4)"
+    Write-Host " 0. 終了"
+    Write-Host ""
+    $choice = Read-Host "選択 (0-3)"
 
     switch ($choice) {
+        "0" { exit 0 }
         "1" { Delete-RemoteBranch }
         "2" { Delete-LocalBranch }
         "3" { Delete-BothBranches }
-        "4" { exit 0 }
         default {
             Write-Host "無効な選択です" -ForegroundColor Red
             Start-Sleep -Seconds 1
