@@ -274,6 +274,18 @@ if ($transferMode -eq "changed") {
             return
         }
 
+        # サブディレクトリパスを除去（配下フォルダからの相対パスに変換）
+        # 例: $subDirPath = "src", $filePath = "src/main.c" → $filePath = "main.c"
+        if ($subDirPath -ne "") {
+            $subDirPathLinux = $subDirPath.Replace("\", "/")
+            if ($filePath.StartsWith($subDirPathLinux + "/")) {
+                $filePath = $filePath.Substring($subDirPathLinux.Length + 1)
+            } else {
+                # 配下フォルダ外のファイルは除外
+                return
+            }
+        }
+
         # 拡張子フィルタ
         if ($TARGET_EXTENSIONS.Count -eq 0) {
             # フィルタなし
@@ -422,29 +434,21 @@ $failCount = 0
 $failedFiles = @()
 
 foreach ($file in $filesToTransfer) {
-    # ローカルパスはGitリポジトリルートからの相対パスで計算
-    $localPath = Join-Path $gitRootDir $file.Path
+    # ローカルパスは配下フォルダ（$GIT_ROOT）からの相対パスで計算
+    $localPath = Join-Path $GIT_ROOT $file.Path
 
     # Windowsのパス区切り(\)をLinux形式(/)に変換
     $linuxPath = $file.Path.Replace("\", "/")
 
-    # サブディレクトリパスを除去してリモートパスを計算
-    # 例: $subDirPath = "src", $linuxPath = "src/main.c" → $remoteRelPath = "main.c"
-    $remoteRelPath = $linuxPath
-    if ($subDirPath -ne "") {
-        $subDirPathLinux = $subDirPath.Replace("\", "/")
-        if ($linuxPath.StartsWith($subDirPathLinux + "/")) {
-            $remoteRelPath = $linuxPath.Substring($subDirPathLinux.Length + 1)
-        }
-    }
-    $remotePath = "${REMOTE_DIR}${remoteRelPath}"
+    # リモートパスを計算（$file.Pathは既に配下フォルダからの相対パス）
+    $remotePath = "${REMOTE_DIR}${linuxPath}"
 
     Write-Color "[転送] $($file.Path)" "Cyan"
     Write-Host "  ローカル: $localPath"
     Write-Host "  リモート: ${SSH_USER}@${SSH_HOST}:${remotePath}"
 
-    # Linux側で親ディレクトリを作成（サブディレクトリ除去後のパスで計算）
-    $parentDir = Split-Path $remoteRelPath -Parent
+    # Linux側で親ディレクトリを作成
+    $parentDir = Split-Path $linuxPath -Parent
     if ($parentDir) {
         $parentDir = $parentDir.Replace("\", "/")
         $remoteParentDir = "${REMOTE_DIR}${parentDir}"
