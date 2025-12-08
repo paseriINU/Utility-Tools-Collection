@@ -83,6 +83,16 @@ $REPO_ROOT = git rev-parse --show-toplevel
 $REPO_ROOT = $REPO_ROOT -replace '/', '\'
 
 Write-Host "リポジトリルート: $REPO_ROOT" -ForegroundColor White
+
+# $GIT_PROJECT_PATH から $REPO_ROOT への相対パス（サブディレクトリパス）を計算
+# 例: $REPO_ROOT = C:\repo, $GIT_PROJECT_PATH = C:\repo\src → $subDirPath = src
+$subDirPath = ""
+$repoRootNormalized = $REPO_ROOT.TrimEnd("\")
+$projectPathNormalized = $GIT_PROJECT_PATH.TrimEnd("\")
+if ($projectPathNormalized.StartsWith($repoRootNormalized + "\")) {
+    $subDirPath = $projectPathNormalized.Substring($repoRootNormalized.Length + 1)
+    Write-Host "対象サブディレクトリ: $subDirPath" -ForegroundColor White
+}
 Write-Host ""
 #endregion
 
@@ -171,10 +181,14 @@ Write-Host ""
 # 出力先フォルダ（デスクトップ + タイムスタンプ）
 $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
 $OUTPUT_DIR = "$env:USERPROFILE\Desktop\git_diff_$timestamp"
+$OUTPUT_DIR_BEFORE = "$OUTPUT_DIR\01_変更前"
+$OUTPUT_DIR_AFTER = "$OUTPUT_DIR\02_変更後"
 
 Write-Host "比較元ブランチ  : $BASE_BRANCH" -ForegroundColor White
 Write-Host "比較先ブランチ  : $TARGET_BRANCH" -ForegroundColor White
 Write-Host "出力先フォルダ  : $OUTPUT_DIR" -ForegroundColor White
+Write-Host "  01_変更前     : 比較元($BASE_BRANCH)のファイル" -ForegroundColor Gray
+Write-Host "  02_変更後     : 比較先($TARGET_BRANCH)のファイル" -ForegroundColor Gray
 Write-Host ""
 #endregion
 
@@ -193,6 +207,8 @@ if (Test-Path $OUTPUT_DIR) {
 }
 
 New-Item -ItemType Directory -Path $OUTPUT_DIR -Force | Out-Null
+New-Item -ItemType Directory -Path $OUTPUT_DIR_BEFORE -Force | Out-Null
+New-Item -ItemType Directory -Path $OUTPUT_DIR_AFTER -Force | Out-Null
 #endregion
 
 #region 差分ファイル取得
@@ -214,7 +230,33 @@ if (-not $diffFiles -or $diffFiles.Count -eq 0) {
     exit 0
 }
 
-$FILE_COUNT = ($diffFiles | Measure-Object).Count
+# サブディレクトリ配下のファイルのみをフィルタリング
+$filteredFiles = @()
+foreach ($file in $diffFiles) {
+    if ($subDirPath -ne "") {
+        $subDirPathLinux = $subDirPath.Replace("\", "/")
+        if ($file.StartsWith($subDirPathLinux + "/")) {
+            # サブディレクトリパスを除去して相対パスに変換
+            $relativePath = $file.Substring($subDirPathLinux.Length + 1)
+            $filteredFiles += [PSCustomObject]@{
+                OriginalPath = $file
+                RelativePath = $relativePath
+            }
+        }
+    } else {
+        $filteredFiles += [PSCustomObject]@{
+            OriginalPath = $file
+            RelativePath = $file
+        }
+    }
+}
+
+if ($filteredFiles.Count -eq 0) {
+    Write-Host "[情報] 対象サブディレクトリ配下に差分ファイルが見つかりませんでした" -ForegroundColor Yellow
+    exit 0
+}
+
+$FILE_COUNT = $filteredFiles.Count
 Write-Host "検出された差分ファイル数: $FILE_COUNT 個" -ForegroundColor Green
 Write-Host ""
 Write-Host "ファイルをコピー中..." -ForegroundColor Cyan
@@ -222,38 +264,60 @@ Write-Host ""
 #endregion
 
 #region ファイルコピー
-$COPY_COUNT = 0
+$COPY_COUNT_BEFORE = 0
+$COPY_COUNT_AFTER = 0
 $ERROR_COUNT = 0
 $SKIP_COUNT = 0
 
-foreach ($file in $diffFiles) {
+foreach ($fileObj in $filteredFiles) {
+    $originalPath = $fileObj.OriginalPath
+    $relativePath = $fileObj.RelativePath
+
     # Unixスタイルのパスをバックスラッシュに変換
-    $filePath = $file -replace '/', '\'
+    $relativePathWin = $relativePath -replace '/', '\'
 
-    # フルパス
-    $sourceFile = Join-Path $REPO_ROOT $filePath
-    $destFile = Join-Path $OUTPUT_DIR $filePath
+    Write-Host "[処理] $relativePath" -ForegroundColor Cyan
 
-    # ファイルの存在確認（削除されたファイルはスキップ）
-    if (Test-Path $sourceFile) {
-        # コピー先のディレクトリを作成
-        $destDir = Split-Path -Path $destFile -Parent
-        if (-not (Test-Path $destDir)) {
-            New-Item -ItemType Directory -Path $destDir -Force | Out-Null
+    # 01_変更前（比較元ブランチ）のファイルをコピー
+    $destFileBefore = Join-Path $OUTPUT_DIR_BEFORE $relativePathWin
+    $destDirBefore = Split-Path -Path $destFileBefore -Parent
+    if (-not (Test-Path $destDirBefore)) {
+        New-Item -ItemType Directory -Path $destDirBefore -Force | Out-Null
+    }
+
+    try {
+        $contentBefore = git show "${BASE_BRANCH}:${originalPath}" 2>&1
+        if ($LASTEXITCODE -eq 0) {
+            [System.IO.File]::WriteAllText($destFileBefore, ($contentBefore -join "`n"), [System.Text.Encoding]::UTF8)
+            Write-Host "  [01_変更前] コピー完了" -ForegroundColor Green
+            $COPY_COUNT_BEFORE++
+        } else {
+            Write-Host "  [01_変更前] 新規ファイル（比較元に存在しない）" -ForegroundColor Gray
         }
+    } catch {
+        Write-Host "  [01_変更前] エラー: $($_.Exception.Message)" -ForegroundColor Red
+        $ERROR_COUNT++
+    }
 
-        # ファイルをコピー
-        try {
-            Copy-Item -Path $sourceFile -Destination $destFile -Force -ErrorAction Stop
-            Write-Host "[コピー] $filePath" -ForegroundColor Green
-            $COPY_COUNT++
-        } catch {
-            Write-Host "[エラー] $filePath" -ForegroundColor Red
-            $ERROR_COUNT++
+    # 02_変更後（比較先ブランチ）のファイルをコピー
+    $destFileAfter = Join-Path $OUTPUT_DIR_AFTER $relativePathWin
+    $destDirAfter = Split-Path -Path $destFileAfter -Parent
+    if (-not (Test-Path $destDirAfter)) {
+        New-Item -ItemType Directory -Path $destDirAfter -Force | Out-Null
+    }
+
+    try {
+        $contentAfter = git show "${TARGET_BRANCH}:${originalPath}" 2>&1
+        if ($LASTEXITCODE -eq 0) {
+            [System.IO.File]::WriteAllText($destFileAfter, ($contentAfter -join "`n"), [System.Text.Encoding]::UTF8)
+            Write-Host "  [02_変更後] コピー完了" -ForegroundColor Green
+            $COPY_COUNT_AFTER++
+        } else {
+            Write-Host "  [02_変更後] 削除済みファイル（比較先に存在しない）" -ForegroundColor Gray
         }
-    } else {
-        Write-Host "[削除済] $filePath (スキップ)" -ForegroundColor Gray
-        $SKIP_COUNT++
+    } catch {
+        Write-Host "  [02_変更後] エラー: $($_.Exception.Message)" -ForegroundColor Red
+        $ERROR_COUNT++
     }
 }
 #endregion
@@ -264,24 +328,21 @@ Write-Host "====================================================================
 Write-Host " 処理完了" -ForegroundColor Cyan
 Write-Host "========================================================================" -ForegroundColor Cyan
 Write-Host ""
-Write-Host "コピーしたファイル数: $COPY_COUNT 個" -ForegroundColor Green
-
-if ($SKIP_COUNT -gt 0) {
-    Write-Host "スキップ          : $SKIP_COUNT 個" -ForegroundColor Gray
-}
+Write-Host "01_変更前 コピー数: $COPY_COUNT_BEFORE 個" -ForegroundColor Green
+Write-Host "02_変更後 コピー数: $COPY_COUNT_AFTER 個" -ForegroundColor Green
 
 if ($ERROR_COUNT -gt 0) {
     Write-Host "エラー            : $ERROR_COUNT 個" -ForegroundColor Red
 }
 
+Write-Host ""
 Write-Host "出力先: $OUTPUT_DIR" -ForegroundColor White
+Write-Host "  01_変更前: 比較元($BASE_BRANCH)のファイル" -ForegroundColor Gray
+Write-Host "  02_変更後: 比較先($TARGET_BRANCH)のファイル" -ForegroundColor Gray
 Write-Host ""
 
 # 出力先フォルダを開く
-$openFolder = Read-Host "出力先フォルダを開きますか? (y/n)"
-if ($openFolder -eq "y") {
-    explorer $OUTPUT_DIR
-}
+explorer $OUTPUT_DIR
 #endregion
 
 exit 0
