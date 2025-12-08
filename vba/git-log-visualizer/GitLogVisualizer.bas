@@ -309,12 +309,22 @@ Private Function GetGitLog(ByVal repoPath As String, ByVal maxCount As Long) As 
                     .Hash = parts(0)
                     .FullHash = parts(1)
                     .ParentHashes = parts(2) ' 親コミットハッシュ（スペース区切り）
-                    .ParentCount = IIf(Len(Trim(parts(2))) = 0, 0, UBound(Split(Trim(parts(2)), " ")) + 1)
+                    ' 親コミット数を計算
+                    If Len(Trim(parts(2))) = 0 Then
+                        .ParentCount = 0
+                    Else
+                        .ParentCount = UBound(Split(Trim(parts(2)), " ")) + 1
+                    End If
                     .Author = parts(3)
                     .AuthorEmail = parts(4)
                     .CommitDate = ParseGitDate(parts(5))
                     .Subject = parts(6)
-                    .RefNames = IIf(UBound(parts) >= 7, Trim(Replace(Replace(parts(7), "(", ""), ")", "")), "")
+                    ' RefNames（parts(7)）は存在する場合のみ取得
+                    If UBound(parts) >= 7 Then
+                        .RefNames = Trim(Replace(Replace(parts(7), "(", ""), ")", ""))
+                    Else
+                        .RefNames = ""
+                    End If
                     .FilesChanged = 0
                     .Insertions = 0
                     .Deletions = 0
