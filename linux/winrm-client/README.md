@@ -487,18 +487,18 @@ netstat -an | findstr :5985
 
 #### エラー: "401 Unauthorized" または認証エラー
 
-**原因**: 認証情報が正しくない、またはBasic認証が無効
+**原因**: 認証情報が正しくない、またはNTLM/Negotiate認証が無効
 
 **解決策**:
 ```powershell
-# Windows側でBasic認証が有効か確認
-Get-Item WSMan:\localhost\Service\Auth\Basic
+# Windows側でNegotiate認証が有効か確認
+Get-Item WSMan:\localhost\Service\Auth\Negotiate
 
-# 無効の場合は有効化（現在の実装ではBasic認証を使用）
-Set-Item WSMan:\localhost\Service\Auth\Basic -Value $true
+# 無効の場合は有効化（本ツールはNTLM認証を使用）
+Set-Item WSMan:\localhost\Service\Auth\Negotiate -Value $true
 ```
 
-**注意**: 現在の実装では**Basic認証**を使用しています。セキュリティを考慮してHTTPS接続を使用することを推奨します。
+**注意**: 本ツールのすべての実装（Python版・C言語版・Bash版）は**NTLM認証**を使用しています。Windows側でBasic認証を有効化する必要はありません。
 
 #### エラー: "403 Forbidden"
 
