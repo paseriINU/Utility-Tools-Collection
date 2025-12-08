@@ -314,7 +314,7 @@ create_shell() {
         return 1
     fi
 
-    echo -e "${GREEN}[SUCCESS]${NC} シェル作成成功: $shell_id"
+    printf "${GREEN}[SUCCESS]${NC} シェル作成成功: %s\n" "$shell_id"
     echo "$shell_id"
 }
 
@@ -376,7 +376,7 @@ run_command() {
         return 1
     fi
 
-    echo -e "${GREEN}[SUCCESS]${NC} コマンド実行開始: $command_id"
+    printf "${GREEN}[SUCCESS]${NC} コマンド実行開始: %s\n" "$command_id"
     echo "$command_id"
 }
 
@@ -462,7 +462,7 @@ get_command_output() {
         log_warn "コマンド完了待機がタイムアウトしました"
     fi
 
-    echo -e "${GREEN}[SUCCESS]${NC} コマンド完了 (終了コード: $exit_code)"
+    printf "${GREEN}[SUCCESS]${NC} コマンド完了 (終了コード: %s)\n" "$exit_code"
 
     # 出力を一時ファイルに保存（改行を保持）
     echo "$stdout_all" > /tmp/winrm_stdout_$$
@@ -500,7 +500,7 @@ delete_shell() {
 
     log_info "シェル削除中..."
     send_soap_request "$soap_envelope" > /dev/null
-    echo -e "${GREEN}[SUCCESS]${NC} シェル削除完了"
+    printf "${GREEN}[SUCCESS]${NC} シェル削除完了\n"
 }
 
 # メイン処理
