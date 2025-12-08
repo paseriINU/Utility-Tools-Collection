@@ -582,7 +582,7 @@ End Sub
 Private Sub CreateChartsSheet(ByRef commits() As CommitInfo, ByVal commitCount As Long)
     Dim ws As Worksheet
     Dim statsWs As Worksheet
-    Dim chartObj As ChartObject
+    Dim chartObj As Object  ' ChartObject - 遅延バインディングで参照エラー回避
 
     Set ws = Sheets("Charts")
     Set statsWs = Sheets("Statistics")
@@ -631,7 +631,7 @@ Private Sub CreateBranchGraphSheet(ByRef commits() As CommitInfo, ByVal commitCo
     Set ws = Sheets("BranchGraph")
 
     ' シートの図形をすべて削除
-    Dim shp As Shape
+    Dim shp As Object  ' Shape - 遅延バインディングで参照エラー回避
     For Each shp In ws.Shapes
         shp.Delete
     Next shp
@@ -734,7 +734,7 @@ Private Sub CreateBranchGraphSheet(ByRef commits() As CommitInfo, ByVal commitCo
                 nodeColor = RGB(0, 128, 255) ' 通常コミット=青
             End If
 
-            Dim node As Shape
+            Dim node As Object  ' Shape
             Set node = .Shapes.AddShape(msoShapeOval, x, y, nodeSize, nodeSize)
             node.Fill.ForeColor.RGB = nodeColor
             node.Line.ForeColor.RGB = RGB(0, 0, 0)
