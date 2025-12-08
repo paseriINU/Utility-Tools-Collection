@@ -343,9 +343,6 @@ Write-Host "出力先: $OUTPUT_DIR" -ForegroundColor White
 Write-Host "  01_修正前: 比較元($BASE_BRANCH)のファイル" -ForegroundColor Gray
 Write-Host "  02_修正後: 比較先($TARGET_BRANCH)のファイル" -ForegroundColor Gray
 Write-Host ""
-
-# 出力先フォルダを開く
-explorer $OUTPUT_DIR
 #endregion
 
 #region WinMerge比較
