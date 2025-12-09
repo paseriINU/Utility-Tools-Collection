@@ -1360,6 +1360,12 @@ static size_t ntlm_create_type3(const char *user, const char *password,
      * 重要: MS-NLMPの仕様では、MICはExportedSessionKeyで計算する
      * MICはMsvAvTimestampがTargetInfoに含まれる場合に必須
      */
+    if (DEBUG) {
+        char mic_dbg[128];
+        snprintf(mic_dbg, sizeof(mic_dbg), "MIC計算条件: type1=%p len=%zu, type2=%p len=%zu",
+                 (void*)type1_msg, type1_len, (void*)type2_msg, type2_len);
+        log_info(mic_dbg);
+    }
     if (type1_msg && type2_msg && type1_len > 0 && type2_len > 0) {
         /* Type3は現時点でMICフィールドが0で初期化されている */
         size_t total_len = type1_len + type2_len + offset;
