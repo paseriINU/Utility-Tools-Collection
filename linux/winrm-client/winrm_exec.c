@@ -2076,6 +2076,114 @@ static bool send_http_with_ntlm(const char *host, int port, const char *body,
         log_info("NTLM Signing/Sealingキー派生完了");
     }
 
+    /* ===== ステップ1: Type 3のみで認証を確立 ===== */
+    if (use_spnego) {
+        /* SPNEGOでラップ */
+        uint8_t spnego_auth[8192];
+        size_t spnego_auth_len = spnego_create_neg_token_resp(type3, type3_len,
+                                                              spnego_auth, sizeof(spnego_auth));
+        base64_encode(spnego_auth, spnego_auth_len, auth_b64);
+
+        snprintf(request, sizeof(request),
+                 "POST /wsman HTTP/1.1\r\n"
+                 "Host: %s:%d\r\n"
+                 "Authorization: Negotiate %s\r\n"
+                 "Content-Type: application/soap+xml;charset=UTF-8\r\n"
+                 "Content-Length: 0\r\n"
+                 "Connection: keep-alive\r\n"
+                 "\r\n",
+                 host, port, auth_b64);
+    } else {
+        /* 直接NTLM */
+        base64_encode(type3, type3_len, auth_b64);
+
+        snprintf(request, sizeof(request),
+                 "POST /wsman HTTP/1.1\r\n"
+                 "Host: %s:%d\r\n"
+                 "Authorization: NTLM %s\r\n"
+                 "Content-Type: application/soap+xml;charset=UTF-8\r\n"
+                 "Content-Length: 0\r\n"
+                 "Connection: keep-alive\r\n"
+                 "\r\n",
+                 host, port, auth_b64);
+    }
+
+    if (DEBUG) {
+        log_info("Type 3メッセージ送信中（認証のみ、ボディなし）...");
+        char sock_msg[64];
+        snprintf(sock_msg, sizeof(sock_msg), "  ソケットFD: %d", sock);
+        log_info(sock_msg);
+    }
+
+    sent = send(sock, request, strlen(request), MSG_NOSIGNAL);
+    if (sent < 0) {
+        log_error("Type 3メッセージの送信に失敗しました");
+        char err_msg[128];
+        snprintf(err_msg, sizeof(err_msg), "  送信エラー: %s", strerror(errno));
+        log_error(err_msg);
+        close(sock);
+        return false;
+    }
+
+    if (DEBUG) {
+        char sent_msg[64];
+        snprintf(sent_msg, sizeof(sent_msg), "  送信バイト数: %zd", sent);
+        log_info(sent_msg);
+        log_info("認証レスポンス待機中...");
+    }
+
+    ssize_t recv_len = recv_http_response(sock, recv_buffer, sizeof(recv_buffer), &http_code, auth_header);
+
+    if (DEBUG) {
+        char recv_msg[64];
+        snprintf(recv_msg, sizeof(recv_msg), "  受信バイト数: %zd", recv_len);
+        log_info(recv_msg);
+        char msg[64];
+        snprintf(msg, sizeof(msg), "Type 3認証レスポンス HTTPステータス: %d", http_code);
+        log_info(msg);
+
+        /* レスポンスヘッダーを出力 */
+        log_info("Type 3後のレスポンスヘッダー:");
+        char *header_end = strstr(recv_buffer, "\r\n\r\n");
+        if (header_end) {
+            char header_copy[2048];
+            size_t header_len = header_end - recv_buffer;
+            if (header_len >= sizeof(header_copy)) header_len = sizeof(header_copy) - 1;
+            memcpy(header_copy, recv_buffer, header_len);
+            header_copy[header_len] = '\0';
+            fprintf(stderr, "%s\n", header_copy);
+        }
+    }
+
+    if (http_code == 401) {
+        log_error("認証に失敗しました (HTTP 401)");
+        log_error("ユーザー名とパスワードを確認してください");
+
+        /* 401エラー時のレスポンスボディを表示 */
+        if (DEBUG) {
+            char *body_start_err = strstr(recv_buffer, "\r\n\r\n");
+            if (body_start_err) {
+                body_start_err += 4;
+                log_info("401レスポンスボディ:");
+                fprintf(stderr, "%s\n", body_start_err);
+            }
+        }
+        close(sock);
+        return false;
+    }
+
+    /* 認証成功後、サーバーがWWW-Authenticateヘッダーを返す場合は継続認証トークンを確認 */
+    if (DEBUG && strlen(auth_header) > 0) {
+        char auth_msg[256];
+        snprintf(auth_msg, sizeof(auth_msg), "  認証継続トークン: %s", auth_header);
+        log_info(auth_msg);
+    }
+
+    /* ===== ステップ2: 暗号化SOAPリクエストを送信 ===== */
+    if (DEBUG) {
+        log_info("暗号化SOAPリクエスト送信開始...");
+    }
+
     /* SOAPボディを暗号化 */
     size_t body_len = strlen(body);
     uint8_t *sealed_body = malloc(body_len);
@@ -2116,36 +2224,15 @@ static bool send_http_with_ntlm(const char *host, int port, const char *body,
                               sizeof(encrypted_body) - enc_body_len,
                               "\r\n--%s--\r\n", boundary);
 
-    if (use_spnego) {
-        /* SPNEGOでラップ */
-        uint8_t spnego_auth[8192];
-        size_t spnego_auth_len = spnego_create_neg_token_resp(type3, type3_len,
-                                                              spnego_auth, sizeof(spnego_auth));
-        base64_encode(spnego_auth, spnego_auth_len, auth_b64);
-
-        snprintf(request, sizeof(request),
-                 "POST /wsman HTTP/1.1\r\n"
-                 "Host: %s:%d\r\n"
-                 "Authorization: Negotiate %s\r\n"
-                 "Content-Type: multipart/encrypted;protocol=\"application/HTTP-SPNEGO-session-encrypted\";boundary=\"%s\"\r\n"
-                 "Content-Length: %zu\r\n"
-                 "Connection: keep-alive\r\n"
-                 "\r\n",
-                 host, port, auth_b64, boundary, enc_body_len);
-    } else {
-        /* 直接NTLM */
-        base64_encode(type3, type3_len, auth_b64);
-
-        snprintf(request, sizeof(request),
-                 "POST /wsman HTTP/1.1\r\n"
-                 "Host: %s:%d\r\n"
-                 "Authorization: NTLM %s\r\n"
-                 "Content-Type: multipart/encrypted;protocol=\"application/HTTP-SPNEGO-session-encrypted\";boundary=\"%s\"\r\n"
-                 "Content-Length: %zu\r\n"
-                 "Connection: keep-alive\r\n"
-                 "\r\n",
-                 host, port, auth_b64, boundary, enc_body_len);
-    }
+    /* 暗号化SOAPリクエスト送信 */
+    snprintf(request, sizeof(request),
+             "POST /wsman HTTP/1.1\r\n"
+             "Host: %s:%d\r\n"
+             "Content-Type: multipart/encrypted;protocol=\"application/HTTP-SPNEGO-session-encrypted\";boundary=\"%s\"\r\n"
+             "Content-Length: %zu\r\n"
+             "Connection: keep-alive\r\n"
+             "\r\n",
+             host, port, boundary, enc_body_len);
 
     /* ヘッダーと暗号化ボディを結合 */
     size_t request_header_len = strlen(request);
@@ -2153,7 +2240,7 @@ static bool send_http_with_ntlm(const char *host, int port, const char *body,
     size_t total_request_len = request_header_len + enc_body_len;
 
     if (DEBUG) {
-        log_info("Type 3メッセージ送信中（暗号化ボディ付き）...");
+        log_info("暗号化SOAPリクエスト送信中...");
         char sock_msg[64];
         snprintf(sock_msg, sizeof(sock_msg), "  ソケットFD: %d", sock);
         log_info(sock_msg);
@@ -2163,7 +2250,7 @@ static bool send_http_with_ntlm(const char *host, int port, const char *body,
 
     sent = send(sock, request, total_request_len, MSG_NOSIGNAL);
     if (sent < 0) {
-        log_error("Type 3メッセージの送信に失敗しました");
+        log_error("暗号化SOAPリクエストの送信に失敗しました");
         char err_msg[128];
         snprintf(err_msg, sizeof(err_msg), "  送信エラー: %s", strerror(errno));
         log_error(err_msg);
@@ -2175,19 +2262,22 @@ static bool send_http_with_ntlm(const char *host, int port, const char *body,
         char sent_msg[64];
         snprintf(sent_msg, sizeof(sent_msg), "  送信バイト数: %zd", sent);
         log_info(sent_msg);
-        log_info("レスポンス待機中...");
+        log_info("SOAPレスポンス待機中...");
     }
 
-    ssize_t recv_len = recv_http_response(sock, recv_buffer, sizeof(recv_buffer), &http_code, auth_header);
+    recv_len = recv_http_response(sock, recv_buffer, sizeof(recv_buffer), &http_code, auth_header);
     close(sock);
 
     if (DEBUG) {
         char recv_msg[64];
         snprintf(recv_msg, sizeof(recv_msg), "  受信バイト数: %zd", recv_len);
         log_info(recv_msg);
+        char msg[64];
+        snprintf(msg, sizeof(msg), "SOAPレスポンス HTTPステータス: %d", http_code);
+        log_info(msg);
 
         /* レスポンスヘッダーを出力 */
-        log_info("Type 3後のレスポンスヘッダー:");
+        log_info("SOAPレスポンスヘッダー:");
         char *header_end = strstr(recv_buffer, "\r\n\r\n");
         if (header_end) {
             char header_copy[2048];
@@ -2199,25 +2289,9 @@ static bool send_http_with_ntlm(const char *host, int port, const char *body,
         }
     }
 
-    if (DEBUG) {
-        char msg[64];
-        snprintf(msg, sizeof(msg), "HTTPステータスコード: %d", http_code);
-        log_info(msg);
-    }
-
     if (http_code == 401) {
-        log_error("認証に失敗しました (HTTP 401)");
-        log_error("ユーザー名とパスワードを確認してください");
-
-        /* 401エラー時のレスポンスボディを表示 */
-        if (DEBUG) {
-            char *body_start = strstr(recv_buffer, "\r\n\r\n");
-            if (body_start) {
-                body_start += 4;
-                log_info("401レスポンスボディ:");
-                fprintf(stderr, "%s\n", body_start);
-            }
-        }
+        log_error("暗号化リクエストで認証エラー (HTTP 401)");
+        close(sock);
         return false;
     } else if (http_code == 500) {
         log_error("サーバー内部エラーが発生しました (HTTP 500)");
