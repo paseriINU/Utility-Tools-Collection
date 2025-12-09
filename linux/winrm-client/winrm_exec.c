@@ -1770,7 +1770,7 @@ static bool send_soap_request(const char *soap_envelope, char *response, size_t 
     if (DEBUG) {
         log_info("送信XML:");
         fprintf(stderr, "%s\n\n", soap_envelope);
-        char msg[256];
+        char msg[512];
         snprintf(msg, sizeof(msg), "接続先: http://%s:%d/wsman", g_host, g_port);
         log_info(msg);
         snprintf(msg, sizeof(msg), "ユーザー: %s", g_user);
