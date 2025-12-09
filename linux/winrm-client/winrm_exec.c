@@ -2208,6 +2208,16 @@ static bool send_http_with_ntlm(const char *host, int port, const char *body,
     if (http_code == 401) {
         log_error("認証に失敗しました (HTTP 401)");
         log_error("ユーザー名とパスワードを確認してください");
+
+        /* 401エラー時のレスポンスボディを表示 */
+        if (DEBUG) {
+            char *body_start = strstr(recv_buffer, "\r\n\r\n");
+            if (body_start) {
+                body_start += 4;
+                log_info("401レスポンスボディ:");
+                fprintf(stderr, "%s\n", body_start);
+            }
+        }
         return false;
     } else if (http_code == 500) {
         log_error("サーバー内部エラーが発生しました (HTTP 500)");
