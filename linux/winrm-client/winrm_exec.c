@@ -1660,13 +1660,13 @@ static size_t recv_http_response(int sock, char *buffer, size_t buffer_size,
                     sscanf(cl + 15, "%zu", &content_length);
                 }
 
-                /* 本文を十分受信したか確認 */
-                if (content_length > 0 && total >= header_end + content_length) {
+                /* 本文を十分受信したか確認（Content-Length: 0の場合も含む） */
+                if (total >= header_end + content_length) {
                     break;
                 }
             }
         } else {
-            if (content_length > 0 && total >= header_end + content_length) {
+            if (total >= header_end + content_length) {
                 break;
             }
         }
