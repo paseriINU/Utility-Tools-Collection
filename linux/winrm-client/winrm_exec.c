@@ -1185,7 +1185,7 @@ static size_t ntlm_create_type3(const char *user, const char *password,
 
     if (DEBUG) {
         log_info("=== NTLMv2認証デバッグ ===");
-        char dbg[256];
+        char dbg[512];
 
         /* サーバーチャレンジ */
         snprintf(dbg, sizeof(dbg), "ServerChallenge: %02X%02X%02X%02X%02X%02X%02X%02X",
@@ -1193,20 +1193,50 @@ static size_t ntlm_create_type3(const char *user, const char *password,
                  challenge[4], challenge[5], challenge[6], challenge[7]);
         log_info(dbg);
 
-        /* NTLMv2ハッシュ（先頭8バイト） */
-        snprintf(dbg, sizeof(dbg), "NTLMv2Hash: %02X%02X%02X%02X%02X%02X%02X%02X...",
+        /* クライアントチャレンジ */
+        snprintf(dbg, sizeof(dbg), "ClientChallenge: %02X%02X%02X%02X%02X%02X%02X%02X",
+                 client_challenge[0], client_challenge[1], client_challenge[2], client_challenge[3],
+                 client_challenge[4], client_challenge[5], client_challenge[6], client_challenge[7]);
+        log_info(dbg);
+
+        /* タイムスタンプ */
+        snprintf(dbg, sizeof(dbg), "Timestamp: %016llX", (unsigned long long)timestamp);
+        log_info(dbg);
+
+        /* NTLMv2ハッシュ（全16バイト） */
+        snprintf(dbg, sizeof(dbg), "NTLMv2Hash: %02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X",
                  ntlmv2_h[0], ntlmv2_h[1], ntlmv2_h[2], ntlmv2_h[3],
-                 ntlmv2_h[4], ntlmv2_h[5], ntlmv2_h[6], ntlmv2_h[7]);
+                 ntlmv2_h[4], ntlmv2_h[5], ntlmv2_h[6], ntlmv2_h[7],
+                 ntlmv2_h[8], ntlmv2_h[9], ntlmv2_h[10], ntlmv2_h[11],
+                 ntlmv2_h[12], ntlmv2_h[13], ntlmv2_h[14], ntlmv2_h[15]);
         log_info(dbg);
 
-        /* NTProofStr（先頭8バイト） */
-        snprintf(dbg, sizeof(dbg), "NTProofStr: %02X%02X%02X%02X%02X%02X%02X%02X...",
+        /* NTProofStr（全16バイト） */
+        snprintf(dbg, sizeof(dbg), "NTProofStr: %02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X",
                  nt_proof_str[0], nt_proof_str[1], nt_proof_str[2], nt_proof_str[3],
-                 nt_proof_str[4], nt_proof_str[5], nt_proof_str[6], nt_proof_str[7]);
+                 nt_proof_str[4], nt_proof_str[5], nt_proof_str[6], nt_proof_str[7],
+                 nt_proof_str[8], nt_proof_str[9], nt_proof_str[10], nt_proof_str[11],
+                 nt_proof_str[12], nt_proof_str[13], nt_proof_str[14], nt_proof_str[15]);
         log_info(dbg);
 
-        /* Blob長 */
-        snprintf(dbg, sizeof(dbg), "Blob長: %zu バイト", blob_len);
+        /* Blob先頭32バイト */
+        snprintf(dbg, sizeof(dbg), "Blob長: %zu バイト, 先頭32バイト:", blob_len);
+        log_info(dbg);
+        snprintf(dbg, sizeof(dbg), "  %02X%02X%02X%02X %02X%02X%02X%02X %02X%02X%02X%02X %02X%02X%02X%02X",
+                 concat[8], concat[9], concat[10], concat[11],
+                 concat[12], concat[13], concat[14], concat[15],
+                 concat[16], concat[17], concat[18], concat[19],
+                 concat[20], concat[21], concat[22], concat[23]);
+        log_info(dbg);
+        snprintf(dbg, sizeof(dbg), "  %02X%02X%02X%02X %02X%02X%02X%02X %02X%02X%02X%02X %02X%02X%02X%02X",
+                 concat[24], concat[25], concat[26], concat[27],
+                 concat[28], concat[29], concat[30], concat[31],
+                 concat[32], concat[33], concat[34], concat[35],
+                 concat[36], concat[37], concat[38], concat[39]);
+        log_info(dbg);
+
+        /* TargetInfo長 */
+        snprintf(dbg, sizeof(dbg), "TargetInfo長: %zu バイト", new_target_info_len);
         log_info(dbg);
 
         /* ユーザー名とドメイン */
