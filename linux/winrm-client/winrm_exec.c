@@ -1068,6 +1068,38 @@ static size_t ntlm_create_type3(const char *user, const char *password,
 
     uint8_t nt_proof_str[16];
     hmac_md5(ntlmv2_h, 16, concat, concat_len, nt_proof_str);
+
+    if (DEBUG) {
+        log_info("=== NTLMv2認証デバッグ ===");
+        char dbg[256];
+
+        /* サーバーチャレンジ */
+        snprintf(dbg, sizeof(dbg), "ServerChallenge: %02X%02X%02X%02X%02X%02X%02X%02X",
+                 challenge[0], challenge[1], challenge[2], challenge[3],
+                 challenge[4], challenge[5], challenge[6], challenge[7]);
+        log_info(dbg);
+
+        /* NTLMv2ハッシュ（先頭8バイト） */
+        snprintf(dbg, sizeof(dbg), "NTLMv2Hash: %02X%02X%02X%02X%02X%02X%02X%02X...",
+                 ntlmv2_h[0], ntlmv2_h[1], ntlmv2_h[2], ntlmv2_h[3],
+                 ntlmv2_h[4], ntlmv2_h[5], ntlmv2_h[6], ntlmv2_h[7]);
+        log_info(dbg);
+
+        /* NTProofStr（先頭8バイト） */
+        snprintf(dbg, sizeof(dbg), "NTProofStr: %02X%02X%02X%02X%02X%02X%02X%02X...",
+                 nt_proof_str[0], nt_proof_str[1], nt_proof_str[2], nt_proof_str[3],
+                 nt_proof_str[4], nt_proof_str[5], nt_proof_str[6], nt_proof_str[7]);
+        log_info(dbg);
+
+        /* Blob長 */
+        snprintf(dbg, sizeof(dbg), "Blob長: %zu バイト", blob_len);
+        log_info(dbg);
+
+        /* ユーザー名とドメイン */
+        snprintf(dbg, sizeof(dbg), "User: %s, Domain: %s", user, domain);
+        log_info(dbg);
+    }
+
     free(concat);
 
     /* NTLMv2 Response = NTProofStr + Blob */
