@@ -177,7 +177,11 @@ static const char *ENVIRONMENTS[] = {"TST1T", "TST2T", NULL};
 #define NTLMSSP_NEGOTIATE_NTLM             0x00000200  /* NTLM認証を使用 */
 #define NTLMSSP_NEGOTIATE_ALWAYS_SIGN      0x00008000  /* 常に署名を使用 */
 #define NTLMSSP_NEGOTIATE_EXTENDED_SESSIONSECURITY 0x00080000  /* NTLMv2セッションセキュリティ */
+#define NTLMSSP_NEGOTIATE_VERSION          0x02000000  /* バージョン情報を含む */
 #define NTLMSSP_NEGOTIATE_TARGET_INFO      0x00800000  /* TargetInfo構造体を含む */
+
+/* MsAvFlags (TargetInfo内のフラグ) */
+#define MIC_PROVIDED                       0x00000002  /* MICが含まれることを示す */
 
 /* ============================================================================
  * SPNEGO (Negotiate) 認証定数
@@ -884,6 +888,8 @@ static bool ntlm_parse_type2(const uint8_t *buffer, size_t len,
 static size_t ntlm_create_type3(const char *user, const char *password,
                                 const char *domain, const uint8_t *challenge,
                                 const uint8_t *target_info, size_t target_info_len,
+                                const uint8_t *type1_msg, size_t type1_len,
+                                const uint8_t *type2_msg, size_t type2_len,
                                 uint8_t *buffer, size_t buffer_size) {
     uint8_t ntlmv2_h[16];
     ntlmv2_hash(password, user, domain, ntlmv2_h);
@@ -892,7 +898,9 @@ static size_t ntlm_create_type3(const char *user, const char *password,
     uint8_t client_challenge[8];
     FILE *urandom = fopen("/dev/urandom", "r");
     if (urandom) {
-        fread(client_challenge, 1, 8, urandom);
+        if (fread(client_challenge, 1, 8, urandom) != 8) {
+            for (int i = 0; i < 8; i++) client_challenge[i] = rand() & 0xff;
+        }
         fclose(urandom);
     } else {
         for (int i = 0; i < 8; i++) client_challenge[i] = rand() & 0xff;
@@ -904,14 +912,46 @@ static size_t ntlm_create_type3(const char *user, const char *password,
     gettimeofday(&tv, NULL);
     timestamp = ((uint64_t)tv.tv_sec + 11644473600ULL) * 10000000ULL + tv.tv_usec * 10;
 
+    /*
+     * MICを有効にするため、TargetInfoにMsAvFlags (AVPair ID=6)を追加
+     * MsAvFlags = 0x00000002 (MIC_PROVIDED) を設定
+     */
+    /* MsAvFlags (AVPair: ID=0x0006, Len=4, Value=0x00000002) */
+    uint8_t av_flags[8] = {0x06, 0x00, 0x04, 0x00, 0x02, 0x00, 0x00, 0x00};
+
+    /* 既存のTargetInfoからMsAvEOL(0x0000)の位置を探す */
+    size_t eol_pos = 0;
+    size_t i = 0;
+    while (i + 3 < target_info_len) {
+        uint16_t av_id = target_info[i] | (target_info[i+1] << 8);
+        uint16_t av_len = target_info[i+2] | (target_info[i+3] << 8);
+        if (av_id == 0x0000) {
+            eol_pos = i;
+            break;
+        }
+        i += 4 + av_len;
+    }
+    if (eol_pos == 0 && target_info_len >= 4) {
+        eol_pos = target_info_len - 4;
+    }
+
+    /* 新しいTargetInfo = 元のTargetInfo(EOL前) + MsAvFlags + MsAvEOL */
+    size_t new_target_info_len = eol_pos + 8 + 4;  /* +8=MsAvFlags, +4=EOL */
+    uint8_t *new_target_info = malloc(new_target_info_len);
+    memcpy(new_target_info, target_info, eol_pos);
+    memcpy(new_target_info + eol_pos, av_flags, 8);
+    /* MsAvEOL (ID=0, Len=0) */
+    memset(new_target_info + eol_pos + 8, 0, 4);
+
     /* NTLMv2 blob */
-    size_t blob_len = 28 + target_info_len + 4;
+    size_t blob_len = 28 + new_target_info_len + 4;
     uint8_t *blob = calloc(blob_len, 1);
 
     blob[0] = 0x01; blob[1] = 0x01;  /* Blob signature */
     memcpy(blob + 8, &timestamp, 8);
     memcpy(blob + 16, client_challenge, 8);
-    memcpy(blob + 28, target_info, target_info_len);
+    memcpy(blob + 28, new_target_info, new_target_info_len);
+    free(new_target_info);
 
     /* NTProofStr = HMAC-MD5(NTLMv2Hash, ServerChallenge + Blob) */
     size_t concat_len = 8 + blob_len;
@@ -930,16 +970,16 @@ static size_t ntlm_create_type3(const char *user, const char *password,
     memcpy(nt_response + 16, blob, blob_len);
     free(blob);
 
-    /* セッションキー */
-    uint8_t session_key[16];
-    hmac_md5(ntlmv2_h, 16, nt_proof_str, 16, session_key);
+    /* SessionBaseKey = HMAC-MD5(NTLMv2Hash, NTProofStr) */
+    uint8_t session_base_key[16];
+    hmac_md5(ntlmv2_h, 16, nt_proof_str, 16, session_base_key);
 
     /* UTF-16LEに変換 */
     uint8_t domain_utf16[256], user_utf16[256];
     size_t domain_len = utf8_to_utf16le(domain, domain_utf16, sizeof(domain_utf16));
     size_t user_len = utf8_to_utf16le(user, user_utf16, sizeof(user_utf16));
 
-    /* Type 3メッセージ構築 */
+    /* Type 3メッセージ構築（88バイトヘッダ、MICはオフセット72-87） */
     size_t offset = 88;  /* ヘッダサイズ */
 
     memset(buffer, 0, buffer_size);
@@ -989,12 +1029,42 @@ static size_t ntlm_create_type3(const char *user, const char *password,
     uint32_t sk_offset = offset;
     memcpy(buffer + 52, &sk_offset, 4);
 
-    /* Flags */
+    /* Flags (NTLMSSP_NEGOTIATE_TARGET_INFOでMIC対応を示す) */
     uint32_t flags = NTLMSSP_NEGOTIATE_UNICODE |
                      NTLMSSP_NEGOTIATE_NTLM |
                      NTLMSSP_NEGOTIATE_ALWAYS_SIGN |
-                     NTLMSSP_NEGOTIATE_EXTENDED_SESSIONSECURITY;
+                     NTLMSSP_NEGOTIATE_EXTENDED_SESSIONSECURITY |
+                     NTLMSSP_NEGOTIATE_TARGET_INFO;
     memcpy(buffer + 60, &flags, 4);
+
+    /* Version情報 (オフセット64-71) - Windows 10相当 */
+    uint8_t version[8] = {0x0a, 0x00, 0x63, 0x45, 0x00, 0x00, 0x00, 0x0f};
+    memcpy(buffer + 64, version, 8);
+
+    /*
+     * MIC計算 (オフセット72-87の16バイト)
+     * MIC = HMAC-MD5(SessionBaseKey, Type1 || Type2 || Type3_with_zero_MIC)
+     */
+    if (type1_msg && type2_msg && type1_len > 0 && type2_len > 0) {
+        /* Type3は現時点でMICフィールドが0で初期化されている */
+        size_t total_len = type1_len + type2_len + offset;
+        uint8_t *mic_data = malloc(total_len);
+
+        memcpy(mic_data, type1_msg, type1_len);
+        memcpy(mic_data + type1_len, type2_msg, type2_len);
+        memcpy(mic_data + type1_len + type2_len, buffer, offset);
+
+        uint8_t mic[16];
+        hmac_md5(session_base_key, 16, mic_data, total_len, mic);
+        free(mic_data);
+
+        /* MICをType 3メッセージのオフセット72に書き込み */
+        memcpy(buffer + 72, mic, 16);
+
+        if (DEBUG) {
+            log_info("MIC計算・設定完了");
+        }
+    }
 
     return offset;
 }
@@ -1595,9 +1665,11 @@ static bool send_http_with_ntlm(const char *host, int port, const char *body,
     sock = connect_to_host(host, port);
     if (sock < 0) return false;
 
-    uint8_t type3[2048];
+    uint8_t type3[4096];
     size_t type3_len = ntlm_create_type3(g_user, g_pass, g_domain,
                                           challenge, target_info, target_info_len,
+                                          type1, type1_len,
+                                          type2, type2_len,
                                           type3, sizeof(type3));
 
     char auth_b64[16384];
