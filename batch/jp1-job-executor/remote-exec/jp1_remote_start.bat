@@ -78,8 +78,7 @@ $Config = @{
 $ErrorActionPreference = "Stop"
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
-Clear-Host
-
+Write-Host ""
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "JP1ジョブネット起動ツール" -ForegroundColor Cyan
 Write-Host "（リモート実行版）" -ForegroundColor Cyan
@@ -303,7 +302,6 @@ try {
     }
 
     $exitCode = 1
-}
 } finally {
     #region WinRM設定の復元
     if ($winrmConfigChanged) {

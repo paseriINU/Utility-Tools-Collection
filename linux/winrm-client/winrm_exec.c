@@ -1,3 +1,6 @@
+/* GNU拡張関数（strcasestr等）を使用するために必要 - 必ずインクルード前に定義 */
+#define _GNU_SOURCE
+
 /*
  * ============================================================================
  * WinRM Remote Batch Executor for Linux (C言語版 - 標準ライブラリのみ)
@@ -76,6 +79,7 @@
 #include <netdb.h>      /* ネットワークデータベース: gethostbyname, hostent */
 #include <errno.h>      /* エラー番号: errno */
 #include <fcntl.h>      /* ファイル制御: open, O_RDONLY等 */
+#include <signal.h>     /* シグナル処理: signal, SIGPIPE */
 
 /* ============================================================================
  * 設定セクション（ユーザー編集エリア）
@@ -171,10 +175,33 @@ static const char *ENVIRONMENTS[] = {"TST1T", "TST2T", NULL};
 #define NTLMSSP_NEGOTIATE_UNICODE          0x00000001  /* Unicode文字列を使用 */
 #define NTLMSSP_NEGOTIATE_OEM              0x00000002  /* OEM文字列を使用 */
 #define NTLMSSP_REQUEST_TARGET             0x00000004  /* ターゲット情報を要求 */
+#define NTLMSSP_NEGOTIATE_SIGN             0x00000010  /* 署名を使用 */
+#define NTLMSSP_NEGOTIATE_SEAL             0x00000020  /* 暗号化を使用 */
 #define NTLMSSP_NEGOTIATE_NTLM             0x00000200  /* NTLM認証を使用 */
 #define NTLMSSP_NEGOTIATE_ALWAYS_SIGN      0x00008000  /* 常に署名を使用 */
 #define NTLMSSP_NEGOTIATE_EXTENDED_SESSIONSECURITY 0x00080000  /* NTLMv2セッションセキュリティ */
 #define NTLMSSP_NEGOTIATE_TARGET_INFO      0x00800000  /* TargetInfo構造体を含む */
+#define NTLMSSP_NEGOTIATE_VERSION          0x02000000  /* バージョン情報を含む */
+#define NTLMSSP_NEGOTIATE_128              0x20000000  /* 128ビット暗号化 */
+#define NTLMSSP_NEGOTIATE_KEY_EXCH         0x40000000  /* セッションキー交換 */
+#define NTLMSSP_NEGOTIATE_56               0x80000000  /* 56ビット暗号化 */
+
+/* MsAvFlags (TargetInfo内のフラグ) */
+#define MIC_PROVIDED                       0x00000002  /* MICが含まれることを示す */
+
+/* ============================================================================
+ * SPNEGO (Negotiate) 認証定数
+ * ============================================================================
+ * SPNEGO (Simple and Protected GSSAPI Negotiation Mechanism) は、
+ * NTLMやKerberosをラップして使用するための認証メカニズム。
+ * Windows ServerがNTLMを直接提供しない場合、Negotiate経由でNTLMを使用する。
+ * ============================================================================ */
+
+/* SPNEGO OID: 1.3.6.1.5.5.2 */
+static const uint8_t SPNEGO_OID[] = {0x06, 0x06, 0x2b, 0x06, 0x01, 0x05, 0x05, 0x02};
+
+/* NTLMSSP OID: 1.3.6.1.4.1.311.2.2.10 */
+static const uint8_t NTLMSSP_OID[] = {0x06, 0x0a, 0x2b, 0x06, 0x01, 0x04, 0x01, 0x82, 0x37, 0x02, 0x02, 0x0a};
 
 /* ============================================================================
  * グローバル変数
@@ -530,6 +557,158 @@ static void hmac_md5(const uint8_t *key, size_t key_len,
     md5_hash(outer, 80, output);
 }
 
+/*
+ * rc4_crypt - RC4暗号化/復号
+ *
+ * @key:      暗号化キー
+ * @key_len:  キーの長さ
+ * @data:     入力データ
+ * @data_len: データの長さ
+ * @output:   出力先（入力と同じサイズ）
+ *
+ * RC4はストリーム暗号で、暗号化と復号が同じ操作。
+ * NTLM KEY_EXCHでセッションキーの暗号化に使用。
+ */
+static void rc4_crypt(const uint8_t *key, size_t key_len,
+                      const uint8_t *data, size_t data_len,
+                      uint8_t *output) {
+    uint8_t S[256];
+    size_t i, j;
+
+    /* KSA (Key-Scheduling Algorithm) */
+    for (i = 0; i < 256; i++) {
+        S[i] = (uint8_t)i;
+    }
+
+    j = 0;
+    for (i = 0; i < 256; i++) {
+        j = (j + S[i] + key[i % key_len]) & 0xff;
+        uint8_t tmp = S[i];
+        S[i] = S[j];
+        S[j] = tmp;
+    }
+
+    /* PRGA (Pseudo-Random Generation Algorithm) */
+    i = 0;
+    j = 0;
+    for (size_t k = 0; k < data_len; k++) {
+        i = (i + 1) & 0xff;
+        j = (j + S[i]) & 0xff;
+        uint8_t tmp = S[i];
+        S[i] = S[j];
+        S[j] = tmp;
+        output[k] = data[k] ^ S[(S[i] + S[j]) & 0xff];
+    }
+}
+
+/* ============================================================================
+ * NTLM Signing/Sealing (メッセージレベル暗号化)
+ * ============================================================================
+ *
+ * AllowUnencrypted=FalseのWinRM HTTP接続で必要。
+ * NTLM認証完了後、SOAPメッセージを暗号化して送信する。
+ *
+ * MS-NLMP Section 3.4.4: セッションセキュリティ
+ * ============================================================================ */
+
+/* NTLM セッション状態 */
+typedef struct {
+    uint8_t signing_key[16];   /* ClientSigningKey */
+    uint8_t sealing_key[16];   /* ClientSealingKey */
+    uint8_t rc4_state[256];    /* RC4状態 */
+    size_t rc4_i, rc4_j;       /* RC4インデックス */
+    uint32_t seq_num;          /* シーケンス番号 */
+} ntlm_session_t;
+
+/* マジック定数 (MS-NLMP 3.4.4.2) */
+static const char SIGN_MAGIC[] = "session key to client-to-server signing key magic constant\0";
+static const char SEAL_MAGIC[] = "session key to client-to-server sealing key magic constant\0";
+
+/*
+ * ntlm_derive_keys - SigningKey と SealingKey を派生
+ *
+ * MS-NLMP 3.4.4.2:
+ * SigningKey = HMAC_MD5(ExportedSessionKey, SignMagic)
+ * SealingKey = HMAC_MD5(ExportedSessionKey, SealMagic)
+ */
+static void ntlm_derive_keys(const uint8_t *exported_session_key, ntlm_session_t *session) {
+    /* SigningKey */
+    hmac_md5(exported_session_key, 16, (const uint8_t *)SIGN_MAGIC, sizeof(SIGN_MAGIC), session->signing_key);
+
+    /* SealingKey */
+    hmac_md5(exported_session_key, 16, (const uint8_t *)SEAL_MAGIC, sizeof(SEAL_MAGIC), session->sealing_key);
+
+    /* RC4状態を初期化 */
+    for (int i = 0; i < 256; i++) {
+        session->rc4_state[i] = (uint8_t)i;
+    }
+    size_t j = 0;
+    for (int i = 0; i < 256; i++) {
+        j = (j + session->rc4_state[i] + session->sealing_key[i % 16]) & 0xff;
+        uint8_t tmp = session->rc4_state[i];
+        session->rc4_state[i] = session->rc4_state[j];
+        session->rc4_state[j] = tmp;
+    }
+    session->rc4_i = 0;
+    session->rc4_j = 0;
+    session->seq_num = 0;
+}
+
+/*
+ * ntlm_rc4_stream - RC4ストリームで暗号化（状態を維持）
+ */
+static void ntlm_rc4_stream(ntlm_session_t *session, const uint8_t *data, size_t len, uint8_t *output) {
+    for (size_t k = 0; k < len; k++) {
+        session->rc4_i = (session->rc4_i + 1) & 0xff;
+        session->rc4_j = (session->rc4_j + session->rc4_state[session->rc4_i]) & 0xff;
+        uint8_t tmp = session->rc4_state[session->rc4_i];
+        session->rc4_state[session->rc4_i] = session->rc4_state[session->rc4_j];
+        session->rc4_state[session->rc4_j] = tmp;
+        output[k] = data[k] ^ session->rc4_state[(session->rc4_state[session->rc4_i] + session->rc4_state[session->rc4_j]) & 0xff];
+    }
+}
+
+/*
+ * ntlm_seal_message - メッセージを暗号化して署名を生成
+ *
+ * MS-NLMP 3.4.4.2.1: SEAL()
+ *
+ * @session:    NTLMセッション状態
+ * @message:    暗号化するメッセージ
+ * @msg_len:    メッセージ長
+ * @sealed:     暗号化されたメッセージの出力先
+ * @signature:  署名の出力先（16バイト）
+ */
+static void ntlm_seal_message(ntlm_session_t *session, const uint8_t *message, size_t msg_len,
+                               uint8_t *sealed, uint8_t *signature) {
+    /* 1. シーケンス番号 + メッセージのHMAC-MD5を計算 */
+    size_t hmac_input_len = 4 + msg_len;
+    uint8_t *hmac_input = malloc(hmac_input_len);
+    memcpy(hmac_input, &session->seq_num, 4);
+    memcpy(hmac_input + 4, message, msg_len);
+
+    uint8_t hmac_output[16];
+    hmac_md5(session->signing_key, 16, hmac_input, hmac_input_len, hmac_output);
+    free(hmac_input);
+
+    /* 2. メッセージをRC4で暗号化 */
+    ntlm_rc4_stream(session, message, msg_len, sealed);
+
+    /* 3. 署名を構築: Version(4) + Checksum(8) + SeqNum(4) */
+    /*    Checksum部分もRC4で暗号化 */
+    uint8_t checksum_encrypted[8];
+    ntlm_rc4_stream(session, hmac_output, 8, checksum_encrypted);
+
+    /* NTLMSSP_MESSAGE_SIGNATURE構造体 */
+    uint32_t version = 0x00000001;
+    memcpy(signature, &version, 4);
+    memcpy(signature + 4, checksum_encrypted, 8);
+    memcpy(signature + 12, &session->seq_num, 4);
+
+    /* シーケンス番号をインクリメント */
+    session->seq_num++;
+}
+
 /* ============================================================================
  * Base64エンコード/デコード実装
  * ============================================================================
@@ -725,20 +904,31 @@ static void ntlm_hash(const char *password, uint8_t *hash) {
  *
  * 計算式: NTLMv2_Hash = HMAC-MD5(NT_Hash, UTF-16LE(Username.upper() + Domain))
  *
- * 注: ユーザー名は大文字に変換されるが、ドメイン名はそのまま使用
+ * 注: MS-NLMP仕様ではユーザー名のみ大文字化、ドメインはそのまま
  */
 static void ntlmv2_hash(const char *password, const char *user, const char *domain,
                         uint8_t *hash) {
     uint8_t nt_hash[16];
     ntlm_hash(password, nt_hash);
 
-    /* ユーザー名を大文字に変換してドメインと結合 */
+    /*
+     * NTLMv2Hash = HMAC-MD5(NT_Hash, UNICODE(Uppercase(User) + Domain))
+     *
+     * MS-NLMP仕様: ユーザー名のみ大文字化、ドメインはそのまま
+     */
     char user_domain[512];
-    size_t i;
+    size_t i, j;
+
+    /* ユーザー名を大文字に変換 */
     for (i = 0; user[i]; i++) {
         user_domain[i] = (user[i] >= 'a' && user[i] <= 'z') ? user[i] - 32 : user[i];
     }
-    strcpy(user_domain + i, domain);
+
+    /* ドメインはそのまま（MS-NLMP仕様通り） */
+    for (j = 0; domain[j]; j++) {
+        user_domain[i + j] = domain[j];
+    }
+    user_domain[i + j] = '\0';
 
     uint8_t utf16_ud[512];
     size_t utf16_len = utf8_to_utf16le(user_domain, utf16_ud, sizeof(utf16_ud));
@@ -860,7 +1050,11 @@ static bool ntlm_parse_type2(const uint8_t *buffer, size_t len,
 static size_t ntlm_create_type3(const char *user, const char *password,
                                 const char *domain, const uint8_t *challenge,
                                 const uint8_t *target_info, size_t target_info_len,
-                                uint8_t *buffer, size_t buffer_size) {
+                                uint32_t server_flags,
+                                const uint8_t *type1_msg, size_t type1_len,
+                                const uint8_t *type2_msg, size_t type2_len,
+                                uint8_t *buffer, size_t buffer_size,
+                                uint8_t *exported_session_key_out) {
     uint8_t ntlmv2_h[16];
     ntlmv2_hash(password, user, domain, ntlmv2_h);
 
@@ -868,26 +1062,111 @@ static size_t ntlm_create_type3(const char *user, const char *password,
     uint8_t client_challenge[8];
     FILE *urandom = fopen("/dev/urandom", "r");
     if (urandom) {
-        fread(client_challenge, 1, 8, urandom);
+        if (fread(client_challenge, 1, 8, urandom) != 8) {
+            for (int i = 0; i < 8; i++) client_challenge[i] = rand() & 0xff;
+        }
         fclose(urandom);
     } else {
         for (int i = 0; i < 8; i++) client_challenge[i] = rand() & 0xff;
     }
 
-    /* タイムスタンプ（Windows FILETIME形式） */
-    uint64_t timestamp;
-    struct timeval tv;
-    gettimeofday(&tv, NULL);
-    timestamp = ((uint64_t)tv.tv_sec + 11644473600ULL) * 10000000ULL + tv.tv_usec * 10;
+    /*
+     * サーバーのTargetInfoを解析
+     * - MsvAvTimestamp (AvId=7) があれば取得して使用
+     * - MsAvFlags (AvId=6) の位置を確認
+     * - MsAvEOL (AvId=0) の位置を確認
+     */
+    uint64_t timestamp = 0;
+    bool has_server_timestamp = false;
+    size_t av_flags_pos = 0;
+    bool has_av_flags = false;
+    size_t eol_pos = 0;
 
-    /* NTLMv2 blob */
-    size_t blob_len = 28 + target_info_len + 4;
+    size_t i = 0;
+    while (i + 3 < target_info_len) {
+        uint16_t av_id = target_info[i] | (target_info[i+1] << 8);
+        uint16_t av_len = target_info[i+2] | (target_info[i+3] << 8);
+
+        if (av_id == 0x0007 && av_len == 8) {
+            /* MsvAvTimestamp (AvId=7): サーバーのタイムスタンプ */
+            memcpy(&timestamp, &target_info[i+4], 8);
+            has_server_timestamp = true;
+            if (DEBUG) {
+                log_info("サーバーのMsvAvTimestampを使用");
+            }
+        } else if (av_id == 0x0006) {
+            /* MsAvFlags (AvId=6): 既存のフラグ位置 */
+            av_flags_pos = i;
+            has_av_flags = true;
+        } else if (av_id == 0x0000) {
+            /* MsAvEOL (AvId=0): 終端 */
+            eol_pos = i;
+            break;
+        }
+        i += 4 + av_len;
+    }
+
+    /* サーバーからタイムスタンプがない場合は自分で生成 */
+    if (!has_server_timestamp) {
+        struct timeval tv;
+        gettimeofday(&tv, NULL);
+        timestamp = ((uint64_t)tv.tv_sec + 11644473600ULL) * 10000000ULL + tv.tv_usec * 10;
+    }
+
+    if (eol_pos == 0 && target_info_len >= 4) {
+        eol_pos = target_info_len - 4;
+    }
+
+    /*
+     * 新しいTargetInfoを構築
+     * - MsAvFlagsが既存の場合は更新（MIC_PROVIDEDフラグを追加）
+     * - 存在しない場合は新規追加
+     */
+    size_t new_target_info_len;
+    uint8_t *new_target_info;
+
+    if (has_av_flags) {
+        /* 既存のMsAvFlagsを更新 */
+        new_target_info_len = target_info_len;
+        new_target_info = malloc(new_target_info_len);
+        memcpy(new_target_info, target_info, target_info_len);
+
+        /* MIC_PROVIDEDフラグを追加（既存値とOR） */
+        uint32_t existing_flags = 0;
+        memcpy(&existing_flags, &new_target_info[av_flags_pos + 4], 4);
+        existing_flags |= MIC_PROVIDED;
+        memcpy(&new_target_info[av_flags_pos + 4], &existing_flags, 4);
+    } else {
+        /* MsAvFlagsを新規追加（EOL前に挿入） */
+        uint8_t av_flags[8] = {0x06, 0x00, 0x04, 0x00, 0x02, 0x00, 0x00, 0x00};
+
+        new_target_info_len = eol_pos + 8 + 4;
+        new_target_info = malloc(new_target_info_len);
+        memcpy(new_target_info, target_info, eol_pos);
+        memcpy(new_target_info + eol_pos, av_flags, 8);
+        memset(new_target_info + eol_pos + 8, 0, 4);
+    }
+
+    /* NTLMv2 blob (NTLMv2_CLIENT_CHALLENGE構造体)
+     * - RespType (1): 0x01
+     * - HiRespType (1): 0x01
+     * - Reserved1 (2): 0x0000
+     * - Reserved2 (4): 0x00000000
+     * - TimeStamp (8): FILETIME
+     * - ChallengeFromClient (8): random
+     * - Reserved3 (4): 0x00000000
+     * - AvPairs (variable): TargetInfo (MsAvEOL終端を含む)
+     * ヘッダ: 28バイト, AvPairs: new_target_info_len (終端含む)
+     */
+    size_t blob_len = 28 + new_target_info_len;
     uint8_t *blob = calloc(blob_len, 1);
 
-    blob[0] = 0x01; blob[1] = 0x01;  /* Blob signature */
+    blob[0] = 0x01; blob[1] = 0x01;  /* RespType, HiRespType */
+    /* Reserved1, Reserved2, Reserved3 は calloc で 0 に初期化済み */
     memcpy(blob + 8, &timestamp, 8);
     memcpy(blob + 16, client_challenge, 8);
-    memcpy(blob + 28, target_info, target_info_len);
+    memcpy(blob + 28, new_target_info, new_target_info_len);
+    free(new_target_info);
 
     /* NTProofStr = HMAC-MD5(NTLMv2Hash, ServerChallenge + Blob) */
     size_t concat_len = 8 + blob_len;
@@ -897,6 +1176,13 @@ static size_t ntlm_create_type3(const char *user, const char *password,
 
     uint8_t nt_proof_str[16];
     hmac_md5(ntlmv2_h, 16, concat, concat_len, nt_proof_str);
+
+    if (DEBUG) {
+        char dbg[128];
+        snprintf(dbg, sizeof(dbg), "NTLMv2レスポンス生成: Blob長=%zu", blob_len);
+        log_info(dbg);
+    }
+
     free(concat);
 
     /* NTLMv2 Response = NTProofStr + Blob */
@@ -906,16 +1192,49 @@ static size_t ntlm_create_type3(const char *user, const char *password,
     memcpy(nt_response + 16, blob, blob_len);
     free(blob);
 
-    /* セッションキー */
-    uint8_t session_key[16];
-    hmac_md5(ntlmv2_h, 16, nt_proof_str, 16, session_key);
+    /* SessionBaseKey = HMAC-MD5(NTLMv2Hash, NTProofStr) */
+    uint8_t session_base_key[16];
+    hmac_md5(ntlmv2_h, 16, nt_proof_str, 16, session_base_key);
+
+    /*
+     * ExportedSessionKey の計算
+     * KEY_EXCHフラグが設定されている場合:
+     *   - ランダムな16バイトをExportedSessionKeyとして生成
+     *   - RC4(SessionBaseKey, ExportedSessionKey) を EncryptedRandomSessionKey として送信
+     * KEY_EXCHフラグが設定されていない場合:
+     *   - ExportedSessionKey = SessionBaseKey
+     */
+    uint8_t exported_session_key[16];
+    uint8_t encrypted_session_key[16];
+    bool use_key_exch = (server_flags & NTLMSSP_NEGOTIATE_KEY_EXCH) != 0;
+
+    if (use_key_exch) {
+        /* ランダムなセッションキーを生成 */
+        FILE *rnd = fopen("/dev/urandom", "r");
+        if (rnd) {
+            if (fread(exported_session_key, 1, 16, rnd) != 16) {
+                for (int j = 0; j < 16; j++) exported_session_key[j] = rand() & 0xff;
+            }
+            fclose(rnd);
+        } else {
+            for (int j = 0; j < 16; j++) exported_session_key[j] = rand() & 0xff;
+        }
+        /* SessionBaseKeyでRC4暗号化 */
+        rc4_crypt(session_base_key, 16, exported_session_key, 16, encrypted_session_key);
+
+        if (DEBUG) {
+            log_info("KEY_EXCH: ランダムセッションキー生成・暗号化完了");
+        }
+    } else {
+        memcpy(exported_session_key, session_base_key, 16);
+    }
 
     /* UTF-16LEに変換 */
     uint8_t domain_utf16[256], user_utf16[256];
     size_t domain_len = utf8_to_utf16le(domain, domain_utf16, sizeof(domain_utf16));
     size_t user_len = utf8_to_utf16le(user, user_utf16, sizeof(user_utf16));
 
-    /* Type 3メッセージ構築 */
+    /* Type 3メッセージ構築（88バイトヘッダ、MICはオフセット72-87） */
     size_t offset = 88;  /* ヘッダサイズ */
 
     memset(buffer, 0, buffer_size);
@@ -924,10 +1243,12 @@ static size_t ntlm_create_type3(const char *user, const char *password,
     uint32_t type = NTLM_TYPE3;
     memcpy(buffer + 8, &type, 4);
 
-    /* LM Response（空） */
+    /* LM Response（空） - オフセットはNT Responseと同じ位置を指す */
     uint16_t lm_len = 0;
+    uint32_t lm_offset = offset;  /* データ開始位置 */
     memcpy(buffer + 12, &lm_len, 2);
     memcpy(buffer + 14, &lm_len, 2);
+    memcpy(buffer + 16, &lm_offset, 4);
 
     /* NT Response */
     uint16_t nt_len = nt_response_len;
@@ -959,20 +1280,338 @@ static size_t ntlm_create_type3(const char *user, const char *password,
 
     /* Workstation（空） */
     uint32_t ws_offset = offset;
+    memcpy(buffer + 44, &lm_len, 2);  /* Workstation Len = 0 */
+    memcpy(buffer + 46, &lm_len, 2);  /* Workstation MaxLen = 0 */
     memcpy(buffer + 48, &ws_offset, 4);
 
-    /* Encrypted Session Key（空） */
+    /* Encrypted Session Key */
+    uint16_t sk_len = use_key_exch ? 16 : 0;
     uint32_t sk_offset = offset;
-    memcpy(buffer + 52, &sk_offset, 4);
+    memcpy(buffer + 52, &sk_len, 2);
+    memcpy(buffer + 54, &sk_len, 2);
+    memcpy(buffer + 56, &sk_offset, 4);
+    if (use_key_exch) {
+        memcpy(buffer + offset, encrypted_session_key, 16);
+        offset += 16;
+    }
 
-    /* Flags */
+    /* Flags - サーバーフラグを基に構築 */
     uint32_t flags = NTLMSSP_NEGOTIATE_UNICODE |
                      NTLMSSP_NEGOTIATE_NTLM |
                      NTLMSSP_NEGOTIATE_ALWAYS_SIGN |
-                     NTLMSSP_NEGOTIATE_EXTENDED_SESSIONSECURITY;
+                     NTLMSSP_NEGOTIATE_EXTENDED_SESSIONSECURITY |
+                     NTLMSSP_NEGOTIATE_TARGET_INFO |
+                     NTLMSSP_NEGOTIATE_VERSION;  /* バージョン情報を含む */
+    if (use_key_exch) {
+        flags |= NTLMSSP_NEGOTIATE_KEY_EXCH;
+    }
+    if (server_flags & NTLMSSP_NEGOTIATE_SEAL) {
+        flags |= NTLMSSP_NEGOTIATE_SEAL;
+    }
+    if (server_flags & NTLMSSP_NEGOTIATE_SIGN) {
+        flags |= NTLMSSP_NEGOTIATE_SIGN;
+    }
+    if (server_flags & NTLMSSP_NEGOTIATE_128) {
+        flags |= NTLMSSP_NEGOTIATE_128;
+    }
+    if (server_flags & NTLMSSP_NEGOTIATE_56) {
+        flags |= NTLMSSP_NEGOTIATE_56;
+    }
     memcpy(buffer + 60, &flags, 4);
 
+    /* Version情報 (オフセット64-71) - Windows 10相当 */
+    uint8_t version[8] = {0x0a, 0x00, 0x63, 0x45, 0x00, 0x00, 0x00, 0x0f};
+    memcpy(buffer + 64, version, 8);
+
+    /*
+     * MIC計算 (オフセット72-87の16バイト)
+     * MIC = HMAC-MD5(ExportedSessionKey, Type1 || Type2 || Type3_with_zero_MIC)
+     */
+    if (type1_msg && type2_msg && type1_len > 0 && type2_len > 0) {
+        size_t total_len = type1_len + type2_len + offset;
+        uint8_t *mic_data = malloc(total_len);
+
+        memcpy(mic_data, type1_msg, type1_len);
+        memcpy(mic_data + type1_len, type2_msg, type2_len);
+        memcpy(mic_data + type1_len + type2_len, buffer, offset);
+
+        uint8_t mic[16];
+        hmac_md5(exported_session_key, 16, mic_data, total_len, mic);
+        free(mic_data);
+
+        memcpy(buffer + 72, mic, 16);
+
+        if (DEBUG) {
+            log_info("MIC計算完了");
+        }
+    }
+
+    /* ExportedSessionKeyを外部に返す（Signing/Sealing用） */
+    if (exported_session_key_out) {
+        memcpy(exported_session_key_out, exported_session_key, 16);
+    }
+
     return offset;
+}
+
+/* ============================================================================
+ * SPNEGO (Negotiate) トークン生成
+ * ============================================================================
+ * NTLMメッセージをSPNEGOでラップして、Negotiate認証で使用可能にする
+ * ============================================================================ */
+
+/*
+ * ASN.1長さエンコード
+ * DER形式で長さをエンコード
+ */
+static size_t asn1_encode_length(uint8_t *buffer, size_t len) {
+    if (len < 128) {
+        buffer[0] = (uint8_t)len;
+        return 1;
+    } else if (len < 256) {
+        buffer[0] = 0x81;
+        buffer[1] = (uint8_t)len;
+        return 2;
+    } else {
+        buffer[0] = 0x82;
+        buffer[1] = (len >> 8) & 0xff;
+        buffer[2] = len & 0xff;
+        return 3;
+    }
+}
+
+/*
+ * spnego_create_neg_token_init - SPNEGO NegTokenInit (Type 1) を生成
+ *
+ * NTLMのType 1メッセージをSPNEGOでラップして返す
+ * 構造:
+ *   Application [0] {
+ *     OID (SPNEGO)
+ *     [0] NegTokenInit {
+ *       [0] mechTypes { OID (NTLMSSP) }
+ *       [2] mechToken { NTLM Type 1 }
+ *     }
+ *   }
+ */
+static size_t spnego_create_neg_token_init(const uint8_t *ntlm_type1, size_t ntlm_len,
+                                           uint8_t *buffer, size_t buffer_size) {
+    uint8_t temp[4096];
+    size_t pos = 0;
+
+    /* mechToken (NTLM Type 1) */
+    /* [2] { OCTET STRING { ntlm_type1 } } */
+    uint8_t mech_token[2048];
+    size_t mt_pos = 0;
+
+    /* OCTET STRING */
+    mech_token[mt_pos++] = 0x04;
+    mt_pos += asn1_encode_length(mech_token + mt_pos, ntlm_len);
+    memcpy(mech_token + mt_pos, ntlm_type1, ntlm_len);
+    mt_pos += ntlm_len;
+
+    /* Context [2] */
+    uint8_t ctx2[2048];
+    size_t c2_pos = 0;
+    ctx2[c2_pos++] = 0xa2;
+    c2_pos += asn1_encode_length(ctx2 + c2_pos, mt_pos);
+    memcpy(ctx2 + c2_pos, mech_token, mt_pos);
+    c2_pos += mt_pos;
+
+    /* mechTypes (NTLMSSP OID) */
+    /* [0] { SEQUENCE { OID } } */
+    uint8_t mech_types[64];
+    size_t mts_pos = 0;
+
+    /* SEQUENCE containing OID */
+    mech_types[mts_pos++] = 0x30;
+    mech_types[mts_pos++] = sizeof(NTLMSSP_OID);
+    memcpy(mech_types + mts_pos, NTLMSSP_OID, sizeof(NTLMSSP_OID));
+    mts_pos += sizeof(NTLMSSP_OID);
+
+    /* Context [0] */
+    uint8_t ctx0[64];
+    size_t c0_pos = 0;
+    ctx0[c0_pos++] = 0xa0;
+    c0_pos += asn1_encode_length(ctx0 + c0_pos, mts_pos);
+    memcpy(ctx0 + c0_pos, mech_types, mts_pos);
+    c0_pos += mts_pos;
+
+    /* NegTokenInit SEQUENCE */
+    uint8_t neg_token_init[4096];
+    size_t nti_pos = 0;
+    neg_token_init[nti_pos++] = 0x30;
+    size_t nti_content_len = c0_pos + c2_pos;
+    nti_pos += asn1_encode_length(neg_token_init + nti_pos, nti_content_len);
+    memcpy(neg_token_init + nti_pos, ctx0, c0_pos);
+    nti_pos += c0_pos;
+    memcpy(neg_token_init + nti_pos, ctx2, c2_pos);
+    nti_pos += c2_pos;
+
+    /* Context [0] for NegTokenInit */
+    uint8_t ctx_nti[4096];
+    size_t cn_pos = 0;
+    ctx_nti[cn_pos++] = 0xa0;
+    cn_pos += asn1_encode_length(ctx_nti + cn_pos, nti_pos);
+    memcpy(ctx_nti + cn_pos, neg_token_init, nti_pos);
+    cn_pos += nti_pos;
+
+    /* Application [0] with SPNEGO OID */
+    temp[pos++] = 0x60;  /* Application Constructed [0] */
+    size_t app_content_len = sizeof(SPNEGO_OID) + cn_pos;
+    pos += asn1_encode_length(temp + pos, app_content_len);
+    memcpy(temp + pos, SPNEGO_OID, sizeof(SPNEGO_OID));
+    pos += sizeof(SPNEGO_OID);
+    memcpy(temp + pos, ctx_nti, cn_pos);
+    pos += cn_pos;
+
+    if (pos > buffer_size) return 0;
+    memcpy(buffer, temp, pos);
+    return pos;
+}
+
+/*
+ * spnego_parse_neg_token_resp - SPNEGO NegTokenResp からNTLMメッセージを抽出
+ *
+ * サーバーからのSPNEGOレスポンスを解析し、中のNTLMメッセージを取り出す
+ */
+static size_t spnego_parse_neg_token_resp(const uint8_t *token, size_t token_len,
+                                          uint8_t *ntlm_msg, size_t ntlm_size) {
+    if (token_len < 4) return 0;
+
+    size_t pos = 0;
+
+    /* Context [1] (NegTokenResp) をスキップ */
+    if (token[pos] == 0xa1) {
+        pos++;
+        /* 長さを読み飛ばす */
+        if (token[pos] & 0x80) {
+            int len_bytes = token[pos] & 0x7f;
+            pos += 1 + len_bytes;
+        } else {
+            pos++;
+        }
+    }
+
+    /* SEQUENCE をスキップ */
+    if (pos < token_len && token[pos] == 0x30) {
+        pos++;
+        if (token[pos] & 0x80) {
+            int len_bytes = token[pos] & 0x7f;
+            pos += 1 + len_bytes;
+        } else {
+            pos++;
+        }
+    }
+
+    /* responseToken [2] を探す */
+    while (pos < token_len - 2) {
+        if (token[pos] == 0xa2) {
+            pos++;
+            /* 長さを読む */
+            size_t content_len;
+            if (token[pos] & 0x80) {
+                int len_bytes = token[pos] & 0x7f;
+                pos++;
+                content_len = 0;
+                for (int i = 0; i < len_bytes && pos < token_len; i++) {
+                    content_len = (content_len << 8) | token[pos++];
+                }
+            } else {
+                content_len = token[pos++];
+            }
+
+            /* OCTET STRING */
+            if (pos < token_len && token[pos] == 0x04) {
+                pos++;
+                size_t octet_len;
+                if (token[pos] & 0x80) {
+                    int len_bytes = token[pos] & 0x7f;
+                    pos++;
+                    octet_len = 0;
+                    for (int i = 0; i < len_bytes && pos < token_len; i++) {
+                        octet_len = (octet_len << 8) | token[pos++];
+                    }
+                } else {
+                    octet_len = token[pos++];
+                }
+
+                /* NTLMメッセージをコピー */
+                if (octet_len <= ntlm_size && pos + octet_len <= token_len) {
+                    memcpy(ntlm_msg, token + pos, octet_len);
+                    return octet_len;
+                }
+            }
+            break;
+        } else {
+            /* 他のコンテキストタグをスキップ */
+            pos++;
+            if (pos < token_len) {
+                if (token[pos] & 0x80) {
+                    int len_bytes = token[pos] & 0x7f;
+                    pos++;
+                    size_t skip_len = 0;
+                    for (int i = 0; i < len_bytes && pos < token_len; i++) {
+                        skip_len = (skip_len << 8) | token[pos++];
+                    }
+                    pos += skip_len;
+                } else {
+                    size_t skip_len = token[pos++];
+                    pos += skip_len;
+                }
+            }
+        }
+    }
+
+    return 0;
+}
+
+/*
+ * spnego_create_neg_token_resp - SPNEGO NegTokenResp (Type 3) を生成
+ *
+ * NTLMのType 3メッセージをSPNEGOでラップして返す
+ * 構造:
+ *   [1] NegTokenResp {
+ *     [2] responseToken { NTLM Type 3 }
+ *   }
+ */
+static size_t spnego_create_neg_token_resp(const uint8_t *ntlm_type3, size_t ntlm_len,
+                                           uint8_t *buffer, size_t buffer_size) {
+    uint8_t temp[8192];
+    size_t pos = 0;
+
+    /* OCTET STRING containing NTLM Type 3 */
+    uint8_t octet[4096];
+    size_t oct_pos = 0;
+    octet[oct_pos++] = 0x04;
+    oct_pos += asn1_encode_length(octet + oct_pos, ntlm_len);
+    memcpy(octet + oct_pos, ntlm_type3, ntlm_len);
+    oct_pos += ntlm_len;
+
+    /* Context [2] for responseToken */
+    uint8_t ctx2[4096];
+    size_t c2_pos = 0;
+    ctx2[c2_pos++] = 0xa2;
+    c2_pos += asn1_encode_length(ctx2 + c2_pos, oct_pos);
+    memcpy(ctx2 + c2_pos, octet, oct_pos);
+    c2_pos += oct_pos;
+
+    /* NegTokenResp SEQUENCE */
+    uint8_t seq[8192];
+    size_t seq_pos = 0;
+    seq[seq_pos++] = 0x30;
+    seq_pos += asn1_encode_length(seq + seq_pos, c2_pos);
+    memcpy(seq + seq_pos, ctx2, c2_pos);
+    seq_pos += c2_pos;
+
+    /* Context [1] */
+    temp[pos++] = 0xa1;
+    pos += asn1_encode_length(temp + pos, seq_pos);
+    memcpy(temp + pos, seq, seq_pos);
+    pos += seq_pos;
+
+    if (pos > buffer_size) return 0;
+    memcpy(buffer, temp, pos);
+    return pos;
 }
 
 /* ============================================================================
@@ -1089,16 +1728,45 @@ static size_t recv_http_response(int sock, char *buffer, size_t buffer_size,
                     *http_code = 0;
                 }
 
-                /* WWW-Authenticateヘッダ取得 */
-                char *auth = strcasestr(buffer, "WWW-Authenticate: NTLM ");
+                /* WWW-Authenticateヘッダ取得（Negotiate優先、次にNTLM） */
+                char *auth = strcasestr(buffer, "WWW-Authenticate:");
                 if (auth) {
-                    auth += strlen("WWW-Authenticate: NTLM ");
-                    char *end_auth = strstr(auth, "\r\n");
-                    if (end_auth) {
-                        size_t len = end_auth - auth;
-                        if (len < 1024) {
-                            strncpy(auth_header, auth, len);
-                            auth_header[len] = '\0';
+                    char *token_start = NULL;
+
+                    /* まずNegotiateを探す */
+                    char *negotiate = strcasestr(auth, "Negotiate");
+                    if (negotiate) {
+                        token_start = negotiate + 9;  /* "Negotiate"の長さ */
+                    } else {
+                        /* NTLMを探す */
+                        char *ntlm = strcasestr(auth, "NTLM");
+                        if (ntlm) {
+                            token_start = ntlm + 4;  /* "NTLM"の長さ */
+                        }
+                    }
+
+                    if (token_start) {
+                        /* スペースをスキップ */
+                        while (*token_start == ' ') token_start++;
+
+                        /* 改行までがBase64データ */
+                        char *end_auth = strstr(token_start, "\r\n");
+                        if (!end_auth) end_auth = strstr(token_start, "\n");
+
+                        if (end_auth && end_auth > token_start) {
+                            size_t len = end_auth - token_start;
+                            /* カンマがあれば、そこまでがトークンデータ */
+                            char *comma = strchr(token_start, ',');
+                            if (comma && comma < end_auth) {
+                                len = comma - token_start;
+                            }
+                            /* 末尾のスペースを除去 */
+                            while (len > 0 && token_start[len - 1] == ' ') len--;
+
+                            if (len > 0 && len < 4096) {
+                                strncpy(auth_header, token_start, len);
+                                auth_header[len] = '\0';
+                            }
                         }
                     }
                 }
@@ -1109,13 +1777,13 @@ static size_t recv_http_response(int sock, char *buffer, size_t buffer_size,
                     sscanf(cl + 15, "%zu", &content_length);
                 }
 
-                /* 本文を十分受信したか確認 */
-                if (content_length > 0 && total >= header_end + content_length) {
+                /* 本文を十分受信したか確認（Content-Length: 0の場合も含む） */
+                if (total >= header_end + content_length) {
                     break;
                 }
             }
         } else {
-            if (content_length > 0 && total >= header_end + content_length) {
+            if (total >= header_end + content_length) {
                 break;
             }
         }
@@ -1125,7 +1793,7 @@ static size_t recv_http_response(int sock, char *buffer, size_t buffer_size,
 }
 
 /*
- * send_http_with_ntlm - NTLM認証を行いHTTP POSTリクエストを送信
+ * send_http_with_ntlm - Negotiate (SPNEGO/NTLM) 認証を行いHTTP POSTリクエストを送信
  *
  * @host:          接続先ホスト
  * @port:          接続先ポート
@@ -1135,11 +1803,8 @@ static size_t recv_http_response(int sock, char *buffer, size_t buffer_size,
  * @return:        成功時true
  *
  * 処理フロー:
- * 1. Type 1メッセージを送信（認証開始）
- * 2. 401応答からType 2メッセージ（チャレンジ）を取得
- * 3. Type 2をデコード・解析
- * 4. Type 3メッセージ（認証応答）を生成・送信
- * 5. 200応答で認証成功、レスポンス本文を返却
+ * 1. まず直接NTLMで認証を試行
+ * 2. 失敗した場合、SPNEGO/Negotiateで認証を試行
  */
 static bool send_http_with_ntlm(const char *host, int port, const char *body,
                                 char *response, size_t response_size) {
@@ -1147,14 +1812,19 @@ static bool send_http_with_ntlm(const char *host, int port, const char *body,
     char request[MAX_BUFFER_SIZE];
     char recv_buffer[MAX_BUFFER_SIZE];
     int http_code;
-    char auth_header[1024];
+    char auth_header[4096];
+    bool use_spnego = false;
 
-    /* Step 1: Type 1メッセージを送信 */
-    sock = connect_to_host(host, port);
-    if (sock < 0) return false;
-
+    /* NTLM Type 1メッセージを生成 */
     uint8_t type1[64];
     size_t type1_len = ntlm_create_type1(type1, sizeof(type1));
+
+    /*
+     * Step 1: まず直接NTLMで試行
+     * 重要: NTLM認証は接続ベースなので、Type 2を受信した接続を維持する
+     */
+    sock = connect_to_host(host, port);
+    if (sock < 0) return false;
 
     char type1_b64[256];
     base64_encode(type1, type1_len, type1_b64);
@@ -1170,21 +1840,112 @@ static bool send_http_with_ntlm(const char *host, int port, const char *body,
              host, port, type1_b64, strlen(body), body);
 
     if (DEBUG) {
-        log_info("Type 1メッセージ送信中...");
+        log_info("NTLM Type 1メッセージ送信中（直接NTLM）...");
     }
 
-    send(sock, request, strlen(request), 0);
-    recv_http_response(sock, recv_buffer, sizeof(recv_buffer), &http_code, auth_header);
-    close(sock);
-
-    if (http_code != 401 || auth_header[0] == '\0') {
-        log_error("NTLM認証のType 2応答を受信できませんでした");
+    ssize_t sent = send(sock, request, strlen(request), MSG_NOSIGNAL);
+    if (sent < 0) {
+        log_error("Type 1メッセージの送信に失敗しました");
+        close(sock);
         return false;
     }
 
-    /* Step 2: Type 2メッセージを解析 */
+    recv_http_response(sock, recv_buffer, sizeof(recv_buffer), &http_code, auth_header);
+
+    /* 直接NTLMでチャレンジを受信できなかった場合、SPNEGOを試行 */
+    if (http_code == 401 && auth_header[0] == '\0') {
+        close(sock);  /* 直接NTLMが失敗したので接続を閉じる */
+
+        if (DEBUG) {
+            log_info("直接NTLMは利用不可、SPNEGOで再試行...");
+        }
+        use_spnego = true;
+
+        /* 新しい接続でSPNEGOを試行 */
+        sock = connect_to_host(host, port);
+        if (sock < 0) return false;
+
+        /* SPNEGOでラップ */
+        uint8_t spnego_init[4096];
+        size_t spnego_init_len = spnego_create_neg_token_init(type1, type1_len,
+                                                              spnego_init, sizeof(spnego_init));
+
+        char spnego_init_b64[8192];
+        base64_encode(spnego_init, spnego_init_len, spnego_init_b64);
+
+        snprintf(request, sizeof(request),
+                 "POST /wsman HTTP/1.1\r\n"
+                 "Host: %s:%d\r\n"
+                 "Authorization: Negotiate %s\r\n"
+                 "Content-Type: application/soap+xml;charset=UTF-8\r\n"
+                 "Content-Length: %zu\r\n"
+                 "Connection: keep-alive\r\n"
+                 "\r\n%s",
+                 host, port, spnego_init_b64, strlen(body), body);
+
+        if (DEBUG) {
+            log_info("SPNEGO/NTLM Type 1メッセージ送信中...");
+        }
+
+        sent = send(sock, request, strlen(request), MSG_NOSIGNAL);
+        if (sent < 0) {
+            log_error("Type 1メッセージの送信に失敗しました");
+            close(sock);
+            return false;
+        }
+
+        recv_http_response(sock, recv_buffer, sizeof(recv_buffer), &http_code, auth_header);
+
+        if (DEBUG) {
+            log_info("Type 2レスポンスヘッダー:");
+            /* ヘッダー部分のみ出力 */
+            char *header_end = strstr(recv_buffer, "\r\n\r\n");
+            if (header_end) {
+                char header_copy[2048];
+                size_t header_len = header_end - recv_buffer;
+                if (header_len >= sizeof(header_copy)) header_len = sizeof(header_copy) - 1;
+                memcpy(header_copy, recv_buffer, header_len);
+                header_copy[header_len] = '\0';
+                fprintf(stderr, "%s\n", header_copy);
+            }
+        }
+        /* この接続は維持する（Type 3送信用） */
+    }
+
+    if (http_code != 401 || auth_header[0] == '\0') {
+        close(sock);
+        char err_msg[256];
+        snprintf(err_msg, sizeof(err_msg),
+                 "認証のチャレンジ応答を受信できませんでした (HTTP %d)", http_code);
+        log_error(err_msg);
+        if (http_code == 0) {
+            log_error("サーバーからの応答がありません。接続先とポートを確認してください");
+        } else if (http_code == 401 && auth_header[0] == '\0') {
+            log_error("401応答に認証チャレンジが含まれていません");
+        }
+        return false;
+    }
+
+    /* Step 2: Type 2メッセージを解析（接続は維持したまま） */
+    uint8_t type2_raw[4096];
+    size_t type2_raw_len = base64_decode(auth_header, type2_raw, sizeof(type2_raw));
+
     uint8_t type2[2048];
-    size_t type2_len = base64_decode(auth_header, type2, sizeof(type2));
+    size_t type2_len;
+
+    if (use_spnego) {
+        /* SPNEGOからNTLMを抽出 */
+        type2_len = spnego_parse_neg_token_resp(type2_raw, type2_raw_len, type2, sizeof(type2));
+        if (type2_len == 0) {
+            log_error("SPNEGOレスポンスからNTLMメッセージを抽出できませんでした");
+            close(sock);
+            return false;
+        }
+    } else {
+        /* 直接NTLMの場合はそのまま使用 */
+        memcpy(type2, type2_raw, type2_raw_len);
+        type2_len = type2_raw_len;
+    }
 
     uint8_t challenge[8];
     uint32_t flags;
@@ -1193,53 +1954,300 @@ static bool send_http_with_ntlm(const char *host, int port, const char *body,
 
     if (!ntlm_parse_type2(type2, type2_len, challenge, &flags, target_info, &target_info_len)) {
         log_error("Type 2メッセージの解析に失敗しました");
+        close(sock);
         return false;
     }
 
     if (DEBUG) {
         log_info("Type 2メッセージ受信・解析成功");
+        char flag_msg[256];
+        snprintf(flag_msg, sizeof(flag_msg), "サーバーフラグ: 0x%08X", flags);
+        log_info(flag_msg);
+        if (flags & NTLMSSP_NEGOTIATE_KEY_EXCH) {
+            log_info("  - KEY_EXCH: 有効");
+        }
+        if (flags & NTLMSSP_NEGOTIATE_SEAL) {
+            log_info("  - SEAL: 有効");
+        }
+        if (flags & NTLMSSP_NEGOTIATE_SIGN) {
+            log_info("  - SIGN: 有効");
+        }
+        if (flags & NTLMSSP_NEGOTIATE_128) {
+            log_info("  - 128bit: 有効");
+        }
+        if (flags & NTLMSSP_NEGOTIATE_56) {
+            log_info("  - 56bit: 有効");
+        }
+        if (flags & NTLMSSP_NEGOTIATE_TARGET_INFO) {
+            log_info("  - TARGET_INFO: 有効");
+        }
+        char ti_msg[64];
+        snprintf(ti_msg, sizeof(ti_msg), "TargetInfo長: %zu バイト", target_info_len);
+        log_info(ti_msg);
     }
 
-    /* Step 3: Type 3メッセージを送信 */
-    sock = connect_to_host(host, port);
-    if (sock < 0) return false;
-
-    uint8_t type3[2048];
+    /*
+     * Step 3: Type 3メッセージを送信
+     * 重要: Type 2を受信した同じ接続（sock）を使用する
+     */
+    uint8_t type3[4096];
+    uint8_t exported_session_key[16];
     size_t type3_len = ntlm_create_type3(g_user, g_pass, g_domain,
                                           challenge, target_info, target_info_len,
-                                          type3, sizeof(type3));
+                                          flags,
+                                          type1, type1_len,
+                                          type2, type2_len,
+                                          type3, sizeof(type3),
+                                          exported_session_key);
 
-    char type3_b64[4096];
-    base64_encode(type3, type3_len, type3_b64);
+    if (DEBUG) {
+        char t3_msg[128];
+        snprintf(t3_msg, sizeof(t3_msg), "Type 3メッセージ長: %zu バイト", type3_len);
+        log_info(t3_msg);
 
-    snprintf(request, sizeof(request),
-             "POST /wsman HTTP/1.1\r\n"
-             "Host: %s:%d\r\n"
-             "Authorization: NTLM %s\r\n"
-             "Content-Type: application/soap+xml;charset=UTF-8\r\n"
-             "Content-Length: %zu\r\n"
-             "Connection: close\r\n"
-             "\r\n%s",
-             host, port, type3_b64, strlen(body), body);
+        /* Type 3のフラグを表示（オフセット60-63） */
+        if (type3_len >= 64) {
+            uint32_t t3_flags;
+            memcpy(&t3_flags, type3 + 60, 4);
+            snprintf(t3_msg, sizeof(t3_msg), "Type 3フラグ: 0x%08X", t3_flags);
+            log_info(t3_msg);
+        }
+
+        /* Type 3の最初の88バイトをhexダンプ */
+        log_info("Type 3 hex (先頭88バイト):");
+        for (size_t i = 0; i < 88 && i < type3_len; i += 16) {
+            char hex_line[128];
+            size_t pos = 0;
+            for (size_t j = i; j < i + 16 && j < type3_len && j < 88; j++) {
+                pos += snprintf(hex_line + pos, sizeof(hex_line) - pos, "%02X ", type3[j]);
+            }
+            fprintf(stderr, "  %04zx: %s\n", i, hex_line);
+        }
+    }
+
+    char auth_b64[16384];
+
+    /* NTLMセッションを初期化してSigning/Sealingキーを派生 */
+    ntlm_session_t ntlm_session;
+    ntlm_derive_keys(exported_session_key, &ntlm_session);
+
+    if (DEBUG) {
+        log_info("NTLM Signing/Sealingキー派生完了");
+    }
+
+    /* ===== ステップ1: Type 3のみで認証を確立 ===== */
+    if (use_spnego) {
+        /* SPNEGOでラップ */
+        uint8_t spnego_auth[8192];
+        size_t spnego_auth_len = spnego_create_neg_token_resp(type3, type3_len,
+                                                              spnego_auth, sizeof(spnego_auth));
+        base64_encode(spnego_auth, spnego_auth_len, auth_b64);
+
+        snprintf(request, sizeof(request),
+                 "POST /wsman HTTP/1.1\r\n"
+                 "Host: %s:%d\r\n"
+                 "Authorization: Negotiate %s\r\n"
+                 "Content-Type: application/soap+xml;charset=UTF-8\r\n"
+                 "Content-Length: 0\r\n"
+                 "Connection: keep-alive\r\n"
+                 "\r\n",
+                 host, port, auth_b64);
+    } else {
+        /* 直接NTLM */
+        base64_encode(type3, type3_len, auth_b64);
+
+        snprintf(request, sizeof(request),
+                 "POST /wsman HTTP/1.1\r\n"
+                 "Host: %s:%d\r\n"
+                 "Authorization: NTLM %s\r\n"
+                 "Content-Type: application/soap+xml;charset=UTF-8\r\n"
+                 "Content-Length: 0\r\n"
+                 "Connection: keep-alive\r\n"
+                 "\r\n",
+                 host, port, auth_b64);
+    }
 
     if (DEBUG) {
         log_info("Type 3メッセージ送信中...");
     }
 
-    send(sock, request, strlen(request), 0);
-    size_t recv_len = recv_http_response(sock, recv_buffer, sizeof(recv_buffer),
-                                          &http_code, auth_header);
-    close(sock);
+    sent = send(sock, request, strlen(request), MSG_NOSIGNAL);
+    if (sent < 0) {
+        log_error("Type 3メッセージの送信に失敗しました");
+        char err_msg[128];
+        snprintf(err_msg, sizeof(err_msg), "  送信エラー: %s", strerror(errno));
+        log_error(err_msg);
+        close(sock);
+        return false;
+    }
 
     if (DEBUG) {
+        char sent_msg[64];
+        snprintf(sent_msg, sizeof(sent_msg), "  送信バイト数: %zd", sent);
+        log_info(sent_msg);
+        log_info("認証レスポンス待機中...");
+    }
+
+    ssize_t recv_len = recv_http_response(sock, recv_buffer, sizeof(recv_buffer), &http_code, auth_header);
+
+    if (DEBUG) {
+        char recv_msg[64];
+        snprintf(recv_msg, sizeof(recv_msg), "  受信バイト数: %zd", recv_len);
+        log_info(recv_msg);
         char msg[64];
-        snprintf(msg, sizeof(msg), "HTTPステータスコード: %d", http_code);
+        snprintf(msg, sizeof(msg), "Type 3認証レスポンス HTTPステータス: %d", http_code);
         log_info(msg);
+
+        /* レスポンスヘッダーを出力 */
+        log_info("Type 3後のレスポンスヘッダー:");
+        char *header_end = strstr(recv_buffer, "\r\n\r\n");
+        if (header_end) {
+            char header_copy[2048];
+            size_t header_len = header_end - recv_buffer;
+            if (header_len >= sizeof(header_copy)) header_len = sizeof(header_copy) - 1;
+            memcpy(header_copy, recv_buffer, header_len);
+            header_copy[header_len] = '\0';
+            fprintf(stderr, "%s\n", header_copy);
+        }
     }
 
     if (http_code == 401) {
         log_error("認証に失敗しました (HTTP 401)");
         log_error("ユーザー名とパスワードを確認してください");
+
+        /* 401エラー時のレスポンスボディを表示 */
+        if (DEBUG) {
+            char *body_start_err = strstr(recv_buffer, "\r\n\r\n");
+            if (body_start_err) {
+                body_start_err += 4;
+                log_info("401レスポンスボディ:");
+                fprintf(stderr, "%s\n", body_start_err);
+            }
+        }
+        close(sock);
+        return false;
+    }
+
+    /* 認証成功後、サーバーがWWW-Authenticateヘッダーを返す場合は継続認証トークンを確認 */
+    if (DEBUG && strlen(auth_header) > 0) {
+        char auth_msg[256];
+        snprintf(auth_msg, sizeof(auth_msg), "  認証継続トークン: %s", auth_header);
+        log_info(auth_msg);
+    }
+
+    /* ===== ステップ2: 暗号化SOAPリクエストを送信 ===== */
+    if (DEBUG) {
+        log_info("暗号化SOAPリクエスト送信開始...");
+    }
+
+    /* SOAPボディを暗号化 */
+    size_t body_len = strlen(body);
+    uint8_t *sealed_body = malloc(body_len);
+    uint8_t signature[16];
+    ntlm_seal_message(&ntlm_session, (const uint8_t *)body, body_len, sealed_body, signature);
+
+    if (DEBUG) {
+        log_info("SOAPボディ暗号化完了");
+        char sig_msg[64];
+        snprintf(sig_msg, sizeof(sig_msg), "  署名: %02X%02X%02X%02X...",
+                 signature[0], signature[1], signature[2], signature[3]);
+        log_info(sig_msg);
+    }
+
+    /* multipart/encrypted形式のボディを構築 */
+    char boundary[] = "Encrypted Boundary";
+    char encrypted_body[MAX_BUFFER_SIZE];
+    size_t enc_body_len;
+
+    /* ヘッダーパート + データパート */
+    int header_part_len = snprintf(encrypted_body, sizeof(encrypted_body),
+        "--%s\r\n"
+        "Content-Type: application/HTTP-SPNEGO-session-encrypted\r\n"
+        "OriginalContent: type=application/soap+xml;charset=UTF-8;Length=%zu\r\n"
+        "--%s\r\n"
+        "Content-Type: application/octet-stream\r\n"
+        "\r\n",
+        boundary, body_len, boundary);
+
+    /* 署名(16バイト) + 暗号化データ */
+    memcpy(encrypted_body + header_part_len, signature, 16);
+    memcpy(encrypted_body + header_part_len + 16, sealed_body, body_len);
+    free(sealed_body);
+
+    /* 終端 */
+    enc_body_len = header_part_len + 16 + body_len;
+    enc_body_len += snprintf(encrypted_body + enc_body_len,
+                              sizeof(encrypted_body) - enc_body_len,
+                              "\r\n--%s--\r\n", boundary);
+
+    /* 暗号化SOAPリクエスト送信 */
+    snprintf(request, sizeof(request),
+             "POST /wsman HTTP/1.1\r\n"
+             "Host: %s:%d\r\n"
+             "Content-Type: multipart/encrypted;protocol=\"application/HTTP-SPNEGO-session-encrypted\";boundary=\"%s\"\r\n"
+             "Content-Length: %zu\r\n"
+             "Connection: keep-alive\r\n"
+             "\r\n",
+             host, port, boundary, enc_body_len);
+
+    /* ヘッダーと暗号化ボディを結合 */
+    size_t request_header_len = strlen(request);
+    memcpy(request + request_header_len, encrypted_body, enc_body_len);
+    size_t total_request_len = request_header_len + enc_body_len;
+
+    if (DEBUG) {
+        log_info("暗号化SOAPリクエスト送信中...");
+        char sock_msg[64];
+        snprintf(sock_msg, sizeof(sock_msg), "  ソケットFD: %d", sock);
+        log_info(sock_msg);
+        snprintf(sock_msg, sizeof(sock_msg), "  リクエスト長: %zu", total_request_len);
+        log_info(sock_msg);
+    }
+
+    sent = send(sock, request, total_request_len, MSG_NOSIGNAL);
+    if (sent < 0) {
+        log_error("暗号化SOAPリクエストの送信に失敗しました");
+        char err_msg[128];
+        snprintf(err_msg, sizeof(err_msg), "  送信エラー: %s", strerror(errno));
+        log_error(err_msg);
+        close(sock);
+        return false;
+    }
+
+    if (DEBUG) {
+        char sent_msg[64];
+        snprintf(sent_msg, sizeof(sent_msg), "  送信バイト数: %zd", sent);
+        log_info(sent_msg);
+        log_info("SOAPレスポンス待機中...");
+    }
+
+    recv_len = recv_http_response(sock, recv_buffer, sizeof(recv_buffer), &http_code, auth_header);
+    close(sock);
+
+    if (DEBUG) {
+        char recv_msg[64];
+        snprintf(recv_msg, sizeof(recv_msg), "  受信バイト数: %zd", recv_len);
+        log_info(recv_msg);
+        char msg[64];
+        snprintf(msg, sizeof(msg), "SOAPレスポンス HTTPステータス: %d", http_code);
+        log_info(msg);
+
+        /* レスポンスヘッダーを出力 */
+        log_info("SOAPレスポンスヘッダー:");
+        char *header_end = strstr(recv_buffer, "\r\n\r\n");
+        if (header_end) {
+            char header_copy[2048];
+            size_t header_len = header_end - recv_buffer;
+            if (header_len >= sizeof(header_copy)) header_len = sizeof(header_copy) - 1;
+            memcpy(header_copy, recv_buffer, header_len);
+            header_copy[header_len] = '\0';
+            fprintf(stderr, "%s\n", header_copy);
+        }
+    }
+
+    if (http_code == 401) {
+        log_error("暗号化リクエストで認証エラー (HTTP 401)");
+        close(sock);
         return false;
     } else if (http_code == 500) {
         log_error("サーバー内部エラーが発生しました (HTTP 500)");
@@ -1424,7 +2432,7 @@ static bool send_soap_request(const char *soap_envelope, char *response, size_t 
     if (DEBUG) {
         log_info("送信XML:");
         fprintf(stderr, "%s\n\n", soap_envelope);
-        char msg[256];
+        char msg[512];
         snprintf(msg, sizeof(msg), "接続先: http://%s:%d/wsman", g_host, g_port);
         log_info(msg);
         snprintf(msg, sizeof(msg), "ユーザー: %s", g_user);
@@ -1827,6 +2835,9 @@ static void print_help(const char *prog_name) {
  * @return: 終了コード（成功時0、エラー時1以上）
  */
 int main(int argc, char *argv[]) {
+    /* SIGPIPEを無視（接続が閉じられた後のsend()でプロセス終了を防ぐ） */
+    signal(SIGPIPE, SIG_IGN);
+
     /* 乱数シード初期化（クライアントチャレンジ生成用） */
     srand(time(NULL));
 
@@ -1877,7 +2888,7 @@ int main(int argc, char *argv[]) {
     printf("========================================================================\n");
     printf("\n");
 
-    char msg[256];
+    char msg[1024];
     snprintf(msg, sizeof(msg), "指定された環境: %s", g_env_folder);
     log_success(msg);
     printf("\n");

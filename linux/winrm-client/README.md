@@ -558,6 +558,155 @@ python3 winrm_exec.py --timeout 600 --batch "C:\Scripts\long-running-task.bat"
 Set-Item WSMan:\localhost\MaxTimeoutms -Value 600000
 ```
 
+## 既知の制限事項・環境依存の問題
+
+### サーバー側TrustedHosts設定によるNTLM認証の有効化
+
+LinuxからのNTLM認証が401エラーで失敗する場合、**サーバー側のTrustedHosts設定**が必要です。
+
+#### 設定手順（PowerShell）
+
+```powershell
+# 1. 現在の設定を確認（復元用に控える）
+Get-Item WSMan:\localhost\Client\TrustedHosts
+
+# 2. LinuxクライアントのIPアドレスを追加
+Set-Item WSMan:\localhost\Client\TrustedHosts -Value "LinuxのIPアドレス" -Force
+
+# または全ホスト許可（テスト用）
+Set-Item WSMan:\localhost\Client\TrustedHosts -Value "*" -Force
+
+# 3. 設定確認
+Get-Item WSMan:\localhost\Client\TrustedHosts
+```
+
+#### 元に戻す方法（PowerShell）
+
+```powershell
+# 空に戻す（元々空だった場合）
+Set-Item WSMan:\localhost\Client\TrustedHosts -Value "" -Force
+
+# または元の値に戻す
+Set-Item WSMan:\localhost\Client\TrustedHosts -Value "元の値" -Force
+
+# 設定確認
+Get-Item WSMan:\localhost\Client\TrustedHosts
+```
+
+#### GUI での設定方法
+
+**方法1: グループポリシーエディター（gpedit.msc）**
+
+1. `Win + R` → `gpedit.msc` を実行
+2. 以下のパスに移動:
+   ```
+   コンピューターの構成
+   └─ 管理用テンプレート
+       └─ Windowsコンポーネント
+           └─ Windows リモート管理 (WinRM)
+               └─ WinRM クライアント
+   ```
+3. 「信頼されたホスト」をダブルクリック
+4. 「有効」を選択し、TrustedHostsList に `*` または Linux の IP を入力
+5. 「OK」をクリック
+
+**方法2: レジストリエディター（regedit）**
+
+1. `Win + R` → `regedit` を実行
+2. 以下のキーに移動:
+   ```
+   HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\WSMAN\Client
+   ```
+3. 「TrustedHosts」を右クリック → 「修正」
+4. 値に `*` または Linux の IP アドレスを入力
+5. 「OK」をクリック
+
+**元に戻す場合**: 同じ手順で値を空にするか、元の値に戻します。
+
+---
+
+### NTLM認証が失敗する環境
+
+以下の環境では、LinuxからのNTLM認証が失敗する場合があります。
+
+#### 1. Active Directoryドメイン環境でKerberosが優先される場合
+
+**現象**: 401 Unauthorized（エラーコード 0xC000006D: STATUS_LOGON_FAILURE）
+
+**原因**:
+- サーバーがActive Directoryドメインに参加している
+- `winrm get winrm/config/service/auth` で `Kerberos = true`、`Negotiate = true` だが `NTLM` の項目がない
+- WindowsクライアントはKerberosで認証成功するが、LinuxからのNTLM認証は拒否される
+
+**確認コマンド**:
+```powershell
+# サーバー側の認証設定確認
+winrm get winrm/config/service/auth
+
+# 期待される出力にNTLM = trueがあるか確認
+# Basic = false
+# Kerberos = true
+# Negotiate = true
+# NTLM = true  ← これがない場合、NTLM認証不可
+```
+
+**解決策**:
+1. **TrustedHostsにLinuxクライアントを追加**（推奨）
+   ```powershell
+   Set-Item WSMan:\localhost\Client\TrustedHosts -Value "LinuxのIPアドレス" -Force
+   # または全ホスト許可（テスト用）
+   Set-Item WSMan:\localhost\Client\TrustedHosts -Value "*" -Force
+   ```
+
+2. **LinuxにKerberosクライアントをインストール**（IT制限環境では困難）
+   ```bash
+   # RHEL/CentOS
+   sudo yum install krb5-workstation krb5-libs
+   # Ubuntu/Debian
+   sudo apt install krb5-user libkrb5-dev
+   ```
+
+#### 2. TrustedHostsが空の場合
+
+**現象**: WindowsクライアントからはKerberosで接続可能だが、LinuxからのNTLM接続は拒否される
+
+**確認コマンド**:
+```powershell
+winrm get winrm/config/client
+# TrustedHosts が空の場合、リモートNTLM認証が制限される
+```
+
+**解決策**:
+```powershell
+# 元に戻す場合は空文字列を設定
+Set-Item WSMan:\localhost\Client\TrustedHosts -Value "" -Force
+```
+
+#### 3. IT制限環境での制約
+
+以下の制限がある環境では、LinuxからのWinRM接続が困難な場合があります：
+
+| 制限事項 | 影響 |
+|---------|------|
+| krb5パッケージインストール不可 | Kerberos認証が使用できない |
+| サーバー設定変更不可 | TrustedHosts設定ができない |
+| AllowUnencrypted = false | HTTP接続で暗号化が必要 |
+| HTTPS (5986) 無効 | 暗号化接続が使用できない |
+
+**回避策**:
+- IT部門にTrustedHostsの設定変更を依頼
+- Windowsの踏み台サーバーを経由して接続
+- SSH for Windowsが有効な場合はSSHを使用
+
+### NTLMv2計算の検証結果
+
+本プログラムのNTLMv2実装は、MS-NLMPのテストベクトル（セクション4.2.4）で検証済みです：
+- NT Hash計算: OK
+- NTLMv2 Hash計算: OK
+- HMAC-MD5、MD4、MD5: 全て正常動作
+
+認証が失敗する場合、上記の環境設定の問題を確認してください。
+
 ## セキュリティに関する注意事項
 
 ### 本番環境での推奨設定

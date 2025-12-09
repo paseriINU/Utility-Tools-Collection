@@ -60,3 +60,6 @@ tests/
 *.pem
 credentials.*
 config.local.*
+
+# C/C++ compiled binaries
+linux/winrm-client/winrm_exec

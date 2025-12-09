@@ -575,7 +575,7 @@ Private Sub CreateStatisticsSheet(ByRef commits() As CommitInfo, ByVal commitCou
 
     Dim i As Long
     Dim author As Variant
-    Dim dateKey As String
+    Dim dateKey As Variant
 
     ' 作者別・日別に集計
     For i = 0 To commitCount - 1

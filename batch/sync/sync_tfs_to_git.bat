@@ -259,21 +259,6 @@ foreach ($relativePath in $gitFileDict.Keys) {
     }
 }
 
-# 差分サマリー表示
-Write-Host "========================================================================" -ForegroundColor Yellow
-Write-Host " 差分サマリー" -ForegroundColor Yellow
-Write-Host "========================================================================" -ForegroundColor Yellow
-Write-Host ""
-Write-Host "新規ファイル (TFS → Git): " -NoNewline -ForegroundColor Green
-Write-Host "$($newFiles.Count) 件"
-Write-Host "更新ファイル (TFS → Git): " -NoNewline -ForegroundColor Yellow
-Write-Host "$($updateFiles.Count) 件"
-Write-Host "削除対象 (Gitのみ):       " -NoNewline -ForegroundColor Red
-Write-Host "$($deleteFiles.Count) 件"
-Write-Host "変更なし:                 " -NoNewline -ForegroundColor Gray
-Write-Host "$identicalCount 件"
-Write-Host ""
-
 # 差分がない場合は終了
 if ($newFiles.Count -eq 0 -and $updateFiles.Count -eq 0 -and $deleteFiles.Count -eq 0) {
     Write-Host "差分はありません。ファイルは同期されています。" -ForegroundColor Green
@@ -310,6 +295,21 @@ if ($deleteFiles.Count -gt 0) {
     }
     Write-Host ""
 }
+
+# 差分サマリー表示
+Write-Host "========================================================================" -ForegroundColor Yellow
+Write-Host " 差分サマリー" -ForegroundColor Yellow
+Write-Host "========================================================================" -ForegroundColor Yellow
+Write-Host ""
+Write-Host "新規ファイル (TFS → Git): " -NoNewline -ForegroundColor Green
+Write-Host "$($newFiles.Count) 件"
+Write-Host "更新ファイル (TFS → Git): " -NoNewline -ForegroundColor Yellow
+Write-Host "$($updateFiles.Count) 件"
+Write-Host "削除対象 (Gitのみ):       " -NoNewline -ForegroundColor Red
+Write-Host "$($deleteFiles.Count) 件"
+Write-Host "変更なし:                 " -NoNewline -ForegroundColor Gray
+Write-Host "$identicalCount 件"
+Write-Host ""
 
 # マージ確認
 Write-Host "------------------------------------------------------------------------" -ForegroundColor Cyan

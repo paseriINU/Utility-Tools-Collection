@@ -59,16 +59,31 @@ $Config = @{
     # UserName = ""
     # Password = ""
 
-    # 実行するバッチファイルのパス（リモートサーバ上のパス）
-    # {env}の部分が実行時に選択した環境（tst1t/tst2t）に置換されます
-    BatchPath = "C:\Scripts\{env}\test.bat"
-
     # バッチファイルに渡す引数（オプション、不要な場合は空文字）
     Arguments = ""
 
     # SSL/HTTPS接続を使用する場合は $true（通常は $false）
     UseSSL = $false
 }
+
+# 環境設定（複数環境対応）
+# 環境名と対応するバッチファイルパスを定義
+# ※ 環境を追加・削除する場合はこの配列を編集してください
+$ENVIRONMENTS = @(
+    @{
+        Name = "tst1t"
+        BatchPath = "C:\Scripts\tst1t\test.bat"
+    },
+    @{
+        Name = "tst2t"
+        BatchPath = "C:\Scripts\tst2t\test.bat"
+    }
+    # 環境を追加する場合は以下のように追記:
+    # ,@{
+    #     Name = "tst3t"
+    #     BatchPath = "C:\Scripts\tst3t\test.bat"
+    # }
+)
 
 # ======================================================================================================
 # ■ メイン処理（以下は編集不要）
@@ -88,30 +103,46 @@ Write-Host "====================================================================
 Write-Host ""
 
 #region 環境選択
-if ($Config.BatchPath -like "*{env}*") {
+if ($ENVIRONMENTS.Count -gt 0) {
     Write-Host "実行環境を選択してください:" -ForegroundColor Cyan
-    Write-Host "  1. tst1t"
-    Write-Host "  2. tst2t"
     Write-Host ""
 
-    $envChoice = Read-Host "選択 (1-2)"
-
-    switch ($envChoice) {
-        "1" { $selectedEnv = "tst1t" }
-        "2" { $selectedEnv = "tst2t" }
-        default {
-            Write-Host "[エラー] 無効な選択です" -ForegroundColor Red
-            Write-Host "Enterキーを押して終了..." -ForegroundColor Gray
-            $null = Read-Host
-            exit 1
-        }
+    # 環境一覧を動的に表示
+    for ($i = 0; $i -lt $ENVIRONMENTS.Count; $i++) {
+        Write-Host "  $($i + 1). $($ENVIRONMENTS[$i].Name)"
     }
+    Write-Host ""
+    Write-Host "  0. キャンセル"
+    Write-Host ""
 
-    # BatchPathの{env}を選択した環境に置換
-    $Config.BatchPath = $Config.BatchPath -replace '\{env\}', $selectedEnv
+    # 入力検証付きで選択を受け付け
+    do {
+        $envChoice = Read-Host "選択 (0-$($ENVIRONMENTS.Count))"
+
+        if ($envChoice -eq "0") {
+            Write-Host "[キャンセル] 処理を中止しました" -ForegroundColor Yellow
+            exit 0
+        }
+
+        $envIndex = -1
+        if ($envChoice -match '^\d+$') {
+            $envIndex = [int]$envChoice - 1
+        }
+    } while ($envIndex -lt 0 -or $envIndex -ge $ENVIRONMENTS.Count)
+
+    # 選択された環境を取得
+    $selectedEnv = $ENVIRONMENTS[$envIndex]
+    $Config.BatchPath = $selectedEnv.BatchPath
+
     Write-Host ""
-    Write-Host "選択された環境: $selectedEnv" -ForegroundColor Green
+    Write-Host "選択された環境: $($selectedEnv.Name)" -ForegroundColor Green
     Write-Host ""
+} else {
+    Write-Host "[エラー] 環境が設定されていません" -ForegroundColor Red
+    Write-Host "設定セクションの `$ENVIRONMENTS 配列を確認してください" -ForegroundColor Yellow
+    Write-Host "Enterキーを押して終了..." -ForegroundColor Gray
+    $null = Read-Host
+    exit 1
 }
 #endregion
 
