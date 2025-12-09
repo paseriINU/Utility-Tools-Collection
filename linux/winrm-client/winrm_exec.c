@@ -1,3 +1,6 @@
+/* GNU拡張関数（strcasestr等）を使用するために必要 - 必ずインクルード前に定義 */
+#define _GNU_SOURCE
+
 /*
  * ============================================================================
  * WinRM Remote Batch Executor for Linux (C言語版 - 標準ライブラリのみ)
@@ -1227,8 +1230,7 @@ static bool send_http_with_ntlm(const char *host, int port, const char *body,
     }
 
     send(sock, request, strlen(request), 0);
-    size_t recv_len = recv_http_response(sock, recv_buffer, sizeof(recv_buffer),
-                                          &http_code, auth_header);
+    recv_http_response(sock, recv_buffer, sizeof(recv_buffer), &http_code, auth_header);
     close(sock);
 
     if (DEBUG) {
@@ -1877,7 +1879,7 @@ int main(int argc, char *argv[]) {
     printf("========================================================================\n");
     printf("\n");
 
-    char msg[256];
+    char msg[1024];
     snprintf(msg, sizeof(msg), "指定された環境: %s", g_env_folder);
     log_success(msg);
     printf("\n");
