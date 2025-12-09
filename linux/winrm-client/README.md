@@ -558,6 +558,90 @@ python3 winrm_exec.py --timeout 600 --batch "C:\Scripts\long-running-task.bat"
 Set-Item WSMan:\localhost\MaxTimeoutms -Value 600000
 ```
 
+## 既知の制限事項・環境依存の問題
+
+### NTLM認証が失敗する環境
+
+以下の環境では、LinuxからのNTLM認証が失敗する場合があります。
+
+#### 1. Active Directoryドメイン環境でKerberosが優先される場合
+
+**現象**: 401 Unauthorized（エラーコード 0xC000006D: STATUS_LOGON_FAILURE）
+
+**原因**:
+- サーバーがActive Directoryドメインに参加している
+- `winrm get winrm/config/service/auth` で `Kerberos = true`、`Negotiate = true` だが `NTLM` の項目がない
+- WindowsクライアントはKerberosで認証成功するが、LinuxからのNTLM認証は拒否される
+
+**確認コマンド**:
+```powershell
+# サーバー側の認証設定確認
+winrm get winrm/config/service/auth
+
+# 期待される出力にNTLM = trueがあるか確認
+# Basic = false
+# Kerberos = true
+# Negotiate = true
+# NTLM = true  ← これがない場合、NTLM認証不可
+```
+
+**解決策**:
+1. **TrustedHostsにLinuxクライアントを追加**（推奨）
+   ```powershell
+   Set-Item WSMan:\localhost\Client\TrustedHosts -Value "LinuxのIPアドレス" -Force
+   # または全ホスト許可（テスト用）
+   Set-Item WSMan:\localhost\Client\TrustedHosts -Value "*" -Force
+   ```
+
+2. **LinuxにKerberosクライアントをインストール**（IT制限環境では困難）
+   ```bash
+   # RHEL/CentOS
+   sudo yum install krb5-workstation krb5-libs
+   # Ubuntu/Debian
+   sudo apt install krb5-user libkrb5-dev
+   ```
+
+#### 2. TrustedHostsが空の場合
+
+**現象**: WindowsクライアントからはKerberosで接続可能だが、LinuxからのNTLM接続は拒否される
+
+**確認コマンド**:
+```powershell
+winrm get winrm/config/client
+# TrustedHosts が空の場合、リモートNTLM認証が制限される
+```
+
+**解決策**:
+```powershell
+# 元に戻す場合は空文字列を設定
+Set-Item WSMan:\localhost\Client\TrustedHosts -Value "" -Force
+```
+
+#### 3. IT制限環境での制約
+
+以下の制限がある環境では、LinuxからのWinRM接続が困難な場合があります：
+
+| 制限事項 | 影響 |
+|---------|------|
+| krb5パッケージインストール不可 | Kerberos認証が使用できない |
+| サーバー設定変更不可 | TrustedHosts設定ができない |
+| AllowUnencrypted = false | HTTP接続で暗号化が必要 |
+| HTTPS (5986) 無効 | 暗号化接続が使用できない |
+
+**回避策**:
+- IT部門にTrustedHostsの設定変更を依頼
+- Windowsの踏み台サーバーを経由して接続
+- SSH for Windowsが有効な場合はSSHを使用
+
+### NTLMv2計算の検証結果
+
+本プログラムのNTLMv2実装は、MS-NLMPのテストベクトル（セクション4.2.4）で検証済みです：
+- NT Hash計算: OK
+- NTLMv2 Hash計算: OK
+- HMAC-MD5、MD4、MD5: 全て正常動作
+
+認証が失敗する場合、上記の環境設定の問題を確認してください。
+
 ## セキュリティに関する注意事項
 
 ### 本番環境での推奨設定

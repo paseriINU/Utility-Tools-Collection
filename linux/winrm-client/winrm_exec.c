@@ -930,39 +930,8 @@ static void ntlmv2_hash(const char *password, const char *user, const char *doma
     }
     user_domain[i + j] = '\0';
 
-    if (DEBUG) {
-        char dbg[256];
-        snprintf(dbg, sizeof(dbg), "NTLMv2Hash入力: User+Domain='%s' (len=%zu)",
-                 user_domain, i + j);
-        log_info(dbg);
-        snprintf(dbg, sizeof(dbg), "  元User='%s', 元Domain='%s'", user, domain);
-        log_info(dbg);
-    }
-
     uint8_t utf16_ud[512];
     size_t utf16_len = utf8_to_utf16le(user_domain, utf16_ud, sizeof(utf16_ud));
-
-    if (DEBUG) {
-        char dbg[512];
-        snprintf(dbg, sizeof(dbg), "  UTF-16LE長: %zu バイト", utf16_len);
-        log_info(dbg);
-        /* UTF-16LE先頭32バイトをダンプ */
-        log_info("  UTF-16LE (先頭32バイト):");
-        size_t dump_len = utf16_len < 32 ? utf16_len : 32;
-        char hex[128] = "    ";
-        size_t pos = 4;
-        for (size_t k = 0; k < dump_len; k++) {
-            pos += snprintf(hex + pos, sizeof(hex) - pos, "%02X ", utf16_ud[k]);
-        }
-        log_info(hex);
-        /* NT Hash表示 */
-        snprintf(dbg, sizeof(dbg), "  NT_Hash: %02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X",
-                 nt_hash[0], nt_hash[1], nt_hash[2], nt_hash[3],
-                 nt_hash[4], nt_hash[5], nt_hash[6], nt_hash[7],
-                 nt_hash[8], nt_hash[9], nt_hash[10], nt_hash[11],
-                 nt_hash[12], nt_hash[13], nt_hash[14], nt_hash[15]);
-        log_info(dbg);
-    }
 
     hmac_md5(nt_hash, 16, utf16_ud, utf16_len, hash);
 }
@@ -1149,20 +1118,34 @@ static size_t ntlm_create_type3(const char *user, const char *password,
     }
 
     /*
-     * TargetInfoをそのまま使用（MsAvFlags追加なし - テスト用）
+     * 新しいTargetInfoを構築
+     * - MsAvFlagsが既存の場合は更新（MIC_PROVIDEDフラグを追加）
+     * - 存在しない場合は新規追加
      */
-    size_t new_target_info_len = target_info_len;
-    uint8_t *new_target_info = malloc(new_target_info_len);
-    memcpy(new_target_info, target_info, target_info_len);
+    size_t new_target_info_len;
+    uint8_t *new_target_info;
 
-    if (DEBUG) {
-        log_info("TargetInfoをそのまま使用（MsAvFlags追加なし）");
+    if (has_av_flags) {
+        /* 既存のMsAvFlagsを更新 */
+        new_target_info_len = target_info_len;
+        new_target_info = malloc(new_target_info_len);
+        memcpy(new_target_info, target_info, target_info_len);
+
+        /* MIC_PROVIDEDフラグを追加（既存値とOR） */
+        uint32_t existing_flags = 0;
+        memcpy(&existing_flags, &new_target_info[av_flags_pos + 4], 4);
+        existing_flags |= MIC_PROVIDED;
+        memcpy(&new_target_info[av_flags_pos + 4], &existing_flags, 4);
+    } else {
+        /* MsAvFlagsを新規追加（EOL前に挿入） */
+        uint8_t av_flags[8] = {0x06, 0x00, 0x04, 0x00, 0x02, 0x00, 0x00, 0x00};
+
+        new_target_info_len = eol_pos + 8 + 4;
+        new_target_info = malloc(new_target_info_len);
+        memcpy(new_target_info, target_info, eol_pos);
+        memcpy(new_target_info + eol_pos, av_flags, 8);
+        memset(new_target_info + eol_pos + 8, 0, 4);
     }
-
-    /* MsAvFlagsの変数を使用しないことを明示 */
-    (void)has_av_flags;
-    (void)av_flags_pos;
-    (void)eol_pos;
 
     /* NTLMv2 blob (NTLMv2_CLIENT_CHALLENGE構造体)
      * - RespType (1): 0x01
@@ -1195,63 +1178,8 @@ static size_t ntlm_create_type3(const char *user, const char *password,
     hmac_md5(ntlmv2_h, 16, concat, concat_len, nt_proof_str);
 
     if (DEBUG) {
-        log_info("=== NTLMv2認証デバッグ ===");
-        char dbg[512];
-
-        /* サーバーチャレンジ */
-        snprintf(dbg, sizeof(dbg), "ServerChallenge: %02X%02X%02X%02X%02X%02X%02X%02X",
-                 challenge[0], challenge[1], challenge[2], challenge[3],
-                 challenge[4], challenge[5], challenge[6], challenge[7]);
-        log_info(dbg);
-
-        /* クライアントチャレンジ */
-        snprintf(dbg, sizeof(dbg), "ClientChallenge: %02X%02X%02X%02X%02X%02X%02X%02X",
-                 client_challenge[0], client_challenge[1], client_challenge[2], client_challenge[3],
-                 client_challenge[4], client_challenge[5], client_challenge[6], client_challenge[7]);
-        log_info(dbg);
-
-        /* タイムスタンプ */
-        snprintf(dbg, sizeof(dbg), "Timestamp: %016llX", (unsigned long long)timestamp);
-        log_info(dbg);
-
-        /* NTLMv2ハッシュ（全16バイト） */
-        snprintf(dbg, sizeof(dbg), "NTLMv2Hash: %02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X",
-                 ntlmv2_h[0], ntlmv2_h[1], ntlmv2_h[2], ntlmv2_h[3],
-                 ntlmv2_h[4], ntlmv2_h[5], ntlmv2_h[6], ntlmv2_h[7],
-                 ntlmv2_h[8], ntlmv2_h[9], ntlmv2_h[10], ntlmv2_h[11],
-                 ntlmv2_h[12], ntlmv2_h[13], ntlmv2_h[14], ntlmv2_h[15]);
-        log_info(dbg);
-
-        /* NTProofStr（全16バイト） */
-        snprintf(dbg, sizeof(dbg), "NTProofStr: %02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X",
-                 nt_proof_str[0], nt_proof_str[1], nt_proof_str[2], nt_proof_str[3],
-                 nt_proof_str[4], nt_proof_str[5], nt_proof_str[6], nt_proof_str[7],
-                 nt_proof_str[8], nt_proof_str[9], nt_proof_str[10], nt_proof_str[11],
-                 nt_proof_str[12], nt_proof_str[13], nt_proof_str[14], nt_proof_str[15]);
-        log_info(dbg);
-
-        /* Blob先頭32バイト */
-        snprintf(dbg, sizeof(dbg), "Blob長: %zu バイト, 先頭32バイト:", blob_len);
-        log_info(dbg);
-        snprintf(dbg, sizeof(dbg), "  %02X%02X%02X%02X %02X%02X%02X%02X %02X%02X%02X%02X %02X%02X%02X%02X",
-                 concat[8], concat[9], concat[10], concat[11],
-                 concat[12], concat[13], concat[14], concat[15],
-                 concat[16], concat[17], concat[18], concat[19],
-                 concat[20], concat[21], concat[22], concat[23]);
-        log_info(dbg);
-        snprintf(dbg, sizeof(dbg), "  %02X%02X%02X%02X %02X%02X%02X%02X %02X%02X%02X%02X %02X%02X%02X%02X",
-                 concat[24], concat[25], concat[26], concat[27],
-                 concat[28], concat[29], concat[30], concat[31],
-                 concat[32], concat[33], concat[34], concat[35],
-                 concat[36], concat[37], concat[38], concat[39]);
-        log_info(dbg);
-
-        /* TargetInfo長 */
-        snprintf(dbg, sizeof(dbg), "TargetInfo長: %zu バイト", new_target_info_len);
-        log_info(dbg);
-
-        /* ユーザー名とドメイン */
-        snprintf(dbg, sizeof(dbg), "User: %s, Domain: %s", user, domain);
+        char dbg[128];
+        snprintf(dbg, sizeof(dbg), "NTLMv2レスポンス生成: Blob長=%zu", blob_len);
         log_info(dbg);
     }
 
@@ -1396,17 +1324,27 @@ static size_t ntlm_create_type3(const char *user, const char *password,
     memcpy(buffer + 64, version, 8);
 
     /*
-     * MIC計算を無効化（テスト用）
-     * MICフィールド(オフセット72-87)は0のまま
+     * MIC計算 (オフセット72-87の16バイト)
+     * MIC = HMAC-MD5(ExportedSessionKey, Type1 || Type2 || Type3_with_zero_MIC)
      */
-    if (DEBUG) {
-        log_info("MIC計算: 無効（テスト用）");
+    if (type1_msg && type2_msg && type1_len > 0 && type2_len > 0) {
+        size_t total_len = type1_len + type2_len + offset;
+        uint8_t *mic_data = malloc(total_len);
+
+        memcpy(mic_data, type1_msg, type1_len);
+        memcpy(mic_data + type1_len, type2_msg, type2_len);
+        memcpy(mic_data + type1_len + type2_len, buffer, offset);
+
+        uint8_t mic[16];
+        hmac_md5(exported_session_key, 16, mic_data, total_len, mic);
+        free(mic_data);
+
+        memcpy(buffer + 72, mic, 16);
+
+        if (DEBUG) {
+            log_info("MIC計算完了");
+        }
     }
-    /* 未使用パラメータの警告を抑制 */
-    (void)type1_msg;
-    (void)type1_len;
-    (void)type2_msg;
-    (void)type2_len;
 
     /* ExportedSessionKeyを外部に返す（Signing/Sealing用） */
     if (exported_session_key_out) {
@@ -2098,30 +2036,39 @@ static bool send_http_with_ntlm(const char *host, int port, const char *body,
     }
 
     /* ===== ステップ1: Type 3のみで認証を確立 ===== */
-    /* テスト: SPNEGOラッピングを使わず、直接NTLMで送信 */
-    (void)use_spnego;  /* 未使用警告を抑制 */
+    if (use_spnego) {
+        /* SPNEGOでラップ */
+        uint8_t spnego_auth[8192];
+        size_t spnego_auth_len = spnego_create_neg_token_resp(type3, type3_len,
+                                                              spnego_auth, sizeof(spnego_auth));
+        base64_encode(spnego_auth, spnego_auth_len, auth_b64);
 
-    base64_encode(type3, type3_len, auth_b64);
+        snprintf(request, sizeof(request),
+                 "POST /wsman HTTP/1.1\r\n"
+                 "Host: %s:%d\r\n"
+                 "Authorization: Negotiate %s\r\n"
+                 "Content-Type: application/soap+xml;charset=UTF-8\r\n"
+                 "Content-Length: 0\r\n"
+                 "Connection: keep-alive\r\n"
+                 "\r\n",
+                 host, port, auth_b64);
+    } else {
+        /* 直接NTLM */
+        base64_encode(type3, type3_len, auth_b64);
 
-    snprintf(request, sizeof(request),
-             "POST /wsman HTTP/1.1\r\n"
-             "Host: %s:%d\r\n"
-             "Authorization: Negotiate %s\r\n"
-             "Content-Type: application/soap+xml;charset=UTF-8\r\n"
-             "Content-Length: 0\r\n"
-             "Connection: keep-alive\r\n"
-             "\r\n",
-             host, port, auth_b64);
-
-    if (DEBUG) {
-        log_info("Type 3: SPNEGOラッピングなし、直接NTLMトークンを送信");
+        snprintf(request, sizeof(request),
+                 "POST /wsman HTTP/1.1\r\n"
+                 "Host: %s:%d\r\n"
+                 "Authorization: NTLM %s\r\n"
+                 "Content-Type: application/soap+xml;charset=UTF-8\r\n"
+                 "Content-Length: 0\r\n"
+                 "Connection: keep-alive\r\n"
+                 "\r\n",
+                 host, port, auth_b64);
     }
 
     if (DEBUG) {
-        log_info("Type 3メッセージ送信中（認証のみ、ボディなし）...");
-        char sock_msg[64];
-        snprintf(sock_msg, sizeof(sock_msg), "  ソケットFD: %d", sock);
-        log_info(sock_msg);
+        log_info("Type 3メッセージ送信中...");
     }
 
     sent = send(sock, request, strlen(request), MSG_NOSIGNAL);
@@ -2873,57 +2820,6 @@ static void print_help(const char *prog_name) {
 }
 
 /*
- * test_ntlmv2_calculation - MS-NLMPテストベクトルでNTLMv2計算を検証
- *
- * MS-NLMP 4.2.4のテストデータを使用
- */
-static void test_ntlmv2_calculation(void) {
-    printf("\n=== NTLMv2計算テスト (MS-NLMP 4.2.4) ===\n");
-
-    /* テストデータ */
-    const char *test_user = "User";
-    const char *test_domain = "Domain";
-    const char *test_password = "Password";
-
-    /* 期待されるNT Hash (MS-NLMP 4.2.4.1.1) */
-    uint8_t expected_nt_hash[16] = {
-        0xa4, 0xf4, 0x9c, 0x40, 0x65, 0x10, 0xbd, 0xca,
-        0xb6, 0x82, 0x4e, 0xe7, 0xc3, 0x0f, 0xd8, 0x52
-    };
-
-    /* 期待されるNTLMv2 Hash (MS-NLMP 4.2.4.2.1) */
-    uint8_t expected_ntlmv2_hash[16] = {
-        0x0c, 0x86, 0x8a, 0x40, 0x3b, 0xfd, 0x7a, 0x93,
-        0xa3, 0x00, 0x1e, 0xf2, 0x2e, 0xf0, 0x2e, 0x3f
-    };
-
-    /* NT Hashを計算 */
-    uint8_t nt_hash[16];
-    ntlm_hash(test_password, nt_hash);
-
-    printf("NT Hash計算:\n");
-    printf("  期待値: ");
-    for (int i = 0; i < 16; i++) printf("%02X", expected_nt_hash[i]);
-    printf("\n  計算値: ");
-    for (int i = 0; i < 16; i++) printf("%02X", nt_hash[i]);
-    printf("\n  結果: %s\n", memcmp(nt_hash, expected_nt_hash, 16) == 0 ? "OK" : "NG");
-
-    /* NTLMv2 Hashを計算 */
-    uint8_t ntlmv2_h[16];
-    ntlmv2_hash(test_password, test_user, test_domain, ntlmv2_h);
-
-    printf("\nNTLMv2 Hash計算:\n");
-    printf("  User+Domain入力: %s + %s\n", test_user, test_domain);
-    printf("  期待値: ");
-    for (int i = 0; i < 16; i++) printf("%02X", expected_ntlmv2_hash[i]);
-    printf("\n  計算値: ");
-    for (int i = 0; i < 16; i++) printf("%02X", ntlmv2_h[i]);
-    printf("\n  結果: %s\n", memcmp(ntlmv2_h, expected_ntlmv2_hash, 16) == 0 ? "OK" : "NG");
-
-    printf("\n=== テスト完了 ===\n\n");
-}
-
-/*
  * main - メインエントリーポイント
  *
  * 処理フロー:
@@ -2944,8 +2840,6 @@ int main(int argc, char *argv[]) {
 
     /* 乱数シード初期化（クライアントチャレンジ生成用） */
     srand(time(NULL));
-
-    /* テスト: test_ntlmv2_calculation(); (MS-NLMPテストベクトルOK確認済み) */
 
     /* 引数チェック */
     if (argc < 2) {
