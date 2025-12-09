@@ -1448,11 +1448,8 @@ static size_t recv_http_response(int sock, char *buffer, size_t buffer_size,
  * @return:        成功時true
  *
  * 処理フロー:
- * 1. NTLM Type 1をSPNEGOでラップして送信（認証開始）
- * 2. 401応答からSPNEGOトークン（NTLMチャレンジ含む）を取得
- * 3. SPNEGOからNTLM Type 2を抽出・解析
- * 4. NTLM Type 3をSPNEGOでラップして送信（認証応答）
- * 5. 200応答で認証成功、レスポンス本文を返却
+ * 1. まず直接NTLMで認証を試行
+ * 2. 失敗した場合、SPNEGO/Negotiateで認証を試行
  */
 static bool send_http_with_ntlm(const char *host, int port, const char *body,
                                 char *response, size_t response_size) {
@@ -1461,8 +1458,9 @@ static bool send_http_with_ntlm(const char *host, int port, const char *body,
     char recv_buffer[MAX_BUFFER_SIZE];
     int http_code;
     char auth_header[4096];
+    bool use_spnego = false;
 
-    /* Step 1: NTLM Type 1をSPNEGOでラップして送信 */
+    /* Step 1: まず直接NTLMで試行 */
     sock = connect_to_host(host, port);
     if (sock < 0) return false;
 
@@ -1470,26 +1468,21 @@ static bool send_http_with_ntlm(const char *host, int port, const char *body,
     uint8_t type1[64];
     size_t type1_len = ntlm_create_type1(type1, sizeof(type1));
 
-    /* SPNEGOでラップ */
-    uint8_t spnego_init[4096];
-    size_t spnego_init_len = spnego_create_neg_token_init(type1, type1_len,
-                                                          spnego_init, sizeof(spnego_init));
-
-    char spnego_init_b64[8192];
-    base64_encode(spnego_init, spnego_init_len, spnego_init_b64);
+    char type1_b64[256];
+    base64_encode(type1, type1_len, type1_b64);
 
     snprintf(request, sizeof(request),
              "POST /wsman HTTP/1.1\r\n"
              "Host: %s:%d\r\n"
-             "Authorization: Negotiate %s\r\n"
+             "Authorization: NTLM %s\r\n"
              "Content-Type: application/soap+xml;charset=UTF-8\r\n"
              "Content-Length: %zu\r\n"
              "Connection: keep-alive\r\n"
              "\r\n%s",
-             host, port, spnego_init_b64, strlen(body), body);
+             host, port, type1_b64, strlen(body), body);
 
     if (DEBUG) {
-        log_info("SPNEGO/NTLM Type 1メッセージ送信中...");
+        log_info("NTLM Type 1メッセージ送信中（直接NTLM）...");
     }
 
     ssize_t sent = send(sock, request, strlen(request), 0);
@@ -1502,16 +1495,58 @@ static bool send_http_with_ntlm(const char *host, int port, const char *body,
     recv_http_response(sock, recv_buffer, sizeof(recv_buffer), &http_code, auth_header);
     close(sock);
 
+    /* 直接NTLMでチャレンジを受信できなかった場合、SPNEGOを試行 */
+    if (http_code == 401 && auth_header[0] == '\0') {
+        if (DEBUG) {
+            log_info("直接NTLMは利用不可、SPNEGOで再試行...");
+        }
+        use_spnego = true;
+
+        sock = connect_to_host(host, port);
+        if (sock < 0) return false;
+
+        /* SPNEGOでラップ */
+        uint8_t spnego_init[4096];
+        size_t spnego_init_len = spnego_create_neg_token_init(type1, type1_len,
+                                                              spnego_init, sizeof(spnego_init));
+
+        char spnego_init_b64[8192];
+        base64_encode(spnego_init, spnego_init_len, spnego_init_b64);
+
+        snprintf(request, sizeof(request),
+                 "POST /wsman HTTP/1.1\r\n"
+                 "Host: %s:%d\r\n"
+                 "Authorization: Negotiate %s\r\n"
+                 "Content-Type: application/soap+xml;charset=UTF-8\r\n"
+                 "Content-Length: %zu\r\n"
+                 "Connection: keep-alive\r\n"
+                 "\r\n%s",
+                 host, port, spnego_init_b64, strlen(body), body);
+
+        if (DEBUG) {
+            log_info("SPNEGO/NTLM Type 1メッセージ送信中...");
+        }
+
+        sent = send(sock, request, strlen(request), 0);
+        if (sent < 0) {
+            log_error("Type 1メッセージの送信に失敗しました");
+            close(sock);
+            return false;
+        }
+
+        recv_http_response(sock, recv_buffer, sizeof(recv_buffer), &http_code, auth_header);
+        close(sock);
+    }
+
     if (http_code != 401 || auth_header[0] == '\0') {
         char err_msg[256];
         snprintf(err_msg, sizeof(err_msg),
-                 "Negotiate認証のチャレンジ応答を受信できませんでした (HTTP %d)", http_code);
+                 "認証のチャレンジ応答を受信できませんでした (HTTP %d)", http_code);
         log_error(err_msg);
         if (http_code == 0) {
             log_error("サーバーからの応答がありません。接続先とポートを確認してください");
         } else if (http_code == 401 && auth_header[0] == '\0') {
-            log_error("401応答にNegotiateチャレンジが含まれていません");
-            /* レスポンスヘッダーの最初の部分を表示 */
+            log_error("401応答に認証チャレンジが含まれていません");
             char *header_end = strstr(recv_buffer, "\r\n\r\n");
             if (header_end) {
                 *header_end = '\0';
@@ -1522,17 +1557,24 @@ static bool send_http_with_ntlm(const char *host, int port, const char *body,
         return false;
     }
 
-    /* Step 2: SPNEGOレスポンスからNTLM Type 2を抽出 */
-    uint8_t spnego_resp[4096];
-    size_t spnego_resp_len = base64_decode(auth_header, spnego_resp, sizeof(spnego_resp));
+    /* Step 2: Type 2メッセージを解析 */
+    uint8_t type2_raw[4096];
+    size_t type2_raw_len = base64_decode(auth_header, type2_raw, sizeof(type2_raw));
 
     uint8_t type2[2048];
-    size_t type2_len = spnego_parse_neg_token_resp(spnego_resp, spnego_resp_len,
-                                                    type2, sizeof(type2));
+    size_t type2_len;
 
-    if (type2_len == 0) {
-        log_error("SPNEGOレスポンスからNTLMメッセージを抽出できませんでした");
-        return false;
+    if (use_spnego) {
+        /* SPNEGOからNTLMを抽出 */
+        type2_len = spnego_parse_neg_token_resp(type2_raw, type2_raw_len, type2, sizeof(type2));
+        if (type2_len == 0) {
+            log_error("SPNEGOレスポンスからNTLMメッセージを抽出できませんでした");
+            return false;
+        }
+    } else {
+        /* 直接NTLMの場合はそのまま使用 */
+        memcpy(type2, type2_raw, type2_raw_len);
+        type2_len = type2_raw_len;
     }
 
     uint8_t challenge[8];
@@ -1546,10 +1588,10 @@ static bool send_http_with_ntlm(const char *host, int port, const char *body,
     }
 
     if (DEBUG) {
-        log_info("SPNEGO/NTLM Type 2メッセージ受信・解析成功");
+        log_info("Type 2メッセージ受信・解析成功");
     }
 
-    /* Step 3: NTLM Type 3をSPNEGOでラップして送信 */
+    /* Step 3: Type 3メッセージを送信 */
     sock = connect_to_host(host, port);
     if (sock < 0) return false;
 
@@ -1558,26 +1600,41 @@ static bool send_http_with_ntlm(const char *host, int port, const char *body,
                                           challenge, target_info, target_info_len,
                                           type3, sizeof(type3));
 
-    /* SPNEGOでラップ */
-    uint8_t spnego_auth[8192];
-    size_t spnego_auth_len = spnego_create_neg_token_resp(type3, type3_len,
-                                                          spnego_auth, sizeof(spnego_auth));
+    char auth_b64[16384];
 
-    char spnego_auth_b64[16384];
-    base64_encode(spnego_auth, spnego_auth_len, spnego_auth_b64);
+    if (use_spnego) {
+        /* SPNEGOでラップ */
+        uint8_t spnego_auth[8192];
+        size_t spnego_auth_len = spnego_create_neg_token_resp(type3, type3_len,
+                                                              spnego_auth, sizeof(spnego_auth));
+        base64_encode(spnego_auth, spnego_auth_len, auth_b64);
 
-    snprintf(request, sizeof(request),
-             "POST /wsman HTTP/1.1\r\n"
-             "Host: %s:%d\r\n"
-             "Authorization: Negotiate %s\r\n"
-             "Content-Type: application/soap+xml;charset=UTF-8\r\n"
-             "Content-Length: %zu\r\n"
-             "Connection: close\r\n"
-             "\r\n%s",
-             host, port, spnego_auth_b64, strlen(body), body);
+        snprintf(request, sizeof(request),
+                 "POST /wsman HTTP/1.1\r\n"
+                 "Host: %s:%d\r\n"
+                 "Authorization: Negotiate %s\r\n"
+                 "Content-Type: application/soap+xml;charset=UTF-8\r\n"
+                 "Content-Length: %zu\r\n"
+                 "Connection: close\r\n"
+                 "\r\n%s",
+                 host, port, auth_b64, strlen(body), body);
+    } else {
+        /* 直接NTLM */
+        base64_encode(type3, type3_len, auth_b64);
+
+        snprintf(request, sizeof(request),
+                 "POST /wsman HTTP/1.1\r\n"
+                 "Host: %s:%d\r\n"
+                 "Authorization: NTLM %s\r\n"
+                 "Content-Type: application/soap+xml;charset=UTF-8\r\n"
+                 "Content-Length: %zu\r\n"
+                 "Connection: close\r\n"
+                 "\r\n%s",
+                 host, port, auth_b64, strlen(body), body);
+    }
 
     if (DEBUG) {
-        log_info("SPNEGO/NTLM Type 3メッセージ送信中...");
+        log_info("Type 3メッセージ送信中...");
     }
 
     send(sock, request, strlen(request), 0);
