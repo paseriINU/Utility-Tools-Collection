@@ -795,14 +795,17 @@ static void ntlm_hash(const char *password, uint8_t *hash) {
  *
  * 計算式: NTLMv2_Hash = HMAC-MD5(NT_Hash, UTF-16LE(Username.upper() + Domain))
  *
- * 注: ユーザー名とドメイン名は両方とも大文字に変換される（NTLMv2仕様）
+ * 注: MS-NLMP仕様ではユーザー名のみ大文字化、ドメインはそのまま
  */
 static void ntlmv2_hash(const char *password, const char *user, const char *domain,
                         uint8_t *hash) {
     uint8_t nt_hash[16];
     ntlm_hash(password, nt_hash);
 
-    /* ユーザー名とドメインを大文字に変換して結合 */
+    /*
+     * NTLMv2Hash = HMAC-MD5(NT_Hash, UNICODE(Uppercase(User) + Domain))
+     * MS-NLMP 3.3.2: ユーザー名のみ大文字化、ドメインはそのまま使用
+     */
     char user_domain[512];
     size_t i, j;
 
@@ -811,9 +814,9 @@ static void ntlmv2_hash(const char *password, const char *user, const char *doma
         user_domain[i] = (user[i] >= 'a' && user[i] <= 'z') ? user[i] - 32 : user[i];
     }
 
-    /* ドメインも大文字に変換して結合 */
+    /* ドメインはそのまま結合（大文字化しない - MS-NLMP仕様） */
     for (j = 0; domain[j]; j++) {
-        user_domain[i + j] = (domain[j] >= 'a' && domain[j] <= 'z') ? domain[j] - 32 : domain[j];
+        user_domain[i + j] = domain[j];
     }
     user_domain[i + j] = '\0';
 
