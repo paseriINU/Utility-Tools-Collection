@@ -1035,11 +1035,22 @@ static size_t ntlm_create_type3(const char *user, const char *password,
         memset(new_target_info + eol_pos + 8, 0, 4);
     }
 
-    /* NTLMv2 blob */
-    size_t blob_len = 28 + new_target_info_len + 4;
+    /* NTLMv2 blob (NTLMv2_CLIENT_CHALLENGE構造体)
+     * - RespType (1): 0x01
+     * - HiRespType (1): 0x01
+     * - Reserved1 (2): 0x0000
+     * - Reserved2 (4): 0x00000000
+     * - TimeStamp (8): FILETIME
+     * - ChallengeFromClient (8): random
+     * - Reserved3 (4): 0x00000000
+     * - AvPairs (variable): TargetInfo (MsAvEOL終端を含む)
+     * ヘッダ: 28バイト, AvPairs: new_target_info_len (終端含む)
+     */
+    size_t blob_len = 28 + new_target_info_len;
     uint8_t *blob = calloc(blob_len, 1);
 
-    blob[0] = 0x01; blob[1] = 0x01;  /* Blob signature */
+    blob[0] = 0x01; blob[1] = 0x01;  /* RespType, HiRespType */
+    /* Reserved1, Reserved2, Reserved3 は calloc で 0 に初期化済み */
     memcpy(blob + 8, &timestamp, 8);
     memcpy(blob + 16, client_challenge, 8);
     memcpy(blob + 28, new_target_info, new_target_info_len);
