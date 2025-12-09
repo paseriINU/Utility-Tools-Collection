@@ -174,11 +174,16 @@ static const char *ENVIRONMENTS[] = {"TST1T", "TST2T", NULL};
 #define NTLMSSP_NEGOTIATE_UNICODE          0x00000001  /* Unicode文字列を使用 */
 #define NTLMSSP_NEGOTIATE_OEM              0x00000002  /* OEM文字列を使用 */
 #define NTLMSSP_REQUEST_TARGET             0x00000004  /* ターゲット情報を要求 */
+#define NTLMSSP_NEGOTIATE_SIGN             0x00000010  /* 署名を使用 */
+#define NTLMSSP_NEGOTIATE_SEAL             0x00000020  /* 暗号化を使用 */
 #define NTLMSSP_NEGOTIATE_NTLM             0x00000200  /* NTLM認証を使用 */
 #define NTLMSSP_NEGOTIATE_ALWAYS_SIGN      0x00008000  /* 常に署名を使用 */
 #define NTLMSSP_NEGOTIATE_EXTENDED_SESSIONSECURITY 0x00080000  /* NTLMv2セッションセキュリティ */
-#define NTLMSSP_NEGOTIATE_VERSION          0x02000000  /* バージョン情報を含む */
 #define NTLMSSP_NEGOTIATE_TARGET_INFO      0x00800000  /* TargetInfo構造体を含む */
+#define NTLMSSP_NEGOTIATE_VERSION          0x02000000  /* バージョン情報を含む */
+#define NTLMSSP_NEGOTIATE_128              0x20000000  /* 128ビット暗号化 */
+#define NTLMSSP_NEGOTIATE_KEY_EXCH         0x40000000  /* セッションキー交換 */
+#define NTLMSSP_NEGOTIATE_56               0x80000000  /* 56ビット暗号化 */
 
 /* MsAvFlags (TargetInfo内のフラグ) */
 #define MIC_PROVIDED                       0x00000002  /* MICが含まれることを示す */
@@ -551,6 +556,50 @@ static void hmac_md5(const uint8_t *key, size_t key_len,
     md5_hash(outer, 80, output);
 }
 
+/*
+ * rc4_crypt - RC4暗号化/復号
+ *
+ * @key:      暗号化キー
+ * @key_len:  キーの長さ
+ * @data:     入力データ
+ * @data_len: データの長さ
+ * @output:   出力先（入力と同じサイズ）
+ *
+ * RC4はストリーム暗号で、暗号化と復号が同じ操作。
+ * NTLM KEY_EXCHでセッションキーの暗号化に使用。
+ */
+static void rc4_crypt(const uint8_t *key, size_t key_len,
+                      const uint8_t *data, size_t data_len,
+                      uint8_t *output) {
+    uint8_t S[256];
+    size_t i, j;
+
+    /* KSA (Key-Scheduling Algorithm) */
+    for (i = 0; i < 256; i++) {
+        S[i] = (uint8_t)i;
+    }
+
+    j = 0;
+    for (i = 0; i < 256; i++) {
+        j = (j + S[i] + key[i % key_len]) & 0xff;
+        uint8_t tmp = S[i];
+        S[i] = S[j];
+        S[j] = tmp;
+    }
+
+    /* PRGA (Pseudo-Random Generation Algorithm) */
+    i = 0;
+    j = 0;
+    for (size_t k = 0; k < data_len; k++) {
+        i = (i + 1) & 0xff;
+        j = (j + S[i]) & 0xff;
+        uint8_t tmp = S[i];
+        S[i] = S[j];
+        S[j] = tmp;
+        output[k] = data[k] ^ S[(S[i] + S[j]) & 0xff];
+    }
+}
+
 /* ============================================================================
  * Base64エンコード/デコード実装
  * ============================================================================
@@ -888,6 +937,7 @@ static bool ntlm_parse_type2(const uint8_t *buffer, size_t len,
 static size_t ntlm_create_type3(const char *user, const char *password,
                                 const char *domain, const uint8_t *challenge,
                                 const uint8_t *target_info, size_t target_info_len,
+                                uint32_t server_flags,
                                 const uint8_t *type1_msg, size_t type1_len,
                                 const uint8_t *type2_msg, size_t type2_len,
                                 uint8_t *buffer, size_t buffer_size) {
@@ -974,6 +1024,39 @@ static size_t ntlm_create_type3(const char *user, const char *password,
     uint8_t session_base_key[16];
     hmac_md5(ntlmv2_h, 16, nt_proof_str, 16, session_base_key);
 
+    /*
+     * ExportedSessionKey の計算
+     * KEY_EXCHフラグが設定されている場合:
+     *   - ランダムな16バイトをExportedSessionKeyとして生成
+     *   - RC4(SessionBaseKey, ExportedSessionKey) を EncryptedRandomSessionKey として送信
+     * KEY_EXCHフラグが設定されていない場合:
+     *   - ExportedSessionKey = SessionBaseKey
+     */
+    uint8_t exported_session_key[16];
+    uint8_t encrypted_session_key[16];
+    bool use_key_exch = (server_flags & NTLMSSP_NEGOTIATE_KEY_EXCH) != 0;
+
+    if (use_key_exch) {
+        /* ランダムなセッションキーを生成 */
+        FILE *rnd = fopen("/dev/urandom", "r");
+        if (rnd) {
+            if (fread(exported_session_key, 1, 16, rnd) != 16) {
+                for (int j = 0; j < 16; j++) exported_session_key[j] = rand() & 0xff;
+            }
+            fclose(rnd);
+        } else {
+            for (int j = 0; j < 16; j++) exported_session_key[j] = rand() & 0xff;
+        }
+        /* SessionBaseKeyでRC4暗号化 */
+        rc4_crypt(session_base_key, 16, exported_session_key, 16, encrypted_session_key);
+
+        if (DEBUG) {
+            log_info("KEY_EXCH: ランダムセッションキー生成・暗号化完了");
+        }
+    } else {
+        memcpy(exported_session_key, session_base_key, 16);
+    }
+
     /* UTF-16LEに変換 */
     uint8_t domain_utf16[256], user_utf16[256];
     size_t domain_len = utf8_to_utf16le(domain, domain_utf16, sizeof(domain_utf16));
@@ -1023,18 +1106,42 @@ static size_t ntlm_create_type3(const char *user, const char *password,
 
     /* Workstation（空） */
     uint32_t ws_offset = offset;
+    memcpy(buffer + 44, &lm_len, 2);  /* Workstation Len = 0 */
+    memcpy(buffer + 46, &lm_len, 2);  /* Workstation MaxLen = 0 */
     memcpy(buffer + 48, &ws_offset, 4);
 
-    /* Encrypted Session Key（空） */
+    /* Encrypted Session Key */
+    uint16_t sk_len = use_key_exch ? 16 : 0;
     uint32_t sk_offset = offset;
-    memcpy(buffer + 52, &sk_offset, 4);
+    memcpy(buffer + 52, &sk_len, 2);
+    memcpy(buffer + 54, &sk_len, 2);
+    memcpy(buffer + 56, &sk_offset, 4);
+    if (use_key_exch) {
+        memcpy(buffer + offset, encrypted_session_key, 16);
+        offset += 16;
+    }
 
-    /* Flags (NTLMSSP_NEGOTIATE_TARGET_INFOでMIC対応を示す) */
+    /* Flags - サーバーフラグを基に構築 */
     uint32_t flags = NTLMSSP_NEGOTIATE_UNICODE |
                      NTLMSSP_NEGOTIATE_NTLM |
                      NTLMSSP_NEGOTIATE_ALWAYS_SIGN |
                      NTLMSSP_NEGOTIATE_EXTENDED_SESSIONSECURITY |
                      NTLMSSP_NEGOTIATE_TARGET_INFO;
+    if (use_key_exch) {
+        flags |= NTLMSSP_NEGOTIATE_KEY_EXCH;
+    }
+    if (server_flags & NTLMSSP_NEGOTIATE_SEAL) {
+        flags |= NTLMSSP_NEGOTIATE_SEAL;
+    }
+    if (server_flags & NTLMSSP_NEGOTIATE_SIGN) {
+        flags |= NTLMSSP_NEGOTIATE_SIGN;
+    }
+    if (server_flags & NTLMSSP_NEGOTIATE_128) {
+        flags |= NTLMSSP_NEGOTIATE_128;
+    }
+    if (server_flags & NTLMSSP_NEGOTIATE_56) {
+        flags |= NTLMSSP_NEGOTIATE_56;
+    }
     memcpy(buffer + 60, &flags, 4);
 
     /* Version情報 (オフセット64-71) - Windows 10相当 */
@@ -1043,7 +1150,9 @@ static size_t ntlm_create_type3(const char *user, const char *password,
 
     /*
      * MIC計算 (オフセット72-87の16バイト)
-     * MIC = HMAC-MD5(SessionBaseKey, Type1 || Type2 || Type3_with_zero_MIC)
+     * MIC = HMAC-MD5(ExportedSessionKey, Type1 || Type2 || Type3_with_zero_MIC)
+     *
+     * 重要: MS-NLMPの仕様では、MICはExportedSessionKeyで計算する
      */
     if (type1_msg && type2_msg && type1_len > 0 && type2_len > 0) {
         /* Type3は現時点でMICフィールドが0で初期化されている */
@@ -1055,14 +1164,14 @@ static size_t ntlm_create_type3(const char *user, const char *password,
         memcpy(mic_data + type1_len + type2_len, buffer, offset);
 
         uint8_t mic[16];
-        hmac_md5(session_base_key, 16, mic_data, total_len, mic);
+        hmac_md5(exported_session_key, 16, mic_data, total_len, mic);
         free(mic_data);
 
         /* MICをType 3メッセージのオフセット72に書き込み */
         memcpy(buffer + 72, mic, 16);
 
         if (DEBUG) {
-            log_info("MIC計算・設定完了");
+            log_info("MIC計算・設定完了（ExportedSessionKey使用）");
         }
     }
 
@@ -1668,6 +1777,7 @@ static bool send_http_with_ntlm(const char *host, int port, const char *body,
     uint8_t type3[4096];
     size_t type3_len = ntlm_create_type3(g_user, g_pass, g_domain,
                                           challenge, target_info, target_info_len,
+                                          flags,
                                           type1, type1_len,
                                           type2, type2_len,
                                           type3, sizeof(type3));
