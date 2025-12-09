@@ -79,6 +79,7 @@
 #include <netdb.h>      /* ネットワークデータベース: gethostbyname, hostent */
 #include <errno.h>      /* エラー番号: errno */
 #include <fcntl.h>      /* ファイル制御: open, O_RDONLY等 */
+#include <signal.h>     /* シグナル処理: signal, SIGPIPE */
 
 /* ============================================================================
  * 設定セクション（ユーザー編集エリア）
@@ -1725,7 +1726,7 @@ static bool send_http_with_ntlm(const char *host, int port, const char *body,
         log_info("NTLM Type 1メッセージ送信中（直接NTLM）...");
     }
 
-    ssize_t sent = send(sock, request, strlen(request), 0);
+    ssize_t sent = send(sock, request, strlen(request), MSG_NOSIGNAL);
     if (sent < 0) {
         log_error("Type 1メッセージの送信に失敗しました");
         close(sock);
@@ -1769,7 +1770,7 @@ static bool send_http_with_ntlm(const char *host, int port, const char *body,
             log_info("SPNEGO/NTLM Type 1メッセージ送信中...");
         }
 
-        sent = send(sock, request, strlen(request), 0);
+        sent = send(sock, request, strlen(request), MSG_NOSIGNAL);
         if (sent < 0) {
             log_error("Type 1メッセージの送信に失敗しました");
             close(sock);
@@ -1906,7 +1907,7 @@ static bool send_http_with_ntlm(const char *host, int port, const char *body,
         log_info(sock_msg);
     }
 
-    sent = send(sock, request, strlen(request), 0);
+    sent = send(sock, request, strlen(request), MSG_NOSIGNAL);
     if (sent < 0) {
         log_error("Type 3メッセージの送信に失敗しました");
         char err_msg[128];
@@ -2528,6 +2529,9 @@ static void print_help(const char *prog_name) {
  * @return: 終了コード（成功時0、エラー時1以上）
  */
 int main(int argc, char *argv[]) {
+    /* SIGPIPEを無視（接続が閉じられた後のsend()でプロセス終了を防ぐ） */
+    signal(SIGPIPE, SIG_IGN);
+
     /* 乱数シード初期化（クライアントチャレンジ生成用） */
     srand(time(NULL));
 
