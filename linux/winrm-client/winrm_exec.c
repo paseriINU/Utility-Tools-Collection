@@ -943,13 +943,24 @@ static void ntlmv2_hash(const char *password, const char *user, const char *doma
     size_t utf16_len = utf8_to_utf16le(user_domain, utf16_ud, sizeof(utf16_ud));
 
     if (DEBUG) {
-        char dbg[256];
+        char dbg[512];
         snprintf(dbg, sizeof(dbg), "  UTF-16LE長: %zu バイト", utf16_len);
         log_info(dbg);
+        /* UTF-16LE先頭32バイトをダンプ */
+        log_info("  UTF-16LE (先頭32バイト):");
+        size_t dump_len = utf16_len < 32 ? utf16_len : 32;
+        char hex[128] = "    ";
+        size_t pos = 4;
+        for (size_t k = 0; k < dump_len; k++) {
+            pos += snprintf(hex + pos, sizeof(hex) - pos, "%02X ", utf16_ud[k]);
+        }
+        log_info(hex);
         /* NT Hash表示 */
-        snprintf(dbg, sizeof(dbg), "  NT_Hash: %02X%02X%02X%02X%02X%02X%02X%02X...",
+        snprintf(dbg, sizeof(dbg), "  NT_Hash: %02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X%02X",
                  nt_hash[0], nt_hash[1], nt_hash[2], nt_hash[3],
-                 nt_hash[4], nt_hash[5], nt_hash[6], nt_hash[7]);
+                 nt_hash[4], nt_hash[5], nt_hash[6], nt_hash[7],
+                 nt_hash[8], nt_hash[9], nt_hash[10], nt_hash[11],
+                 nt_hash[12], nt_hash[13], nt_hash[14], nt_hash[15]);
         log_info(dbg);
     }
 
@@ -2862,6 +2873,57 @@ static void print_help(const char *prog_name) {
 }
 
 /*
+ * test_ntlmv2_calculation - MS-NLMPテストベクトルでNTLMv2計算を検証
+ *
+ * MS-NLMP 4.2.4のテストデータを使用
+ */
+static void test_ntlmv2_calculation(void) {
+    printf("\n=== NTLMv2計算テスト (MS-NLMP 4.2.4) ===\n");
+
+    /* テストデータ */
+    const char *test_user = "User";
+    const char *test_domain = "Domain";
+    const char *test_password = "Password";
+
+    /* 期待されるNT Hash (MS-NLMP 4.2.4.1.1) */
+    uint8_t expected_nt_hash[16] = {
+        0xa4, 0xf4, 0x9c, 0x40, 0x65, 0x10, 0xbd, 0xca,
+        0xb6, 0x82, 0x4e, 0xe7, 0xc3, 0x0f, 0xd8, 0x52
+    };
+
+    /* 期待されるNTLMv2 Hash (MS-NLMP 4.2.4.2.1) */
+    uint8_t expected_ntlmv2_hash[16] = {
+        0x0c, 0x86, 0x8a, 0x40, 0x3b, 0xfd, 0x7a, 0x93,
+        0xa3, 0x00, 0x1e, 0xf2, 0x2e, 0xf0, 0x2e, 0x3f
+    };
+
+    /* NT Hashを計算 */
+    uint8_t nt_hash[16];
+    ntlm_hash(test_password, nt_hash);
+
+    printf("NT Hash計算:\n");
+    printf("  期待値: ");
+    for (int i = 0; i < 16; i++) printf("%02X", expected_nt_hash[i]);
+    printf("\n  計算値: ");
+    for (int i = 0; i < 16; i++) printf("%02X", nt_hash[i]);
+    printf("\n  結果: %s\n", memcmp(nt_hash, expected_nt_hash, 16) == 0 ? "OK" : "NG");
+
+    /* NTLMv2 Hashを計算 */
+    uint8_t ntlmv2_h[16];
+    ntlmv2_hash(test_password, test_user, test_domain, ntlmv2_h);
+
+    printf("\nNTLMv2 Hash計算:\n");
+    printf("  User+Domain入力: %s + %s\n", test_user, test_domain);
+    printf("  期待値: ");
+    for (int i = 0; i < 16; i++) printf("%02X", expected_ntlmv2_hash[i]);
+    printf("\n  計算値: ");
+    for (int i = 0; i < 16; i++) printf("%02X", ntlmv2_h[i]);
+    printf("\n  結果: %s\n", memcmp(ntlmv2_h, expected_ntlmv2_hash, 16) == 0 ? "OK" : "NG");
+
+    printf("\n=== テスト完了 ===\n\n");
+}
+
+/*
  * main - メインエントリーポイント
  *
  * 処理フロー:
@@ -2882,6 +2944,8 @@ int main(int argc, char *argv[]) {
 
     /* 乱数シード初期化（クライアントチャレンジ生成用） */
     srand(time(NULL));
+
+    /* テスト: test_ntlmv2_calculation(); (MS-NLMPテストベクトルOK確認済み) */
 
     /* 引数チェック */
     if (argc < 2) {
