@@ -602,6 +602,114 @@ static void rc4_crypt(const uint8_t *key, size_t key_len,
 }
 
 /* ============================================================================
+ * NTLM Signing/Sealing (メッセージレベル暗号化)
+ * ============================================================================
+ *
+ * AllowUnencrypted=FalseのWinRM HTTP接続で必要。
+ * NTLM認証完了後、SOAPメッセージを暗号化して送信する。
+ *
+ * MS-NLMP Section 3.4.4: セッションセキュリティ
+ * ============================================================================ */
+
+/* NTLM セッション状態 */
+typedef struct {
+    uint8_t signing_key[16];   /* ClientSigningKey */
+    uint8_t sealing_key[16];   /* ClientSealingKey */
+    uint8_t rc4_state[256];    /* RC4状態 */
+    size_t rc4_i, rc4_j;       /* RC4インデックス */
+    uint32_t seq_num;          /* シーケンス番号 */
+} ntlm_session_t;
+
+/* マジック定数 (MS-NLMP 3.4.4.2) */
+static const char SIGN_MAGIC[] = "session key to client-to-server signing key magic constant\0";
+static const char SEAL_MAGIC[] = "session key to client-to-server sealing key magic constant\0";
+
+/*
+ * ntlm_derive_keys - SigningKey と SealingKey を派生
+ *
+ * MS-NLMP 3.4.4.2:
+ * SigningKey = HMAC_MD5(ExportedSessionKey, SignMagic)
+ * SealingKey = HMAC_MD5(ExportedSessionKey, SealMagic)
+ */
+static void ntlm_derive_keys(const uint8_t *exported_session_key, ntlm_session_t *session) {
+    /* SigningKey */
+    hmac_md5(exported_session_key, 16, (const uint8_t *)SIGN_MAGIC, sizeof(SIGN_MAGIC), session->signing_key);
+
+    /* SealingKey */
+    hmac_md5(exported_session_key, 16, (const uint8_t *)SEAL_MAGIC, sizeof(SEAL_MAGIC), session->sealing_key);
+
+    /* RC4状態を初期化 */
+    for (int i = 0; i < 256; i++) {
+        session->rc4_state[i] = (uint8_t)i;
+    }
+    size_t j = 0;
+    for (int i = 0; i < 256; i++) {
+        j = (j + session->rc4_state[i] + session->sealing_key[i % 16]) & 0xff;
+        uint8_t tmp = session->rc4_state[i];
+        session->rc4_state[i] = session->rc4_state[j];
+        session->rc4_state[j] = tmp;
+    }
+    session->rc4_i = 0;
+    session->rc4_j = 0;
+    session->seq_num = 0;
+}
+
+/*
+ * ntlm_rc4_stream - RC4ストリームで暗号化（状態を維持）
+ */
+static void ntlm_rc4_stream(ntlm_session_t *session, const uint8_t *data, size_t len, uint8_t *output) {
+    for (size_t k = 0; k < len; k++) {
+        session->rc4_i = (session->rc4_i + 1) & 0xff;
+        session->rc4_j = (session->rc4_j + session->rc4_state[session->rc4_i]) & 0xff;
+        uint8_t tmp = session->rc4_state[session->rc4_i];
+        session->rc4_state[session->rc4_i] = session->rc4_state[session->rc4_j];
+        session->rc4_state[session->rc4_j] = tmp;
+        output[k] = data[k] ^ session->rc4_state[(session->rc4_state[session->rc4_i] + session->rc4_state[session->rc4_j]) & 0xff];
+    }
+}
+
+/*
+ * ntlm_seal_message - メッセージを暗号化して署名を生成
+ *
+ * MS-NLMP 3.4.4.2.1: SEAL()
+ *
+ * @session:    NTLMセッション状態
+ * @message:    暗号化するメッセージ
+ * @msg_len:    メッセージ長
+ * @sealed:     暗号化されたメッセージの出力先
+ * @signature:  署名の出力先（16バイト）
+ */
+static void ntlm_seal_message(ntlm_session_t *session, const uint8_t *message, size_t msg_len,
+                               uint8_t *sealed, uint8_t *signature) {
+    /* 1. シーケンス番号 + メッセージのHMAC-MD5を計算 */
+    size_t hmac_input_len = 4 + msg_len;
+    uint8_t *hmac_input = malloc(hmac_input_len);
+    memcpy(hmac_input, &session->seq_num, 4);
+    memcpy(hmac_input + 4, message, msg_len);
+
+    uint8_t hmac_output[16];
+    hmac_md5(session->signing_key, 16, hmac_input, hmac_input_len, hmac_output);
+    free(hmac_input);
+
+    /* 2. メッセージをRC4で暗号化 */
+    ntlm_rc4_stream(session, message, msg_len, sealed);
+
+    /* 3. 署名を構築: Version(4) + Checksum(8) + SeqNum(4) */
+    /*    Checksum部分もRC4で暗号化 */
+    uint8_t checksum_encrypted[8];
+    ntlm_rc4_stream(session, hmac_output, 8, checksum_encrypted);
+
+    /* NTLMSSP_MESSAGE_SIGNATURE構造体 */
+    uint32_t version = 0x00000001;
+    memcpy(signature, &version, 4);
+    memcpy(signature + 4, checksum_encrypted, 8);
+    memcpy(signature + 12, &session->seq_num, 4);
+
+    /* シーケンス番号をインクリメント */
+    session->seq_num++;
+}
+
+/* ============================================================================
  * Base64エンコード/デコード実装
  * ============================================================================
  *
@@ -948,7 +1056,8 @@ static size_t ntlm_create_type3(const char *user, const char *password,
                                 uint32_t server_flags,
                                 const uint8_t *type1_msg, size_t type1_len,
                                 const uint8_t *type2_msg, size_t type2_len,
-                                uint8_t *buffer, size_t buffer_size) {
+                                uint8_t *buffer, size_t buffer_size,
+                                uint8_t *exported_session_key_out) {
     uint8_t ntlmv2_h[16];
     ntlmv2_hash(password, user, domain, ntlmv2_h);
 
@@ -1290,6 +1399,11 @@ static size_t ntlm_create_type3(const char *user, const char *password,
     /* MICフィールドは既に0で初期化されている */
     /* MsAvFlagsのMIC_PROVIDEDフラグも削除する必要があるかもしれない */
 #endif
+
+    /* ExportedSessionKeyを外部に返す（Signing/Sealing用） */
+    if (exported_session_key_out) {
+        memcpy(exported_session_key_out, exported_session_key, 16);
+    }
 
     return offset;
 }
@@ -1931,12 +2045,14 @@ static bool send_http_with_ntlm(const char *host, int port, const char *body,
      * 重要: Type 2を受信した同じ接続（sock）を使用する
      */
     uint8_t type3[4096];
+    uint8_t exported_session_key[16];
     size_t type3_len = ntlm_create_type3(g_user, g_pass, g_domain,
                                           challenge, target_info, target_info_len,
                                           flags,
                                           type1, type1_len,
                                           type2, type2_len,
-                                          type3, sizeof(type3));
+                                          type3, sizeof(type3),
+                                          exported_session_key);
 
     if (DEBUG) {
         char t3_msg[128];
@@ -1965,6 +2081,54 @@ static bool send_http_with_ntlm(const char *host, int port, const char *body,
 
     char auth_b64[16384];
 
+    /* NTLMセッションを初期化してSigning/Sealingキーを派生 */
+    ntlm_session_t ntlm_session;
+    ntlm_derive_keys(exported_session_key, &ntlm_session);
+
+    if (DEBUG) {
+        log_info("NTLM Signing/Sealingキー派生完了");
+    }
+
+    /* SOAPボディを暗号化 */
+    size_t body_len = strlen(body);
+    uint8_t *sealed_body = malloc(body_len);
+    uint8_t signature[16];
+    ntlm_seal_message(&ntlm_session, (const uint8_t *)body, body_len, sealed_body, signature);
+
+    if (DEBUG) {
+        log_info("SOAPボディ暗号化完了");
+        char sig_msg[64];
+        snprintf(sig_msg, sizeof(sig_msg), "  署名: %02X%02X%02X%02X...",
+                 signature[0], signature[1], signature[2], signature[3]);
+        log_info(sig_msg);
+    }
+
+    /* multipart/encrypted形式のボディを構築 */
+    char boundary[] = "Encrypted Boundary";
+    char encrypted_body[MAX_BUFFER_SIZE];
+    size_t enc_body_len;
+
+    /* ヘッダーパート + データパート */
+    int header_part_len = snprintf(encrypted_body, sizeof(encrypted_body),
+        "--%s\r\n"
+        "Content-Type: application/HTTP-SPNEGO-session-encrypted\r\n"
+        "OriginalContent: type=application/soap+xml;charset=UTF-8;Length=%zu\r\n"
+        "--%s\r\n"
+        "Content-Type: application/octet-stream\r\n"
+        "\r\n",
+        boundary, body_len, boundary);
+
+    /* 署名(16バイト) + 暗号化データ */
+    memcpy(encrypted_body + header_part_len, signature, 16);
+    memcpy(encrypted_body + header_part_len + 16, sealed_body, body_len);
+    free(sealed_body);
+
+    /* 終端 */
+    enc_body_len = header_part_len + 16 + body_len;
+    enc_body_len += snprintf(encrypted_body + enc_body_len,
+                              sizeof(encrypted_body) - enc_body_len,
+                              "\r\n--%s--\r\n", boundary);
+
     if (use_spnego) {
         /* SPNEGOでラップ */
         uint8_t spnego_auth[8192];
@@ -1976,11 +2140,11 @@ static bool send_http_with_ntlm(const char *host, int port, const char *body,
                  "POST /wsman HTTP/1.1\r\n"
                  "Host: %s:%d\r\n"
                  "Authorization: Negotiate %s\r\n"
-                 "Content-Type: application/soap+xml;charset=UTF-8\r\n"
+                 "Content-Type: multipart/encrypted;protocol=\"application/HTTP-SPNEGO-session-encrypted\";boundary=\"%s\"\r\n"
                  "Content-Length: %zu\r\n"
                  "Connection: keep-alive\r\n"
-                 "\r\n%s",
-                 host, port, auth_b64, strlen(body), body);
+                 "\r\n",
+                 host, port, auth_b64, boundary, enc_body_len);
     } else {
         /* 直接NTLM */
         base64_encode(type3, type3_len, auth_b64);
@@ -1989,21 +2153,28 @@ static bool send_http_with_ntlm(const char *host, int port, const char *body,
                  "POST /wsman HTTP/1.1\r\n"
                  "Host: %s:%d\r\n"
                  "Authorization: NTLM %s\r\n"
-                 "Content-Type: application/soap+xml;charset=UTF-8\r\n"
+                 "Content-Type: multipart/encrypted;protocol=\"application/HTTP-SPNEGO-session-encrypted\";boundary=\"%s\"\r\n"
                  "Content-Length: %zu\r\n"
                  "Connection: keep-alive\r\n"
-                 "\r\n%s",
-                 host, port, auth_b64, strlen(body), body);
+                 "\r\n",
+                 host, port, auth_b64, boundary, enc_body_len);
     }
 
+    /* ヘッダーと暗号化ボディを結合 */
+    size_t request_header_len = strlen(request);
+    memcpy(request + request_header_len, encrypted_body, enc_body_len);
+    size_t total_request_len = request_header_len + enc_body_len;
+
     if (DEBUG) {
-        log_info("Type 3メッセージ送信中（同一接続）...");
+        log_info("Type 3メッセージ送信中（暗号化ボディ付き）...");
         char sock_msg[64];
         snprintf(sock_msg, sizeof(sock_msg), "  ソケットFD: %d", sock);
         log_info(sock_msg);
+        snprintf(sock_msg, sizeof(sock_msg), "  リクエスト長: %zu", total_request_len);
+        log_info(sock_msg);
     }
 
-    sent = send(sock, request, strlen(request), MSG_NOSIGNAL);
+    sent = send(sock, request, total_request_len, MSG_NOSIGNAL);
     if (sent < 0) {
         log_error("Type 3メッセージの送信に失敗しました");
         char err_msg[128];
