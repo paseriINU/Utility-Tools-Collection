@@ -2057,35 +2057,23 @@ static bool send_http_with_ntlm(const char *host, int port, const char *body,
     }
 
     /* ===== ステップ1: Type 3のみで認証を確立 ===== */
-    if (use_spnego) {
-        /* SPNEGOでラップ */
-        uint8_t spnego_auth[8192];
-        size_t spnego_auth_len = spnego_create_neg_token_resp(type3, type3_len,
-                                                              spnego_auth, sizeof(spnego_auth));
-        base64_encode(spnego_auth, spnego_auth_len, auth_b64);
+    /* テスト: SPNEGOラッピングを使わず、直接NTLMで送信 */
+    (void)use_spnego;  /* 未使用警告を抑制 */
 
-        snprintf(request, sizeof(request),
-                 "POST /wsman HTTP/1.1\r\n"
-                 "Host: %s:%d\r\n"
-                 "Authorization: Negotiate %s\r\n"
-                 "Content-Type: application/soap+xml;charset=UTF-8\r\n"
-                 "Content-Length: 0\r\n"
-                 "Connection: keep-alive\r\n"
-                 "\r\n",
-                 host, port, auth_b64);
-    } else {
-        /* 直接NTLM */
-        base64_encode(type3, type3_len, auth_b64);
+    base64_encode(type3, type3_len, auth_b64);
 
-        snprintf(request, sizeof(request),
-                 "POST /wsman HTTP/1.1\r\n"
-                 "Host: %s:%d\r\n"
-                 "Authorization: NTLM %s\r\n"
-                 "Content-Type: application/soap+xml;charset=UTF-8\r\n"
-                 "Content-Length: 0\r\n"
-                 "Connection: keep-alive\r\n"
-                 "\r\n",
-                 host, port, auth_b64);
+    snprintf(request, sizeof(request),
+             "POST /wsman HTTP/1.1\r\n"
+             "Host: %s:%d\r\n"
+             "Authorization: Negotiate %s\r\n"
+             "Content-Type: application/soap+xml;charset=UTF-8\r\n"
+             "Content-Length: 0\r\n"
+             "Connection: keep-alive\r\n"
+             "\r\n",
+             host, port, auth_b64);
+
+    if (DEBUG) {
+        log_info("Type 3: SPNEGOラッピングなし、直接NTLMトークンを送信");
     }
 
     if (DEBUG) {
