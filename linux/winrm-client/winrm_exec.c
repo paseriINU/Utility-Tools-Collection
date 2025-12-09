@@ -1881,6 +1881,31 @@ static bool send_http_with_ntlm(const char *host, int port, const char *body,
                                           type2, type2_len,
                                           type3, sizeof(type3));
 
+    if (DEBUG) {
+        char t3_msg[128];
+        snprintf(t3_msg, sizeof(t3_msg), "Type 3メッセージ長: %zu バイト", type3_len);
+        log_info(t3_msg);
+
+        /* Type 3のフラグを表示（オフセット60-63） */
+        if (type3_len >= 64) {
+            uint32_t t3_flags;
+            memcpy(&t3_flags, type3 + 60, 4);
+            snprintf(t3_msg, sizeof(t3_msg), "Type 3フラグ: 0x%08X", t3_flags);
+            log_info(t3_msg);
+        }
+
+        /* Type 3の最初の88バイトをhexダンプ */
+        log_info("Type 3 hex (先頭88バイト):");
+        for (size_t i = 0; i < 88 && i < type3_len; i += 16) {
+            char hex_line[128];
+            size_t pos = 0;
+            for (size_t j = i; j < i + 16 && j < type3_len && j < 88; j++) {
+                pos += snprintf(hex_line + pos, sizeof(hex_line) - pos, "%02X ", type3[j]);
+            }
+            fprintf(stderr, "  %04zx: %s\n", i, hex_line);
+        }
+    }
+
     char auth_b64[16384];
 
     if (use_spnego) {
@@ -1945,6 +1970,18 @@ static bool send_http_with_ntlm(const char *host, int port, const char *body,
         char recv_msg[64];
         snprintf(recv_msg, sizeof(recv_msg), "  受信バイト数: %zd", recv_len);
         log_info(recv_msg);
+
+        /* レスポンスヘッダーを出力 */
+        log_info("Type 3後のレスポンスヘッダー:");
+        char *header_end = strstr(recv_buffer, "\r\n\r\n");
+        if (header_end) {
+            char header_copy[2048];
+            size_t header_len = header_end - recv_buffer;
+            if (header_len >= sizeof(header_copy)) header_len = sizeof(header_copy) - 1;
+            memcpy(header_copy, recv_buffer, header_len);
+            header_copy[header_len] = '\0';
+            fprintf(stderr, "%s\n", header_copy);
+        }
     }
 
     if (DEBUG) {
