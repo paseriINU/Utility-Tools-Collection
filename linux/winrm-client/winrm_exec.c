@@ -914,9 +914,7 @@ static void ntlmv2_hash(const char *password, const char *user, const char *doma
     /*
      * NTLMv2Hash = HMAC-MD5(NT_Hash, UNICODE(Uppercase(User) + Domain))
      *
-     * 注意: MS-NLMP仕様ではユーザー名のみ大文字化とされているが、
-     * 一部のサーバー実装ではドメイン名も大文字化が必要な場合がある。
-     * ここでは両方を大文字化する（より互換性が高い）。
+     * MS-NLMP仕様: ユーザー名のみ大文字化、ドメインはそのまま
      */
     char user_domain[512];
     size_t i, j;
@@ -926,15 +924,34 @@ static void ntlmv2_hash(const char *password, const char *user, const char *doma
         user_domain[i] = (user[i] >= 'a' && user[i] <= 'z') ? user[i] - 32 : user[i];
     }
 
-    /* ドメインも大文字に変換（互換性のため） */
+    /* ドメインはそのまま（MS-NLMP仕様通り） */
     for (j = 0; domain[j]; j++) {
-        char c = domain[j];
-        user_domain[i + j] = (c >= 'a' && c <= 'z') ? c - 32 : c;
+        user_domain[i + j] = domain[j];
     }
     user_domain[i + j] = '\0';
 
+    if (DEBUG) {
+        char dbg[256];
+        snprintf(dbg, sizeof(dbg), "NTLMv2Hash入力: User+Domain='%s' (len=%zu)",
+                 user_domain, i + j);
+        log_info(dbg);
+        snprintf(dbg, sizeof(dbg), "  元User='%s', 元Domain='%s'", user, domain);
+        log_info(dbg);
+    }
+
     uint8_t utf16_ud[512];
     size_t utf16_len = utf8_to_utf16le(user_domain, utf16_ud, sizeof(utf16_ud));
+
+    if (DEBUG) {
+        char dbg[256];
+        snprintf(dbg, sizeof(dbg), "  UTF-16LE長: %zu バイト", utf16_len);
+        log_info(dbg);
+        /* NT Hash表示 */
+        snprintf(dbg, sizeof(dbg), "  NT_Hash: %02X%02X%02X%02X%02X%02X%02X%02X...",
+                 nt_hash[0], nt_hash[1], nt_hash[2], nt_hash[3],
+                 nt_hash[4], nt_hash[5], nt_hash[6], nt_hash[7]);
+        log_info(dbg);
+    }
 
     hmac_md5(nt_hash, 16, utf16_ud, utf16_len, hash);
 }
