@@ -1093,15 +1093,34 @@ static size_t recv_http_response(int sock, char *buffer, size_t buffer_size,
                 }
 
                 /* WWW-Authenticateヘッダ取得 */
-                char *auth = strcasestr(buffer, "WWW-Authenticate: NTLM ");
+                char *auth = strcasestr(buffer, "WWW-Authenticate:");
                 if (auth) {
-                    auth += strlen("WWW-Authenticate: NTLM ");
-                    char *end_auth = strstr(auth, "\r\n");
-                    if (end_auth) {
-                        size_t len = end_auth - auth;
-                        if (len < 1024) {
-                            strncpy(auth_header, auth, len);
-                            auth_header[len] = '\0';
+                    /* NTLMを探す */
+                    char *ntlm = strcasestr(auth, "NTLM");
+                    if (ntlm) {
+                        /* NTLMの後のBase64データを取得 */
+                        ntlm += 4;  /* "NTLM"の長さ */
+                        /* スペースをスキップ */
+                        while (*ntlm == ' ') ntlm++;
+
+                        /* 改行までがBase64データ */
+                        char *end_auth = strstr(ntlm, "\r\n");
+                        if (!end_auth) end_auth = strstr(ntlm, "\n");
+
+                        if (end_auth && end_auth > ntlm) {
+                            size_t len = end_auth - ntlm;
+                            /* カンマがあれば、そこまでがNTLMデータ */
+                            char *comma = strchr(ntlm, ',');
+                            if (comma && comma < end_auth) {
+                                len = comma - ntlm;
+                            }
+                            /* 末尾のスペースを除去 */
+                            while (len > 0 && ntlm[len - 1] == ' ') len--;
+
+                            if (len > 0 && len < 1024) {
+                                strncpy(auth_header, ntlm, len);
+                                auth_header[len] = '\0';
+                            }
                         }
                     }
                 }
@@ -1187,12 +1206,22 @@ static bool send_http_with_ntlm(const char *host, int port, const char *body,
     close(sock);
 
     if (http_code != 401 || auth_header[0] == '\0') {
-        char err_msg[128];
+        char err_msg[256];
         snprintf(err_msg, sizeof(err_msg),
                  "NTLM認証のType 2応答を受信できませんでした (HTTP %d)", http_code);
         log_error(err_msg);
         if (http_code == 0) {
             log_error("サーバーからの応答がありません。接続先とポートを確認してください");
+        } else if (http_code == 401 && auth_header[0] == '\0') {
+            log_error("401応答にNTLMチャレンジが含まれていません");
+            log_error("サーバーのWinRM設定でNTLM認証が有効か確認してください");
+            /* レスポンスヘッダーの最初の部分を表示 */
+            char *header_end = strstr(recv_buffer, "\r\n\r\n");
+            if (header_end) {
+                *header_end = '\0';
+                log_warn("受信したHTTPヘッダー:");
+                fprintf(stderr, "%s\n", recv_buffer);
+            }
         }
         return false;
     }
