@@ -1697,13 +1697,16 @@ static bool send_http_with_ntlm(const char *host, int port, const char *body,
     char auth_header[4096];
     bool use_spnego = false;
 
-    /* Step 1: まず直接NTLMで試行 */
-    sock = connect_to_host(host, port);
-    if (sock < 0) return false;
-
     /* NTLM Type 1メッセージを生成 */
     uint8_t type1[64];
     size_t type1_len = ntlm_create_type1(type1, sizeof(type1));
+
+    /*
+     * Step 1: まず直接NTLMで試行
+     * 重要: NTLM認証は接続ベースなので、Type 2を受信した接続を維持する
+     */
+    sock = connect_to_host(host, port);
+    if (sock < 0) return false;
 
     char type1_b64[256];
     base64_encode(type1, type1_len, type1_b64);
@@ -1730,15 +1733,17 @@ static bool send_http_with_ntlm(const char *host, int port, const char *body,
     }
 
     recv_http_response(sock, recv_buffer, sizeof(recv_buffer), &http_code, auth_header);
-    close(sock);
 
     /* 直接NTLMでチャレンジを受信できなかった場合、SPNEGOを試行 */
     if (http_code == 401 && auth_header[0] == '\0') {
+        close(sock);  /* 直接NTLMが失敗したので接続を閉じる */
+
         if (DEBUG) {
             log_info("直接NTLMは利用不可、SPNEGOで再試行...");
         }
         use_spnego = true;
 
+        /* 新しい接続でSPNEGOを試行 */
         sock = connect_to_host(host, port);
         if (sock < 0) return false;
 
@@ -1772,10 +1777,11 @@ static bool send_http_with_ntlm(const char *host, int port, const char *body,
         }
 
         recv_http_response(sock, recv_buffer, sizeof(recv_buffer), &http_code, auth_header);
-        close(sock);
+        /* この接続は維持する（Type 3送信用） */
     }
 
     if (http_code != 401 || auth_header[0] == '\0') {
+        close(sock);
         char err_msg[256];
         snprintf(err_msg, sizeof(err_msg),
                  "認証のチャレンジ応答を受信できませんでした (HTTP %d)", http_code);
@@ -1784,17 +1790,11 @@ static bool send_http_with_ntlm(const char *host, int port, const char *body,
             log_error("サーバーからの応答がありません。接続先とポートを確認してください");
         } else if (http_code == 401 && auth_header[0] == '\0') {
             log_error("401応答に認証チャレンジが含まれていません");
-            char *header_end = strstr(recv_buffer, "\r\n\r\n");
-            if (header_end) {
-                *header_end = '\0';
-                log_warn("受信したHTTPヘッダー:");
-                fprintf(stderr, "%s\n", recv_buffer);
-            }
         }
         return false;
     }
 
-    /* Step 2: Type 2メッセージを解析 */
+    /* Step 2: Type 2メッセージを解析（接続は維持したまま） */
     uint8_t type2_raw[4096];
     size_t type2_raw_len = base64_decode(auth_header, type2_raw, sizeof(type2_raw));
 
@@ -1806,6 +1806,7 @@ static bool send_http_with_ntlm(const char *host, int port, const char *body,
         type2_len = spnego_parse_neg_token_resp(type2_raw, type2_raw_len, type2, sizeof(type2));
         if (type2_len == 0) {
             log_error("SPNEGOレスポンスからNTLMメッセージを抽出できませんでした");
+            close(sock);
             return false;
         }
     } else {
@@ -1821,6 +1822,7 @@ static bool send_http_with_ntlm(const char *host, int port, const char *body,
 
     if (!ntlm_parse_type2(type2, type2_len, challenge, &flags, target_info, &target_info_len)) {
         log_error("Type 2メッセージの解析に失敗しました");
+        close(sock);
         return false;
     }
 
@@ -1852,10 +1854,10 @@ static bool send_http_with_ntlm(const char *host, int port, const char *body,
         log_info(ti_msg);
     }
 
-    /* Step 3: Type 3メッセージを送信 */
-    sock = connect_to_host(host, port);
-    if (sock < 0) return false;
-
+    /*
+     * Step 3: Type 3メッセージを送信
+     * 重要: Type 2を受信した同じ接続（sock）を使用する
+     */
     uint8_t type3[4096];
     size_t type3_len = ntlm_create_type3(g_user, g_pass, g_domain,
                                           challenge, target_info, target_info_len,
@@ -1879,7 +1881,7 @@ static bool send_http_with_ntlm(const char *host, int port, const char *body,
                  "Authorization: Negotiate %s\r\n"
                  "Content-Type: application/soap+xml;charset=UTF-8\r\n"
                  "Content-Length: %zu\r\n"
-                 "Connection: close\r\n"
+                 "Connection: keep-alive\r\n"
                  "\r\n%s",
                  host, port, auth_b64, strlen(body), body);
     } else {
@@ -1892,16 +1894,22 @@ static bool send_http_with_ntlm(const char *host, int port, const char *body,
                  "Authorization: NTLM %s\r\n"
                  "Content-Type: application/soap+xml;charset=UTF-8\r\n"
                  "Content-Length: %zu\r\n"
-                 "Connection: close\r\n"
+                 "Connection: keep-alive\r\n"
                  "\r\n%s",
                  host, port, auth_b64, strlen(body), body);
     }
 
     if (DEBUG) {
-        log_info("Type 3メッセージ送信中...");
+        log_info("Type 3メッセージ送信中（同一接続）...");
     }
 
-    send(sock, request, strlen(request), 0);
+    sent = send(sock, request, strlen(request), 0);
+    if (sent < 0) {
+        log_error("Type 3メッセージの送信に失敗しました");
+        close(sock);
+        return false;
+    }
+
     recv_http_response(sock, recv_buffer, sizeof(recv_buffer), &http_code, auth_header);
     close(sock);
 
