@@ -1185,7 +1185,8 @@ static size_t ntlm_create_type3(const char *user, const char *password,
                      NTLMSSP_NEGOTIATE_NTLM |
                      NTLMSSP_NEGOTIATE_ALWAYS_SIGN |
                      NTLMSSP_NEGOTIATE_EXTENDED_SESSIONSECURITY |
-                     NTLMSSP_NEGOTIATE_TARGET_INFO;
+                     NTLMSSP_NEGOTIATE_TARGET_INFO |
+                     NTLMSSP_NEGOTIATE_VERSION;  /* バージョン情報を含む */
     if (use_key_exch) {
         flags |= NTLMSSP_NEGOTIATE_KEY_EXCH;
     }
