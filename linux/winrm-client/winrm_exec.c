@@ -1778,6 +1778,20 @@ static bool send_http_with_ntlm(const char *host, int port, const char *body,
         }
 
         recv_http_response(sock, recv_buffer, sizeof(recv_buffer), &http_code, auth_header);
+
+        if (DEBUG) {
+            log_info("Type 2レスポンスヘッダー:");
+            /* ヘッダー部分のみ出力 */
+            char *header_end = strstr(recv_buffer, "\r\n\r\n");
+            if (header_end) {
+                char header_copy[2048];
+                size_t header_len = header_end - recv_buffer;
+                if (header_len >= sizeof(header_copy)) header_len = sizeof(header_copy) - 1;
+                memcpy(header_copy, recv_buffer, header_len);
+                header_copy[header_len] = '\0';
+                fprintf(stderr, "%s\n", header_copy);
+            }
+        }
         /* この接続は維持する（Type 3送信用） */
     }
 
