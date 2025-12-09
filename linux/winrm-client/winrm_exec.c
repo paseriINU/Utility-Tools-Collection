@@ -1122,12 +1122,12 @@ static size_t ntlm_create_type3(const char *user, const char *password,
 
     /*
      * 新しいTargetInfoを構築
-     * MIC無効化テスト中: MIC_PROVIDEDフラグを追加しない
+     * - MsAvFlagsが既存の場合は更新（MIC_PROVIDEDフラグを追加）
+     * - 存在しない場合は新規追加
      */
     size_t new_target_info_len;
     uint8_t *new_target_info;
 
-#if 0  /* MIC無効化テスト中 - MIC_PROVIDEDを追加しない */
     if (has_av_flags) {
         /* 既存のMsAvFlagsを更新 */
         new_target_info_len = target_info_len;
@@ -1151,15 +1151,6 @@ static size_t ntlm_create_type3(const char *user, const char *password,
         /* MsAvEOL (ID=0, Len=0) */
         memset(new_target_info + eol_pos + 8, 0, 4);
     }
-#else
-    /* MIC無効化テスト: サーバーのTargetInfoをそのまま使用 */
-    new_target_info_len = target_info_len;
-    new_target_info = malloc(new_target_info_len);
-    memcpy(new_target_info, target_info, target_info_len);
-    (void)has_av_flags;
-    (void)av_flags_pos;
-    (void)eol_pos;
-#endif
 
     /* NTLMv2 blob (NTLMv2_CLIENT_CHALLENGE構造体)
      * - RespType (1): 0x01
@@ -1367,11 +1358,8 @@ static size_t ntlm_create_type3(const char *user, const char *password,
      * MIC = HMAC-MD5(ExportedSessionKey, Type1 || Type2 || Type3_with_zero_MIC)
      *
      * 重要: MS-NLMPの仕様では、MICはExportedSessionKeyで計算する
-     *
-     * 注意: MICはMsvAvTimestampがTargetInfoに含まれる場合に必須
-     * 一時的に無効化してテスト（MIC計算に問題がある可能性を確認）
+     * MICはMsvAvTimestampがTargetInfoに含まれる場合に必須
      */
-#if 0  /* MIC一時無効化 */
     if (type1_msg && type2_msg && type1_len > 0 && type2_len > 0) {
         /* Type3は現時点でMICフィールドが0で初期化されている */
         size_t total_len = type1_len + type2_len + offset;
@@ -1392,13 +1380,6 @@ static size_t ntlm_create_type3(const char *user, const char *password,
             log_info("MIC計算・設定完了（ExportedSessionKey使用）");
         }
     }
-#else
-    if (DEBUG) {
-        log_info("MIC無効化テスト中（MIC=0）");
-    }
-    /* MICフィールドは既に0で初期化されている */
-    /* MsAvFlagsのMIC_PROVIDEDフラグも削除する必要があるかもしれない */
-#endif
 
     /* ExportedSessionKeyを外部に返す（Signing/Sealing用） */
     if (exported_session_key_out) {
