@@ -560,6 +560,71 @@ Set-Item WSMan:\localhost\MaxTimeoutms -Value 600000
 
 ## 既知の制限事項・環境依存の問題
 
+### サーバー側TrustedHosts設定によるNTLM認証の有効化
+
+LinuxからのNTLM認証が401エラーで失敗する場合、**サーバー側のTrustedHosts設定**が必要です。
+
+#### 設定手順（PowerShell）
+
+```powershell
+# 1. 現在の設定を確認（復元用に控える）
+Get-Item WSMan:\localhost\Client\TrustedHosts
+
+# 2. LinuxクライアントのIPアドレスを追加
+Set-Item WSMan:\localhost\Client\TrustedHosts -Value "LinuxのIPアドレス" -Force
+
+# または全ホスト許可（テスト用）
+Set-Item WSMan:\localhost\Client\TrustedHosts -Value "*" -Force
+
+# 3. 設定確認
+Get-Item WSMan:\localhost\Client\TrustedHosts
+```
+
+#### 元に戻す方法（PowerShell）
+
+```powershell
+# 空に戻す（元々空だった場合）
+Set-Item WSMan:\localhost\Client\TrustedHosts -Value "" -Force
+
+# または元の値に戻す
+Set-Item WSMan:\localhost\Client\TrustedHosts -Value "元の値" -Force
+
+# 設定確認
+Get-Item WSMan:\localhost\Client\TrustedHosts
+```
+
+#### GUI での設定方法
+
+**方法1: グループポリシーエディター（gpedit.msc）**
+
+1. `Win + R` → `gpedit.msc` を実行
+2. 以下のパスに移動:
+   ```
+   コンピューターの構成
+   └─ 管理用テンプレート
+       └─ Windowsコンポーネント
+           └─ Windows リモート管理 (WinRM)
+               └─ WinRM クライアント
+   ```
+3. 「信頼されたホスト」をダブルクリック
+4. 「有効」を選択し、TrustedHostsList に `*` または Linux の IP を入力
+5. 「OK」をクリック
+
+**方法2: レジストリエディター（regedit）**
+
+1. `Win + R` → `regedit` を実行
+2. 以下のキーに移動:
+   ```
+   HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\WSMAN\Client
+   ```
+3. 「TrustedHosts」を右クリック → 「修正」
+4. 値に `*` または Linux の IP アドレスを入力
+5. 「OK」をクリック
+
+**元に戻す場合**: 同じ手順で値を空にするか、元の値に戻します。
+
+---
+
 ### NTLM認証が失敗する環境
 
 以下の環境では、LinuxからのNTLM認証が失敗する場合があります。
