@@ -956,42 +956,84 @@ static size_t ntlm_create_type3(const char *user, const char *password,
         for (int i = 0; i < 8; i++) client_challenge[i] = rand() & 0xff;
     }
 
-    /* タイムスタンプ（Windows FILETIME形式） */
-    uint64_t timestamp;
-    struct timeval tv;
-    gettimeofday(&tv, NULL);
-    timestamp = ((uint64_t)tv.tv_sec + 11644473600ULL) * 10000000ULL + tv.tv_usec * 10;
-
     /*
-     * MICを有効にするため、TargetInfoにMsAvFlags (AVPair ID=6)を追加
-     * MsAvFlags = 0x00000002 (MIC_PROVIDED) を設定
+     * サーバーのTargetInfoを解析
+     * - MsvAvTimestamp (AvId=7) があれば取得して使用
+     * - MsAvFlags (AvId=6) の位置を確認
+     * - MsAvEOL (AvId=0) の位置を確認
      */
-    /* MsAvFlags (AVPair: ID=0x0006, Len=4, Value=0x00000002) */
-    uint8_t av_flags[8] = {0x06, 0x00, 0x04, 0x00, 0x02, 0x00, 0x00, 0x00};
-
-    /* 既存のTargetInfoからMsAvEOL(0x0000)の位置を探す */
+    uint64_t timestamp = 0;
+    bool has_server_timestamp = false;
+    size_t av_flags_pos = 0;
+    bool has_av_flags = false;
     size_t eol_pos = 0;
+
     size_t i = 0;
     while (i + 3 < target_info_len) {
         uint16_t av_id = target_info[i] | (target_info[i+1] << 8);
         uint16_t av_len = target_info[i+2] | (target_info[i+3] << 8);
-        if (av_id == 0x0000) {
+
+        if (av_id == 0x0007 && av_len == 8) {
+            /* MsvAvTimestamp (AvId=7): サーバーのタイムスタンプ */
+            memcpy(&timestamp, &target_info[i+4], 8);
+            has_server_timestamp = true;
+            if (DEBUG) {
+                log_info("サーバーのMsvAvTimestampを使用");
+            }
+        } else if (av_id == 0x0006) {
+            /* MsAvFlags (AvId=6): 既存のフラグ位置 */
+            av_flags_pos = i;
+            has_av_flags = true;
+        } else if (av_id == 0x0000) {
+            /* MsAvEOL (AvId=0): 終端 */
             eol_pos = i;
             break;
         }
         i += 4 + av_len;
     }
+
+    /* サーバーからタイムスタンプがない場合は自分で生成 */
+    if (!has_server_timestamp) {
+        struct timeval tv;
+        gettimeofday(&tv, NULL);
+        timestamp = ((uint64_t)tv.tv_sec + 11644473600ULL) * 10000000ULL + tv.tv_usec * 10;
+    }
+
     if (eol_pos == 0 && target_info_len >= 4) {
         eol_pos = target_info_len - 4;
     }
 
-    /* 新しいTargetInfo = 元のTargetInfo(EOL前) + MsAvFlags + MsAvEOL */
-    size_t new_target_info_len = eol_pos + 8 + 4;  /* +8=MsAvFlags, +4=EOL */
-    uint8_t *new_target_info = malloc(new_target_info_len);
-    memcpy(new_target_info, target_info, eol_pos);
-    memcpy(new_target_info + eol_pos, av_flags, 8);
-    /* MsAvEOL (ID=0, Len=0) */
-    memset(new_target_info + eol_pos + 8, 0, 4);
+    /*
+     * 新しいTargetInfoを構築
+     * - MsAvFlagsが既存の場合は更新（MIC_PROVIDEDフラグを追加）
+     * - 存在しない場合は新規追加
+     */
+    size_t new_target_info_len;
+    uint8_t *new_target_info;
+
+    if (has_av_flags) {
+        /* 既存のMsAvFlagsを更新 */
+        new_target_info_len = target_info_len;
+        new_target_info = malloc(new_target_info_len);
+        memcpy(new_target_info, target_info, target_info_len);
+
+        /* MIC_PROVIDEDフラグを追加（既存値とOR） */
+        uint32_t existing_flags = 0;
+        memcpy(&existing_flags, &new_target_info[av_flags_pos + 4], 4);
+        existing_flags |= MIC_PROVIDED;
+        memcpy(&new_target_info[av_flags_pos + 4], &existing_flags, 4);
+    } else {
+        /* MsAvFlagsを新規追加（EOL前に挿入） */
+        /* MsAvFlags (AVPair: ID=0x0006, Len=4, Value=0x00000002) */
+        uint8_t av_flags[8] = {0x06, 0x00, 0x04, 0x00, 0x02, 0x00, 0x00, 0x00};
+
+        new_target_info_len = eol_pos + 8 + 4;  /* +8=MsAvFlags, +4=EOL */
+        new_target_info = malloc(new_target_info_len);
+        memcpy(new_target_info, target_info, eol_pos);
+        memcpy(new_target_info + eol_pos, av_flags, 8);
+        /* MsAvEOL (ID=0, Len=0) */
+        memset(new_target_info + eol_pos + 8, 0, 4);
+    }
 
     /* NTLMv2 blob */
     size_t blob_len = 28 + new_target_info_len + 4;
