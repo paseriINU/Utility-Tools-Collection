@@ -1138,36 +1138,20 @@ static size_t ntlm_create_type3(const char *user, const char *password,
     }
 
     /*
-     * 新しいTargetInfoを構築
-     * - MsAvFlagsが既存の場合は更新（MIC_PROVIDEDフラグを追加）
-     * - 存在しない場合は新規追加
+     * TargetInfoをそのまま使用（MsAvFlags追加なし - テスト用）
      */
-    size_t new_target_info_len;
-    uint8_t *new_target_info;
+    size_t new_target_info_len = target_info_len;
+    uint8_t *new_target_info = malloc(new_target_info_len);
+    memcpy(new_target_info, target_info, target_info_len);
 
-    if (has_av_flags) {
-        /* 既存のMsAvFlagsを更新 */
-        new_target_info_len = target_info_len;
-        new_target_info = malloc(new_target_info_len);
-        memcpy(new_target_info, target_info, target_info_len);
-
-        /* MIC_PROVIDEDフラグを追加（既存値とOR） */
-        uint32_t existing_flags = 0;
-        memcpy(&existing_flags, &new_target_info[av_flags_pos + 4], 4);
-        existing_flags |= MIC_PROVIDED;
-        memcpy(&new_target_info[av_flags_pos + 4], &existing_flags, 4);
-    } else {
-        /* MsAvFlagsを新規追加（EOL前に挿入） */
-        /* MsAvFlags (AVPair: ID=0x0006, Len=4, Value=0x00000002) */
-        uint8_t av_flags[8] = {0x06, 0x00, 0x04, 0x00, 0x02, 0x00, 0x00, 0x00};
-
-        new_target_info_len = eol_pos + 8 + 4;  /* +8=MsAvFlags, +4=EOL */
-        new_target_info = malloc(new_target_info_len);
-        memcpy(new_target_info, target_info, eol_pos);
-        memcpy(new_target_info + eol_pos, av_flags, 8);
-        /* MsAvEOL (ID=0, Len=0) */
-        memset(new_target_info + eol_pos + 8, 0, 4);
+    if (DEBUG) {
+        log_info("TargetInfoをそのまま使用（MsAvFlags追加なし）");
     }
+
+    /* MsAvFlagsの変数を使用しないことを明示 */
+    (void)has_av_flags;
+    (void)av_flags_pos;
+    (void)eol_pos;
 
     /* NTLMv2 blob (NTLMv2_CLIENT_CHALLENGE構造体)
      * - RespType (1): 0x01
@@ -1371,38 +1355,17 @@ static size_t ntlm_create_type3(const char *user, const char *password,
     memcpy(buffer + 64, version, 8);
 
     /*
-     * MIC計算 (オフセット72-87の16バイト)
-     * MIC = HMAC-MD5(ExportedSessionKey, Type1 || Type2 || Type3_with_zero_MIC)
-     *
-     * 重要: MS-NLMPの仕様では、MICはExportedSessionKeyで計算する
-     * MICはMsvAvTimestampがTargetInfoに含まれる場合に必須
+     * MIC計算を無効化（テスト用）
+     * MICフィールド(オフセット72-87)は0のまま
      */
     if (DEBUG) {
-        char mic_dbg[128];
-        snprintf(mic_dbg, sizeof(mic_dbg), "MIC計算条件: type1=%p len=%zu, type2=%p len=%zu",
-                 (void*)type1_msg, type1_len, (void*)type2_msg, type2_len);
-        log_info(mic_dbg);
+        log_info("MIC計算: 無効（テスト用）");
     }
-    if (type1_msg && type2_msg && type1_len > 0 && type2_len > 0) {
-        /* Type3は現時点でMICフィールドが0で初期化されている */
-        size_t total_len = type1_len + type2_len + offset;
-        uint8_t *mic_data = malloc(total_len);
-
-        memcpy(mic_data, type1_msg, type1_len);
-        memcpy(mic_data + type1_len, type2_msg, type2_len);
-        memcpy(mic_data + type1_len + type2_len, buffer, offset);
-
-        uint8_t mic[16];
-        hmac_md5(exported_session_key, 16, mic_data, total_len, mic);
-        free(mic_data);
-
-        /* MICをType 3メッセージのオフセット72に書き込み */
-        memcpy(buffer + 72, mic, 16);
-
-        if (DEBUG) {
-            log_info("MIC計算・設定完了（ExportedSessionKey使用）");
-        }
-    }
+    /* 未使用パラメータの警告を抑制 */
+    (void)type1_msg;
+    (void)type1_len;
+    (void)type2_msg;
+    (void)type2_len;
 
     /* ExportedSessionKeyを外部に返す（Signing/Sealing用） */
     if (exported_session_key_out) {
