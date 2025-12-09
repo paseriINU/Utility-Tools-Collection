@@ -1176,12 +1176,24 @@ static bool send_http_with_ntlm(const char *host, int port, const char *body,
         log_info("Type 1メッセージ送信中...");
     }
 
-    send(sock, request, strlen(request), 0);
+    ssize_t sent = send(sock, request, strlen(request), 0);
+    if (sent < 0) {
+        log_error("Type 1メッセージの送信に失敗しました");
+        close(sock);
+        return false;
+    }
+
     recv_http_response(sock, recv_buffer, sizeof(recv_buffer), &http_code, auth_header);
     close(sock);
 
     if (http_code != 401 || auth_header[0] == '\0') {
-        log_error("NTLM認証のType 2応答を受信できませんでした");
+        char err_msg[128];
+        snprintf(err_msg, sizeof(err_msg),
+                 "NTLM認証のType 2応答を受信できませんでした (HTTP %d)", http_code);
+        log_error(err_msg);
+        if (http_code == 0) {
+            log_error("サーバーからの応答がありません。接続先とポートを確認してください");
+        }
         return false;
     }
 
