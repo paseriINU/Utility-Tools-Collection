@@ -1113,10 +1113,12 @@ static size_t ntlm_create_type3(const char *user, const char *password,
     uint32_t type = NTLM_TYPE3;
     memcpy(buffer + 8, &type, 4);
 
-    /* LM Response（空） */
+    /* LM Response（空） - オフセットはNT Responseと同じ位置を指す */
     uint16_t lm_len = 0;
+    uint32_t lm_offset = offset;  /* データ開始位置 */
     memcpy(buffer + 12, &lm_len, 2);
     memcpy(buffer + 14, &lm_len, 2);
+    memcpy(buffer + 16, &lm_offset, 4);
 
     /* NT Response */
     uint16_t nt_len = nt_response_len;
@@ -1810,6 +1812,30 @@ static bool send_http_with_ntlm(const char *host, int port, const char *body,
 
     if (DEBUG) {
         log_info("Type 2メッセージ受信・解析成功");
+        char flag_msg[256];
+        snprintf(flag_msg, sizeof(flag_msg), "サーバーフラグ: 0x%08X", flags);
+        log_info(flag_msg);
+        if (flags & NTLMSSP_NEGOTIATE_KEY_EXCH) {
+            log_info("  - KEY_EXCH: 有効");
+        }
+        if (flags & NTLMSSP_NEGOTIATE_SEAL) {
+            log_info("  - SEAL: 有効");
+        }
+        if (flags & NTLMSSP_NEGOTIATE_SIGN) {
+            log_info("  - SIGN: 有効");
+        }
+        if (flags & NTLMSSP_NEGOTIATE_128) {
+            log_info("  - 128bit: 有効");
+        }
+        if (flags & NTLMSSP_NEGOTIATE_56) {
+            log_info("  - 56bit: 有効");
+        }
+        if (flags & NTLMSSP_NEGOTIATE_TARGET_INFO) {
+            log_info("  - TARGET_INFO: 有効");
+        }
+        char ti_msg[64];
+        snprintf(ti_msg, sizeof(ti_msg), "TargetInfo長: %zu バイト", target_info_len);
+        log_info(ti_msg);
     }
 
     /* Step 3: Type 3メッセージを送信 */
