@@ -1901,17 +1901,36 @@ static bool send_http_with_ntlm(const char *host, int port, const char *body,
 
     if (DEBUG) {
         log_info("Type 3メッセージ送信中（同一接続）...");
+        char sock_msg[64];
+        snprintf(sock_msg, sizeof(sock_msg), "  ソケットFD: %d", sock);
+        log_info(sock_msg);
     }
 
     sent = send(sock, request, strlen(request), 0);
     if (sent < 0) {
         log_error("Type 3メッセージの送信に失敗しました");
+        char err_msg[128];
+        snprintf(err_msg, sizeof(err_msg), "  送信エラー: %s", strerror(errno));
+        log_error(err_msg);
         close(sock);
         return false;
     }
 
-    recv_http_response(sock, recv_buffer, sizeof(recv_buffer), &http_code, auth_header);
+    if (DEBUG) {
+        char sent_msg[64];
+        snprintf(sent_msg, sizeof(sent_msg), "  送信バイト数: %zd", sent);
+        log_info(sent_msg);
+        log_info("レスポンス待機中...");
+    }
+
+    ssize_t recv_len = recv_http_response(sock, recv_buffer, sizeof(recv_buffer), &http_code, auth_header);
     close(sock);
+
+    if (DEBUG) {
+        char recv_msg[64];
+        snprintf(recv_msg, sizeof(recv_msg), "  受信バイト数: %zd", recv_len);
+        log_info(recv_msg);
+    }
 
     if (DEBUG) {
         char msg[64];
