@@ -51,6 +51,7 @@ winrm quickconfig
 `Invoke-RemoteBatch-Hybrid.bat` をテキストエディタで開き、設定セクションを編集：
 
 ```powershell
+# リモートサーバの設定
 $Config = @{
     # リモートサーバのIPアドレスまたはホスト名
     ComputerName = "192.168.1.100"
@@ -61,16 +62,30 @@ $Config = @{
     # パスワード（空の場合は実行時に入力、推奨）
     Password = ""
 
-    # 実行するバッチファイルのパス（リモートサーバ上）
-    # {env} は環境選択時に置換されます
-    BatchPath = "C:\Scripts\{env}\backup.bat"
-
     # バッチファイルに渡す引数（オプション）
     Arguments = ""
 
     # HTTPS接続を使用する場合は $true
     UseSSL = $false
 }
+
+# 環境設定（複数環境対応）
+# 環境名と対応するバッチファイルパスを定義
+$ENVIRONMENTS = @(
+    @{
+        Name = "tst1t"
+        BatchPath = "C:\Scripts\tst1t\backup.bat"
+    },
+    @{
+        Name = "tst2t"
+        BatchPath = "C:\Scripts\tst2t\backup.bat"
+    }
+    # 環境を追加する場合は以下のように追記:
+    # ,@{
+    #     Name = "tst3t"
+    #     BatchPath = "C:\Scripts\tst3t\backup.bat"
+    # }
+)
 ```
 
 ### 3. 実行
@@ -91,12 +106,16 @@ Invoke-RemoteBatch-Hybrid.bat
 ### 4. 実行フロー
 
 1. **管理者権限チェック** → 必要に応じてUACプロンプト表示
-2. **環境選択**（BatchPathに{env}が含まれる場合）
+2. **環境選択**（$ENVIRONMENTSで定義された環境から選択）
    ```
    実行環境を選択してください:
+
      1. tst1t
      2. tst2t
-   選択 (1-2):
+
+     0. キャンセル
+
+   選択 (0-2):
    ```
 3. **WinRM設定の自動構成**
 4. **パスワード入力**（Passwordが空の場合）
@@ -108,22 +127,37 @@ Invoke-RemoteBatch-Hybrid.bat
 
 ### 環境選択機能
 
-`BatchPath` に `{env}` を含めると、実行時に環境を選択できます：
+`$ENVIRONMENTS` 配列に環境を定義すると、実行時に環境を選択できます：
 
 ```powershell
-BatchPath = "C:\Scripts\{env}\backup.bat"
+$ENVIRONMENTS = @(
+    @{
+        Name = "tst1t"
+        BatchPath = "C:\Scripts\tst1t\backup.bat"
+    },
+    @{
+        Name = "tst2t"
+        BatchPath = "C:\Scripts\tst2t\backup.bat"
+    },
+    @{
+        Name = "production"
+        BatchPath = "C:\Scripts\production\daily_batch.bat"
+    }
+)
 ```
 
-実行時の選択肢：
-1. tst1t
-2. tst2t
+**環境の追加・削除**は、配列に要素を追加・削除するだけで対応可能です。
+メニューは配列の内容に基づいて動的に生成されます。
 
-選択すると、`{env}` が選択した環境名に置換されます。
-
-**環境選択機能を使用しない場合**は、固定値を設定：
+**単一環境のみ使用する場合**も、配列に1つだけ定義：
 
 ```powershell
-BatchPath = "C:\Scripts\production\daily_batch.bat"
+$ENVIRONMENTS = @(
+    @{
+        Name = "production"
+        BatchPath = "C:\Scripts\production\daily_batch.bat"
+    }
+)
 ```
 
 ### WinRM設定の自動構成
@@ -295,10 +329,16 @@ Get-Item WSMan:\localhost\Client\TrustedHosts
 ---
 
 **作成日:** 2025-12-05
-**バージョン:** 2.0
-**更新内容:** PowerShell Remoting版に統一、タスクスケジューラ版とWinRM版を削除
+**バージョン:** 2.1
+**更新内容:** 環境設定を動的配列方式に変更
 
 ## バージョン履歴
+
+- **v2.1** (2025-12-09)
+  - 環境設定を$ENVIRONMENTS配列方式に変更（動的に環境を追加・削除可能）
+  - git-deploy-to-linux.batと同じ設定方式に統一
+  - 環境選択メニューを動的生成に変更
+  - キャンセル（0番）オプションを追加
 
 - **v2.0** (2025-12-05)
   - ハイブリッド.bat形式に統合
