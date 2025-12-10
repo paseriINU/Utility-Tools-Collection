@@ -12,7 +12,8 @@
 │   ├── git-diff-extract/    # Git差分ファイル抽出ツール
 │   ├── git-branch-manager/  # Gitブランチ管理ツール
 │   ├── git-deploy/          # Git→Linux転送ツール
-│   └── jp1-job-executor/    # JP1ジョブネット起動ツール
+│   ├── jp1-job-executor/    # JP1ジョブネット起動ツール
+│   └── server-config-collector/  # サーバ構成情報収集ツール
 │
 ├── linux/                   # Linuxスクリプト
 │   └── winrm-client/        # WinRMクライアント（Python/Bash/C）
@@ -22,9 +23,6 @@
 │   └── git-log-visualizer/  # Git Log 可視化ツール
 │
 ├── git-hooks/               # Git Hooks（ブランチ保護等）
-│
-├── samples/                 # サンプルツール・テンプレート集
-│   └── server-config-collector/  # サーバ構成情報収集ツール
 │
 └── javascript/              # JavaScriptツール（準備中）
 ```
@@ -73,6 +71,11 @@
   - ローカルPCにJP1インストール不要
   - ダブルクリックで実行可能なスタンドアローン版
 
+- **[Server-Config-Collector](batch/server-config-collector/)**: サーバ構成情報収集ツール
+  - ネットワーク・セキュリティ設定をExcel出力
+  - WinRM設定、ファイアウォール、開放ポート、レジストリ
+  - WinRM実行前の事前調査に最適
+
 ### Linux Tools
 
 - **[WinRM-Client](linux/winrm-client/)**: LinuxからWindowsへWinRM接続してコマンド実行
@@ -106,20 +109,6 @@
 
 ### JavaScript Tools
 *準備中 - 今後追加予定*
-
-### Samples（サンプル・テンプレート）
-
-- **[server-config-collector](samples/server-config-collector/)**: サーバ構成情報収集ツール
-  - ネットワーク・セキュリティ設定をExcel出力
-  - WinRM設定、ファイアウォール、開放ポート、レジストリ
-  - WinRM実行前の事前調査に最適
-
-**提案ツール一覧**: [samples/README.md](samples/README.md) を参照
-- PowerShell/Batch: ログ収集、サービス監視、バックアップ
-- Shell: プロセス監視、DBバックアップ、デプロイスクリプト
-- VBA: CSV一括インポート、PDF変換、データ検証
-- JavaScript: フォーム自動入力、JSON整形、正規表現テスター
-- Python: ファイル整理、文字コード変換、レポート生成
 
 ## 🚀 使い方
 
