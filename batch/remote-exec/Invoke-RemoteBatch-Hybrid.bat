@@ -67,9 +67,8 @@ $Config = @{
 }
 
 # 環境設定（複数環境対応）
-# バッチファイルパス: $BATCH_BASE_PATH\[環境名]\[環境名]$BATCH_FILE_SUFFIX
-$BATCH_BASE_PATH = "C:\Scripts"
-$BATCH_FILE_SUFFIX = "_test.bat"
+# パステンプレート（{0}に環境名が入る）
+$BATCH_PATH_TEMPLATE = "C:\Scripts\{0}\{0}_test.bat"
 
 # 環境名の配列（追加・削除する場合はここを編集）
 $ENVIRONMENTS = @("tst1t", "tst2t")
@@ -121,7 +120,7 @@ if ($ENVIRONMENTS.Count -gt 0) {
 
     # 選択された環境からパスを生成
     $selectedEnv = $ENVIRONMENTS[$envIndex]
-    $Config.BatchPath = "$BATCH_BASE_PATH\$selectedEnv\$selectedEnv$BATCH_FILE_SUFFIX"
+    $Config.BatchPath = $BATCH_PATH_TEMPLATE -f $selectedEnv
 
     Write-Host ""
     Write-Host "選択された環境: $selectedEnv" -ForegroundColor Green
