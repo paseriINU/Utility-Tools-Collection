@@ -67,23 +67,12 @@ $Config = @{
 }
 
 # 環境設定（複数環境対応）
-# 環境名と対応するバッチファイルパスを定義
-# ※ 環境を追加・削除する場合はこの配列を編集してください
-$ENVIRONMENTS = @(
-    @{
-        Name = "tst1t"
-        BatchPath = "C:\Scripts\tst1t\test.bat"
-    },
-    @{
-        Name = "tst2t"
-        BatchPath = "C:\Scripts\tst2t\test.bat"
-    }
-    # 環境を追加する場合は以下のように追記:
-    # ,@{
-    #     Name = "tst3t"
-    #     BatchPath = "C:\Scripts\tst3t\test.bat"
-    # }
-)
+# バッチファイルパス: $BATCH_BASE_PATH\[環境名]\$BATCH_FILE_NAME
+$BATCH_BASE_PATH = "C:\Scripts"
+$BATCH_FILE_NAME = "test.bat"
+
+# 環境名の配列（追加・削除する場合はここを編集）
+$ENVIRONMENTS = @("tst1t", "tst2t")
 
 # ======================================================================================================
 # ■ メイン処理（以下は編集不要）
@@ -109,7 +98,7 @@ if ($ENVIRONMENTS.Count -gt 0) {
 
     # 環境一覧を動的に表示
     for ($i = 0; $i -lt $ENVIRONMENTS.Count; $i++) {
-        Write-Host "  $($i + 1). $($ENVIRONMENTS[$i].Name)"
+        Write-Host "  $($i + 1). $($ENVIRONMENTS[$i])"
     }
     Write-Host ""
     Write-Host "  0. キャンセル"
@@ -130,12 +119,12 @@ if ($ENVIRONMENTS.Count -gt 0) {
         }
     } while ($envIndex -lt 0 -or $envIndex -ge $ENVIRONMENTS.Count)
 
-    # 選択された環境を取得
+    # 選択された環境からパスを生成
     $selectedEnv = $ENVIRONMENTS[$envIndex]
-    $Config.BatchPath = $selectedEnv.BatchPath
+    $Config.BatchPath = "$BATCH_BASE_PATH\$selectedEnv\$BATCH_FILE_NAME"
 
     Write-Host ""
-    Write-Host "選択された環境: $($selectedEnv.Name)" -ForegroundColor Green
+    Write-Host "選択された環境: $selectedEnv" -ForegroundColor Green
     Write-Host ""
 } else {
     Write-Host "[エラー] 環境が設定されていません" -ForegroundColor Red
