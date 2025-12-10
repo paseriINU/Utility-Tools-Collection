@@ -24,6 +24,8 @@
 │
 ├── git-hooks/               # Git Hooks（ブランチ保護等）
 │
+├── samples/                 # サンプルツール・テンプレート集
+│
 └── javascript/              # JavaScriptツール（準備中）
 ```
 
@@ -109,6 +111,10 @@
 
 ### JavaScript Tools
 *準備中 - 今後追加予定*
+
+### Samples（提案ツール）
+
+今後作成を検討しているツールの一覧は [samples/README.md](samples/README.md) を参照してください。
 
 ## 🚀 使い方
 
