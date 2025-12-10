@@ -23,6 +23,9 @@
 │
 ├── git-hooks/               # Git Hooks（ブランチ保護等）
 │
+├── samples/                 # サンプルツール・テンプレート集
+│   └── config-diff/         # 設定ファイル比較ツール
+│
 └── javascript/              # JavaScriptツール（準備中）
 ```
 
@@ -103,6 +106,21 @@
 
 ### JavaScript Tools
 *準備中 - 今後追加予定*
+
+### Samples（サンプル・テンプレート）
+
+- **[config-diff](samples/config-diff/)**: 環境間の設定ファイル比較ツール
+  - 2フォルダの設定ファイルを再帰的に比較
+  - 対応形式: `.ini`, `.json`, `.xml`, `.properties`, `.yaml` など
+  - 差分結果をテキストファイルに出力
+  - WinMerge連携で詳細比較
+
+**提案ツール一覧**: [samples/README.md](samples/README.md) を参照
+- PowerShell/Batch: ログ収集、サービス監視、バックアップ
+- Shell: プロセス監視、DBバックアップ、デプロイスクリプト
+- VBA: CSV一括インポート、PDF変換、データ検証
+- JavaScript: フォーム自動入力、JSON整形、正規表現テスター
+- Python: ファイル整理、文字コード変換、レポート生成
 
 ## 🚀 使い方
 
