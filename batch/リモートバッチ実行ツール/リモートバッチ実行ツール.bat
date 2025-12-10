@@ -128,8 +128,6 @@ if ($ENVIRONMENTS.Count -gt 0) {
 } else {
     Write-Host "[エラー] 環境が設定されていません" -ForegroundColor Red
     Write-Host "設定セクションの `$ENVIRONMENTS 配列を確認してください" -ForegroundColor Yellow
-    Write-Host "Enterキーを押して終了..." -ForegroundColor Gray
-    $null = Read-Host
     exit 1
 }
 #endregion
@@ -201,8 +199,6 @@ try {
     Write-Host ""
     Write-Host "このスクリプトは管理者権限で実行する必要があります。" -ForegroundColor Yellow
     Write-Host ""
-    Write-Host "Enterキーを押して終了..." -ForegroundColor Gray
-    $null = Read-Host
     exit 1
 }
 #endregion
