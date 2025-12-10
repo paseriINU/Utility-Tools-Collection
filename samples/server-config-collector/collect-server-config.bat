@@ -18,24 +18,28 @@ exit /b %EXITCODE%
 
 <#
 .SYNOPSIS
-    Windowsサーバ構成情報収集ツール（ネットワーク・セキュリティ重視）
+    Windowsサーバ構成情報収集ツール（完全版）
 
 .DESCRIPTION
-    WinRM実行検討のため、ローカルサーバのネットワーク・セキュリティ設定を
-    収集してExcelファイルに出力します。
+    ローカルサーバの構成情報を包括的に収集してExcelファイルに出力します。
 
 .NOTES
     作成日: 2025-12-10
-    バージョン: 1.0
+    バージョン: 2.0
 
     収集項目:
     - OS基本情報
+    - ハードウェア情報（CPU、メモリ、ディスク）
     - ネットワーク設定（IP、DNS、ゲートウェイ）
     - WinRM設定（サービス状態、TrustedHosts、認証設定）
-    - ファイアウォール設定（WinRM関連ルール）
+    - ファイアウォール設定
     - 開いているポート（LISTENING）
     - セキュリティ関連レジストリ
-    - Windowsサービス一覧
+    - Windowsサービス一覧（全サービス）
+    - ローカルユーザー/グループ
+    - インストール済みソフトウェア
+    - 共有フォルダ
+    - タスクスケジューラ
 #>
 
 # ==============================================================================
@@ -48,13 +52,17 @@ $Config = @{
 
     # 収集項目の有効/無効
     CollectOSInfo = $true
+    CollectHardwareInfo = $true
     CollectNetworkConfig = $true
     CollectWinRMConfig = $true
     CollectFirewallRules = $true
     CollectOpenPorts = $true
     CollectRegistrySettings = $true
-    CollectServices = $true
+    CollectAllServices = $true
     CollectLocalUsers = $true
+    CollectInstalledSoftware = $true
+    CollectSharedFolders = $true
+    CollectScheduledTasks = $true
 }
 
 # ==============================================================================
@@ -67,8 +75,7 @@ $ErrorActionPreference = "Continue"
 # ヘッダー表示
 Write-Host ""
 Write-Host "========================================================================" -ForegroundColor Cyan
-Write-Host "  サーバ構成情報収集ツール" -ForegroundColor Cyan
-Write-Host "  （ネットワーク・セキュリティ重視）" -ForegroundColor Cyan
+Write-Host "  サーバ構成情報収集ツール（完全版）" -ForegroundColor Cyan
 Write-Host "========================================================================" -ForegroundColor Cyan
 Write-Host ""
 
@@ -83,8 +90,8 @@ Write-Host "コンピュータ名: $computerName" -ForegroundColor White
 Write-Host "出力先: $outputFolder" -ForegroundColor White
 Write-Host ""
 
-# データ収集用ハッシュテーブル
-$collectedData = @{}
+# データ収集用ハッシュテーブル（順序付き）
+$collectedData = [ordered]@{}
 
 #region OS基本情報
 if ($Config.CollectOSInfo) {
@@ -93,7 +100,7 @@ if ($Config.CollectOSInfo) {
     $osInfo = Get-CimInstance -ClassName Win32_OperatingSystem
     $computerSystem = Get-CimInstance -ClassName Win32_ComputerSystem
 
-    $collectedData["OS情報"] = @(
+    $collectedData["01_OS情報"] = @(
         [PSCustomObject]@{ 項目 = "コンピュータ名"; 値 = $computerName }
         [PSCustomObject]@{ 項目 = "OS名"; 値 = $osInfo.Caption }
         [PSCustomObject]@{ 項目 = "OSバージョン"; 値 = $osInfo.Version }
@@ -104,12 +111,72 @@ if ($Config.CollectOSInfo) {
         [PSCustomObject]@{ 項目 = "最終起動日時"; 値 = $osInfo.LastBootUpTime.ToString("yyyy-MM-dd HH:mm:ss") }
         [PSCustomObject]@{ 項目 = "ドメイン/ワークグループ"; 値 = $computerSystem.Domain }
         [PSCustomObject]@{ 項目 = "ドメイン参加"; 値 = if ($computerSystem.PartOfDomain) { "はい" } else { "いいえ（ワークグループ）" } }
-        [PSCustomObject]@{ 項目 = "物理メモリ(GB)"; 値 = [math]::Round($computerSystem.TotalPhysicalMemory / 1GB, 2) }
-        [PSCustomObject]@{ 項目 = "プロセッサ数"; 値 = $computerSystem.NumberOfProcessors }
-        [PSCustomObject]@{ 項目 = "論理プロセッサ数"; 値 = $computerSystem.NumberOfLogicalProcessors }
+        [PSCustomObject]@{ 項目 = "システムディレクトリ"; 値 = $osInfo.SystemDirectory }
+        [PSCustomObject]@{ 項目 = "Windowsディレクトリ"; 値 = $osInfo.WindowsDirectory }
+        [PSCustomObject]@{ 項目 = "シリアル番号"; 値 = $osInfo.SerialNumber }
     )
 
-    Write-Host "  [OK] OS基本情報: $($collectedData["OS情報"].Count) 件" -ForegroundColor Green
+    Write-Host "  [OK] OS基本情報: $($collectedData["01_OS情報"].Count) 件" -ForegroundColor Green
+}
+#endregion
+
+#region ハードウェア情報
+if ($Config.CollectHardwareInfo) {
+    Write-Host "[収集中] ハードウェア情報..." -ForegroundColor Cyan
+
+    $hardwareData = @()
+
+    # CPU情報
+    $cpuInfo = Get-CimInstance -ClassName Win32_Processor
+    foreach ($cpu in $cpuInfo) {
+        $hardwareData += [PSCustomObject]@{ カテゴリ = "CPU"; 項目 = "プロセッサ名"; 値 = $cpu.Name }
+        $hardwareData += [PSCustomObject]@{ カテゴリ = "CPU"; 項目 = "コア数"; 値 = $cpu.NumberOfCores }
+        $hardwareData += [PSCustomObject]@{ カテゴリ = "CPU"; 項目 = "論理プロセッサ数"; 値 = $cpu.NumberOfLogicalProcessors }
+        $hardwareData += [PSCustomObject]@{ カテゴリ = "CPU"; 項目 = "最大クロック(MHz)"; 値 = $cpu.MaxClockSpeed }
+        $hardwareData += [PSCustomObject]@{ カテゴリ = "CPU"; 項目 = "ソケット"; 値 = $cpu.SocketDesignation }
+    }
+
+    # メモリ情報
+    $computerSystem = Get-CimInstance -ClassName Win32_ComputerSystem
+    $osInfo = Get-CimInstance -ClassName Win32_OperatingSystem
+    $hardwareData += [PSCustomObject]@{ カテゴリ = "メモリ"; 項目 = "物理メモリ合計(GB)"; 値 = [math]::Round($computerSystem.TotalPhysicalMemory / 1GB, 2) }
+    $hardwareData += [PSCustomObject]@{ カテゴリ = "メモリ"; 項目 = "利用可能メモリ(GB)"; 値 = [math]::Round($osInfo.FreePhysicalMemory / 1MB, 2) }
+    $hardwareData += [PSCustomObject]@{ カテゴリ = "メモリ"; 項目 = "仮想メモリ合計(GB)"; 値 = [math]::Round($osInfo.TotalVirtualMemorySize / 1MB, 2) }
+    $hardwareData += [PSCustomObject]@{ カテゴリ = "メモリ"; 項目 = "利用可能仮想メモリ(GB)"; 値 = [math]::Round($osInfo.FreeVirtualMemory / 1MB, 2) }
+
+    # メモリスロット情報
+    $memorySlots = Get-CimInstance -ClassName Win32_PhysicalMemory -ErrorAction SilentlyContinue
+    $slotNum = 1
+    foreach ($slot in $memorySlots) {
+        $hardwareData += [PSCustomObject]@{ カテゴリ = "メモリスロット$slotNum"; 項目 = "容量(GB)"; 値 = [math]::Round($slot.Capacity / 1GB, 2) }
+        $hardwareData += [PSCustomObject]@{ カテゴリ = "メモリスロット$slotNum"; 項目 = "速度(MHz)"; 値 = $slot.Speed }
+        $hardwareData += [PSCustomObject]@{ カテゴリ = "メモリスロット$slotNum"; 項目 = "製造元"; 値 = $slot.Manufacturer }
+        $slotNum++
+    }
+
+    $collectedData["02_ハードウェア"] = $hardwareData
+
+    # ディスク情報（別シート）
+    $diskData = @()
+    $disks = Get-CimInstance -ClassName Win32_LogicalDisk | Where-Object { $_.DriveType -eq 3 }
+    foreach ($disk in $disks) {
+        $usedSpace = $disk.Size - $disk.FreeSpace
+        $usagePercent = if ($disk.Size -gt 0) { [math]::Round(($usedSpace / $disk.Size) * 100, 1) } else { 0 }
+        $diskData += [PSCustomObject]@{
+            ドライブ = $disk.DeviceID
+            ボリューム名 = $disk.VolumeName
+            ファイルシステム = $disk.FileSystem
+            "合計容量(GB)" = [math]::Round($disk.Size / 1GB, 2)
+            "使用容量(GB)" = [math]::Round($usedSpace / 1GB, 2)
+            "空き容量(GB)" = [math]::Round($disk.FreeSpace / 1GB, 2)
+            "使用率(%)" = $usagePercent
+            状態 = if ($usagePercent -gt 90) { "警告:容量不足" } elseif ($usagePercent -gt 80) { "注意" } else { "正常" }
+        }
+    }
+    $collectedData["03_ディスク"] = $diskData
+
+    Write-Host "  [OK] ハードウェア情報: $($collectedData["02_ハードウェア"].Count) 件" -ForegroundColor Green
+    Write-Host "  [OK] ディスク情報: $($collectedData["03_ディスク"].Count) 件" -ForegroundColor Green
 }
 #endregion
 
@@ -130,10 +197,11 @@ if ($Config.CollectNetworkConfig) {
             DNSサーバ = ($adapter.DNSServerSearchOrder -join ", ")
             DHCP有効 = if ($adapter.DHCPEnabled) { "はい" } else { "いいえ" }
             DHCPサーバ = $adapter.DHCPServer
+            DNSドメイン = $adapter.DNSDomain
         }
     }
 
-    $collectedData["ネットワーク設定"] = $networkData
+    $collectedData["04_ネットワーク設定"] = $networkData
 
     # ネットワークプロファイル
     try {
@@ -148,12 +216,12 @@ if ($Config.CollectNetworkConfig) {
                 IPv6接続 = $profile.IPv6Connectivity.ToString()
             }
         }
-        $collectedData["ネットワークプロファイル"] = $profileData
+        $collectedData["05_ネットワークプロファイル"] = $profileData
     } catch {
         Write-Host "  [警告] ネットワークプロファイル取得に失敗" -ForegroundColor Yellow
     }
 
-    Write-Host "  [OK] ネットワーク設定: $($collectedData["ネットワーク設定"].Count) 件" -ForegroundColor Green
+    Write-Host "  [OK] ネットワーク設定: $($collectedData["04_ネットワーク設定"].Count) 件" -ForegroundColor Green
 }
 #endregion
 
@@ -238,8 +306,8 @@ if ($Config.CollectWinRMConfig) {
         }
     }
 
-    $collectedData["WinRM設定"] = $winrmData
-    Write-Host "  [OK] WinRM設定: $($collectedData["WinRM設定"].Count) 件" -ForegroundColor Green
+    $collectedData["06_WinRM設定"] = $winrmData
+    Write-Host "  [OK] WinRM設定: $($collectedData["06_WinRM設定"].Count) 件" -ForegroundColor Green
 }
 #endregion
 
@@ -268,7 +336,7 @@ if ($Config.CollectFirewallRules) {
         Write-Host "  [警告] ファイアウォールプロファイル取得に失敗" -ForegroundColor Yellow
     }
 
-    # WinRM関連ルール（受信）
+    # WinRM関連ルール
     try {
         $winrmRules = Get-NetFirewallRule -ErrorAction SilentlyContinue | Where-Object {
             $_.DisplayName -like "*WinRM*" -or
@@ -315,8 +383,8 @@ if ($Config.CollectFirewallRules) {
         Write-Host "  [警告] ファイアウォールルール取得に失敗" -ForegroundColor Yellow
     }
 
-    $collectedData["ファイアウォール"] = $firewallData
-    Write-Host "  [OK] ファイアウォール設定: $($collectedData["ファイアウォール"].Count) 件" -ForegroundColor Green
+    $collectedData["07_ファイアウォール"] = $firewallData
+    Write-Host "  [OK] ファイアウォール設定: $($collectedData["07_ファイアウォール"].Count) 件" -ForegroundColor Green
 }
 #endregion
 
@@ -333,14 +401,26 @@ if ($Config.CollectOpenPorts) {
             $process = Get-Process -Id $conn.OwningProcess -ErrorAction SilentlyContinue
             $processName = if ($process) { $process.ProcessName } else { "不明" }
 
-            # WinRM関連ポートをハイライト
-            $remark = ""
-            if ($conn.LocalPort -eq 5985) { $remark = "WinRM HTTP" }
-            elseif ($conn.LocalPort -eq 5986) { $remark = "WinRM HTTPS" }
-            elseif ($conn.LocalPort -eq 3389) { $remark = "RDP" }
-            elseif ($conn.LocalPort -eq 445) { $remark = "SMB" }
-            elseif ($conn.LocalPort -eq 135) { $remark = "RPC" }
-            elseif ($conn.LocalPort -eq 139) { $remark = "NetBIOS" }
+            # 主要ポートの備考
+            $remark = switch ($conn.LocalPort) {
+                5985 { "WinRM HTTP" }
+                5986 { "WinRM HTTPS" }
+                3389 { "RDP" }
+                445 { "SMB" }
+                135 { "RPC" }
+                139 { "NetBIOS" }
+                80 { "HTTP" }
+                443 { "HTTPS" }
+                22 { "SSH" }
+                21 { "FTP" }
+                25 { "SMTP" }
+                53 { "DNS" }
+                1433 { "SQL Server" }
+                1521 { "Oracle" }
+                3306 { "MySQL" }
+                5432 { "PostgreSQL" }
+                default { "" }
+            }
 
             $portData += [PSCustomObject]@{
                 プロトコル = "TCP"
@@ -355,8 +435,8 @@ if ($Config.CollectOpenPorts) {
         Write-Host "  [警告] TCPポート取得に失敗" -ForegroundColor Yellow
     }
 
-    $collectedData["開いているポート"] = $portData
-    Write-Host "  [OK] 開いているポート: $($collectedData["開いているポート"].Count) 件" -ForegroundColor Green
+    $collectedData["08_開いているポート"] = $portData
+    Write-Host "  [OK] 開いているポート: $($collectedData["08_開いているポート"].Count) 件" -ForegroundColor Green
 }
 #endregion
 
@@ -406,46 +486,29 @@ if ($Config.CollectRegistrySettings) {
         }
     }
 
-    $collectedData["レジストリ設定"] = $registryData
-    Write-Host "  [OK] レジストリ設定: $($collectedData["レジストリ設定"].Count) 件" -ForegroundColor Green
+    $collectedData["09_レジストリ設定"] = $registryData
+    Write-Host "  [OK] レジストリ設定: $($collectedData["09_レジストリ設定"].Count) 件" -ForegroundColor Green
 }
 #endregion
 
-#region Windowsサービス
-if ($Config.CollectServices) {
-    Write-Host "[収集中] 関連Windowsサービス..." -ForegroundColor Cyan
-
-    # WinRM/リモート管理関連サービス
-    $relatedServices = @(
-        "WinRM", "RemoteRegistry", "RemoteAccess", "RpcSs", "RpcEptMapper",
-        "LanmanServer", "LanmanWorkstation", "Netlogon", "TermService",
-        "WinHttpAutoProxySvc", "iphlpsvc", "PolicyAgent", "IKEEXT"
-    )
+#region Windowsサービス（全サービス）
+if ($Config.CollectAllServices) {
+    Write-Host "[収集中] Windowsサービス（全サービス）..." -ForegroundColor Cyan
 
     $serviceData = @()
 
-    foreach ($svcName in $relatedServices) {
-        $svc = Get-Service -Name $svcName -ErrorAction SilentlyContinue
-        if ($svc) {
-            $serviceData += [PSCustomObject]@{
-                サービス名 = $svc.Name
-                表示名 = $svc.DisplayName
-                状態 = $svc.Status.ToString()
-                スタートアップ種別 = $svc.StartType.ToString()
-                備考 = switch ($svc.Name) {
-                    "WinRM" { "Windows Remote Management" }
-                    "RemoteRegistry" { "リモートレジストリ" }
-                    "TermService" { "リモートデスクトップ" }
-                    "LanmanServer" { "ファイル共有（Server）" }
-                    "LanmanWorkstation" { "ファイル共有（Client）" }
-                    default { "" }
-                }
-            }
+    $allServices = Get-Service | Sort-Object Name
+    foreach ($svc in $allServices) {
+        $serviceData += [PSCustomObject]@{
+            サービス名 = $svc.Name
+            表示名 = $svc.DisplayName
+            状態 = $svc.Status.ToString()
+            スタートアップ種別 = $svc.StartType.ToString()
         }
     }
 
-    $collectedData["関連サービス"] = $serviceData
-    Write-Host "  [OK] 関連サービス: $($collectedData["関連サービス"].Count) 件" -ForegroundColor Green
+    $collectedData["10_Windowsサービス"] = $serviceData
+    Write-Host "  [OK] Windowsサービス: $($collectedData["10_Windowsサービス"].Count) 件" -ForegroundColor Green
 }
 #endregion
 
@@ -498,8 +561,112 @@ if ($Config.CollectLocalUsers) {
         Write-Host "  [警告] ローカルユーザー/グループ取得に失敗" -ForegroundColor Yellow
     }
 
-    $collectedData["ユーザー_グループ"] = $userData
-    Write-Host "  [OK] ユーザー/グループ: $($collectedData["ユーザー_グループ"].Count) 件" -ForegroundColor Green
+    $collectedData["11_ユーザー_グループ"] = $userData
+    Write-Host "  [OK] ユーザー/グループ: $($collectedData["11_ユーザー_グループ"].Count) 件" -ForegroundColor Green
+}
+#endregion
+
+#region インストール済みソフトウェア
+if ($Config.CollectInstalledSoftware) {
+    Write-Host "[収集中] インストール済みソフトウェア..." -ForegroundColor Cyan
+
+    $softwareData = @()
+
+    try {
+        # 32bit/64bitの両方から取得
+        $regPaths = @(
+            "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*",
+            "HKLM:\SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*"
+        )
+
+        foreach ($regPath in $regPaths) {
+            $software = Get-ItemProperty $regPath -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName }
+            foreach ($sw in $software) {
+                # 重複チェック
+                if (-not ($softwareData | Where-Object { $_.名前 -eq $sw.DisplayName })) {
+                    $softwareData += [PSCustomObject]@{
+                        名前 = $sw.DisplayName
+                        バージョン = $sw.DisplayVersion
+                        発行元 = $sw.Publisher
+                        インストール日 = $sw.InstallDate
+                        インストール場所 = $sw.InstallLocation
+                    }
+                }
+            }
+        }
+
+        $softwareData = $softwareData | Sort-Object 名前
+    } catch {
+        Write-Host "  [警告] ソフトウェア一覧取得に失敗" -ForegroundColor Yellow
+    }
+
+    $collectedData["12_インストール済ソフト"] = $softwareData
+    Write-Host "  [OK] インストール済みソフトウェア: $($collectedData["12_インストール済ソフト"].Count) 件" -ForegroundColor Green
+}
+#endregion
+
+#region 共有フォルダ
+if ($Config.CollectSharedFolders) {
+    Write-Host "[収集中] 共有フォルダ..." -ForegroundColor Cyan
+
+    $shareData = @()
+
+    try {
+        $shares = Get-CimInstance -ClassName Win32_Share
+        foreach ($share in $shares) {
+            $shareData += [PSCustomObject]@{
+                共有名 = $share.Name
+                パス = $share.Path
+                説明 = $share.Description
+                種別 = switch ($share.Type) {
+                    0 { "ディスクドライブ" }
+                    1 { "プリンター" }
+                    2 { "デバイス" }
+                    3 { "IPC" }
+                    2147483648 { "管理共有(ディスク)" }
+                    2147483649 { "管理共有(プリンター)" }
+                    2147483650 { "管理共有(デバイス)" }
+                    2147483651 { "管理共有(IPC)" }
+                    default { $share.Type }
+                }
+                状態 = $share.Status
+            }
+        }
+    } catch {
+        Write-Host "  [警告] 共有フォルダ取得に失敗" -ForegroundColor Yellow
+    }
+
+    $collectedData["13_共有フォルダ"] = $shareData
+    Write-Host "  [OK] 共有フォルダ: $($collectedData["13_共有フォルダ"].Count) 件" -ForegroundColor Green
+}
+#endregion
+
+#region タスクスケジューラ
+if ($Config.CollectScheduledTasks) {
+    Write-Host "[収集中] タスクスケジューラ..." -ForegroundColor Cyan
+
+    $taskData = @()
+
+    try {
+        $tasks = Get-ScheduledTask -ErrorAction SilentlyContinue | Where-Object { $_.State -ne "Disabled" -and $_.TaskPath -notlike "\Microsoft\*" }
+        foreach ($task in $tasks) {
+            $taskInfo = Get-ScheduledTaskInfo -TaskName $task.TaskName -TaskPath $task.TaskPath -ErrorAction SilentlyContinue
+            $taskData += [PSCustomObject]@{
+                タスク名 = $task.TaskName
+                パス = $task.TaskPath
+                状態 = $task.State.ToString()
+                最終実行 = if ($taskInfo.LastRunTime -and $taskInfo.LastRunTime -ne [DateTime]::MinValue) { $taskInfo.LastRunTime.ToString("yyyy-MM-dd HH:mm:ss") } else { "-" }
+                最終結果 = $taskInfo.LastTaskResult
+                次回実行 = if ($taskInfo.NextRunTime -and $taskInfo.NextRunTime -ne [DateTime]::MinValue) { $taskInfo.NextRunTime.ToString("yyyy-MM-dd HH:mm:ss") } else { "-" }
+                説明 = $task.Description
+            }
+        }
+    } catch {
+        Write-Host "  [警告] タスクスケジューラ取得に失敗" -ForegroundColor Yellow
+    }
+
+    $collectedData["14_タスクスケジューラ"] = $taskData
+    Write-Host "  [OK] タスクスケジューラ: $($collectedData["14_タスクスケジューラ"].Count) 件" -ForegroundColor Green
 }
 #endregion
 
@@ -540,7 +707,7 @@ if ($excelAvailable) {
         foreach ($sheetName in $collectedData.Keys) {
             $data = $collectedData[$sheetName]
 
-            if ($data.Count -eq 0) { continue }
+            if ($null -eq $data -or $data.Count -eq 0) { continue }
 
             if ($sheetIndex -eq 0) {
                 $sheet = $workbook.Sheets.Item(1)
@@ -576,6 +743,7 @@ if ($excelAvailable) {
             $sheet.UsedRange.Columns.AutoFit() | Out-Null
 
             $sheetIndex++
+            Write-Host "  [OK] $sheetName" -ForegroundColor Gray
         }
 
         # 保存
@@ -589,6 +757,7 @@ if ($excelAvailable) {
         [System.GC]::Collect()
         [System.GC]::WaitForPendingFinalizers()
 
+        Write-Host ""
         Write-Host "[OK] Excel出力完了: $excelPath" -ForegroundColor Green
 
     } catch {
@@ -606,7 +775,7 @@ if (-not $excelAvailable) {
 
     foreach ($sheetName in $collectedData.Keys) {
         $data = $collectedData[$sheetName]
-        if ($data.Count -gt 0) {
+        if ($null -ne $data -and $data.Count -gt 0) {
             $csvPath = Join-Path $csvFolder "$sheetName.csv"
             $data | Export-Csv -Path $csvPath -NoTypeInformation -Encoding UTF8
             Write-Host "  [OK] $csvPath" -ForegroundColor Green
@@ -630,7 +799,8 @@ Write-Host "コンピュータ: $computerName" -ForegroundColor White
 Write-Host ""
 
 foreach ($key in $collectedData.Keys) {
-    Write-Host "  $key : $($collectedData[$key].Count) 件" -ForegroundColor Gray
+    $count = if ($null -ne $collectedData[$key]) { $collectedData[$key].Count } else { 0 }
+    Write-Host "  $key : $count 件" -ForegroundColor Gray
 }
 
 Write-Host ""
