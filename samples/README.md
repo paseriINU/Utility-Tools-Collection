@@ -9,7 +9,7 @@
 
 | フォルダ | ツール名 | 説明 |
 |----------|----------|------|
-| `config-diff/` | 設定ファイル比較 | 環境間の設定差分検出 |
+| `server-config-collector/` | サーバ構成情報収集 | ネットワーク・セキュリティ設定をExcel出力 |
 
 ---
 
@@ -27,6 +27,7 @@
 | **event-log-analyzer** | Windowsイベントログ解析 | 障害分析 |
 | **file-hash-checker** | ファイル改ざん検知（ハッシュ比較） | セキュリティ |
 | **backup-with-rotation** | 世代管理付きバックアップ | データ保護 |
+| **config-diff** | 環境間の設定ファイル比較 | 構成管理 |
 
 ### Shell（Linux/Unix運用向け）
 
@@ -85,10 +86,10 @@
 業務でよく使われる機能を優先的に実装することを推奨します：
 
 ### 即効性が高いもの
-1. **log-collector** (PowerShell) - 障害調査で頻繁に使用
-2. **csv-importer** (VBA) - Excel業務で頻繁に使用
-3. **form-auto-filler** (JavaScript) - 繰り返し入力の効率化
-4. **backup-with-rotation** (PowerShell) - データ保護の基本
+1. **server-config-collector** (PowerShell) - サーバ設定の可視化 ✅作成済み
+2. **log-collector** (PowerShell) - 障害調査で頻繁に使用
+3. **csv-importer** (VBA) - Excel業務で頻繁に使用
+4. **form-auto-filler** (JavaScript) - 繰り返し入力の効率化
 
 ### 運用品質向上
 1. **service-monitor** (PowerShell) - サービス監視の自動化

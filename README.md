@@ -24,7 +24,7 @@
 ├── git-hooks/               # Git Hooks（ブランチ保護等）
 │
 ├── samples/                 # サンプルツール・テンプレート集
-│   └── config-diff/         # 設定ファイル比較ツール
+│   └── server-config-collector/  # サーバ構成情報収集ツール
 │
 └── javascript/              # JavaScriptツール（準備中）
 ```
@@ -109,11 +109,10 @@
 
 ### Samples（サンプル・テンプレート）
 
-- **[config-diff](samples/config-diff/)**: 環境間の設定ファイル比較ツール
-  - 2フォルダの設定ファイルを再帰的に比較
-  - 対応形式: `.ini`, `.json`, `.xml`, `.properties`, `.yaml` など
-  - 差分結果をテキストファイルに出力
-  - WinMerge連携で詳細比較
+- **[server-config-collector](samples/server-config-collector/)**: サーバ構成情報収集ツール
+  - ネットワーク・セキュリティ設定をExcel出力
+  - WinRM設定、ファイアウォール、開放ポート、レジストリ
+  - WinRM実行前の事前調査に最適
 
 **提案ツール一覧**: [samples/README.md](samples/README.md) を参照
 - PowerShell/Batch: ログ収集、サービス監視、バックアップ
