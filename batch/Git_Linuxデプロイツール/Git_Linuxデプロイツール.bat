@@ -1,7 +1,7 @@
 <# :
 @echo off
 chcp 65001 >nul
-title Git Deploy to Linux
+title Git Linuxデプロイツール
 setlocal
 
 rem UNCパス対応（PushD/PopDで自動マッピング）
@@ -17,7 +17,7 @@ exit /b %EXITCODE%
 : #>
 
 #==============================================================================
-# Git Deploy to Linux - 統合版
+# Git Linuxデプロイツール
 #==============================================================================
 #
 # 機能:
@@ -136,7 +136,7 @@ Set-Location $GIT_ROOT
 # 最初にタイトルを表示
 Write-Host ""
 Write-Color "================================================================" "Cyan"
-Write-Color "  Git Deploy to Linux" "Cyan"
+Write-Color "  Git Linuxデプロイツール" "Cyan"
 Write-Color "================================================================" "Cyan"
 Write-Host ""
 

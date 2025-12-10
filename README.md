@@ -7,13 +7,15 @@
 ```
 .
 ├── batch/                    # Windowsバッチスクリプト
-│   ├── sync/                # 同期ツール（TFS→Git同期）
-│   ├── remote-exec/         # リモート実行ツール（PowerShell Remoting）
-│   ├── git-diff-extract/    # Git差分ファイル抽出ツール
-│   ├── git-branch-manager/  # Gitブランチ管理ツール
-│   ├── git-deploy/          # Git→Linux転送ツール
+│   ├── TFS_to_Git_同期ツール/   # TFS→Git同期ツール
+│   ├── リモートバッチ実行ツール/   # リモート実行ツール（PowerShell Remoting）
+│   ├── Git_差分ファイル抽出ツール/ # Git差分ファイル抽出ツール
+│   ├── Git_ブランチ削除ツール/   # Gitブランチ管理ツール
+│   ├── Git_Linuxデプロイツール/  # Git→Linux転送ツール
 │   ├── jp1-job-executor/    # JP1ジョブネット起動ツール
-│   └── server-config-collector/  # サーバ構成情報収集ツール
+│   │   ├── JP1_リモートジョブ起動ツール/
+│   │   └── JP1_ジョブネット起動ツール/
+│   └── サーバ構成情報収集ツール/  # サーバ構成情報収集ツール
 │
 ├── linux/                   # Linuxスクリプト
 │   └── winrm-client/        # WinRMクライアント（Python/Bash/C）
@@ -34,12 +36,12 @@
 ### Batch Scripts
 
 **Note**: このカテゴリにはWindowsバッチファイル(.bat)およびPowerShellスクリプト(.ps1)が含まれます。
-- **[TFS-Git-sync](batch/sync/)**: TFS（Team Foundation Server）とGitリポジトリを同期するバッチスクリプト
+- **[TFS to Git 同期ツール](batch/TFS_to_Git_同期ツール/)**: TFS（Team Foundation Server）とGitリポジトリを同期するバッチスクリプト
   - MD5ハッシュによる高速差分チェック
   - 自動的なファイル更新・追加・削除
   - 日本語ファイル名対応
 
-- **[Remote-Batch-Executor](batch/remote-exec/)**: リモートWindowsサーバでバッチファイルを実行（PowerShell Remoting）
+- **[リモートバッチ実行ツール](batch/リモートバッチ実行ツール/)**: リモートWindowsサーバでバッチファイルを実行（PowerShell Remoting）
   - ダブルクリックで実行可能な.batハイブリッドスクリプト
   - WinRM設定の自動構成と復元（TrustedHosts自動設定）
   - 環境選択機能（tst1t/tst2t）
@@ -47,20 +49,20 @@
   - ログファイル自動保存
   - ネットワークパス（UNCパス）対応
 
-- **[Git-Diff-Extract](batch/git-diff-extract/)**: Gitブランチ間の差分ファイルを抽出
+- **[Git 差分ファイル抽出ツール](batch/Git_差分ファイル抽出ツール/)**: Gitブランチ間の差分ファイルを抽出
   - フォルダ構造を保ったまま差分ファイルをコピー
   - main と develop などブランチ間の差分を簡単に抽出
   - デプロイ用差分ファイル作成に最適
   - ダブルクリックで実行可能
 
-- **[Git-Branch-Manager](batch/git-branch-manager/)**: Gitブランチを数字で選択して削除
+- **[Git ブランチ削除ツール](batch/Git_ブランチ削除ツール/)**: Gitブランチを数字で選択して削除
   - リモートブランチを対話的に削除
   - ローカルブランチを対話的に削除
   - リモート＆ローカル両方を一度に削除
   - main/master/develop は保護機能付き
   - 通常削除・強制削除を選択可能
 
-- **[Git-Deploy-to-Linux](batch/git-deploy/)**: Git変更ファイルをLinuxサーバーに転送
+- **[Git Linuxデプロイツール](batch/Git_Linuxデプロイツール/)**: Git変更ファイルをLinuxサーバーに転送
   - 複数環境対応・拡張子フィルタ・削除ファイル除外
   - すべて転送 or 個別選択の2つのモード
   - Linux側の自動設定（mkdir/chmod/chown）
@@ -68,12 +70,13 @@
   - ネットワークパス（UNCパス）からの実行対応
   - ダブルクリックで実行可能
 
-- **[JP1-Job-Executor](batch/jp1-job-executor/)**: JP1/AJS3ジョブネットを起動
-  - リモート実行版（PowerShell Remoting）とREST API版の2種類
+- **[JP1 ジョブ起動ツール](batch/jp1-job-executor/)**: JP1/AJS3ジョブネットを起動
+  - [JP1 リモートジョブ起動ツール](batch/jp1-job-executor/JP1_リモートジョブ起動ツール/): PowerShell Remoting版
+  - [JP1 ジョブネット起動ツール](batch/jp1-job-executor/JP1_ジョブネット起動ツール/): REST API版
   - ローカルPCにJP1インストール不要
   - ダブルクリックで実行可能なスタンドアローン版
 
-- **[Server-Config-Collector](batch/server-config-collector/)**: サーバ構成情報収集ツール
+- **[サーバ構成情報収集ツール](batch/サーバ構成情報収集ツール/)**: サーバ構成情報収集ツール
   - ネットワーク・セキュリティ設定をExcel出力
   - WinRM設定、ファイアウォール、開放ポート、レジストリ
   - WinRM実行前の事前調査に最適

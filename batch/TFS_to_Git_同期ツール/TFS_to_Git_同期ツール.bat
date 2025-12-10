@@ -1,7 +1,7 @@
 <# :
 @echo off
 chcp 65001 >nul
-title TFS to Git 同期スクリプト
+title TFS to Git 同期ツール
 setlocal
 
 rem UNCパス対応（PushD/PopDで自動マッピング）
@@ -24,7 +24,7 @@ exit /b %EXITCODE%
 # タイトル表示
 Write-Host ""
 Write-Host "========================================================================" -ForegroundColor Cyan
-Write-Host "  TFS to Git 同期スクリプト" -ForegroundColor Cyan
+Write-Host "  TFS to Git 同期ツール" -ForegroundColor Cyan
 Write-Host "========================================================================" -ForegroundColor Cyan
 Write-Host ""
 
