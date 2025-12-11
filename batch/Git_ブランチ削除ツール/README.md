@@ -18,7 +18,7 @@ Gitのリモートブランチとローカルブランチを**数字で選択し
 
 ```
 git-branch-manager/
-├── delete_branches.bat         # ブランチ削除ツール（統合版）
+├── Git_ブランチ削除ツール.bat  # ブランチ削除ツール
 └── README.md
 ```
 

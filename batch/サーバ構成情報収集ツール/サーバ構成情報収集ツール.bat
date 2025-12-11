@@ -18,7 +18,7 @@ exit /b %EXITCODE%
 
 <#
 .SYNOPSIS
-    Windowsサーバ構成情報収集ツール（完全版）
+    Windowsサーバ構成情報収集ツール
 
 .DESCRIPTION
     ローカルサーバの構成情報を包括的に収集してExcelファイルに出力します。
