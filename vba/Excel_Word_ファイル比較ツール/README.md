@@ -1,12 +1,10 @@
-# Excel/Word ファイル比較ツール（統合版）
+# Excel/Word ファイル比較ツール
 
 2つのExcelファイルまたはWordファイルを比較し、差異を一覧表示するVBAマクロです。
 
-1つ目のファイル選択で自動的にファイルタイプを判定し、2つ目は同じタイプのファイルのみ選択可能です。
-
 ## 機能
 
-### 統合比較機能 (`FileComparator.bas`)
+### `FileComparator.bas`
 
 - **CompareFiles**: ExcelまたはWordファイルを比較
   - 1つ目のファイル選択でExcel/Wordを自動判定
