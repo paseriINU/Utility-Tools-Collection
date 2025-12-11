@@ -13,8 +13,7 @@
 │   ├── Git_ブランチ削除ツール/   # Gitブランチ管理ツール
 │   ├── Git_Linuxデプロイツール/  # Git→Linux転送ツール
 │   ├── jp1-job-executor/    # JP1ジョブネット起動ツール
-│   │   ├── JP1_リモートジョブ起動ツール/
-│   │   └── JP1_ジョブネット起動ツール/
+│   │   └── JP1_リモートジョブ起動ツール/
 │   └── サーバ構成情報収集ツール/  # サーバ構成情報収集ツール
 │
 ├── linux/                   # Linuxスクリプト
@@ -71,9 +70,8 @@
   - ネットワークパス（UNCパス）からの実行対応
   - ダブルクリックで実行可能
 
-- **[JP1 ジョブ起動ツール](batch/jp1-job-executor/)**: JP1/AJS3ジョブネットを起動
-  - [JP1 リモートジョブ起動ツール](batch/jp1-job-executor/JP1_リモートジョブ起動ツール/): PowerShell Remoting版
-  - [JP1 ジョブネット起動ツール](batch/jp1-job-executor/JP1_ジョブネット起動ツール/): REST API版
+- **[JP1 リモートジョブ起動ツール](batch/jp1-job-executor/)**: JP1/AJS3ジョブネットを起動
+  - PowerShell Remotingを使用してリモートサーバでajsentryを実行
   - ローカルPCにJP1インストール不要
   - ダブルクリックで実行可能なスタンドアローン版
 

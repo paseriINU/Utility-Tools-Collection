@@ -1,42 +1,28 @@
-# Excel/Word ファイル比較ツール
+# Excel/Word ファイル比較ツール（統合版）
 
 2つのExcelファイルまたはWordファイルを比較し、差異を一覧表示するVBAマクロです。
 
+1つ目のファイル選択で自動的にファイルタイプを判定し、2つ目は同じタイプのファイルのみ選択可能です。
+
 ## 機能
 
-### Excel ファイル比較 (`ExcelFileComparator.bas`)
+### 統合比較機能 (`FileComparator.bas`)
 
-- **CompareExcelFiles**: 2つのExcelファイルを全体比較
-  - ファイル選択ダイアログで2つのファイルを指定
-  - シート単位・セル単位での差異検出
+- **CompareFiles**: ExcelまたはWordファイルを比較
+  - 1つ目のファイル選択でExcel/Wordを自動判定
+  - 2つ目は同じタイプのファイルのみ選択可能
+  - Excel: シート単位・セル単位での差異検出
+  - Word: 段落単位での差異検出
   - 差異の種類を識別（値変更、追加、削除、シート追加/削除）
   - 結果を「CompareResult」シートに出力
   - 差異セルのハイライト表示（黄色:変更、緑:追加、赤:削除）
 
-- **QuickCompareSelectedRange**: 選択範囲のクイック比較
-  - 現在のシートで選択したセル範囲のみを比較
-  - 差異セルをハイライト表示
-  - コメントで旧/新の値を表示
-
 - **ClearHighlight**: ハイライトとコメントをクリア
-
-### Word ファイル比較 (`WordFileComparator.bas`)
-
-- **CompareWordFiles**: 2つのWordファイルを段落単位で比較
-  - ファイル選択ダイアログで2つのファイルを指定
-  - 段落単位での差異検出
-  - 結果を「WordCompareResult」シートに出力
-  - 差異行のハイライト表示
-
-- **CompareWordFilesDetailed**: Wordの組み込み比較機能を使用
-  - 変更履歴付きの詳細比較
-  - 比較結果をWordで表示
-  - 書式変更、コメント、表なども比較可能
 
 ## 必要な環境
 
 - Microsoft Excel 2010以降
-- Microsoft Word 2010以降（Word比較機能を使用する場合）
+- Microsoft Word 2010以降（Word比較を使用する場合）
 - マクロを有効にする必要があります
 
 ## インストール方法
@@ -45,9 +31,8 @@
 
 1. Excelを開き、`Alt + F11` でVBAエディタを開く
 2. 「ファイル」→「ファイルのインポート」を選択
-3. `ExcelFileComparator.bas` をインポート
-4. Word比較も使用する場合は `WordFileComparator.bas` もインポート
-5. `Ctrl + S` で保存（.xlsm形式で保存）
+3. `FileComparator.bas` をインポート
+4. `Ctrl + S` で保存（.xlsm形式で保存）
 
 ### 方法2: コードをコピー
 
@@ -58,32 +43,17 @@
 
 ## 使い方
 
-### Excel ファイルの比較
+### ファイルの比較
 
 1. マクロを含むExcelファイルを開く
 2. `Alt + F8` でマクロダイアログを開く
-3. 「CompareExcelFiles」を選択して実行
+3. 「CompareFiles」を選択して実行
 4. 1つ目のファイル（旧ファイル）を選択
+   - ExcelまたはWordファイルを選択可能
+   - ファイルタイプが自動判定される
 5. 2つ目のファイル（新ファイル）を選択
+   - 1つ目と同じタイプのファイルのみ選択可能
 6. 比較結果が「CompareResult」シートに出力される
-
-### Word ファイルの比較
-
-#### 段落単位の比較（結果をExcelに出力）
-
-1. `Alt + F8` でマクロダイアログを開く
-2. 「CompareWordFiles」を選択して実行
-3. 1つ目のファイル（旧ファイル）を選択
-4. 2つ目のファイル（新ファイル）を選択
-5. 比較結果が「WordCompareResult」シートに出力される
-
-#### 詳細比較（Wordの組み込み機能を使用）
-
-1. `Alt + F8` でマクロダイアログを開く
-2. 「CompareWordFilesDetailed」を選択して実行
-3. 1つ目のファイル（旧ファイル）を選択
-4. 2つ目のファイル（新ファイル）を選択
-5. 比較結果がWordで表示される（変更履歴付き）
 
 ## 出力形式
 
@@ -95,7 +65,7 @@
 | 2 | Sheet1 | B2 | 追加 | (空) | 追加された値 |
 | 3 | Sheet2 | C3 | 削除 | 削除された値 | (空) |
 
-### Word比較結果シート（WordCompareResult）
+### Word比較結果シート（CompareResult）
 
 | No | 段落番号 | 差異タイプ | 旧ファイルのテキスト | 新ファイルのテキスト |
 |----|----------|------------|----------------------|----------------------|
@@ -113,29 +83,36 @@
 
 VBAコード内の以下の定数を編集することで動作を変更できます：
 
-### ExcelFileComparator.bas
-
 ```vba
-' 比較する最大行数（パフォーマンス対策）
+' Excel比較: 最大行数（パフォーマンス対策）
 Private Const MAX_ROWS As Long = 10000
 
-' 比較する最大列数
+' Excel比較: 最大列数
 Private Const MAX_COLS As Long = 256
-```
 
-### WordFileComparator.bas
-
-```vba
-' 比較する最大段落数（パフォーマンス対策）
+' Word比較: 最大段落数（パフォーマンス対策）
 Private Const MAX_PARAGRAPHS As Long = 5000
 ```
+
+## 対応ファイル形式
+
+### Excel
+- `.xlsx` - Excel ブック
+- `.xlsm` - Excel マクロ有効ブック
+- `.xls` - Excel 97-2003 ブック
+- `.xlsb` - Excel バイナリ ブック
+
+### Word
+- `.docx` - Word 文書
+- `.docm` - Word マクロ有効文書
+- `.doc` - Word 97-2003 文書
 
 ## 注意事項
 
 - 大きなファイルの比較には時間がかかる場合があります
 - セルの数式は評価後の値で比較されます
 - 書式（色、フォントなど）の違いは検出されません
-- Word比較の段落単位比較は、段落の順序変更に弱い場合があります（詳細比較を推奨）
+- Word比較の段落単位比較は、段落の順序変更に弱い場合があります
 - 比較中は画面更新が停止しますが、処理完了まで待ってください
 
 ## トラブルシューティング
@@ -153,7 +130,6 @@ Private Const MAX_PARAGRAPHS As Long = 5000
 ### 比較に時間がかかる
 
 - `MAX_ROWS`、`MAX_COLS`、`MAX_PARAGRAPHS` の値を小さくしてください
-- 比較範囲を限定したい場合は `QuickCompareSelectedRange` を使用してください
 
 ## ライセンス
 
