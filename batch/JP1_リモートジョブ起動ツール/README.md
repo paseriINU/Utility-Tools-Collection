@@ -77,7 +77,7 @@ Windows Remote Management (HTTP-In)  True
 
 ### 1. バッチファイルを編集
 
-`jp1_remote_start.bat`をテキストエディタで開き、以下の設定項目を編集します：
+`JP1_リモートジョブ起動ツール.bat`をテキストエディタで開き、以下の設定項目を編集します：
 
 ```batch
 rem JP1/AJS3が稼働しているリモートサーバ
@@ -101,10 +101,10 @@ set AJSENTRY_PATH=C:\Program Files\HITACHI\JP1AJS3\bin\ajsentry.exe
 
 ### 2. 実行
 
-`jp1_remote_start.bat`をダブルクリックまたはコマンドプロンプトから実行：
+`JP1_リモートジョブ起動ツール.bat`をダブルクリックまたはコマンドプロンプトから実行：
 
 ```cmd
-jp1_remote_start.bat
+JP1_リモートジョブ起動ツール.bat
 ```
 
 ### 3. 認証情報の入力
@@ -346,8 +346,7 @@ jp1_remote_server3.bat  → JP1_SERVER=192.168.1.102
 
 このリポジトリの他のツールも参照：
 
-- [batch/remote-exec/](../../remote-exec/) - リモートバッチ実行ツール（PowerShell Remoting）
-- [batch/jp1-job-executor/rest-api/](../rest-api/) - JP1ジョブネット起動ツール（REST API版）
+- [リモートバッチ実行ツール](../リモートバッチ実行ツール/) - リモートバッチ実行ツール（PowerShell Remoting）
 
 ---
 
