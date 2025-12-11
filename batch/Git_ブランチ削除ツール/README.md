@@ -400,26 +400,16 @@ git push origin --delete main
 
 ### 保護ブランチの追加
 
-`Git_ブランチ削除ツール.bat` を編集：
+`Git_ブランチ削除ツール.bat` の設定セクションを編集：
 
-```batch
-rem 保護ブランチチェック
-if "!SELECTED_BRANCH!"=="main" goto PROTECTED_BRANCH
-if "!SELECTED_BRANCH!"=="master" goto PROTECTED_BRANCH
-if "!SELECTED_BRANCH!"=="develop" goto PROTECTED_BRANCH
-if "!SELECTED_BRANCH!"=="production" goto PROTECTED_BRANCH  ← 追加
-```
+```powershell
+#region 設定セクション
+# Gitプロジェクトのパス
+$GIT_PROJECT_PATH = "C:\Users\$env:USERNAME\source\Git\project"
 
----
-
-### 自動でリモート状態を更新
-
-バッチファイルの先頭に追加：
-
-```batch
-echo リモート情報を更新中...
-git fetch --prune
-echo.
+# 保護ブランチリスト（削除不可）
+$ProtectedBranches = @("main", "master", "develop", "production")  # ← production を追加
+#endregion
 ```
 
 ---
