@@ -30,8 +30,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **例**:
 ```
 以下の7つのバッチファイルを修正します：
-1. batch/git-diff-extract/extract_diff.bat
-2. batch/sync/sync_tfs_to_git.bat
+1. batch/Git_差分ファイル抽出ツール/Git_差分ファイル抽出ツール.bat
+2. batch/TFS_to_Git_同期ツール/TFS_to_Git_同期ツール.bat
 ...
 
 UNCパス対応には以下の方法があります：
@@ -133,19 +133,24 @@ README.mdを更新します...
 
 ```
 .
-├── batch/                    # Windowsバッチスクリプト
-│   └── sync/                # 同期ツール
-│       ├── sync_tfs_to_git.bat  # TFS→Git同期スクリプト
-│       ├── README.md
-│       └── LICENSE
+├── batch/                           # Windowsバッチスクリプト
+│   ├── TFS_to_Git_同期ツール/       # TFS→Git同期ツール
+│   ├── リモートバッチ実行ツール/    # リモート実行ツール
+│   ├── Git_差分ファイル抽出ツール/  # Git差分ファイル抽出
+│   ├── Git_ブランチ削除ツール/      # Gitブランチ管理
+│   ├── Git_Linuxデプロイツール/     # Git→Linux転送
+│   ├── JP1_リモートジョブ起動ツール/ # JP1ジョブネット起動
+│   └── サーバ構成情報収集ツール/    # サーバ構成情報収集
 │
-├── vba/                     # Excel VBAマクロ
-│   └── excel-automation/    # Excel自動化ツール
-│       └── README.md
+├── vba/                             # Excel VBAマクロ
+│   ├── Word_しおり整理ツール/       # Wordしおり整理
+│   ├── Git_Log_可視化ツール/        # Git Log可視化
+│   └── Excel_Word_ファイル比較ツール/ # ファイル比較
 │
-└── javascript/              # JavaScriptツール
-    └── browser-automation/  # ブラウザ自動化スクリプト
-        └── README.md
+├── linux/                           # Linuxスクリプト
+│   └── winrm-client/                # WinRMクライアント
+│
+└── javascript/                      # JavaScriptツール（準備中）
 ```
 
 ## Development Guidelines
@@ -442,19 +447,23 @@ README.mdを更新します...
 ## Tools Currently Available
 
 ### Batch Scripts (.bat)
-- **TFS-Git-sync** (`batch/sync/`): TFS（Team Foundation Server）とGitリポジトリを同期（PowerShellロジック埋め込み版）
-- **Remote-Batch-Executor** (`batch/remote-exec/`): リモートサーバでバッチ実行（schtasks/WinRM/PowerShell Remoting）
-  - パラメータ版とスタンドアローン版
-  - 環境選択機能付きハイブリッド版
-- **JP1-Job-Executor** (`batch/jp1-job-executor/`): JP1/AJS3 REST APIを使用したジョブネット起動
-  - パラメータ版とスタンドアローン版
-- **Git-Diff-Extract** (`batch/git-diff-extract/`): Gitブランチ間の差分ファイル抽出
-- **Git-Branch-Manager** (`batch/git-branch-manager/`): Gitブランチを対話的に削除
+- **TFS_to_Git_同期ツール** (`batch/TFS_to_Git_同期ツール/`): TFS→Git同期
+- **リモートバッチ実行ツール** (`batch/リモートバッチ実行ツール/`): リモートサーバでバッチ実行
+- **Git_差分ファイル抽出ツール** (`batch/Git_差分ファイル抽出ツール/`): Gitブランチ間の差分ファイル抽出
+- **Git_ブランチ削除ツール** (`batch/Git_ブランチ削除ツール/`): Gitブランチを対話的に削除
+- **Git_Linuxデプロイツール** (`batch/Git_Linuxデプロイツール/`): Git変更ファイルをLinuxへ転送
+- **JP1_リモートジョブ起動ツール** (`batch/JP1_リモートジョブ起動ツール/`): JP1ジョブネット起動
+- **サーバ構成情報収集ツール** (`batch/サーバ構成情報収集ツール/`): サーバ構成情報収集
 
 **注**: すべてのツールは`.bat`ファイル単体で動作し、PowerShellが必要な場合もポリグロットパターンで埋め込まれています。
 
-### Other Categories
-VBA、JavaScriptのツールは今後追加予定
+### VBA Macros
+- **Word_しおり整理ツール** (`vba/Word_しおり整理ツール/`): Word文書のしおり整理とPDF出力
+- **Git_Log_可視化ツール** (`vba/Git_Log_可視化ツール/`): Gitコミット履歴の可視化
+- **Excel_Word_ファイル比較ツール** (`vba/Excel_Word_ファイル比較ツール/`): Excel/Wordファイル比較
+
+### Linux Tools
+- **WinRM-Client** (`linux/winrm-client/`): LinuxからWindowsへWinRM接続
 
 ## Development Approach
 
