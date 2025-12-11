@@ -148,7 +148,8 @@ README.mdを更新します...
 │   └── Excel_Word_ファイル比較ツール/ # ファイル比較
 │
 ├── linux/                           # Linuxスクリプト
-│   └── winrm-client/                # WinRMクライアント
+│   ├── winrm-client/                # WinRMクライアント
+│   └── opentp1-deploy/              # OpenTP1デプロイ自動化
 │
 └── javascript/                      # JavaScriptツール（準備中）
 ```
@@ -464,6 +465,7 @@ README.mdを更新します...
 
 ### Linux Tools
 - **WinRM-Client** (`linux/winrm-client/`): LinuxからWindowsへWinRM接続
+- **OpenTP1-Deploy** (`linux/opentp1-deploy/`): OpenTP1環境でのCプログラムデプロイ自動化
 
 ## Development Approach
 

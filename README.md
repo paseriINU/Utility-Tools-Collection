@@ -16,7 +16,8 @@
 │   └── サーバ構成情報収集ツール/  # サーバ構成情報収集ツール
 │
 ├── linux/                   # Linuxスクリプト
-│   └── winrm-client/        # WinRMクライアント（Python/Bash/C）
+│   ├── winrm-client/        # WinRMクライアント（Python/Bash/C）
+│   └── opentp1-deploy/      # OpenTP1デプロイ自動化ツール
 │
 ├── vba/                     # Excel VBAマクロ
 │   ├── Word_しおり整理ツール/  # Word文書しおり整理ツール
@@ -85,6 +86,11 @@
   - Python版・Bash版・C言語版の3種類を提供
   - 追加パッケージ不要（標準ライブラリのみ）
   - IT制限環境対応
+
+- **[OpenTP1 デプロイツール](linux/opentp1-deploy/)**: OpenTP1環境でのCプログラムデプロイを自動化
+  - OpenTP1停止 → コンパイル → 配置 → 起動を自動実行
+  - Makefile対応、バックアップ機能付き
+  - 詳細なログ出力
 
 ### Git Hooks
 
