@@ -4,7 +4,7 @@ Excel VBAマクロによる自動化ツール集です。
 
 ## 📂 サブフォルダ
 
-### word-bookmark-organizer/
+### Word_しおり整理ツール/
 Word文書のしおり（ブックマーク）整理とPDF出力ツールです。
 
 - ExcelからWordを操作し、スタイルに基づいてアウトラインレベルを自動設定
@@ -12,7 +12,7 @@ Word文書のしおり（ブックマーク）整理とPDF出力ツールです�
 - しおり付きPDFを自動出力
 - Input/Output方式でファイル管理が明確
 
-### git-log-visualizer/
+### Git_Log_可視化ツール/
 Gitコミット履歴の可視化ツールです。
 
 - Excelから実行し、git logを表形式・統計・グラフで視覚化
@@ -21,7 +21,7 @@ Gitコミット履歴の可視化ツールです。
 - 全ブランチ対応で最近のN件を取得
 - ブランチ構造の図形可視化機能
 
-### excel-file-comparator/
+### Excel_Word_ファイル比較ツール/
 Excel/Wordファイル比較ツールです。
 
 - 2つのExcelファイルを比較し、差異を一覧表示

@@ -21,9 +21,9 @@
 │   └── winrm-client/        # WinRMクライアント（Python/Bash/C）
 │
 ├── vba/                     # Excel VBAマクロ
-│   ├── word-bookmark-organizer/  # Word文書しおり整理ツール
-│   ├── git-log-visualizer/  # Git Log 可視化ツール
-│   └── excel-file-comparator/  # Excel/Word ファイル比較ツール
+│   ├── Word_しおり整理ツール/  # Word文書しおり整理ツール
+│   ├── Git_Log_可視化ツール/  # Git Log 可視化ツール
+│   └── Excel_Word_ファイル比較ツール/  # Excel/Word ファイル比較ツール
 │
 ├── git-hooks/               # Git Hooks（ブランチ保護等）
 │
@@ -98,14 +98,14 @@
 
 ### VBA Macros
 
-- **[Word-Bookmark-Organizer](vba/word-bookmark-organizer/)**: Word文書のしおり（ブックマーク）整理とPDF出力
+- **[Word しおり整理ツール](vba/Word_しおり整理ツール/)**: Word文書のしおり（ブックマーク）整理とPDF出力
   - ExcelからWordを操作し、スタイルに基づいてアウトラインレベルを自動設定
   - 「表題1」「表題2」「表題3」などの独自スタイルに対応
   - しおり付きPDFを自動出力（目次で適切な箇所に飛べる）
   - Input/Output方式でファイル管理が明確
   - スタイル名のカスタマイズ可能
 
-- **[Git-Log-Visualizer](vba/git-log-visualizer/)**: Gitコミット履歴の可視化ツール
+- **[Git Log 可視化ツール](vba/Git_Log_可視化ツール/)**: Gitコミット履歴の可視化ツール
   - Excelから実行し、git logを表形式・統計・グラフで視覚化
   - 4つのシート：Dashboard、CommitHistory、Statistics、Charts
   - 作者別・日別の統計情報を自動集計
@@ -113,7 +113,7 @@
   - コミットメッセージ・変更行数も表示
   - フィルター機能でデータを絞り込み
 
-- **[Excel-File-Comparator](vba/excel-file-comparator/)**: Excel/Wordファイル比較ツール
+- **[Excel/Word ファイル比較ツール](vba/Excel_Word_ファイル比較ツール/)**: Excel/Wordファイル比較ツール
   - 2つのExcelファイルを比較し、差異を一覧表示
   - 2つのWordファイルを比較（段落単位/詳細比較）
   - シート単位・セル単位での差異検出
