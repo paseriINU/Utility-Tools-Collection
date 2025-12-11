@@ -17,8 +17,8 @@ Gitのリモートブランチとローカルブランチを**数字で選択し
 ## 📁 ファイル構成
 
 ```
-git-branch-manager/
-├── delete_branches.bat         # ブランチ削除ツール（統合版）
+Git_ブランチ削除ツール/
+├── Git_ブランチ削除ツール.bat  # ブランチ削除ツール
 └── README.md
 ```
 
@@ -28,14 +28,14 @@ git-branch-manager/
 
 ### 実行方法
 
-**ファイル**: `delete_branches.bat`
+**ファイル**: `Git_ブランチ削除ツール.bat`
 
 リモート・ローカル・両方のブランチ削除機能がすべて含まれています。
 
 #### 実行
 
 1. Gitリポジトリのルートフォルダに配置
-2. `delete_branches.bat` をダブルクリック
+2. `Git_ブランチ削除ツール.bat` をダブルクリック
 3. メニューから選択
 
 ```
@@ -143,7 +143,7 @@ Gitブランチ削除ツール
 **シナリオ**: `feature/login` をmainにマージ後、ブランチを削除
 
 ```
-1. delete_branches.bat を実行
+1. Git_ブランチ削除ツール.bat を実行
 2. [3] リモート＆ローカル両方を削除 を選択
 3. feature/login を番号で選択
 4. [1] 通常の削除 を選択
@@ -161,7 +161,7 @@ Gitブランチ削除ツール
 **シナリオ**: リモートにある不要なブランチを削除
 
 ```
-1. delete_branches.bat を実行
+1. Git_ブランチ削除ツール.bat を実行
 2. [1] リモートブランチを削除 を選択
 3. 削除したいブランチを番号で選択
 4. [Y] で確認
@@ -174,7 +174,7 @@ Gitブランチ削除ツール
 **シナリオ**: マージしていないがもう不要なブランチを削除
 
 ```
-1. delete_branches.bat を実行
+1. Git_ブランチ削除ツール.bat を実行
 2. [2] ローカルブランチを削除 を選択
 3. 削除したいブランチを番号で選択
 4. [2] 強制削除 を選択
@@ -213,7 +213,7 @@ git --version
 
 ```cmd
 cd C:\Projects\MyProject
-delete_branches.bat
+Git_ブランチ削除ツール.bat
 ```
 
 ---
@@ -340,7 +340,7 @@ git config --global fetch.prune true
 
 2. **ブランチ削除**
    ```
-   delete_branches.bat を実行
+   Git_ブランチ削除ツール.bat を実行
    [3] リモート＆ローカル両方を削除
    feature/new-feature を選択
    [1] 通常の削除
@@ -354,7 +354,7 @@ git config --global fetch.prune true
 ### 複数ブランチの一括削除
 
 ```
-1. delete_branches.bat を実行
+1. Git_ブランチ削除ツール.bat を実行
 2. リモート/ローカルを選択
 3. 1つ目のブランチを削除
 4. メニューに戻る
@@ -400,26 +400,16 @@ git push origin --delete main
 
 ### 保護ブランチの追加
 
-`delete_branches.bat` を編集：
+`Git_ブランチ削除ツール.bat` の設定セクションを編集：
 
-```batch
-rem 保護ブランチチェック
-if "!SELECTED_BRANCH!"=="main" goto PROTECTED_BRANCH
-if "!SELECTED_BRANCH!"=="master" goto PROTECTED_BRANCH
-if "!SELECTED_BRANCH!"=="develop" goto PROTECTED_BRANCH
-if "!SELECTED_BRANCH!"=="production" goto PROTECTED_BRANCH  ← 追加
-```
+```powershell
+#region 設定セクション
+# Gitプロジェクトのパス
+$GIT_PROJECT_PATH = "C:\Users\$env:USERNAME\source\Git\project"
 
----
-
-### 自動でリモート状態を更新
-
-バッチファイルの先頭に追加：
-
-```batch
-echo リモート情報を更新中...
-git fetch --prune
-echo.
+# 保護ブランチリスト（削除不可）
+$ProtectedBranches = @("main", "master", "develop", "production")  # ← production を追加
+#endregion
 ```
 
 ---

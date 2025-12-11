@@ -25,9 +25,9 @@ TFS（Team Foundation Server）のローカルディレクトリとGitリポジ�
 ## ファイル構成
 
 ```
-batch/sync/
-├── sync_tfs_to_git.bat   # TFS-Git同期ツール（ポリグロット版）
-└── README.md              # このファイル
+TFS_to_Git_同期ツール/
+├── TFS_to_Git_同期ツール.bat  # TFS-Git同期ツール（ポリグロット版）
+└── README.md                  # このファイル
 ```
 
 **注**: このツールはポリグロット形式で、.batファイル内にPowerShellロジックが含まれています。1ファイルで完結します。
@@ -42,7 +42,7 @@ batch/sync/
 
 ## インストール
 
-1. `sync_tfs_to_git.bat` をダウンロード
+1. `TFS_to_Git_同期ツール.bat` をダウンロード
 2. 任意のフォルダに配置（TFSやGitリポジトリと同じ場所でなくてもOK）
 3. これで準備完了！
 
@@ -50,7 +50,7 @@ batch/sync/
 
 ### 1. パスの設定
 
-`sync_tfs_to_git.bat` をテキストエディタで開き、設定セクションを編集します:
+`TFS_to_Git_同期ツール.bat` をテキストエディタで開き、設定セクションを編集します:
 
 ```powershell
 $Config = @{
@@ -75,7 +75,7 @@ $Config = @{
 バッチファイルをダブルクリックするか、コマンドプロンプトから実行:
 
 ```cmd
-sync_tfs_to_git.bat
+TFS_to_Git_同期ツール.bat
 ```
 
 ### 3. ブランチ確認

@@ -21,9 +21,9 @@
 ## 📁 ファイル構成
 
 ```
-remote-exec/
-├── Invoke-RemoteBatch-Hybrid.bat  # リモートバッチ実行ツール（本体）
-└── README.md                      # このファイル
+リモートバッチ実行ツール/
+├── リモートバッチ実行ツール.bat  # リモートバッチ実行ツール（本体）
+└── README.md                     # このファイル
 ```
 
 ## 🚀 クイックスタート
@@ -48,7 +48,7 @@ winrm quickconfig
 
 ### 2. スクリプトの編集
 
-`Invoke-RemoteBatch-Hybrid.bat` をテキストエディタで開き、設定セクションを編集：
+`リモートバッチ実行ツール.bat` をテキストエディタで開き、設定セクションを編集：
 
 ```powershell
 # リモートサーバの設定
@@ -93,14 +93,14 @@ $ENVIRONMENTS = @(
 ダブルクリックで実行：
 
 ```cmd
-Invoke-RemoteBatch-Hybrid.bat
+リモートバッチ実行ツール.bat
 ```
 
 または、コマンドプロンプトから：
 
 ```cmd
-cd batch\remote-exec
-Invoke-RemoteBatch-Hybrid.bat
+cd batch\リモートバッチ実行ツール
+リモートバッチ実行ツール.bat
 ```
 
 ### 4. 実行フロー

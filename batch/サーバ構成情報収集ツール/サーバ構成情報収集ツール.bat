@@ -18,7 +18,7 @@ exit /b %EXITCODE%
 
 <#
 .SYNOPSIS
-    Windowsサーバ構成情報収集ツール（完全版）
+    Windowsサーバ構成情報収集ツール
 
 .DESCRIPTION
     ローカルサーバの構成情報を包括的に収集してExcelファイルに出力します。
@@ -75,7 +75,7 @@ $ErrorActionPreference = "Continue"
 # ヘッダー表示
 Write-Host ""
 Write-Host "========================================================================" -ForegroundColor Cyan
-Write-Host "  サーバ構成情報収集ツール（完全版）" -ForegroundColor Cyan
+Write-Host "  サーバ構成情報収集ツール" -ForegroundColor Cyan
 Write-Host "========================================================================" -ForegroundColor Cyan
 Write-Host ""
 

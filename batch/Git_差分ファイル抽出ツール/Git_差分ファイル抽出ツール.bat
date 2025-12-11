@@ -27,6 +27,14 @@ Write-Host "====================================================================
 Write-Host "  Git 差分ファイル抽出ツール" -ForegroundColor Cyan
 Write-Host "========================================================================" -ForegroundColor Cyan
 Write-Host ""
+Write-Host "[注意] ブランチ選択について" -ForegroundColor Yellow
+Write-Host "  比較元 = 修正前のブランチ（古いバージョン）" -ForegroundColor Gray
+Write-Host "  比較先 = 修正後のブランチ（新しいバージョン）" -ForegroundColor Gray
+Write-Host ""
+Write-Host "  出力フォルダ：" -ForegroundColor Gray
+Write-Host "    01_修正前 = 比較元ブランチのファイル" -ForegroundColor Gray
+Write-Host "    02_修正後 = 比較先ブランチのファイル" -ForegroundColor Gray
+Write-Host ""
 
 # UTF-8出力設定
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
@@ -113,7 +121,7 @@ if ($allBranches.Count -eq 0) {
 
 # 比較元ブランチの選択
 Write-Host "========================================================================" -ForegroundColor Cyan
-Write-Host "  比較元ブランチ（基準ブランチ）を選択してください" -ForegroundColor Cyan
+Write-Host "  比較元ブランチ（修正前 / 古いバージョン）を選択してください" -ForegroundColor Cyan
 Write-Host "========================================================================" -ForegroundColor Cyan
 Write-Host ""
 
@@ -148,7 +156,7 @@ Write-Host ""
 
 # 比較先ブランチの選択
 Write-Host "========================================================================" -ForegroundColor Cyan
-Write-Host "  比較先ブランチ（差分を取得したいブランチ）を選択してください" -ForegroundColor Cyan
+Write-Host "  比較先ブランチ（修正後 / 新しいバージョン）を選択してください" -ForegroundColor Cyan
 Write-Host "========================================================================" -ForegroundColor Cyan
 Write-Host ""
 
@@ -237,10 +245,10 @@ Write-Host ""
 # 差分ファイルリストを取得
 if ($INCLUDE_DELETED) {
     # 削除されたファイルも含める
-    $diffFiles = git diff --name-only "$BASE_BRANCH...$TARGET_BRANCH"
+    $diffFiles = git diff --name-only "$BASE_BRANCH..$TARGET_BRANCH"
 } else {
     # 削除されたファイルを除外（追加・変更のみ）
-    $diffFiles = git diff --name-only --diff-filter=ACMR "$BASE_BRANCH...$TARGET_BRANCH"
+    $diffFiles = git diff --name-only --diff-filter=ACMR "$BASE_BRANCH..$TARGET_BRANCH"
 }
 
 if (-not $diffFiles -or $diffFiles.Count -eq 0) {
