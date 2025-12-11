@@ -22,7 +22,8 @@
 │
 ├── vba/                     # Excel VBAマクロ
 │   ├── word-bookmark-organizer/  # Word文書しおり整理ツール
-│   └── git-log-visualizer/  # Git Log 可視化ツール
+│   ├── git-log-visualizer/  # Git Log 可視化ツール
+│   └── excel-file-comparator/  # Excel/Word ファイル比較ツール
 │
 ├── git-hooks/               # Git Hooks（ブランチ保護等）
 │
@@ -111,6 +112,14 @@
   - 全ブランチ対応で最近のN件を取得
   - コミットメッセージ・変更行数も表示
   - フィルター機能でデータを絞り込み
+
+- **[Excel-File-Comparator](vba/excel-file-comparator/)**: Excel/Wordファイル比較ツール
+  - 2つのExcelファイルを比較し、差異を一覧表示
+  - 2つのWordファイルを比較（段落単位/詳細比較）
+  - シート単位・セル単位での差異検出
+  - 差異の種類を識別（値変更、追加、削除）
+  - 結果をExcelシートに出力
+  - 差異セルのハイライト表示（黄色:変更、緑:追加、赤:削除）
 
 ### JavaScript Tools
 *準備中 - 今後追加予定*
