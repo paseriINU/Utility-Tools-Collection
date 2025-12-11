@@ -87,9 +87,9 @@
   - 追加パッケージ不要（標準ライブラリのみ）
   - IT制限環境対応
 
-- **[OpenTP1 デプロイツール](linux/opentp1-deploy/)**: OpenTP1環境でのCプログラムデプロイを自動化
-  - OpenTP1停止 → コンパイル → 配置 → 起動を自動実行
-  - Makefile対応、バックアップ機能付き
+- **[OpenTP1 デプロイツール](linux/opentp1-deploy/)**: OpenTP1環境でのソース配置を自動化
+  - OpenTP1停止 → ソース配置 → 起動を自動実行
+  - バックアップ機能付き
   - 詳細なログ出力
 
 ### Git Hooks

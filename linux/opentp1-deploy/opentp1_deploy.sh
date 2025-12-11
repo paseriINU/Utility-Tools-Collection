@@ -3,7 +3,7 @@
 # OpenTP1 デプロイ自動化ツール
 #
 # 概要:
-#   OpenTP1を停止 → Cソースをコンパイル → 配置 → OpenTP1を起動
+#   OpenTP1を停止 → ソース配置 → OpenTP1を起動
 #   の一連の流れを自動化するシェルスクリプト
 #
 # 使用方法:
@@ -23,21 +23,11 @@ OPENTP1_HOME="/opt/OpenTP1"
 # OpenTP1コマンドのパス（通常はOPENTP1_HOME/bin）
 OPENTP1_BIN="${OPENTP1_HOME}/bin"
 
-# ソースファイルのディレクトリ（コンパイル対象）
-SOURCE_DIR="/home/user/src"
-
-# コンパイル後の実行ファイル名
-PROGRAM_NAME="myprogram"
+# コピー元ファイル（フルパスで指定）
+SOURCE_FILE="/home/user/src/myprogram"
 
 # 配置先ディレクトリ
 DEPLOY_DIR="/opt/OpenTP1/aplib"
-
-# コンパイルコマンド（必要に応じて変更）
-# 例: gcc, cc, または Makefile を使用
-COMPILE_CMD="gcc"
-
-# コンパイルオプション
-COMPILE_OPTIONS="-o ${PROGRAM_NAME} main.c -I${OPENTP1_HOME}/include -L${OPENTP1_HOME}/lib -ltp1"
 
 # バックアップを作成するか（true/false）
 CREATE_BACKUP=true
@@ -61,6 +51,9 @@ NC='\033[0m' # No Color
 
 # ログファイル
 LOG_FILE="opentp1_deploy_$(date +%Y%m%d_%H%M%S).log"
+
+# ファイル名を抽出
+FILE_NAME=$(basename "${SOURCE_FILE}")
 
 #------------------------------------------------------------------------------
 # ログ出力関数
@@ -105,9 +98,8 @@ show_header() {
     echo -e "${CYAN}================================================================${NC}"
     echo ""
     echo "実行日時    : $(date '+%Y-%m-%d %H:%M:%S')"
-    echo "ソースDir   : ${SOURCE_DIR}"
-    echo "プログラム名: ${PROGRAM_NAME}"
-    echo "配置先Dir   : ${DEPLOY_DIR}"
+    echo "コピー元    : ${SOURCE_FILE}"
+    echo "配置先      : ${DEPLOY_DIR}/${FILE_NAME}"
     echo "ログファイル: ${LOG_FILE}"
     echo ""
 }
@@ -128,12 +120,12 @@ pre_check() {
         log_info "OpenTP1 bin: ${OPENTP1_BIN} [OK]"
     fi
 
-    # ソースディレクトリの確認
-    if [ ! -d "${SOURCE_DIR}" ]; then
-        log_error "ソースディレクトリが見つかりません: ${SOURCE_DIR}"
+    # コピー元ファイルの確認
+    if [ ! -f "${SOURCE_FILE}" ]; then
+        log_error "コピー元ファイルが見つかりません: ${SOURCE_FILE}"
         ((error_count++))
     else
-        log_info "ソースDir: ${SOURCE_DIR} [OK]"
+        log_info "コピー元: ${SOURCE_FILE} [OK]"
     fi
 
     # 配置先ディレクトリの確認
@@ -142,14 +134,6 @@ pre_check() {
         log_warn "配置時に作成を試みます"
     else
         log_info "配置先Dir: ${DEPLOY_DIR} [OK]"
-    fi
-
-    # コンパイラの確認
-    if ! command -v ${COMPILE_CMD} &> /dev/null; then
-        log_error "コンパイラが見つかりません: ${COMPILE_CMD}"
-        ((error_count++))
-    else
-        log_info "コンパイラ: ${COMPILE_CMD} [OK]"
     fi
 
     if [ ${error_count} -gt 0 ]; then
@@ -219,55 +203,10 @@ stop_opentp1() {
 }
 
 #------------------------------------------------------------------------------
-# コンパイル
-#------------------------------------------------------------------------------
-compile_source() {
-    log_step "コンパイル"
-
-    # ソースディレクトリに移動
-    cd "${SOURCE_DIR}" || {
-        log_error "ソースディレクトリに移動できません: ${SOURCE_DIR}"
-        return 1
-    }
-
-    log_info "作業ディレクトリ: $(pwd)"
-
-    # Makefileがある場合はmakeを使用
-    if [ -f "Makefile" ] || [ -f "makefile" ]; then
-        log_info "Makefileを検出しました。makeを実行します..."
-        make clean >> "${LOG_FILE}" 2>&1
-        make >> "${LOG_FILE}" 2>&1
-        local exit_code=$?
-    else
-        # 直接コンパイル
-        log_info "コンパイルコマンド: ${COMPILE_CMD} ${COMPILE_OPTIONS}"
-        ${COMPILE_CMD} ${COMPILE_OPTIONS} >> "${LOG_FILE}" 2>&1
-        local exit_code=$?
-    fi
-
-    if [ ${exit_code} -ne 0 ]; then
-        log_error "コンパイルに失敗しました（終了コード: ${exit_code}）"
-        log_error "詳細はログファイルを確認してください: ${LOG_FILE}"
-        return 1
-    fi
-
-    # 実行ファイルの確認
-    if [ -f "${PROGRAM_NAME}" ]; then
-        log_info "コンパイル成功: ${PROGRAM_NAME}"
-        ls -la "${PROGRAM_NAME}" | tee -a "${LOG_FILE}"
-    else
-        log_error "コンパイル後のファイルが見つかりません: ${PROGRAM_NAME}"
-        return 1
-    fi
-
-    return 0
-}
-
-#------------------------------------------------------------------------------
 # デプロイ（ファイル配置）
 #------------------------------------------------------------------------------
 deploy_files() {
-    log_step "デプロイ（ファイル配置）"
+    log_step "ソース配置"
 
     # 配置先ディレクトリの作成（存在しない場合）
     if [ ! -d "${DEPLOY_DIR}" ]; then
@@ -279,29 +218,29 @@ deploy_files() {
     fi
 
     # バックアップ作成
-    if [ "${CREATE_BACKUP}" = true ] && [ -f "${DEPLOY_DIR}/${PROGRAM_NAME}" ]; then
-        local backup_name="${PROGRAM_NAME}.bak.$(date +%Y%m%d_%H%M%S)"
+    if [ "${CREATE_BACKUP}" = true ] && [ -f "${DEPLOY_DIR}/${FILE_NAME}" ]; then
+        local backup_name="${FILE_NAME}.bak.$(date +%Y%m%d_%H%M%S)"
         log_info "既存ファイルをバックアップ: ${backup_name}"
-        cp "${DEPLOY_DIR}/${PROGRAM_NAME}" "${DEPLOY_DIR}/${backup_name}" || {
+        cp "${DEPLOY_DIR}/${FILE_NAME}" "${DEPLOY_DIR}/${backup_name}" || {
             log_warn "バックアップの作成に失敗しました（処理を続行）"
         }
     fi
 
     # ファイルコピー
-    log_info "ファイルをコピー: ${SOURCE_DIR}/${PROGRAM_NAME} → ${DEPLOY_DIR}/"
-    cp "${SOURCE_DIR}/${PROGRAM_NAME}" "${DEPLOY_DIR}/" || {
+    log_info "ファイルをコピー: ${SOURCE_FILE} → ${DEPLOY_DIR}/"
+    cp "${SOURCE_FILE}" "${DEPLOY_DIR}/" || {
         log_error "ファイルのコピーに失敗しました"
         return 1
     }
 
     # 実行権限の付与
-    chmod +x "${DEPLOY_DIR}/${PROGRAM_NAME}" || {
+    chmod +x "${DEPLOY_DIR}/${FILE_NAME}" || {
         log_warn "実行権限の付与に失敗しました"
     }
 
     # 配置結果の確認
     log_info "配置完了:"
-    ls -la "${DEPLOY_DIR}/${PROGRAM_NAME}" | tee -a "${LOG_FILE}"
+    ls -la "${DEPLOY_DIR}/${FILE_NAME}" | tee -a "${LOG_FILE}"
 
     return 0
 }
@@ -375,9 +314,8 @@ confirm_execution() {
     echo ""
     echo "以下の処理を実行します:"
     echo "  1. OpenTP1 停止 (dcstop -f)"
-    echo "  2. Cソースのコンパイル"
-    echo "  3. 実行ファイルの配置"
-    echo "  4. OpenTP1 起動 (dcstart)"
+    echo "  2. ソース配置"
+    echo "  3. OpenTP1 起動 (dcstart)"
     echo ""
     read -p "実行しますか? (y/n): " answer
 
@@ -414,15 +352,6 @@ main() {
     # OpenTP1停止
     if ! stop_opentp1; then
         log_error "OpenTP1の停止に失敗しました"
-        show_summary 1
-        exit 1
-    fi
-
-    # コンパイル
-    if ! compile_source; then
-        log_error "コンパイルに失敗しました"
-        log_warn "OpenTP1を再起動します..."
-        start_opentp1
         show_summary 1
         exit 1
     fi

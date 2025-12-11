@@ -2,14 +2,13 @@
 
 ## 概要
 
-OpenTP1環境でのCプログラムデプロイを自動化するシェルスクリプトです。
+OpenTP1環境でのソース配置を自動化するシェルスクリプトです。
 
 以下の一連の流れを自動で実行します：
 
 1. **OpenTP1 停止** (`dcstop -f`)
-2. **Cソースのコンパイル** (`gcc` または `make`)
-3. **実行ファイルの配置**（バックアップ付き）
-4. **OpenTP1 起動** (`dcstart`)
+2. **ソース配置**（バックアップ付き）
+3. **OpenTP1 起動** (`dcstart`)
 
 ---
 
@@ -17,7 +16,6 @@ OpenTP1環境でのCプログラムデプロイを自動化するシェルスク
 
 - Linux（Red Hat / CentOS / RHEL 等）
 - OpenTP1がインストールされていること
-- gcc または適切なCコンパイラ
 - OpenTP1の停止・起動権限を持つユーザー
 
 ---
@@ -49,20 +47,11 @@ OPENTP1_HOME="/opt/OpenTP1"
 # OpenTP1コマンドのパス（通常はOPENTP1_HOME/bin）
 OPENTP1_BIN="${OPENTP1_HOME}/bin"
 
-# ソースファイルのディレクトリ（コンパイル対象）
-SOURCE_DIR="/home/user/src"
-
-# コンパイル後の実行ファイル名
-PROGRAM_NAME="myprogram"
+# コピー元ファイル（フルパスで指定）
+SOURCE_FILE="/home/user/src/myprogram"
 
 # 配置先ディレクトリ
 DEPLOY_DIR="/opt/OpenTP1/aplib"
-
-# コンパイルコマンド（必要に応じて変更）
-COMPILE_CMD="gcc"
-
-# コンパイルオプション
-COMPILE_OPTIONS="-o ${PROGRAM_NAME} main.c -I${OPENTP1_HOME}/include -L${OPENTP1_HOME}/lib -ltp1"
 
 # バックアップを作成するか（true/false）
 CREATE_BACKUP=true
@@ -96,16 +85,14 @@ chmod +x opentp1_deploy.sh
 ================================================================
 
 実行日時    : 2025-12-11 10:30:45
-ソースDir   : /home/user/src
-プログラム名: myprogram
-配置先Dir   : /opt/OpenTP1/aplib
+コピー元    : /home/user/src/myprogram
+配置先      : /opt/OpenTP1/aplib/myprogram
 ログファイル: opentp1_deploy_20251211_103045.log
 
 以下の処理を実行します:
   1. OpenTP1 停止 (dcstop -f)
-  2. Cソースのコンパイル
-  3. 実行ファイルの配置
-  4. OpenTP1 起動 (dcstart)
+  2. ソース配置
+  3. OpenTP1 起動 (dcstart)
 
 実行しますか? (y/n): y
 
@@ -114,9 +101,8 @@ chmod +x opentp1_deploy.sh
 ======================================
 
 [2025-12-11 10:30:47] [INFO] OpenTP1 bin: /opt/OpenTP1/bin [OK]
-[2025-12-11 10:30:47] [INFO] ソースDir: /home/user/src [OK]
+[2025-12-11 10:30:47] [INFO] コピー元: /home/user/src/myprogram [OK]
 [2025-12-11 10:30:47] [INFO] 配置先Dir: /opt/OpenTP1/aplib [OK]
-[2025-12-11 10:30:47] [INFO] コンパイラ: gcc [OK]
 [2025-12-11 10:30:47] [INFO] 事前チェック完了
 
 ======================================
@@ -131,21 +117,12 @@ chmod +x opentp1_deploy.sh
 [2025-12-11 10:30:58] [INFO] OpenTP1の停止を確認しました
 
 ======================================
-  コンパイル
+  ソース配置
 ======================================
 
-[2025-12-11 10:30:58] [INFO] 作業ディレクトリ: /home/user/src
-[2025-12-11 10:30:58] [INFO] コンパイルコマンド: gcc -o myprogram main.c ...
-[2025-12-11 10:30:59] [INFO] コンパイル成功: myprogram
--rwxr-xr-x 1 user user 45678 Dec 11 10:30 myprogram
-
-======================================
-  デプロイ（ファイル配置）
-======================================
-
-[2025-12-11 10:30:59] [INFO] 既存ファイルをバックアップ: myprogram.bak.20251211_103059
-[2025-12-11 10:30:59] [INFO] ファイルをコピー: /home/user/src/myprogram → /opt/OpenTP1/aplib/
-[2025-12-11 10:30:59] [INFO] 配置完了:
+[2025-12-11 10:30:58] [INFO] 既存ファイルをバックアップ: myprogram.bak.20251211_103058
+[2025-12-11 10:30:58] [INFO] ファイルをコピー: /home/user/src/myprogram → /opt/OpenTP1/aplib/
+[2025-12-11 10:30:58] [INFO] 配置完了:
 -rwxr-xr-x 1 user user 45678 Dec 11 10:30 /opt/OpenTP1/aplib/myprogram
 
 ======================================
@@ -174,33 +151,16 @@ chmod +x opentp1_deploy.sh
 |---------|------|---|
 | `OPENTP1_HOME` | OpenTP1のインストールパス | `/opt/OpenTP1` |
 | `OPENTP1_BIN` | OpenTP1コマンドのパス | `${OPENTP1_HOME}/bin` |
-| `SOURCE_DIR` | Cソースファイルのディレクトリ | `/home/user/src` |
-| `PROGRAM_NAME` | コンパイル後の実行ファイル名 | `myprogram` |
+| `SOURCE_FILE` | コピー元ファイル（フルパス） | `/home/user/src/myprogram` |
 | `DEPLOY_DIR` | 配置先ディレクトリ | `/opt/OpenTP1/aplib` |
-| `COMPILE_CMD` | コンパイラ | `gcc` |
-| `COMPILE_OPTIONS` | コンパイルオプション | `-o myprogram main.c ...` |
 | `CREATE_BACKUP` | バックアップ作成の有無 | `true` |
 | `STOP_WAIT_TIME` | 停止後の待機時間（秒） | `10` |
 | `START_WAIT_TIME` | 起動後の待機時間（秒） | `10` |
 
 ---
 
-## Makefileがある場合
-
-ソースディレクトリに `Makefile` または `makefile` がある場合、スクリプトは自動的に以下を実行します：
-
-```bash
-make clean
-make
-```
-
-この場合、`COMPILE_CMD` と `COMPILE_OPTIONS` の設定は無視されます。
-
----
-
 ## エラー時の動作
 
-- **コンパイル失敗時**: OpenTP1を自動的に再起動してから終了
 - **デプロイ失敗時**: OpenTP1を自動的に再起動してから終了
 - **OpenTP1起動失敗時**: エラーメッセージを表示して終了
 
@@ -233,17 +193,6 @@ which dcstart
 # 設定を修正
 OPENTP1_BIN="/actual/path/to/opentp1/bin"
 ```
-
----
-
-### コンパイルエラー
-
-**原因**: コンパイルオプションが環境に合っていない
-
-**対処法**:
-1. ログファイルでエラー詳細を確認
-2. `COMPILE_OPTIONS` を修正
-3. または `Makefile` を使用
 
 ---
 
@@ -283,25 +232,22 @@ chmod 775 /opt/OpenTP1/aplib/
 1. **本番環境での実行前に必ずテスト環境で動作確認してください**
 2. OpenTP1の停止・起動には適切な権限が必要です
 3. バックアップファイルは自動削除されません。定期的に整理してください
-4. 複数のプログラムをデプロイする場合は、スクリプトをコピーして設定を変更してください
 
 ---
 
-## 複数プログラム対応
+## 複数ファイル対応
 
-複数のプログラムをデプロイする場合：
+複数のファイルをデプロイする場合：
 
 ```bash
-# プログラムごとにスクリプトを作成
+# ファイルごとにスクリプトを作成
 cp opentp1_deploy.sh deploy_program1.sh
 cp opentp1_deploy.sh deploy_program2.sh
 
 # それぞれの設定を編集
-vim deploy_program1.sh  # PROGRAM_NAME="program1"
-vim deploy_program2.sh  # PROGRAM_NAME="program2"
+vim deploy_program1.sh  # SOURCE_FILE="/path/to/program1"
+vim deploy_program2.sh  # SOURCE_FILE="/path/to/program2"
 ```
-
-または、設定ファイルを外部化する改造も可能です。
 
 ---
 
