@@ -89,7 +89,7 @@ type %USERPROFILE%\.ssh\id_rsa.pub | ssh user@hostname "cat >> ~/.ssh/authorized
 
 ### 3. スクリプトの設定
 
-`git-deploy-to-linux.bat` をテキストエディタで開き、設定セクションを編集:
+`Git_Linuxデプロイツール.bat` をテキストエディタで開き、設定セクションを編集:
 
 ```powershell
 #region 設定 - ここを編集してください
@@ -154,7 +154,7 @@ $LINUX_CHMOD_FILE = "777"  # ファイルのパーミッション
 2. バッチファイルをダブルクリックまたはコマンドプロンプトから実行
 
 ```cmd
-git-deploy-to-linux.bat
+Git_Linuxデプロイツール.bat
 ```
 
 ### 実行の流れ

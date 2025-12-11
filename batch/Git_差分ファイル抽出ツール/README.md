@@ -39,11 +39,11 @@ main ブランチと develop ブランチを比較
    your-project/
    ├── .git/
    ├── src/
-   ├── extract_diff.bat  ← ここに配置
+   ├── Git_差分ファイル抽出ツール.bat  ← ここに配置
    └── ...
    ```
 
-2. **`extract_diff.bat`** を編集して設定を変更（必要に応じて）
+2. **`Git_差分ファイル抽出ツール.bat`** を編集して設定を変更（必要に応じて）
 
    ファイルをテキストエディタで開き、設定セクションを編集：
    ```powershell
@@ -62,7 +62,7 @@ main ブランチと develop ブランチを比較
    }
    ```
 
-3. **`extract_diff.bat`** をダブルクリックで実行
+3. **`Git_差分ファイル抽出ツール.bat`** をダブルクリックで実行
 
 4. 完了！`diff_output/` フォルダに差分ファイルがコピーされます
 
@@ -216,7 +216,7 @@ $Config = @{
 
 1. 差分ファイルを抽出
    ```cmd
-   extract_diff.bat
+   Git_差分ファイル抽出ツール.bat
    ```
 
 2. PowerShellでZIP圧縮
@@ -228,7 +228,7 @@ $Config = @{
 
 ```batch
 rem extract_and_zip.bat
-call extract_diff.bat
+call Git_差分ファイル抽出ツール.bat
 
 powershell Compress-Archive -Path "diff_output\*" -DestinationPath "diff_files_%DATE:~0,4%%DATE:~5,2%%DATE:~8,2%.zip"
 

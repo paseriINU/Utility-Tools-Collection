@@ -28,14 +28,14 @@ Git_ブランチ削除ツール/
 
 ### 実行方法
 
-**ファイル**: `delete_branches.bat`
+**ファイル**: `Git_ブランチ削除ツール.bat`
 
 リモート・ローカル・両方のブランチ削除機能がすべて含まれています。
 
 #### 実行
 
 1. Gitリポジトリのルートフォルダに配置
-2. `delete_branches.bat` をダブルクリック
+2. `Git_ブランチ削除ツール.bat` をダブルクリック
 3. メニューから選択
 
 ```
@@ -143,7 +143,7 @@ Gitブランチ削除ツール
 **シナリオ**: `feature/login` をmainにマージ後、ブランチを削除
 
 ```
-1. delete_branches.bat を実行
+1. Git_ブランチ削除ツール.bat を実行
 2. [3] リモート＆ローカル両方を削除 を選択
 3. feature/login を番号で選択
 4. [1] 通常の削除 を選択
@@ -161,7 +161,7 @@ Gitブランチ削除ツール
 **シナリオ**: リモートにある不要なブランチを削除
 
 ```
-1. delete_branches.bat を実行
+1. Git_ブランチ削除ツール.bat を実行
 2. [1] リモートブランチを削除 を選択
 3. 削除したいブランチを番号で選択
 4. [Y] で確認
@@ -174,7 +174,7 @@ Gitブランチ削除ツール
 **シナリオ**: マージしていないがもう不要なブランチを削除
 
 ```
-1. delete_branches.bat を実行
+1. Git_ブランチ削除ツール.bat を実行
 2. [2] ローカルブランチを削除 を選択
 3. 削除したいブランチを番号で選択
 4. [2] 強制削除 を選択
@@ -213,7 +213,7 @@ git --version
 
 ```cmd
 cd C:\Projects\MyProject
-delete_branches.bat
+Git_ブランチ削除ツール.bat
 ```
 
 ---
@@ -340,7 +340,7 @@ git config --global fetch.prune true
 
 2. **ブランチ削除**
    ```
-   delete_branches.bat を実行
+   Git_ブランチ削除ツール.bat を実行
    [3] リモート＆ローカル両方を削除
    feature/new-feature を選択
    [1] 通常の削除
@@ -354,7 +354,7 @@ git config --global fetch.prune true
 ### 複数ブランチの一括削除
 
 ```
-1. delete_branches.bat を実行
+1. Git_ブランチ削除ツール.bat を実行
 2. リモート/ローカルを選択
 3. 1つ目のブランチを削除
 4. メニューに戻る
@@ -400,7 +400,7 @@ git push origin --delete main
 
 ### 保護ブランチの追加
 
-`delete_branches.bat` を編集：
+`Git_ブランチ削除ツール.bat` を編集：
 
 ```batch
 rem 保護ブランチチェック
