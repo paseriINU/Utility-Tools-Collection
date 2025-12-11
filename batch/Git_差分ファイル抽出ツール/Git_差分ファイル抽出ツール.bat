@@ -27,11 +27,10 @@ Write-Host "====================================================================
 Write-Host "  Git 差分ファイル抽出ツール" -ForegroundColor Cyan
 Write-Host "========================================================================" -ForegroundColor Cyan
 Write-Host ""
-Write-Host "[注意] 比較元と比較先について" -ForegroundColor Yellow
-Write-Host "  どちらの方向でも同じ差分ファイルが検出されます。" -ForegroundColor Gray
-Write-Host "  ただし差分の内容は逆になります：" -ForegroundColor Gray
-Write-Host "    A..B = Aで削除されたもの / Bで追加されたもの" -ForegroundColor Gray
-Write-Host "    B..A = Bで削除されたもの / Aで追加されたもの" -ForegroundColor Gray
+Write-Host "[注意] ブランチ選択について" -ForegroundColor Yellow
+Write-Host "  比較元 = 修正前のブランチ（古いバージョン）" -ForegroundColor Gray
+Write-Host "  比較先 = 修正後のブランチ（新しいバージョン）" -ForegroundColor Gray
+Write-Host ""
 Write-Host "  出力フォルダ：" -ForegroundColor Gray
 Write-Host "    01_修正前 = 比較元ブランチのファイル" -ForegroundColor Gray
 Write-Host "    02_修正後 = 比較先ブランチのファイル" -ForegroundColor Gray
