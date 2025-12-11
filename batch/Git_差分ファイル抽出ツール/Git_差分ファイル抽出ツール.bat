@@ -121,7 +121,7 @@ if ($allBranches.Count -eq 0) {
 
 # 比較元ブランチの選択
 Write-Host "========================================================================" -ForegroundColor Cyan
-Write-Host "  比較元ブランチ（基準ブランチ）を選択してください" -ForegroundColor Cyan
+Write-Host "  比較元ブランチ（修正前 / 古いバージョン）を選択してください" -ForegroundColor Cyan
 Write-Host "========================================================================" -ForegroundColor Cyan
 Write-Host ""
 
@@ -156,7 +156,7 @@ Write-Host ""
 
 # 比較先ブランチの選択
 Write-Host "========================================================================" -ForegroundColor Cyan
-Write-Host "  比較先ブランチ（差分を取得したいブランチ）を選択してください" -ForegroundColor Cyan
+Write-Host "  比較先ブランチ（修正後 / 新しいバージョン）を選択してください" -ForegroundColor Cyan
 Write-Host "========================================================================" -ForegroundColor Cyan
 Write-Host ""
 
