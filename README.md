@@ -20,6 +20,7 @@
 │   └── opentp1-deploy/      # OpenTP1デプロイ自動化ツール
 │
 ├── vba/                     # Excel VBAマクロ
+│   ├── SQL_生成ツール/        # Oracle SELECT文生成ツール
 │   ├── Word_しおり整理ツール/  # Word文書しおり整理ツール
 │   ├── Git_Log_可視化ツール/  # Git Log 可視化ツール
 │   └── Excel_Word_ファイル比較ツール/  # Excel/Word ファイル比較ツール
@@ -100,6 +101,14 @@
   - コミットメッセージ品質チェック
 
 ### VBA Macros
+
+- **[SQL 生成ツール](vba/SQL_生成ツール/)**: Oracle SELECT文を対話的に生成するツール
+  - Excel上でGUIを使ってSQL文を組み立て
+  - JOIN（INNER, LEFT, RIGHT, FULL OUTER, CROSS）対応
+  - サブクエリ、WITH句（CTE）、UNION対応
+  - 集計関数（COUNT, SUM, AVG, MAX, MIN）、GROUP BY / HAVING対応
+  - SQLヘルプシートでSQL初心者も安心して使用可能
+  - 生成履歴の保存機能
 
 - **[Word しおり整理ツール](vba/Word_しおり整理ツール/)**: Word文書のしおり（ブックマーク）整理とPDF出力
   - ExcelからWordを操作し、スタイルに基づいてアウトラインレベルを自動設定

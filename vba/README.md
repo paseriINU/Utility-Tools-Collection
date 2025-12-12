@@ -4,6 +4,17 @@ Excel VBAマクロによる自動化ツール集です。
 
 ## 📂 サブフォルダ
 
+### SQL_生成ツール/
+Oracle用SELECT文を対話的に生成するツールです。
+
+- Excel上でGUIを使ってSQL文を組み立て
+- JOIN（INNER, LEFT, RIGHT, FULL OUTER, CROSS）対応
+- サブクエリ、WITH句（CTE）、UNION対応
+- 集計関数（COUNT, SUM, AVG, MAX, MIN）対応
+- GROUP BY / HAVING / ORDER BY対応
+- SQLヘルプシートで初心者も安心
+- 生成履歴の保存機能
+
 ### Word_しおり整理ツール/
 Word文書のしおり（ブックマーク）整理とPDF出力ツールです。
 
