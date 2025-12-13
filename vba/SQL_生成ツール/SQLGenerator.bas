@@ -2118,33 +2118,15 @@ Public Sub ImportTableDefinitions()
         Next i
     End If
 
-    ' 既存データをクリアするか確認
-    Dim clearExisting As VbMsgBoxResult
-    clearExisting = MsgBox("既存のテーブル定義データをクリアしてからインポートしますか？" & vbCrLf & vbCrLf & _
-                           "「はい」: 既存データをクリアして新規インポート" & vbCrLf & _
-                           "「いいえ」: 既存データに追加", _
-                           vbYesNoCancel + vbQuestion, "確認")
-
-    If clearExisting = vbCancel Then
-        Exit Sub
-    ElseIf clearExisting = vbYes Then
-        ' テーブル一覧をクリア（ヘッダー以外）
-        If wsDef.Range("B6").Value <> "" Then
-            wsDef.Range("A6:C" & wsDef.Cells(wsDef.Rows.Count, "B").End(xlUp).row).ClearContents
-        End If
-        ' カラム一覧をクリア（ヘッダー以外）
-        If wsDef.Range("E6").Value <> "" Then
-            wsDef.Range("E6:H" & wsDef.Cells(wsDef.Rows.Count, "E").End(xlUp).row).ClearContents
-        End If
-        nextTableRow = 6
-        nextColumnRow = 6
-    Else
-        ' 次の空き行を探す
-        nextTableRow = wsDef.Cells(wsDef.Rows.Count, "B").End(xlUp).row + 1
-        If nextTableRow < 6 Then nextTableRow = 6
-        nextColumnRow = wsDef.Cells(wsDef.Rows.Count, "E").End(xlUp).row + 1
-        If nextColumnRow < 6 Then nextColumnRow = 6
+    ' 既存データをクリア（常に置換）
+    If wsDef.Range("B6").Value <> "" Then
+        wsDef.Range("A6:C" & wsDef.Cells(wsDef.Rows.Count, "B").End(xlUp).row).ClearContents
     End If
+    If wsDef.Range("E6").Value <> "" Then
+        wsDef.Range("E6:H" & wsDef.Cells(wsDef.Rows.Count, "E").End(xlUp).row).ClearContents
+    End If
+    nextTableRow = 6
+    nextColumnRow = 6
 
     tableCount = 0
     columnCount = 0
