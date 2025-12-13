@@ -525,15 +525,30 @@ Private Sub FormatTableDefSheet()
         .Range("J4:J9").Font.Bold = True
         .Range("J4:J9").Interior.Color = RGB(255, 250, 230)
 
+        ' フォルダパス設定
+        .Range("J10").Value = "フォルダパス設定"
+        .Range("J10").Font.Bold = True
+        .Range("J10").Interior.Color = RGB(255, 242, 204)
+        .Range("J10:K10").Merge
+
+        .Range("J11").Value = "フォルダ1"
+        .Range("K11").Value = ""
+        .Range("J12").Value = "フォルダ2"
+        .Range("K12").Value = ""
+        .Range("J11:J12").Font.Bold = True
+        .Range("J11:J12").Interior.Color = RGB(255, 250, 230)
+
         ' 説明
-        .Range("J11").Value = "※上記の設定を変更することで、"
-        .Range("J12").Value = "  異なるフォーマットの定義書に対応できます。"
-        .Range("J11:J12").Font.Size = 9
-        .Range("J11:J12").Font.Color = RGB(128, 128, 128)
+        .Range("J14").Value = "※設定を変更することで、"
+        .Range("J15").Value = "  異なるフォーマットの定義書に対応。"
+        .Range("J16").Value = "※フォルダパスを設定すると、"
+        .Range("J17").Value = "  複数フォルダから一括インポート可能。"
+        .Range("J14:J17").Font.Size = 9
+        .Range("J14:J17").Font.Color = RGB(128, 128, 128)
 
         ' 列幅
         .Columns("J").ColumnWidth = 15
-        .Columns("K").ColumnWidth = 12
+        .Columns("K").ColumnWidth = 40
 
         ' ボタン追加
         AddButton ws, "J1", "定義書インポート", "ImportTableDefinitions"
@@ -1981,11 +1996,17 @@ End Sub
 '     - B列: カラム名
 '     - C列: 説明
 '     - D列: データ型
+'
+' 複数フォルダ対応:
+'   - テーブル定義シートのK11, K12にフォルダパスを設定可能
+'   - 設定がない場合はダイアログで選択
 '==============================================================================
 Public Sub ImportTableDefinitions()
     On Error GoTo ErrorHandler
 
     Dim wsDef As Worksheet
+    Dim folderPaths() As String
+    Dim folderCount As Long
     Dim folderPath As String
     Dim fileName As String
     Dim sourceWb As Workbook
@@ -2002,11 +2023,15 @@ Public Sub ImportTableDefinitions()
     Dim nextTableRow As Long
     Dim nextColumnRow As Long
     Dim i As Long
+    Dim j As Long
     Dim currentRow As Long
     Dim colNameValue As String
     Dim colDescValue As String
     Dim colTypeValue As String
     Dim importedTables As String
+    Dim path1 As String
+    Dim path2 As String
+    Dim usePresetFolders As Boolean
 
     Set wsDef = Sheets(SHEET_TABLE_DEF)
 
@@ -2018,21 +2043,79 @@ Public Sub ImportTableDefinitions()
     colDescription = GetImportSetting(wsDef, "説明列", DEFAULT_COL_DESCRIPTION)
     colDataType = GetImportSetting(wsDef, "データ型列", DEFAULT_COL_DATATYPE)
 
-    ' フォルダ選択ダイアログ
-    With Application.FileDialog(msoFileDialogFolderPicker)
-        .Title = "テーブル定義書が格納されたフォルダを選択してください"
-        .AllowMultiSelect = False
-        If .Show = -1 Then
-            folderPath = .SelectedItems(1)
-        Else
-            MsgBox "フォルダが選択されませんでした。", vbInformation, "キャンセル"
-            Exit Sub
-        End If
-    End With
+    ' フォルダパス設定を取得
+    path1 = Trim(CStr(wsDef.Range("K11").Value))
+    path2 = Trim(CStr(wsDef.Range("K12").Value))
 
-    ' フォルダパスの末尾にバックスラッシュを追加
-    If Right(folderPath, 1) <> "\" Then
-        folderPath = folderPath & "\"
+    ' フォルダパスの取得方法を決定
+    usePresetFolders = False
+    folderCount = 0
+
+    If path1 <> "" Or path2 <> "" Then
+        Dim usePreset As VbMsgBoxResult
+        usePreset = MsgBox("設定済みのフォルダパスを使用しますか？" & vbCrLf & vbCrLf & _
+                          "フォルダ1: " & IIf(path1 = "", "(未設定)", path1) & vbCrLf & _
+                          "フォルダ2: " & IIf(path2 = "", "(未設定)", path2) & vbCrLf & vbCrLf & _
+                          "「はい」: 設定済みフォルダを使用" & vbCrLf & _
+                          "「いいえ」: フォルダを手動で選択", _
+                          vbYesNoCancel + vbQuestion, "フォルダ選択")
+
+        If usePreset = vbCancel Then
+            Exit Sub
+        ElseIf usePreset = vbYes Then
+            usePresetFolders = True
+            ' 有効なパスをカウント
+            If path1 <> "" Then folderCount = folderCount + 1
+            If path2 <> "" Then folderCount = folderCount + 1
+
+            If folderCount = 0 Then
+                MsgBox "フォルダパスが設定されていません。" & vbCrLf & _
+                       "K11, K12セルにフォルダパスを入力してください。", vbExclamation, "エラー"
+                Exit Sub
+            End If
+
+            ReDim folderPaths(1 To folderCount)
+            j = 1
+            If path1 <> "" Then
+                folderPaths(j) = path1
+                j = j + 1
+            End If
+            If path2 <> "" Then
+                folderPaths(j) = path2
+            End If
+        End If
+    End If
+
+    ' 手動でフォルダを選択する場合
+    If Not usePresetFolders Then
+        Dim selectCount As VbMsgBoxResult
+        selectCount = MsgBox("複数のフォルダからインポートしますか？" & vbCrLf & vbCrLf & _
+                            "「はい」: 2つのフォルダを選択" & vbCrLf & _
+                            "「いいえ」: 1つのフォルダを選択", _
+                            vbYesNoCancel + vbQuestion, "フォルダ数選択")
+
+        If selectCount = vbCancel Then
+            Exit Sub
+        ElseIf selectCount = vbYes Then
+            folderCount = 2
+        Else
+            folderCount = 1
+        End If
+
+        ReDim folderPaths(1 To folderCount)
+
+        For i = 1 To folderCount
+            With Application.FileDialog(msoFileDialogFolderPicker)
+                .Title = "テーブル定義書フォルダ " & i & "/" & folderCount & " を選択"
+                .AllowMultiSelect = False
+                If .Show = -1 Then
+                    folderPaths(i) = .SelectedItems(1)
+                Else
+                    MsgBox "フォルダ選択がキャンセルされました。", vbInformation, "キャンセル"
+                    Exit Sub
+                End If
+            End With
+        Next i
     End If
 
     ' 既存データをクリアするか確認
@@ -2070,64 +2153,82 @@ Public Sub ImportTableDefinitions()
     Application.ScreenUpdating = False
     Application.DisplayAlerts = False
 
-    ' フォルダ内のExcelファイルを処理
-    fileName = Dir(folderPath & "*.xls*")
+    ' 各フォルダを処理
+    For j = 1 To folderCount
+        folderPath = folderPaths(j)
 
-    Do While fileName <> ""
-        ' 自分自身をスキップ
-        If folderPath & fileName <> ThisWorkbook.FullName Then
-            ' ファイルを開く
-            Set sourceWb = Workbooks.Open(folderPath & fileName, ReadOnly:=True, UpdateLinks:=0)
-
-            ' 最初のシートを使用
-            Set sourceWs = sourceWb.Sheets(1)
-
-            ' テーブル名を取得
-            tableName = Trim(CStr(sourceWs.Range(tableNameCell).Value))
-
-            If tableName <> "" Then
-                ' テーブル一覧に追加
-                wsDef.Range("A" & nextTableRow).Value = tableCount + 1
-                wsDef.Range("B" & nextTableRow).Value = tableName
-                wsDef.Range("C" & nextTableRow).Value = GetTableDescription(sourceWs)
-                nextTableRow = nextTableRow + 1
-                tableCount = tableCount + 1
-
-                If importedTables <> "" Then importedTables = importedTables & ", "
-                importedTables = importedTables & tableName
-
-                ' カラム定義を取得
-                currentRow = columnStartRow
-                Do While True
-                    colNameValue = Trim(CStr(sourceWs.Range(colName & currentRow).Value))
-
-                    ' カラム名が空なら終了
-                    If colNameValue = "" Then Exit Do
-
-                    colDescValue = Trim(CStr(sourceWs.Range(colDescription & currentRow).Value))
-                    colTypeValue = Trim(CStr(sourceWs.Range(colDataType & currentRow).Value))
-
-                    ' カラム一覧に追加
-                    wsDef.Range("E" & nextColumnRow).Value = tableName
-                    wsDef.Range("F" & nextColumnRow).Value = colNameValue
-                    wsDef.Range("G" & nextColumnRow).Value = colTypeValue
-                    wsDef.Range("H" & nextColumnRow).Value = colDescValue
-
-                    nextColumnRow = nextColumnRow + 1
-                    columnCount = columnCount + 1
-                    currentRow = currentRow + 1
-
-                    ' 安全制限
-                    If currentRow > 1000 Then Exit Do
-                Loop
-            End If
-
-            ' ファイルを閉じる
-            sourceWb.Close SaveChanges:=False
+        ' フォルダパスの末尾にバックスラッシュを追加
+        If Right(folderPath, 1) <> "\" And Right(folderPath, 1) <> "/" Then
+            folderPath = folderPath & "\"
         End If
 
-        fileName = Dir()
-    Loop
+        ' フォルダ存在チェック
+        If Dir(folderPath, vbDirectory) = "" Then
+            MsgBox "フォルダが見つかりません: " & folderPath, vbExclamation, "警告"
+            GoTo NextFolder
+        End If
+
+        ' フォルダ内のExcelファイルを処理
+        fileName = Dir(folderPath & "*.xls*")
+
+        Do While fileName <> ""
+            ' 自分自身をスキップ
+            If folderPath & fileName <> ThisWorkbook.FullName Then
+                ' ファイルを開く
+                Set sourceWb = Workbooks.Open(folderPath & fileName, ReadOnly:=True, UpdateLinks:=0)
+
+                ' 最初のシートを使用
+                Set sourceWs = sourceWb.Sheets(1)
+
+                ' テーブル名を取得
+                tableName = Trim(CStr(sourceWs.Range(tableNameCell).Value))
+
+                If tableName <> "" Then
+                    ' テーブル一覧に追加
+                    wsDef.Range("A" & nextTableRow).Value = tableCount + 1
+                    wsDef.Range("B" & nextTableRow).Value = tableName
+                    wsDef.Range("C" & nextTableRow).Value = GetTableDescription(sourceWs)
+                    nextTableRow = nextTableRow + 1
+                    tableCount = tableCount + 1
+
+                    If importedTables <> "" Then importedTables = importedTables & ", "
+                    importedTables = importedTables & tableName
+
+                    ' カラム定義を取得
+                    currentRow = columnStartRow
+                    Do While True
+                        colNameValue = Trim(CStr(sourceWs.Range(colName & currentRow).Value))
+
+                        ' カラム名が空なら終了
+                        If colNameValue = "" Then Exit Do
+
+                        colDescValue = Trim(CStr(sourceWs.Range(colDescription & currentRow).Value))
+                        colTypeValue = Trim(CStr(sourceWs.Range(colDataType & currentRow).Value))
+
+                        ' カラム一覧に追加
+                        wsDef.Range("E" & nextColumnRow).Value = tableName
+                        wsDef.Range("F" & nextColumnRow).Value = colNameValue
+                        wsDef.Range("G" & nextColumnRow).Value = colTypeValue
+                        wsDef.Range("H" & nextColumnRow).Value = colDescValue
+
+                        nextColumnRow = nextColumnRow + 1
+                        columnCount = columnCount + 1
+                        currentRow = currentRow + 1
+
+                        ' 安全制限
+                        If currentRow > 1000 Then Exit Do
+                    Loop
+                End If
+
+                ' ファイルを閉じる
+                sourceWb.Close SaveChanges:=False
+            End If
+
+            fileName = Dir()
+        Loop
+
+NextFolder:
+    Next j
 
     Application.DisplayAlerts = True
     Application.ScreenUpdating = True
@@ -2140,6 +2241,7 @@ Public Sub ImportTableDefinitions()
                vbExclamation, "インポート結果"
     Else
         MsgBox "テーブル定義のインポートが完了しました。" & vbCrLf & vbCrLf & _
+               "処理フォルダ数: " & folderCount & vbCrLf & _
                "インポートしたテーブル数: " & tableCount & vbCrLf & _
                "インポートしたカラム数: " & columnCount & vbCrLf & vbCrLf & _
                "テーブル: " & importedTables, _
@@ -2244,15 +2346,30 @@ Public Sub InitializeImportSettings()
     ws.Range("J4:J9").Font.Bold = True
     ws.Range("J4:J9").Interior.Color = RGB(255, 250, 230)
 
+    ' フォルダパス設定
+    ws.Range("J10").Value = "フォルダパス設定"
+    ws.Range("J10").Font.Bold = True
+    ws.Range("J10").Interior.Color = RGB(255, 242, 204)
+    ws.Range("J10:K10").Merge
+
+    ws.Range("J11").Value = "フォルダ1"
+    ws.Range("K11").Value = ""
+    ws.Range("J12").Value = "フォルダ2"
+    ws.Range("K12").Value = ""
+    ws.Range("J11:J12").Font.Bold = True
+    ws.Range("J11:J12").Interior.Color = RGB(255, 250, 230)
+
     ' 説明
-    ws.Range("J11").Value = "※上記の設定を変更することで、"
-    ws.Range("J12").Value = "  異なるフォーマットの定義書に対応できます。"
-    ws.Range("J11:J12").Font.Size = 9
-    ws.Range("J11:J12").Font.Color = RGB(128, 128, 128)
+    ws.Range("J14").Value = "※設定を変更することで、"
+    ws.Range("J15").Value = "  異なるフォーマットの定義書に対応。"
+    ws.Range("J16").Value = "※フォルダパスを設定すると、"
+    ws.Range("J17").Value = "  複数フォルダから一括インポート可能。"
+    ws.Range("J14:J17").Font.Size = 9
+    ws.Range("J14:J17").Font.Color = RGB(128, 128, 128)
 
     ' 列幅
     ws.Columns("J").ColumnWidth = 15
-    ws.Columns("K").ColumnWidth = 12
+    ws.Columns("K").ColumnWidth = 40
 
     MsgBox "インポート設定を初期化しました。", vbInformation, "完了"
 
