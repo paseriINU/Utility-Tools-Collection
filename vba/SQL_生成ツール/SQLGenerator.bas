@@ -45,6 +45,15 @@ Private Const SHEET_HELP As String = "SQLヘルプ"
 
 ' メインシートの行位置
 Private Const ROW_TITLE As Long = 1
+
+' テーブル定義書インポート設定（デフォルト値）
+' ※メインシートの「設定」から変更可能
+Private Const DEFAULT_TABLE_NAME_CELL As String = "E4"           ' テーブル名のセル位置
+Private Const DEFAULT_COLUMN_START_ROW As Long = 10               ' カラム定義開始行
+Private Const DEFAULT_COL_NUMBER As String = "A"                  ' カラム番号の列
+Private Const DEFAULT_COL_NAME As String = "B"                    ' カラム名の列
+Private Const DEFAULT_COL_DESCRIPTION As String = "C"             ' カラム説明の列
+Private Const DEFAULT_COL_DATATYPE As String = "D"                ' データ型の列
 Private Const ROW_OPTIONS As Long = 3
 Private Const ROW_MAIN_TABLE As Long = 6
 Private Const ROW_JOIN_START As Long = 9
@@ -490,6 +499,44 @@ Private Sub FormatTableDefSheet()
         .Columns("F").ColumnWidth = 20
         .Columns("G").ColumnWidth = 15
         .Columns("H").ColumnWidth = 25
+
+        ' インポート設定エリア
+        .Range("J3").Value = "インポート設定"
+        .Range("J3").Font.Bold = True
+        .Range("J3").Font.Size = 12
+        .Range("J3").Interior.Color = RGB(255, 242, 204)
+        .Range("J3:K3").Merge
+
+        ' 設定項目
+        .Range("J4").Value = "テーブル名セル"
+        .Range("K4").Value = DEFAULT_TABLE_NAME_CELL
+        .Range("J5").Value = "カラム開始行"
+        .Range("K5").Value = DEFAULT_COLUMN_START_ROW
+        .Range("J6").Value = "カラム番号列"
+        .Range("K6").Value = DEFAULT_COL_NUMBER
+        .Range("J7").Value = "カラム名列"
+        .Range("K7").Value = DEFAULT_COL_NAME
+        .Range("J8").Value = "説明列"
+        .Range("K8").Value = DEFAULT_COL_DESCRIPTION
+        .Range("J9").Value = "データ型列"
+        .Range("K9").Value = DEFAULT_COL_DATATYPE
+
+        ' ヘッダー色
+        .Range("J4:J9").Font.Bold = True
+        .Range("J4:J9").Interior.Color = RGB(255, 250, 230)
+
+        ' 説明
+        .Range("J11").Value = "※上記の設定を変更することで、"
+        .Range("J12").Value = "  異なるフォーマットの定義書に対応できます。"
+        .Range("J11:J12").Font.Size = 9
+        .Range("J11:J12").Font.Color = RGB(128, 128, 128)
+
+        ' 列幅
+        .Columns("J").ColumnWidth = 15
+        .Columns("K").ColumnWidth = 12
+
+        ' ボタン追加
+        AddButton ws, "J1", "定義書インポート", "ImportTableDefinitions"
     End With
 End Sub
 
@@ -1920,4 +1967,297 @@ End Sub
 '==============================================================================
 Public Sub TestGenerateSQL()
     InitializeSQLGenerator
+End Sub
+
+'==============================================================================
+' テーブル定義書インポート機能
+'==============================================================================
+' 外部のテーブル定義書（Excelファイル）からテーブル・カラム情報をインポート
+'
+' 定義書フォーマット（デフォルト設定）:
+'   - テーブル名: E4セル
+'   - カラム定義: A10行から開始
+'     - A列: カラム番号
+'     - B列: カラム名
+'     - C列: 説明
+'     - D列: データ型
+'==============================================================================
+Public Sub ImportTableDefinitions()
+    On Error GoTo ErrorHandler
+
+    Dim wsDef As Worksheet
+    Dim folderPath As String
+    Dim fileName As String
+    Dim sourceWb As Workbook
+    Dim sourceWs As Worksheet
+    Dim tableNameCell As String
+    Dim columnStartRow As Long
+    Dim colNumber As String
+    Dim colName As String
+    Dim colDescription As String
+    Dim colDataType As String
+    Dim tableName As String
+    Dim tableCount As Long
+    Dim columnCount As Long
+    Dim nextTableRow As Long
+    Dim nextColumnRow As Long
+    Dim i As Long
+    Dim currentRow As Long
+    Dim colNameValue As String
+    Dim colDescValue As String
+    Dim colTypeValue As String
+    Dim importedTables As String
+
+    Set wsDef = Sheets(SHEET_TABLE_DEF)
+
+    ' 設定を取得
+    tableNameCell = GetImportSetting(wsDef, "テーブル名セル", DEFAULT_TABLE_NAME_CELL)
+    columnStartRow = CLng(GetImportSetting(wsDef, "カラム開始行", CStr(DEFAULT_COLUMN_START_ROW)))
+    colNumber = GetImportSetting(wsDef, "カラム番号列", DEFAULT_COL_NUMBER)
+    colName = GetImportSetting(wsDef, "カラム名列", DEFAULT_COL_NAME)
+    colDescription = GetImportSetting(wsDef, "説明列", DEFAULT_COL_DESCRIPTION)
+    colDataType = GetImportSetting(wsDef, "データ型列", DEFAULT_COL_DATATYPE)
+
+    ' フォルダ選択ダイアログ
+    With Application.FileDialog(msoFileDialogFolderPicker)
+        .Title = "テーブル定義書が格納されたフォルダを選択してください"
+        .AllowMultiSelect = False
+        If .Show = -1 Then
+            folderPath = .SelectedItems(1)
+        Else
+            MsgBox "フォルダが選択されませんでした。", vbInformation, "キャンセル"
+            Exit Sub
+        End If
+    End With
+
+    ' フォルダパスの末尾にバックスラッシュを追加
+    If Right(folderPath, 1) <> "\" Then
+        folderPath = folderPath & "\"
+    End If
+
+    ' 既存データをクリアするか確認
+    Dim clearExisting As VbMsgBoxResult
+    clearExisting = MsgBox("既存のテーブル定義データをクリアしてからインポートしますか？" & vbCrLf & vbCrLf & _
+                           "「はい」: 既存データをクリアして新規インポート" & vbCrLf & _
+                           "「いいえ」: 既存データに追加", _
+                           vbYesNoCancel + vbQuestion, "確認")
+
+    If clearExisting = vbCancel Then
+        Exit Sub
+    ElseIf clearExisting = vbYes Then
+        ' テーブル一覧をクリア（ヘッダー以外）
+        If wsDef.Range("B6").Value <> "" Then
+            wsDef.Range("A6:C" & wsDef.Cells(wsDef.Rows.Count, "B").End(xlUp).row).ClearContents
+        End If
+        ' カラム一覧をクリア（ヘッダー以外）
+        If wsDef.Range("E6").Value <> "" Then
+            wsDef.Range("E6:H" & wsDef.Cells(wsDef.Rows.Count, "E").End(xlUp).row).ClearContents
+        End If
+        nextTableRow = 6
+        nextColumnRow = 6
+    Else
+        ' 次の空き行を探す
+        nextTableRow = wsDef.Cells(wsDef.Rows.Count, "B").End(xlUp).row + 1
+        If nextTableRow < 6 Then nextTableRow = 6
+        nextColumnRow = wsDef.Cells(wsDef.Rows.Count, "E").End(xlUp).row + 1
+        If nextColumnRow < 6 Then nextColumnRow = 6
+    End If
+
+    tableCount = 0
+    columnCount = 0
+    importedTables = ""
+
+    Application.ScreenUpdating = False
+    Application.DisplayAlerts = False
+
+    ' フォルダ内のExcelファイルを処理
+    fileName = Dir(folderPath & "*.xls*")
+
+    Do While fileName <> ""
+        ' 自分自身をスキップ
+        If folderPath & fileName <> ThisWorkbook.FullName Then
+            ' ファイルを開く
+            Set sourceWb = Workbooks.Open(folderPath & fileName, ReadOnly:=True, UpdateLinks:=0)
+
+            ' 最初のシートを使用
+            Set sourceWs = sourceWb.Sheets(1)
+
+            ' テーブル名を取得
+            tableName = Trim(CStr(sourceWs.Range(tableNameCell).Value))
+
+            If tableName <> "" Then
+                ' テーブル一覧に追加
+                wsDef.Range("A" & nextTableRow).Value = tableCount + 1
+                wsDef.Range("B" & nextTableRow).Value = tableName
+                wsDef.Range("C" & nextTableRow).Value = GetTableDescription(sourceWs)
+                nextTableRow = nextTableRow + 1
+                tableCount = tableCount + 1
+
+                If importedTables <> "" Then importedTables = importedTables & ", "
+                importedTables = importedTables & tableName
+
+                ' カラム定義を取得
+                currentRow = columnStartRow
+                Do While True
+                    colNameValue = Trim(CStr(sourceWs.Range(colName & currentRow).Value))
+
+                    ' カラム名が空なら終了
+                    If colNameValue = "" Then Exit Do
+
+                    colDescValue = Trim(CStr(sourceWs.Range(colDescription & currentRow).Value))
+                    colTypeValue = Trim(CStr(sourceWs.Range(colDataType & currentRow).Value))
+
+                    ' カラム一覧に追加
+                    wsDef.Range("E" & nextColumnRow).Value = tableName
+                    wsDef.Range("F" & nextColumnRow).Value = colNameValue
+                    wsDef.Range("G" & nextColumnRow).Value = colTypeValue
+                    wsDef.Range("H" & nextColumnRow).Value = colDescValue
+
+                    nextColumnRow = nextColumnRow + 1
+                    columnCount = columnCount + 1
+                    currentRow = currentRow + 1
+
+                    ' 安全制限
+                    If currentRow > 1000 Then Exit Do
+                Loop
+            End If
+
+            ' ファイルを閉じる
+            sourceWb.Close SaveChanges:=False
+        End If
+
+        fileName = Dir()
+    Loop
+
+    Application.DisplayAlerts = True
+    Application.ScreenUpdating = True
+
+    If tableCount = 0 Then
+        MsgBox "インポートできるテーブル定義書が見つかりませんでした。" & vbCrLf & vbCrLf & _
+               "確認事項:" & vbCrLf & _
+               "・フォルダにExcelファイル(.xls/.xlsx/.xlsm)が存在するか" & vbCrLf & _
+               "・テーブル名セル(" & tableNameCell & ")に値があるか", _
+               vbExclamation, "インポート結果"
+    Else
+        MsgBox "テーブル定義のインポートが完了しました。" & vbCrLf & vbCrLf & _
+               "インポートしたテーブル数: " & tableCount & vbCrLf & _
+               "インポートしたカラム数: " & columnCount & vbCrLf & vbCrLf & _
+               "テーブル: " & importedTables, _
+               vbInformation, "インポート完了"
+
+        ' プルダウンを自動更新
+        UpdateDropdownsFromTableDef
+    End If
+
+    Exit Sub
+
+ErrorHandler:
+    Application.DisplayAlerts = True
+    Application.ScreenUpdating = True
+
+    If Not sourceWb Is Nothing Then
+        sourceWb.Close SaveChanges:=False
+    End If
+
+    MsgBox "エラーが発生しました: " & Err.Description & vbCrLf & _
+           "ファイル: " & fileName, vbCritical, "エラー"
+End Sub
+
+'==============================================================================
+' インポート設定を取得
+'==============================================================================
+Private Function GetImportSetting(ByVal ws As Worksheet, ByVal settingName As String, ByVal defaultValue As String) As String
+    Dim i As Long
+    Dim settingRow As Long
+
+    ' 設定エリアを検索（J列〜K列）
+    settingRow = 0
+    For i = 4 To 20
+        If Trim(CStr(ws.Range("J" & i).Value)) = settingName Then
+            settingRow = i
+            Exit For
+        End If
+    Next i
+
+    If settingRow > 0 Then
+        Dim val As String
+        val = Trim(CStr(ws.Range("K" & settingRow).Value))
+        If val <> "" Then
+            GetImportSetting = val
+        Else
+            GetImportSetting = defaultValue
+        End If
+    Else
+        GetImportSetting = defaultValue
+    End If
+End Function
+
+'==============================================================================
+' ソースシートからテーブル説明を取得（E4の下や近辺から推測）
+'==============================================================================
+Private Function GetTableDescription(ByVal ws As Worksheet) As String
+    Dim desc As String
+
+    ' F4に説明があることを想定
+    desc = Trim(CStr(ws.Range("F4").Value))
+
+    ' なければE5を確認
+    If desc = "" Then
+        desc = Trim(CStr(ws.Range("E5").Value))
+    End If
+
+    ' それでもなければ空を返す
+    GetTableDescription = desc
+End Function
+
+'==============================================================================
+' インポート設定の初期化
+'==============================================================================
+Public Sub InitializeImportSettings()
+    On Error GoTo ErrorHandler
+
+    Dim ws As Worksheet
+    Set ws = Sheets(SHEET_TABLE_DEF)
+
+    ' 設定エリアのタイトル
+    ws.Range("J3").Value = "インポート設定"
+    ws.Range("J3").Font.Bold = True
+    ws.Range("J3").Font.Size = 12
+    ws.Range("J3").Interior.Color = RGB(255, 242, 204)
+    ws.Range("J3:K3").Merge
+
+    ' 設定項目
+    ws.Range("J4").Value = "テーブル名セル"
+    ws.Range("K4").Value = DEFAULT_TABLE_NAME_CELL
+    ws.Range("J5").Value = "カラム開始行"
+    ws.Range("K5").Value = DEFAULT_COLUMN_START_ROW
+    ws.Range("J6").Value = "カラム番号列"
+    ws.Range("K6").Value = DEFAULT_COL_NUMBER
+    ws.Range("J7").Value = "カラム名列"
+    ws.Range("K7").Value = DEFAULT_COL_NAME
+    ws.Range("J8").Value = "説明列"
+    ws.Range("K8").Value = DEFAULT_COL_DESCRIPTION
+    ws.Range("J9").Value = "データ型列"
+    ws.Range("K9").Value = DEFAULT_COL_DATATYPE
+
+    ' ヘッダー色
+    ws.Range("J4:J9").Font.Bold = True
+    ws.Range("J4:J9").Interior.Color = RGB(255, 250, 230)
+
+    ' 説明
+    ws.Range("J11").Value = "※上記の設定を変更することで、"
+    ws.Range("J12").Value = "  異なるフォーマットの定義書に対応できます。"
+    ws.Range("J11:J12").Font.Size = 9
+    ws.Range("J11:J12").Font.Color = RGB(128, 128, 128)
+
+    ' 列幅
+    ws.Columns("J").ColumnWidth = 15
+    ws.Columns("K").ColumnWidth = 12
+
+    MsgBox "インポート設定を初期化しました。", vbInformation, "完了"
+
+    Exit Sub
+
+ErrorHandler:
+    MsgBox "エラーが発生しました: " & Err.Description, vbCritical, "エラー"
 End Sub
