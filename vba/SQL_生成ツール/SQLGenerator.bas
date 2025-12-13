@@ -383,6 +383,8 @@ Private Sub FormatMainSheet()
         AddButton ws, "K" & ROW_OPTIONS, "クリア", "ClearMainSheet"
         AddButton ws, "K" & ROW_MAIN_TABLE, "履歴に保存", "SaveToHistory"
         AddButton ws, "K" & ROW_JOIN_START, "コピー", "CopySQL"
+        AddButton ws, "L" & ROW_TITLE, "プルダウン更新", "UpdateDropdownsFromTableDef"
+        AddButton ws, "L" & ROW_OPTIONS, "別名更新", "RefreshAliasDropdowns"
     End With
 End Sub
 
@@ -1620,6 +1622,297 @@ Private Sub FormatHelpSheet()
         .Columns("G").ColumnWidth = 15
         .Columns("H").ColumnWidth = 15
     End With
+End Sub
+
+'==============================================================================
+' テーブル定義からプルダウンを更新
+'==============================================================================
+Public Sub UpdateDropdownsFromTableDef()
+    On Error GoTo ErrorHandler
+
+    Dim wsMain As Worksheet
+    Dim wsDef As Worksheet
+    Dim tableList As String
+    Dim i As Long
+
+    Set wsMain = Sheets(SHEET_MAIN)
+    Set wsDef = Sheets(SHEET_TABLE_DEF)
+
+    ' テーブル一覧を取得
+    tableList = GetTableList()
+
+    If tableList = "" Then
+        MsgBox "テーブル定義シートにテーブルが登録されていません。" & vbCrLf & _
+               "「テーブル定義」シートのB列にテーブル名を登録してください。", vbExclamation, "確認"
+        Exit Sub
+    End If
+
+    ' メインテーブルのプルダウンを更新
+    AddDropdown wsMain, "B" & ROW_MAIN_TABLE + 1, tableList
+
+    ' JOINテーブルのプルダウンを更新
+    For i = ROW_JOIN_START + 2 To ROW_JOIN_END
+        AddDropdown wsMain, "C" & i, tableList
+    Next i
+
+    ' カラム選択のプルダウンを更新（全テーブルの全カラム）
+    Dim columnList As String
+    columnList = GetAllColumnList()
+
+    For i = ROW_COLUMNS_START To ROW_COLUMNS_END
+        If columnList <> "" Then
+            AddDropdown wsMain, "C" & i, columnList
+        End If
+    Next i
+
+    ' WHERE句のカラムプルダウンを更新
+    For i = ROW_WHERE_START To ROW_WHERE_END
+        If columnList <> "" Then
+            AddDropdown wsMain, "E" & i, columnList
+        End If
+    Next i
+
+    ' ORDER BY句のカラムプルダウンを更新
+    For i = ROW_ORDERBY_START To ROW_ORDERBY_END
+        If columnList <> "" Then
+            AddDropdown wsMain, "C" & i, columnList
+        End If
+    Next i
+
+    ' テーブル別名のプルダウンを更新（入力済みの別名から取得）
+    Dim aliasList As String
+    aliasList = GetAliasListFromMain()
+
+    If aliasList <> "" Then
+        For i = ROW_COLUMNS_START To ROW_COLUMNS_END
+            AddDropdown wsMain, "B" & i, aliasList
+        Next i
+        For i = ROW_WHERE_START To ROW_WHERE_END
+            AddDropdown wsMain, "D" & i, aliasList
+        Next i
+        For i = ROW_ORDERBY_START To ROW_ORDERBY_END
+            AddDropdown wsMain, "B" & i, aliasList
+        Next i
+    End If
+
+    MsgBox "プルダウンを更新しました。" & vbCrLf & vbCrLf & _
+           "テーブル数: " & UBound(Split(tableList, ",")) + 1, vbInformation, "更新完了"
+
+    Exit Sub
+
+ErrorHandler:
+    MsgBox "エラーが発生しました: " & Err.Description, vbCritical, "エラー"
+End Sub
+
+'==============================================================================
+' テーブル定義シートからテーブル一覧を取得
+'==============================================================================
+Private Function GetTableList() As String
+    Dim ws As Worksheet
+    Dim result As String
+    Dim i As Long
+    Dim tableName As String
+
+    On Error Resume Next
+    Set ws = Sheets(SHEET_TABLE_DEF)
+    If ws Is Nothing Then
+        GetTableList = ""
+        Exit Function
+    End If
+    On Error GoTo 0
+
+    result = ""
+
+    ' B列（テーブル名）を読み取り（6行目から開始）
+    i = 6
+    Do While ws.Range("B" & i).Value <> ""
+        tableName = Trim(ws.Range("B" & i).Value)
+        If tableName <> "" Then
+            If result = "" Then
+                result = tableName
+            Else
+                result = result & "," & tableName
+            End If
+        End If
+        i = i + 1
+        If i > 100 Then Exit Do ' 安全制限
+    Loop
+
+    GetTableList = result
+End Function
+
+'==============================================================================
+' テーブル定義シートから全カラム一覧を取得
+'==============================================================================
+Private Function GetAllColumnList() As String
+    Dim ws As Worksheet
+    Dim result As String
+    Dim i As Long
+    Dim tableName As String
+    Dim columnName As String
+    Dim dict As Object
+
+    On Error Resume Next
+    Set ws = Sheets(SHEET_TABLE_DEF)
+    If ws Is Nothing Then
+        GetAllColumnList = ""
+        Exit Function
+    End If
+    On Error GoTo 0
+
+    Set dict = CreateObject("Scripting.Dictionary")
+    result = ""
+
+    ' E列（テーブル名）、F列（カラム名）を読み取り（6行目から開始）
+    i = 6
+    Do While ws.Range("E" & i).Value <> "" Or ws.Range("F" & i).Value <> ""
+        tableName = Trim(ws.Range("E" & i).Value)
+        columnName = Trim(ws.Range("F" & i).Value)
+
+        If columnName <> "" Then
+            ' 重複チェック
+            If Not dict.exists(columnName) Then
+                dict.Add columnName, True
+                If result = "" Then
+                    result = columnName
+                Else
+                    result = result & "," & columnName
+                End If
+            End If
+        End If
+        i = i + 1
+        If i > 500 Then Exit Do ' 安全制限
+    Loop
+
+    ' 特殊なカラム名を追加
+    result = "*," & result
+
+    GetAllColumnList = result
+End Function
+
+'==============================================================================
+' 指定テーブルのカラム一覧を取得
+'==============================================================================
+Private Function GetColumnListForTable(ByVal targetTable As String) As String
+    Dim ws As Worksheet
+    Dim result As String
+    Dim i As Long
+    Dim tableName As String
+    Dim columnName As String
+
+    On Error Resume Next
+    Set ws = Sheets(SHEET_TABLE_DEF)
+    If ws Is Nothing Then
+        GetColumnListForTable = ""
+        Exit Function
+    End If
+    On Error GoTo 0
+
+    result = ""
+
+    ' E列（テーブル名）、F列（カラム名）を読み取り（6行目から開始）
+    i = 6
+    Do While ws.Range("E" & i).Value <> "" Or ws.Range("F" & i).Value <> ""
+        tableName = Trim(ws.Range("E" & i).Value)
+        columnName = Trim(ws.Range("F" & i).Value)
+
+        If UCase(tableName) = UCase(targetTable) And columnName <> "" Then
+            If result = "" Then
+                result = columnName
+            Else
+                result = result & "," & columnName
+            End If
+        End If
+        i = i + 1
+        If i > 500 Then Exit Do ' 安全制限
+    Loop
+
+    GetColumnListForTable = result
+End Function
+
+'==============================================================================
+' メインシートから入力済みの別名一覧を取得
+'==============================================================================
+Private Function GetAliasListFromMain() As String
+    Dim ws As Worksheet
+    Dim result As String
+    Dim alias As String
+    Dim dict As Object
+    Dim i As Long
+
+    Set ws = Sheets(SHEET_MAIN)
+    Set dict = CreateObject("Scripting.Dictionary")
+    result = ""
+
+    ' メインテーブルの別名
+    alias = Trim(ws.Range("E" & ROW_MAIN_TABLE + 1).Value)
+    If alias <> "" And Not dict.exists(alias) Then
+        dict.Add alias, True
+        result = alias
+    End If
+
+    ' JOINテーブルの別名
+    For i = ROW_JOIN_START + 2 To ROW_JOIN_END
+        alias = Trim(ws.Range("D" & i).Value)
+        If alias <> "" And Not dict.exists(alias) Then
+            dict.Add alias, True
+            If result = "" Then
+                result = alias
+            Else
+                result = result & "," & alias
+            End If
+        End If
+    Next i
+
+    ' 空白を先頭に追加（未選択用）
+    If result <> "" Then
+        result = "," & result
+    End If
+
+    GetAliasListFromMain = result
+End Function
+
+'==============================================================================
+' 別名更新ボタン用マクロ（テーブル別名を入力後に実行）
+'==============================================================================
+Public Sub RefreshAliasDropdowns()
+    On Error GoTo ErrorHandler
+
+    Dim wsMain As Worksheet
+    Dim aliasList As String
+    Dim i As Long
+
+    Set wsMain = Sheets(SHEET_MAIN)
+
+    ' 入力済みの別名を取得
+    aliasList = GetAliasListFromMain()
+
+    If aliasList = "" Or aliasList = "," Then
+        MsgBox "テーブル別名が入力されていません。" & vbCrLf & _
+               "メインテーブルやJOINテーブルに別名を入力してから実行してください。", vbExclamation, "確認"
+        Exit Sub
+    End If
+
+    ' 各セクションの「テーブル別名」プルダウンを更新
+    For i = ROW_COLUMNS_START To ROW_COLUMNS_END
+        AddDropdown wsMain, "B" & i, aliasList
+    Next i
+
+    For i = ROW_WHERE_START To ROW_WHERE_END
+        AddDropdown wsMain, "D" & i, aliasList
+    Next i
+
+    For i = ROW_ORDERBY_START To ROW_ORDERBY_END
+        AddDropdown wsMain, "B" & i, aliasList
+    Next i
+
+    MsgBox "テーブル別名のプルダウンを更新しました。" & vbCrLf & _
+           "別名: " & Replace(aliasList, ",", ", "), vbInformation, "更新完了"
+
+    Exit Sub
+
+ErrorHandler:
+    MsgBox "エラーが発生しました: " & Err.Description, vbCritical, "エラー"
 End Sub
 
 '==============================================================================
