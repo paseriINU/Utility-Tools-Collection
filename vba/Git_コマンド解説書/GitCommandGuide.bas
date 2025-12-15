@@ -1,40 +1,40 @@
 '==============================================================================
-' Git ã‚³ãƒãƒ³ãƒ‰è§£èª¬æ›¸ ç”Ÿæˆãƒ„ãƒ¼ãƒ«
-' ãƒ¢ã‚¸ãƒ¥ãƒ¼ãƒ«å: GitCommandGuide
+' Git ƒRƒ}ƒ“ƒh‰ğà‘ ¶¬ƒc[ƒ‹
+' ƒ‚ƒWƒ…[ƒ‹–¼: GitCommandGuide
 '==============================================================================
-' æ¦‚è¦:
-'   Gitåˆå¿ƒè€…å‘ã‘ã®ã‚³ãƒãƒ³ãƒ‰è§£èª¬æ›¸ã‚’Excelã§ç”Ÿæˆã™ã‚‹ãƒ„ãƒ¼ãƒ«ã§ã™ã€‚
-'   åŸºæœ¬çš„ãªGitã‚³ãƒãƒ³ãƒ‰ã‹ã‚‰å®Ÿè·µçš„ãªä½¿ã„æ–¹ã¾ã§ã€ã‚ã‹ã‚Šã‚„ã™ãè§£èª¬ã—ã¾ã™ã€‚
+' ŠT—v:
+'   Git‰SÒŒü‚¯‚ÌƒRƒ}ƒ“ƒh‰ğà‘‚ğExcel‚Å¶¬‚·‚éƒc[ƒ‹‚Å‚·B
+'   Šî–{“I‚ÈGitƒRƒ}ƒ“ƒh‚©‚çÀ‘H“I‚Èg‚¢•û‚Ü‚ÅA‚í‚©‚è‚â‚·‚­‰ğà‚µ‚Ü‚·B
 '
-' ä½¿ã„æ–¹:
-'   1. ã“ã®ãƒ¢ã‚¸ãƒ¥ãƒ¼ãƒ«ã‚’Excelã®VBAã‚¨ãƒ‡ã‚£ã‚¿ã«ã‚¤ãƒ³ãƒãƒ¼ãƒˆ
-'   2. CreateGitCommandGuide ãƒã‚¯ãƒ­ã‚’å®Ÿè¡Œ
-'   3. è§£èª¬æ›¸ã‚·ãƒ¼ãƒˆãŒè‡ªå‹•ç”Ÿæˆã•ã‚Œã¾ã™
+' g‚¢•û:
+'   1. ‚±‚Ìƒ‚ƒWƒ…[ƒ‹‚ğExcel‚ÌVBAƒGƒfƒBƒ^‚ÉƒCƒ“ƒ|[ƒg
+'   2. CreateGitCommandGuide ƒ}ƒNƒ‚ğÀs
+'   3. ‰ğà‘ƒV[ƒg‚ª©“®¶¬‚³‚ê‚Ü‚·
 '
-' ä½œæˆæ—¥: 2025-12-13
+' ì¬“ú: 2025-12-13
 '==============================================================================
 
 Option Explicit
 
 '==============================================================================
-' ãƒ¡ã‚¤ãƒ³: Gitè§£èª¬æ›¸ã‚’ç”Ÿæˆ
+' ƒƒCƒ“: Git‰ğà‘‚ğ¶¬
 '==============================================================================
 Public Sub CreateGitCommandGuide()
     On Error GoTo ErrorHandler
 
     Application.ScreenUpdating = False
 
-    ' ã‚·ãƒ¼ãƒˆã‚’ä½œæˆ
-    CreateSheet "GitåŸºç¤çŸ¥è­˜"
-    CreateSheet "åŸºæœ¬ã‚³ãƒãƒ³ãƒ‰"
-    CreateSheet "ãƒ–ãƒ©ãƒ³ãƒæ“ä½œ"
-    CreateSheet "ãƒªãƒ¢ãƒ¼ãƒˆæ“ä½œ"
-    CreateSheet "å±¥æ­´ãƒ»å·®åˆ†ç¢ºèª"
-    CreateSheet "å–ã‚Šæ¶ˆã—ãƒ»ä¿®æ­£"
-    CreateSheet "å®Ÿè·µã‚·ãƒŠãƒªã‚ª"
-    CreateSheet "ãƒˆãƒ©ãƒ–ãƒ«å¯¾å‡¦"
+    ' ƒV[ƒg‚ğì¬
+    CreateSheet "GitŠî‘b’m¯"
+    CreateSheet "Šî–{ƒRƒ}ƒ“ƒh"
+    CreateSheet "ƒuƒ‰ƒ“ƒ`‘€ì"
+    CreateSheet "ƒŠƒ‚[ƒg‘€ì"
+    CreateSheet "—š—ğE·•ªŠm”F"
+    CreateSheet "æ‚èÁ‚µEC³"
+    CreateSheet "À‘HƒVƒiƒŠƒI"
+    CreateSheet "ƒgƒ‰ƒuƒ‹‘Îˆ"
 
-    ' å„ã‚·ãƒ¼ãƒˆã®å†…å®¹ã‚’ä½œæˆ
+    ' ŠeƒV[ƒg‚Ì“à—e‚ğì¬
     FormatBasicsSheet
     FormatBasicCommandsSheet
     FormatBranchSheet
@@ -44,32 +44,32 @@ Public Sub CreateGitCommandGuide()
     FormatScenarioSheet
     FormatTroubleshootSheet
 
-    ' æœ€åˆã®ã‚·ãƒ¼ãƒˆã‚’ã‚¢ã‚¯ãƒ†ã‚£ãƒ–ã«
-    Sheets("GitåŸºç¤çŸ¥è­˜").Activate
+    ' Å‰‚ÌƒV[ƒg‚ğƒAƒNƒeƒBƒu‚É
+    Sheets("GitŠî‘b’m¯").Activate
 
     Application.ScreenUpdating = True
 
-    MsgBox "Git ã‚³ãƒãƒ³ãƒ‰è§£èª¬æ›¸ã‚’ä½œæˆã—ã¾ã—ãŸã€‚" & vbCrLf & vbCrLf & _
-           "ã€ã‚·ãƒ¼ãƒˆæ§‹æˆã€‘" & vbCrLf & _
-           "1. GitåŸºç¤çŸ¥è­˜ - Gitã®æ¦‚å¿µã‚’ç†è§£" & vbCrLf & _
-           "2. åŸºæœ¬ã‚³ãƒãƒ³ãƒ‰ - ã‚ˆãä½¿ã†ã‚³ãƒãƒ³ãƒ‰" & vbCrLf & _
-           "3. ãƒ–ãƒ©ãƒ³ãƒæ“ä½œ - ãƒ–ãƒ©ãƒ³ãƒã®ä½¿ã„æ–¹" & vbCrLf & _
-           "4. ãƒªãƒ¢ãƒ¼ãƒˆæ“ä½œ - GitHubã¨ã®é€£æº" & vbCrLf & _
-           "5. å±¥æ­´ãƒ»å·®åˆ†ç¢ºèª - å¤‰æ›´ã®ç¢ºèªæ–¹æ³•" & vbCrLf & _
-           "6. å–ã‚Šæ¶ˆã—ãƒ»ä¿®æ­£ - é–“é•ã„ã®ä¿®æ­£æ–¹æ³•" & vbCrLf & _
-           "7. å®Ÿè·µã‚·ãƒŠãƒªã‚ª - å®Ÿéš›ã®ä½œæ¥­ãƒ•ãƒ­ãƒ¼" & vbCrLf & _
-           "8. ãƒˆãƒ©ãƒ–ãƒ«å¯¾å‡¦ - ã‚ˆãã‚ã‚‹å•é¡Œã¨è§£æ±ºæ³•", _
-           vbInformation, "ä½œæˆå®Œäº†"
+    MsgBox "Git ƒRƒ}ƒ“ƒh‰ğà‘‚ğì¬‚µ‚Ü‚µ‚½B" & vbCrLf & vbCrLf & _
+           "yƒV[ƒg\¬z" & vbCrLf & _
+           "1. GitŠî‘b’m¯ - Git‚ÌŠT”O‚ğ—‰ğ" & vbCrLf & _
+           "2. Šî–{ƒRƒ}ƒ“ƒh - ‚æ‚­g‚¤ƒRƒ}ƒ“ƒh" & vbCrLf & _
+           "3. ƒuƒ‰ƒ“ƒ`‘€ì - ƒuƒ‰ƒ“ƒ`‚Ìg‚¢•û" & vbCrLf & _
+           "4. ƒŠƒ‚[ƒg‘€ì - GitHub‚Æ‚Ì˜AŒg" & vbCrLf & _
+           "5. —š—ğE·•ªŠm”F - •ÏX‚ÌŠm”F•û–@" & vbCrLf & _
+           "6. æ‚èÁ‚µEC³ - ŠÔˆá‚¢‚ÌC³•û–@" & vbCrLf & _
+           "7. À‘HƒVƒiƒŠƒI - ÀÛ‚Ìì‹Æƒtƒ[" & vbCrLf & _
+           "8. ƒgƒ‰ƒuƒ‹‘Îˆ - ‚æ‚­‚ ‚é–â‘è‚Æ‰ğŒˆ–@", _
+           vbInformation, "ì¬Š®—¹"
 
     Exit Sub
 
 ErrorHandler:
     Application.ScreenUpdating = True
-    MsgBox "ã‚¨ãƒ©ãƒ¼ãŒç™ºç”Ÿã—ã¾ã—ãŸ: " & Err.Description, vbCritical, "ã‚¨ãƒ©ãƒ¼"
+    MsgBox "ƒGƒ‰[‚ª”­¶‚µ‚Ü‚µ‚½: " & Err.Description, vbCritical, "ƒGƒ‰["
 End Sub
 
 '==============================================================================
-' ã‚·ãƒ¼ãƒˆä½œæˆãƒ˜ãƒ«ãƒ‘ãƒ¼
+' ƒV[ƒgì¬ƒwƒ‹ƒp[
 '==============================================================================
 Private Sub CreateSheet(ByVal sheetName As String)
     Dim ws As Worksheet
@@ -92,36 +92,36 @@ Private Sub CreateSheet(ByVal sheetName As String)
 End Sub
 
 '==============================================================================
-' GitåŸºç¤çŸ¥è­˜ã‚·ãƒ¼ãƒˆ
+' GitŠî‘b’m¯ƒV[ƒg
 '==============================================================================
 Private Sub FormatBasicsSheet()
     Dim ws As Worksheet
-    Set ws = Sheets("GitåŸºç¤çŸ¥è­˜")
+    Set ws = Sheets("GitŠî‘b’m¯")
 
     With ws
-        ' ã‚¿ã‚¤ãƒˆãƒ«
-        .Range("A1").Value = "Git åŸºç¤çŸ¥è­˜ - ã¾ãšã¯ã“ã“ã‹ã‚‰!"
+        ' ƒ^ƒCƒgƒ‹
+        .Range("A1").Value = "Git Šî‘b’m¯ - ‚Ü‚¸‚Í‚±‚±‚©‚ç!"
         .Range("A1").Font.Size = 20
         .Range("A1").Font.Bold = True
         .Range("A1:H1").Merge
         .Range("A1").Interior.Color = RGB(64, 64, 64)
         .Range("A1").Font.Color = RGB(255, 255, 255)
 
-        ' Gitã¨ã¯
-        .Range("A3").Value = "Gitã¨ã¯?"
+        ' Git‚Æ‚Í
+        .Range("A3").Value = "Git‚Æ‚Í?"
         .Range("A3").Font.Size = 14
         .Range("A3").Font.Bold = True
         .Range("A3").Interior.Color = RGB(68, 114, 196)
         .Range("A3").Font.Color = RGB(255, 255, 255)
         .Range("A3:H3").Merge
 
-        .Range("A4").Value = "Gitï¼ˆã‚®ãƒƒãƒˆï¼‰ã¯ã€ãƒ•ã‚¡ã‚¤ãƒ«ã®å¤‰æ›´å±¥æ­´ã‚’è¨˜éŒ²ãƒ»ç®¡ç†ã™ã‚‹ãŸã‚ã®ã€Œãƒãƒ¼ã‚¸ãƒ§ãƒ³ç®¡ç†ã‚·ã‚¹ãƒ†ãƒ ã€ã§ã™ã€‚"
+        .Range("A4").Value = "GitiƒMƒbƒgj‚ÍAƒtƒ@ƒCƒ‹‚Ì•ÏX—š—ğ‚ğ‹L˜^EŠÇ—‚·‚é‚½‚ß‚Ìuƒo[ƒWƒ‡ƒ“ŠÇ—ƒVƒXƒeƒ€v‚Å‚·B"
         .Range("A4:H4").Merge
-        .Range("A5").Value = "ãƒ—ãƒ­ã‚°ãƒ©ãƒ ã®ã‚½ãƒ¼ã‚¹ã‚³ãƒ¼ãƒ‰ã ã‘ã§ãªãã€ãƒ‰ã‚­ãƒ¥ãƒ¡ãƒ³ãƒˆã‚„è¨­å®šãƒ•ã‚¡ã‚¤ãƒ«ãªã©ã€ã‚ã‚‰ã‚†ã‚‹ãƒ†ã‚­ã‚¹ãƒˆãƒ•ã‚¡ã‚¤ãƒ«ã®ç®¡ç†ã«ä½¿ãˆã¾ã™ã€‚"
+        .Range("A5").Value = "ƒvƒƒOƒ‰ƒ€‚Ìƒ\[ƒXƒR[ƒh‚¾‚¯‚Å‚È‚­AƒhƒLƒ…ƒƒ“ƒg‚âİ’èƒtƒ@ƒCƒ‹‚È‚ÇA‚ ‚ç‚ä‚éƒeƒLƒXƒgƒtƒ@ƒCƒ‹‚ÌŠÇ—‚Ég‚¦‚Ü‚·B"
         .Range("A5:H5").Merge
 
-        ' ãªãœGitã‚’ä½¿ã†ã®ã‹
-        .Range("A7").Value = "ãªãœGitã‚’ä½¿ã†ã®ã‹?"
+        ' ‚È‚ºGit‚ğg‚¤‚Ì‚©
+        .Range("A7").Value = "‚È‚ºGit‚ğg‚¤‚Ì‚©?"
         .Range("A7").Font.Size = 14
         .Range("A7").Font.Bold = True
         .Range("A7").Interior.Color = RGB(68, 114, 196)
@@ -130,11 +130,11 @@ Private Sub FormatBasicsSheet()
 
         Dim reasons As Variant
         reasons = Array( _
-            "1. å¤‰æ›´å±¥æ­´ã‚’æ®‹ã›ã‚‹ - ã„ã¤ã€èª°ãŒã€ä½•ã‚’å¤‰æ›´ã—ãŸã‹è¨˜éŒ²ã•ã‚Œã‚‹", _
-            "2. éå»ã«æˆ»ã‚Œã‚‹ - é–“é•ãˆã¦ã‚‚ä»¥å‰ã®çŠ¶æ…‹ã«æˆ»ã›ã‚‹", _
-            "3. è¤‡æ•°äººã§ä½œæ¥­ã§ãã‚‹ - ãƒãƒ¼ãƒ ã§åŒæ™‚ã«é–‹ç™ºã§ãã‚‹", _
-            "4. å®Ÿé¨“ã—ã‚„ã™ã„ - ãƒ–ãƒ©ãƒ³ãƒã§å®‰å…¨ã«æ–°æ©Ÿèƒ½ã‚’è©¦ã›ã‚‹", _
-            "5. ãƒãƒƒã‚¯ã‚¢ãƒƒãƒ—ã«ãªã‚‹ - ãƒªãƒ¢ãƒ¼ãƒˆã«ã‚³ãƒ”ãƒ¼ã‚’ä¿å­˜ã§ãã‚‹" _
+            "1. •ÏX—š—ğ‚ğc‚¹‚é - ‚¢‚ÂA’N‚ªA‰½‚ğ•ÏX‚µ‚½‚©‹L˜^‚³‚ê‚é", _
+            "2. ‰ß‹‚É–ß‚ê‚é - ŠÔˆá‚¦‚Ä‚àˆÈ‘O‚Ìó‘Ô‚É–ß‚¹‚é", _
+            "3. •¡”l‚Åì‹Æ‚Å‚«‚é - ƒ`[ƒ€‚Å“¯‚ÉŠJ”­‚Å‚«‚é", _
+            "4. ÀŒ±‚µ‚â‚·‚¢ - ƒuƒ‰ƒ“ƒ`‚ÅˆÀ‘S‚ÉV‹@”\‚ğ‚¹‚é", _
+            "5. ƒoƒbƒNƒAƒbƒv‚É‚È‚é - ƒŠƒ‚[ƒg‚ÉƒRƒs[‚ğ•Û‘¶‚Å‚«‚é" _
         )
 
         Dim i As Long
@@ -143,32 +143,32 @@ Private Sub FormatBasicsSheet()
             .Range("A" & (8 + i) & ":H" & (8 + i)).Merge
         Next i
 
-        ' é‡è¦ãªç”¨èª
-        .Range("A14").Value = "è¦šãˆã¦ãŠããŸã„ç”¨èª"
+        ' d—v‚È—pŒê
+        .Range("A14").Value = "Šo‚¦‚Ä‚¨‚«‚½‚¢—pŒê"
         .Range("A14").Font.Size = 14
         .Range("A14").Font.Bold = True
         .Range("A14").Interior.Color = RGB(68, 114, 196)
         .Range("A14").Font.Color = RGB(255, 255, 255)
         .Range("A14:H14").Merge
 
-        .Range("A15").Value = "ç”¨èª"
-        .Range("B15").Value = "èª­ã¿æ–¹"
-        .Range("C15").Value = "èª¬æ˜"
+        .Range("A15").Value = "—pŒê"
+        .Range("B15").Value = "“Ç‚İ•û"
+        .Range("C15").Value = "à–¾"
         .Range("A15:C15").Font.Bold = True
         .Range("A15:C15").Interior.Color = RGB(180, 198, 231)
 
         Dim terms As Variant
         terms = Array( _
-            Array("Repository", "ãƒªãƒã‚¸ãƒˆãƒª", "Gitã§ç®¡ç†ã•ã‚Œã¦ã„ã‚‹ãƒ•ã‚©ãƒ«ãƒ€ã€‚ãƒ—ãƒ­ã‚¸ã‚§ã‚¯ãƒˆã®å…¨å±¥æ­´ãŒä¿å­˜ã•ã‚Œã‚‹å ´æ‰€ã€‚"), _
-            Array("Commit", "ã‚³ãƒŸãƒƒãƒˆ", "å¤‰æ›´ã‚’è¨˜éŒ²ã™ã‚‹ã“ã¨ã€‚ã‚»ãƒ¼ãƒ–ãƒã‚¤ãƒ³ãƒˆã‚’ä½œã‚‹ã‚¤ãƒ¡ãƒ¼ã‚¸ã€‚"), _
-            Array("Branch", "ãƒ–ãƒ©ãƒ³ãƒ", "é–‹ç™ºã®åˆ†å²ã€‚ãƒ¡ã‚¤ãƒ³ã¨ã¯åˆ¥ã®ä½œæ¥­å ´æ‰€ã‚’ä½œã‚Œã‚‹ã€‚"), _
-            Array("Merge", "ãƒãƒ¼ã‚¸", "ãƒ–ãƒ©ãƒ³ãƒã‚’çµ±åˆã™ã‚‹ã“ã¨ã€‚åˆ¥ã€…ã®å¤‰æ›´ã‚’1ã¤ã«ã¾ã¨ã‚ã‚‹ã€‚"), _
-            Array("Clone", "ã‚¯ãƒ­ãƒ¼ãƒ³", "ãƒªãƒ¢ãƒ¼ãƒˆã®ãƒªãƒã‚¸ãƒˆãƒªã‚’ãƒ­ãƒ¼ã‚«ãƒ«ã«ã‚³ãƒ”ãƒ¼ã™ã‚‹ã“ã¨ã€‚"), _
-            Array("Push", "ãƒ—ãƒƒã‚·ãƒ¥", "ãƒ­ãƒ¼ã‚«ãƒ«ã®å¤‰æ›´ã‚’ãƒªãƒ¢ãƒ¼ãƒˆã«é€ã‚‹ã“ã¨ã€‚"), _
-            Array("Pull", "ãƒ—ãƒ«", "ãƒªãƒ¢ãƒ¼ãƒˆã®å¤‰æ›´ã‚’ãƒ­ãƒ¼ã‚«ãƒ«ã«å–ã‚Šè¾¼ã‚€ã“ã¨ã€‚"), _
-            Array("Staging", "ã‚¹ãƒ†ãƒ¼ã‚¸ãƒ³ã‚°", "ã‚³ãƒŸãƒƒãƒˆã™ã‚‹å¤‰æ›´ã‚’é¸ã¶æº–å‚™æ®µéšã€‚"), _
-            Array("HEAD", "ãƒ˜ãƒƒãƒ‰", "ç¾åœ¨ä½œæ¥­ä¸­ã®ã‚³ãƒŸãƒƒãƒˆã‚’æŒ‡ã™ãƒã‚¤ãƒ³ã‚¿ã€‚"), _
-            Array("Origin", "ã‚ªãƒªã‚¸ãƒ³", "ãƒªãƒ¢ãƒ¼ãƒˆãƒªãƒã‚¸ãƒˆãƒªã®ãƒ‡ãƒ•ã‚©ãƒ«ãƒˆåã€‚é€šå¸¸ã¯GitHubç­‰ã‚’æŒ‡ã™ã€‚") _
+            Array("Repository", "ƒŠƒ|ƒWƒgƒŠ", "Git‚ÅŠÇ—‚³‚ê‚Ä‚¢‚éƒtƒHƒ‹ƒ_BƒvƒƒWƒFƒNƒg‚Ì‘S—š—ğ‚ª•Û‘¶‚³‚ê‚éêŠB"), _
+            Array("Commit", "ƒRƒ~ƒbƒg", "•ÏX‚ğ‹L˜^‚·‚é‚±‚ÆBƒZ[ƒuƒ|ƒCƒ“ƒg‚ğì‚éƒCƒ[ƒWB"), _
+            Array("Branch", "ƒuƒ‰ƒ“ƒ`", "ŠJ”­‚Ì•ªŠòBƒƒCƒ“‚Æ‚Í•Ê‚Ìì‹ÆêŠ‚ğì‚ê‚éB"), _
+            Array("Merge", "ƒ}[ƒW", "ƒuƒ‰ƒ“ƒ`‚ğ“‡‚·‚é‚±‚ÆB•ÊX‚Ì•ÏX‚ğ1‚Â‚É‚Ü‚Æ‚ß‚éB"), _
+            Array("Clone", "ƒNƒ[ƒ“", "ƒŠƒ‚[ƒg‚ÌƒŠƒ|ƒWƒgƒŠ‚ğƒ[ƒJƒ‹‚ÉƒRƒs[‚·‚é‚±‚ÆB"), _
+            Array("Push", "ƒvƒbƒVƒ…", "ƒ[ƒJƒ‹‚Ì•ÏX‚ğƒŠƒ‚[ƒg‚É‘—‚é‚±‚ÆB"), _
+            Array("Pull", "ƒvƒ‹", "ƒŠƒ‚[ƒg‚Ì•ÏX‚ğƒ[ƒJƒ‹‚Éæ‚è‚Ş‚±‚ÆB"), _
+            Array("Staging", "ƒXƒe[ƒWƒ“ƒO", "ƒRƒ~ƒbƒg‚·‚é•ÏX‚ğ‘I‚Ô€”õ’iŠKB"), _
+            Array("HEAD", "ƒwƒbƒh", "Œ»İì‹Æ’†‚ÌƒRƒ~ƒbƒg‚ğw‚·ƒ|ƒCƒ“ƒ^B"), _
+            Array("Origin", "ƒIƒŠƒWƒ“", "ƒŠƒ‚[ƒgƒŠƒ|ƒWƒgƒŠ‚ÌƒfƒtƒHƒ‹ƒg–¼B’Êí‚ÍGitHub“™‚ğw‚·B") _
         )
 
         For i = 0 To UBound(terms)
@@ -178,25 +178,25 @@ Private Sub FormatBasicsSheet()
             .Range("C" & (16 + i) & ":H" & (16 + i)).Merge
         Next i
 
-        ' 3ã¤ã®é ˜åŸŸ
-        .Range("A27").Value = "Gitã®3ã¤ã®é ˜åŸŸï¼ˆã“ã‚Œé‡è¦!ï¼‰"
+        ' 3‚Â‚Ì—Ìˆæ
+        .Range("A27").Value = "Git‚Ì3‚Â‚Ì—Ìˆæi‚±‚êd—v!j"
         .Range("A27").Font.Size = 14
         .Range("A27").Font.Bold = True
         .Range("A27").Interior.Color = RGB(192, 80, 77)
         .Range("A27").Font.Color = RGB(255, 255, 255)
         .Range("A27:H27").Merge
 
-        .Range("A28").Value = "é ˜åŸŸ"
-        .Range("B28").Value = "èª¬æ˜"
-        .Range("C28").Value = "çŠ¶æ…‹"
+        .Range("A28").Value = "—Ìˆæ"
+        .Range("B28").Value = "à–¾"
+        .Range("C28").Value = "ó‘Ô"
         .Range("A28:C28").Font.Bold = True
         .Range("A28:C28").Interior.Color = RGB(230, 184, 183)
 
         Dim areas As Variant
         areas = Array( _
-            Array("ä½œæ¥­ãƒ‡ã‚£ãƒ¬ã‚¯ãƒˆãƒª", "å®Ÿéš›ã«ãƒ•ã‚¡ã‚¤ãƒ«ã‚’ç·¨é›†ã™ã‚‹å ´æ‰€", "ãƒ•ã‚¡ã‚¤ãƒ«ã‚’å¤‰æ›´ã—ã¦ã„ã‚‹çŠ¶æ…‹"), _
-            Array("ã‚¹ãƒ†ãƒ¼ã‚¸ãƒ³ã‚°ã‚¨ãƒªã‚¢", "ã‚³ãƒŸãƒƒãƒˆã™ã‚‹å¤‰æ›´ã‚’é¸ã¶å ´æ‰€", "git add ã—ãŸçŠ¶æ…‹"), _
-            Array("ãƒªãƒã‚¸ãƒˆãƒª", "å¤‰æ›´å±¥æ­´ãŒä¿å­˜ã•ã‚Œã‚‹å ´æ‰€", "git commit ã—ãŸçŠ¶æ…‹") _
+            Array("ì‹ÆƒfƒBƒŒƒNƒgƒŠ", "ÀÛ‚Éƒtƒ@ƒCƒ‹‚ğ•ÒW‚·‚éêŠ", "ƒtƒ@ƒCƒ‹‚ğ•ÏX‚µ‚Ä‚¢‚éó‘Ô"), _
+            Array("ƒXƒe[ƒWƒ“ƒOƒGƒŠƒA", "ƒRƒ~ƒbƒg‚·‚é•ÏX‚ğ‘I‚ÔêŠ", "git add ‚µ‚½ó‘Ô"), _
+            Array("ƒŠƒ|ƒWƒgƒŠ", "•ÏX—š—ğ‚ª•Û‘¶‚³‚ê‚éêŠ", "git commit ‚µ‚½ó‘Ô") _
         )
 
         For i = 0 To UBound(areas)
@@ -207,15 +207,15 @@ Private Sub FormatBasicsSheet()
             .Range("C" & (29 + i) & ":H" & (29 + i)).Merge
         Next i
 
-        ' å›³è§£
-        .Range("A33").Value = "ã€å¤‰æ›´ã®æµã‚Œã€‘"
+        ' }‰ğ
+        .Range("A33").Value = "y•ÏX‚Ì—¬‚êz"
         .Range("A33").Font.Bold = True
-        .Range("A34").Value = "ãƒ•ã‚¡ã‚¤ãƒ«ç·¨é›† â†’ git add â†’ git commit â†’ git push"
+        .Range("A34").Value = "ƒtƒ@ƒCƒ‹•ÒW ¨ git add ¨ git commit ¨ git push"
         .Range("A34").Font.Name = "Consolas"
-        .Range("A35").Value = "(ä½œæ¥­)         (ã‚¹ãƒ†ãƒ¼ã‚¸)  (ãƒ­ãƒ¼ã‚«ãƒ«ä¿å­˜)  (ãƒªãƒ¢ãƒ¼ãƒˆé€ä¿¡)"
+        .Range("A35").Value = "(ì‹Æ)         (ƒXƒe[ƒW)  (ƒ[ƒJƒ‹•Û‘¶)  (ƒŠƒ‚[ƒg‘—M)"
         .Range("A35").Font.Color = RGB(128, 128, 128)
 
-        ' åˆ—å¹…
+        ' —ñ•
         .Columns("A").ColumnWidth = 20
         .Columns("B").ColumnWidth = 15
         .Columns("C").ColumnWidth = 60
@@ -223,41 +223,41 @@ Private Sub FormatBasicsSheet()
 End Sub
 
 '==============================================================================
-' åŸºæœ¬ã‚³ãƒãƒ³ãƒ‰ã‚·ãƒ¼ãƒˆ
+' Šî–{ƒRƒ}ƒ“ƒhƒV[ƒg
 '==============================================================================
 Private Sub FormatBasicCommandsSheet()
     Dim ws As Worksheet
-    Set ws = Sheets("åŸºæœ¬ã‚³ãƒãƒ³ãƒ‰")
+    Set ws = Sheets("Šî–{ƒRƒ}ƒ“ƒh")
 
     With ws
-        ' ã‚¿ã‚¤ãƒˆãƒ«
-        .Range("A1").Value = "åŸºæœ¬ã‚³ãƒãƒ³ãƒ‰ - æ¯æ—¥ä½¿ã†ã‚³ãƒãƒ³ãƒ‰"
+        ' ƒ^ƒCƒgƒ‹
+        .Range("A1").Value = "Šî–{ƒRƒ}ƒ“ƒh - –ˆ“úg‚¤ƒRƒ}ƒ“ƒh"
         .Range("A1").Font.Size = 20
         .Range("A1").Font.Bold = True
         .Range("A1:H1").Merge
         .Range("A1").Interior.Color = RGB(64, 64, 64)
         .Range("A1").Font.Color = RGB(255, 255, 255)
 
-        ' ãƒ˜ãƒƒãƒ€ãƒ¼
-        .Range("A3").Value = "ã‚³ãƒãƒ³ãƒ‰"
-        .Range("B3").Value = "èª¬æ˜"
-        .Range("C3").Value = "ä½¿ç”¨ä¾‹"
-        .Range("D3").Value = "ãƒã‚¤ãƒ³ãƒˆ"
+        ' ƒwƒbƒ_[
+        .Range("A3").Value = "ƒRƒ}ƒ“ƒh"
+        .Range("B3").Value = "à–¾"
+        .Range("C3").Value = "g—p—á"
+        .Range("D3").Value = "ƒ|ƒCƒ“ƒg"
         .Range("A3:D3").Font.Bold = True
         .Range("A3:D3").Interior.Color = RGB(68, 114, 196)
         .Range("A3:D3").Font.Color = RGB(255, 255, 255)
 
         Dim commands As Variant
         commands = Array( _
-            Array("git init", "æ–°ã—ã„ãƒªãƒã‚¸ãƒˆãƒªã‚’ä½œæˆ", "git init", "ç©ºã®ãƒ•ã‚©ãƒ«ãƒ€ã§æœ€åˆã«1å›ã ã‘å®Ÿè¡Œ"), _
-            Array("git clone", "ãƒªãƒ¢ãƒ¼ãƒˆãƒªãƒã‚¸ãƒˆãƒªã‚’ã‚³ãƒ”ãƒ¼", "git clone https://github.com/user/repo.git", "æ—¢å­˜ãƒ—ãƒ­ã‚¸ã‚§ã‚¯ãƒˆã‚’å–å¾—ã™ã‚‹æ™‚ã«ä½¿ã†"), _
-            Array("git status", "ç¾åœ¨ã®çŠ¶æ…‹ã‚’ç¢ºèª", "git status", "è¿·ã£ãŸã‚‰ã¾ãšã“ã‚Œ! ä¸€ç•ªã‚ˆãä½¿ã†"), _
-            Array("git add", "å¤‰æ›´ã‚’ã‚¹ãƒ†ãƒ¼ã‚¸ãƒ³ã‚°", "git add ãƒ•ã‚¡ã‚¤ãƒ«å" & vbLf & "git add .", "ã€Œ.ã€ã§å…¨ãƒ•ã‚¡ã‚¤ãƒ«ã‚’è¿½åŠ "), _
-            Array("git commit", "å¤‰æ›´ã‚’è¨˜éŒ²", "git commit -m ""ãƒ¡ãƒƒã‚»ãƒ¼ã‚¸""", "ãƒ¡ãƒƒã‚»ãƒ¼ã‚¸ã¯ä½•ã‚’å¤‰æ›´ã—ãŸã‹æ›¸ã"), _
-            Array("git push", "ãƒªãƒ¢ãƒ¼ãƒˆã«é€ä¿¡", "git push origin main", "ãƒ­ãƒ¼ã‚«ãƒ«ã®å¤‰æ›´ã‚’GitHubã¸"), _
-            Array("git pull", "ãƒªãƒ¢ãƒ¼ãƒˆã‹ã‚‰å–å¾—", "git pull origin main", "æœ€æ–°ã®å¤‰æ›´ã‚’å–ã‚Šè¾¼ã‚€"), _
-            Array("git log", "å±¥æ­´ã‚’è¡¨ç¤º", "git log --oneline", "--onelineã§1è¡Œè¡¨ç¤º"), _
-            Array("git diff", "å·®åˆ†ã‚’è¡¨ç¤º", "git diff", "ä½•ãŒå¤‰ã‚ã£ãŸã‹ç¢ºèªã§ãã‚‹") _
+            Array("git init", "V‚µ‚¢ƒŠƒ|ƒWƒgƒŠ‚ğì¬", "git init", "‹ó‚ÌƒtƒHƒ‹ƒ_‚ÅÅ‰‚É1‰ñ‚¾‚¯Às"), _
+            Array("git clone", "ƒŠƒ‚[ƒgƒŠƒ|ƒWƒgƒŠ‚ğƒRƒs[", "git clone https://github.com/user/repo.git", "Šù‘¶ƒvƒƒWƒFƒNƒg‚ğæ“¾‚·‚é‚Ég‚¤"), _
+            Array("git status", "Œ»İ‚Ìó‘Ô‚ğŠm”F", "git status", "–À‚Á‚½‚ç‚Ü‚¸‚±‚ê! ˆê”Ô‚æ‚­g‚¤"), _
+            Array("git add", "•ÏX‚ğƒXƒe[ƒWƒ“ƒO", "git add ƒtƒ@ƒCƒ‹–¼" & vbLf & "git add .", "u.v‚Å‘Sƒtƒ@ƒCƒ‹‚ğ’Ç‰Á"), _
+            Array("git commit", "•ÏX‚ğ‹L˜^", "git commit -m ""ƒƒbƒZ[ƒW""", "ƒƒbƒZ[ƒW‚Í‰½‚ğ•ÏX‚µ‚½‚©‘‚­"), _
+            Array("git push", "ƒŠƒ‚[ƒg‚É‘—M", "git push origin main", "ƒ[ƒJƒ‹‚Ì•ÏX‚ğGitHub‚Ö"), _
+            Array("git pull", "ƒŠƒ‚[ƒg‚©‚çæ“¾", "git pull origin main", "ÅV‚Ì•ÏX‚ğæ‚è‚Ş"), _
+            Array("git log", "—š—ğ‚ğ•\¦", "git log --oneline", "--oneline‚Å1s•\¦"), _
+            Array("git diff", "·•ª‚ğ•\¦", "git diff", "‰½‚ª•Ï‚í‚Á‚½‚©Šm”F‚Å‚«‚é") _
         )
 
         Dim i As Long
@@ -276,8 +276,8 @@ Private Sub FormatBasicCommandsSheet()
             row = row + 1
         Next i
 
-        ' åŸºæœ¬ã®æµã‚Œ
-        .Range("A14").Value = "åŸºæœ¬ã®ä½œæ¥­ãƒ•ãƒ­ãƒ¼"
+        ' Šî–{‚Ì—¬‚ê
+        .Range("A14").Value = "Šî–{‚Ìì‹Æƒtƒ["
         .Range("A14").Font.Size = 14
         .Range("A14").Font.Bold = True
         .Range("A14").Interior.Color = RGB(0, 176, 80)
@@ -286,13 +286,13 @@ Private Sub FormatBasicCommandsSheet()
 
         Dim workflow As Variant
         workflow = Array( _
-            "Step 1: git status          # ç¾åœ¨ã®çŠ¶æ…‹ã‚’ç¢ºèª", _
-            "Step 2: (ãƒ•ã‚¡ã‚¤ãƒ«ã‚’ç·¨é›†)", _
-            "Step 3: git status          # å¤‰æ›´ã•ã‚ŒãŸãƒ•ã‚¡ã‚¤ãƒ«ã‚’ç¢ºèª", _
-            "Step 4: git add .           # å…¨ã¦ã®å¤‰æ›´ã‚’ã‚¹ãƒ†ãƒ¼ã‚¸ãƒ³ã‚°", _
-            "Step 5: git status          # ã‚¹ãƒ†ãƒ¼ã‚¸ãƒ³ã‚°ã•ã‚ŒãŸã‹ç¢ºèª", _
-            "Step 6: git commit -m ""å¤‰æ›´å†…å®¹""  # ã‚³ãƒŸãƒƒãƒˆ", _
-            "Step 7: git push origin main     # ãƒªãƒ¢ãƒ¼ãƒˆã«é€ä¿¡" _
+            "Step 1: git status          # Œ»İ‚Ìó‘Ô‚ğŠm”F", _
+            "Step 2: (ƒtƒ@ƒCƒ‹‚ğ•ÒW)", _
+            "Step 3: git status          # •ÏX‚³‚ê‚½ƒtƒ@ƒCƒ‹‚ğŠm”F", _
+            "Step 4: git add .           # ‘S‚Ä‚Ì•ÏX‚ğƒXƒe[ƒWƒ“ƒO", _
+            "Step 5: git status          # ƒXƒe[ƒWƒ“ƒO‚³‚ê‚½‚©Šm”F", _
+            "Step 6: git commit -m ""•ÏX“à—e""  # ƒRƒ~ƒbƒg", _
+            "Step 7: git push origin main     # ƒŠƒ‚[ƒg‚É‘—M" _
         )
 
         For i = 0 To UBound(workflow)
@@ -302,7 +302,7 @@ Private Sub FormatBasicCommandsSheet()
         Next i
 
         ' Tips
-        .Range("A23").Value = "åˆå¿ƒè€…Tips"
+        .Range("A23").Value = "‰SÒTips"
         .Range("A23").Font.Size = 14
         .Range("A23").Font.Bold = True
         .Range("A23").Interior.Color = RGB(255, 192, 0)
@@ -310,10 +310,10 @@ Private Sub FormatBasicCommandsSheet()
 
         Dim tips As Variant
         tips = Array( _
-            "ãƒ»è¿·ã£ãŸã‚‰ git status ã‚’å®Ÿè¡Œ! ä»Šä½•ãŒèµ·ãã¦ã„ã‚‹ã‹ã‚ã‹ã‚Šã¾ã™", _
-            "ãƒ»ã‚³ãƒŸãƒƒãƒˆãƒ¡ãƒƒã‚»ãƒ¼ã‚¸ã¯ã€Œä½•ã‚’ã—ãŸã‹ã€ã‚’æ—¥æœ¬èªã§æ›¸ã„ã¦OK", _
-            "ãƒ»å°ã•ãªå˜ä½ã§ã“ã¾ã‚ã«ã‚³ãƒŸãƒƒãƒˆã™ã‚‹ã®ãŒã‚³ãƒ„", _
-            "ãƒ»pushã™ã‚‹å‰ã«pullã—ã¦æœ€æ–°ã‚’å–ã‚Šè¾¼ã‚€ç¿’æ…£ã‚’ã¤ã‘ã‚ˆã†" _
+            "E–À‚Á‚½‚ç git status ‚ğÀs! ¡‰½‚ª‹N‚«‚Ä‚¢‚é‚©‚í‚©‚è‚Ü‚·", _
+            "EƒRƒ~ƒbƒgƒƒbƒZ[ƒW‚Íu‰½‚ğ‚µ‚½‚©v‚ğ“ú–{Œê‚Å‘‚¢‚ÄOK", _
+            "E¬‚³‚È’PˆÊ‚Å‚±‚Ü‚ß‚ÉƒRƒ~ƒbƒg‚·‚é‚Ì‚ªƒRƒc", _
+            "Epush‚·‚é‘O‚Épull‚µ‚ÄÅV‚ğæ‚è‚ŞKŠµ‚ğ‚Â‚¯‚æ‚¤" _
         )
 
         For i = 0 To UBound(tips)
@@ -321,7 +321,7 @@ Private Sub FormatBasicCommandsSheet()
             .Range("A" & (24 + i) & ":H" & (24 + i)).Merge
         Next i
 
-        ' åˆ—å¹…
+        ' —ñ•
         .Columns("A").ColumnWidth = 18
         .Columns("B").ColumnWidth = 25
         .Columns("C").ColumnWidth = 45
@@ -330,59 +330,59 @@ Private Sub FormatBasicCommandsSheet()
 End Sub
 
 '==============================================================================
-' ãƒ–ãƒ©ãƒ³ãƒæ“ä½œã‚·ãƒ¼ãƒˆ
+' ƒuƒ‰ƒ“ƒ`‘€ìƒV[ƒg
 '==============================================================================
 Private Sub FormatBranchSheet()
     Dim ws As Worksheet
-    Set ws = Sheets("ãƒ–ãƒ©ãƒ³ãƒæ“ä½œ")
+    Set ws = Sheets("ƒuƒ‰ƒ“ƒ`‘€ì")
 
     With ws
-        ' ã‚¿ã‚¤ãƒˆãƒ«
-        .Range("A1").Value = "ãƒ–ãƒ©ãƒ³ãƒæ“ä½œ - ä¸¦è¡Œé–‹ç™ºã®è¦"
+        ' ƒ^ƒCƒgƒ‹
+        .Range("A1").Value = "ƒuƒ‰ƒ“ƒ`‘€ì - •ÀsŠJ”­‚Ì—v"
         .Range("A1").Font.Size = 20
         .Range("A1").Font.Bold = True
         .Range("A1:H1").Merge
         .Range("A1").Interior.Color = RGB(64, 64, 64)
         .Range("A1").Font.Color = RGB(255, 255, 255)
 
-        ' ãƒ–ãƒ©ãƒ³ãƒã¨ã¯
-        .Range("A3").Value = "ãƒ–ãƒ©ãƒ³ãƒã¨ã¯?"
+        ' ƒuƒ‰ƒ“ƒ`‚Æ‚Í
+        .Range("A3").Value = "ƒuƒ‰ƒ“ƒ`‚Æ‚Í?"
         .Range("A3").Font.Size = 14
         .Range("A3").Font.Bold = True
         .Range("A3").Interior.Color = RGB(112, 48, 160)
         .Range("A3").Font.Color = RGB(255, 255, 255)
         .Range("A3:H3").Merge
 
-        .Range("A4").Value = "ãƒ–ãƒ©ãƒ³ãƒã¯ã€Œæåˆ†ã‹ã‚Œã€ã¨ã„ã†æ„å‘³ã€‚ãƒ¡ã‚¤ãƒ³ã®é–‹ç™ºãƒ©ã‚¤ãƒ³ã¨ã¯åˆ¥ã«ã€ç‹¬ç«‹ã—ãŸä½œæ¥­å ´æ‰€ã‚’ä½œã‚Œã¾ã™ã€‚"
+        .Range("A4").Value = "ƒuƒ‰ƒ“ƒ`‚Íu}•ª‚©‚êv‚Æ‚¢‚¤ˆÓ–¡BƒƒCƒ“‚ÌŠJ”­ƒ‰ƒCƒ“‚Æ‚Í•Ê‚ÉA“Æ—§‚µ‚½ì‹ÆêŠ‚ğì‚ê‚Ü‚·B"
         .Range("A4:H4").Merge
-        .Range("A5").Value = "æ–°æ©Ÿèƒ½ã®é–‹ç™ºã‚„ãƒã‚°ä¿®æ­£ã‚’ã€ãƒ¡ã‚¤ãƒ³ã«å½±éŸ¿ã‚’ä¸ãˆãšã«å®‰å…¨ã«è¡Œãˆã¾ã™ã€‚"
+        .Range("A5").Value = "V‹@”\‚ÌŠJ”­‚âƒoƒOC³‚ğAƒƒCƒ“‚É‰e‹¿‚ğ—^‚¦‚¸‚ÉˆÀ‘S‚És‚¦‚Ü‚·B"
         .Range("A5:H5").Merge
 
-        ' ã‚³ãƒãƒ³ãƒ‰ä¸€è¦§
-        .Range("A7").Value = "ãƒ–ãƒ©ãƒ³ãƒæ“ä½œã‚³ãƒãƒ³ãƒ‰"
+        ' ƒRƒ}ƒ“ƒhˆê——
+        .Range("A7").Value = "ƒuƒ‰ƒ“ƒ`‘€ìƒRƒ}ƒ“ƒh"
         .Range("A7").Font.Size = 14
         .Range("A7").Font.Bold = True
         .Range("A7").Interior.Color = RGB(112, 48, 160)
         .Range("A7").Font.Color = RGB(255, 255, 255)
         .Range("A7:H7").Merge
 
-        .Range("A8").Value = "ã‚³ãƒãƒ³ãƒ‰"
-        .Range("B8").Value = "èª¬æ˜"
-        .Range("C8").Value = "ä½¿ç”¨ä¾‹"
+        .Range("A8").Value = "ƒRƒ}ƒ“ƒh"
+        .Range("B8").Value = "à–¾"
+        .Range("C8").Value = "g—p—á"
         .Range("A8:C8").Font.Bold = True
         .Range("A8:C8").Interior.Color = RGB(204, 192, 218)
 
         Dim commands As Variant
         commands = Array( _
-            Array("git branch", "ãƒ–ãƒ©ãƒ³ãƒä¸€è¦§ã‚’è¡¨ç¤º", "git branch"), _
-            Array("git branch [åå‰]", "æ–°ã—ã„ãƒ–ãƒ©ãƒ³ãƒã‚’ä½œæˆ", "git branch feature-login"), _
-            Array("git checkout [åå‰]", "ãƒ–ãƒ©ãƒ³ãƒã‚’åˆ‡ã‚Šæ›¿ãˆ", "git checkout feature-login"), _
-            Array("git checkout -b [åå‰]", "ä½œæˆã¨åˆ‡ã‚Šæ›¿ãˆã‚’åŒæ™‚ã«", "git checkout -b feature-login"), _
-            Array("git switch [åå‰]", "ãƒ–ãƒ©ãƒ³ãƒã‚’åˆ‡ã‚Šæ›¿ãˆ(æ–°)", "git switch feature-login"), _
-            Array("git switch -c [åå‰]", "ä½œæˆã¨åˆ‡ã‚Šæ›¿ãˆ(æ–°)", "git switch -c feature-login"), _
-            Array("git merge [åå‰]", "ãƒ–ãƒ©ãƒ³ãƒã‚’çµ±åˆ", "git merge feature-login"), _
-            Array("git branch -d [åå‰]", "ãƒ–ãƒ©ãƒ³ãƒã‚’å‰Šé™¤", "git branch -d feature-login"), _
-            Array("git branch -D [åå‰]", "å¼·åˆ¶å‰Šé™¤", "git branch -D feature-login") _
+            Array("git branch", "ƒuƒ‰ƒ“ƒ`ˆê——‚ğ•\¦", "git branch"), _
+            Array("git branch [–¼‘O]", "V‚µ‚¢ƒuƒ‰ƒ“ƒ`‚ğì¬", "git branch feature-login"), _
+            Array("git checkout [–¼‘O]", "ƒuƒ‰ƒ“ƒ`‚ğØ‚è‘Ö‚¦", "git checkout feature-login"), _
+            Array("git checkout -b [–¼‘O]", "ì¬‚ÆØ‚è‘Ö‚¦‚ğ“¯‚É", "git checkout -b feature-login"), _
+            Array("git switch [–¼‘O]", "ƒuƒ‰ƒ“ƒ`‚ğØ‚è‘Ö‚¦(V)", "git switch feature-login"), _
+            Array("git switch -c [–¼‘O]", "ì¬‚ÆØ‚è‘Ö‚¦(V)", "git switch -c feature-login"), _
+            Array("git merge [–¼‘O]", "ƒuƒ‰ƒ“ƒ`‚ğ“‡", "git merge feature-login"), _
+            Array("git branch -d [–¼‘O]", "ƒuƒ‰ƒ“ƒ`‚ğíœ", "git branch -d feature-login"), _
+            Array("git branch -D [–¼‘O]", "‹­§íœ", "git branch -D feature-login") _
         )
 
         Dim i As Long
@@ -394,8 +394,8 @@ Private Sub FormatBranchSheet()
             .Range("C" & (9 + i)).Font.Name = "Consolas"
         Next i
 
-        ' ãƒ–ãƒ©ãƒ³ãƒã®ä½¿ã„æ–¹
-        .Range("A19").Value = "ãƒ–ãƒ©ãƒ³ãƒã‚’ä½¿ã£ãŸé–‹ç™ºãƒ•ãƒ­ãƒ¼"
+        ' ƒuƒ‰ƒ“ƒ`‚Ìg‚¢•û
+        .Range("A19").Value = "ƒuƒ‰ƒ“ƒ`‚ğg‚Á‚½ŠJ”­ƒtƒ["
         .Range("A19").Font.Size = 14
         .Range("A19").Font.Bold = True
         .Range("A19").Interior.Color = RGB(0, 176, 80)
@@ -404,13 +404,13 @@ Private Sub FormatBranchSheet()
 
         Dim workflow As Variant
         workflow = Array( _
-            "1. git checkout -b feature-xxx    # æ–°æ©Ÿèƒ½ç”¨ãƒ–ãƒ©ãƒ³ãƒã‚’ä½œæˆ", _
-            "2. (ãƒ•ã‚¡ã‚¤ãƒ«ã‚’ç·¨é›†ãƒ»ã‚³ãƒŸãƒƒãƒˆã‚’ç¹°ã‚Šè¿”ã™)", _
-            "3. git checkout main              # mainãƒ–ãƒ©ãƒ³ãƒã«æˆ»ã‚‹", _
-            "4. git pull origin main           # æœ€æ–°ã‚’å–å¾—", _
-            "5. git merge feature-xxx          # æ–°æ©Ÿèƒ½ã‚’mainã«çµ±åˆ", _
-            "6. git push origin main           # ãƒªãƒ¢ãƒ¼ãƒˆã«é€ä¿¡", _
-            "7. git branch -d feature-xxx      # ä¸è¦ã«ãªã£ãŸãƒ–ãƒ©ãƒ³ãƒã‚’å‰Šé™¤" _
+            "1. git checkout -b feature-xxx    # V‹@”\—pƒuƒ‰ƒ“ƒ`‚ğì¬", _
+            "2. (ƒtƒ@ƒCƒ‹‚ğ•ÒWEƒRƒ~ƒbƒg‚ğŒJ‚è•Ô‚·)", _
+            "3. git checkout main              # mainƒuƒ‰ƒ“ƒ`‚É–ß‚é", _
+            "4. git pull origin main           # ÅV‚ğæ“¾", _
+            "5. git merge feature-xxx          # V‹@”\‚ğmain‚É“‡", _
+            "6. git push origin main           # ƒŠƒ‚[ƒg‚É‘—M", _
+            "7. git branch -d feature-xxx      # •s—v‚É‚È‚Á‚½ƒuƒ‰ƒ“ƒ`‚ğíœ" _
         )
 
         For i = 0 To UBound(workflow)
@@ -419,8 +419,8 @@ Private Sub FormatBranchSheet()
             .Range("A" & (20 + i) & ":H" & (20 + i)).Merge
         Next i
 
-        ' ãƒ–ãƒ©ãƒ³ãƒå‘½åè¦å‰‡
-        .Range("A28").Value = "ãƒ–ãƒ©ãƒ³ãƒåã®ä»˜ã‘æ–¹ï¼ˆä¾‹ï¼‰"
+        ' ƒuƒ‰ƒ“ƒ`–½–¼‹K‘¥
+        .Range("A28").Value = "ƒuƒ‰ƒ“ƒ`–¼‚Ì•t‚¯•ûi—áj"
         .Range("A28").Font.Size = 14
         .Range("A28").Font.Bold = True
         .Range("A28").Interior.Color = RGB(255, 192, 0)
@@ -428,15 +428,15 @@ Private Sub FormatBranchSheet()
 
         Dim naming As Variant
         naming = Array( _
-            Array("feature/xxx", "æ–°æ©Ÿèƒ½é–‹ç™º", "feature/user-login, feature/add-search"), _
-            Array("bugfix/xxx", "ãƒã‚°ä¿®æ­£", "bugfix/login-error, bugfix/null-check"), _
-            Array("hotfix/xxx", "ç·Šæ€¥ä¿®æ­£", "hotfix/security-patch"), _
-            Array("release/xxx", "ãƒªãƒªãƒ¼ã‚¹æº–å‚™", "release/v1.0.0") _
+            Array("feature/xxx", "V‹@”\ŠJ”­", "feature/user-login, feature/add-search"), _
+            Array("bugfix/xxx", "ƒoƒOC³", "bugfix/login-error, bugfix/null-check"), _
+            Array("hotfix/xxx", "‹Ù‹}C³", "hotfix/security-patch"), _
+            Array("release/xxx", "ƒŠƒŠ[ƒX€”õ", "release/v1.0.0") _
         )
 
-        .Range("A29").Value = "ãƒ—ãƒ¬ãƒ•ã‚£ãƒƒã‚¯ã‚¹"
-        .Range("B29").Value = "ç”¨é€”"
-        .Range("C29").Value = "ä¾‹"
+        .Range("A29").Value = "ƒvƒŒƒtƒBƒbƒNƒX"
+        .Range("B29").Value = "—p“r"
+        .Range("C29").Value = "—á"
         .Range("A29:C29").Font.Bold = True
         .Range("A29:C29").Interior.Color = RGB(255, 230, 153)
 
@@ -448,7 +448,7 @@ Private Sub FormatBranchSheet()
             .Range("C" & (30 + i)).Font.Name = "Consolas"
         Next i
 
-        ' åˆ—å¹…
+        ' —ñ•
         .Columns("A").ColumnWidth = 25
         .Columns("B").ColumnWidth = 25
         .Columns("C").ColumnWidth = 45
@@ -456,57 +456,57 @@ Private Sub FormatBranchSheet()
 End Sub
 
 '==============================================================================
-' ãƒªãƒ¢ãƒ¼ãƒˆæ“ä½œã‚·ãƒ¼ãƒˆ
+' ƒŠƒ‚[ƒg‘€ìƒV[ƒg
 '==============================================================================
 Private Sub FormatRemoteSheet()
     Dim ws As Worksheet
-    Set ws = Sheets("ãƒªãƒ¢ãƒ¼ãƒˆæ“ä½œ")
+    Set ws = Sheets("ƒŠƒ‚[ƒg‘€ì")
 
     With ws
-        ' ã‚¿ã‚¤ãƒˆãƒ«
-        .Range("A1").Value = "ãƒªãƒ¢ãƒ¼ãƒˆæ“ä½œ - GitHubã¨ã®é€£æº"
+        ' ƒ^ƒCƒgƒ‹
+        .Range("A1").Value = "ƒŠƒ‚[ƒg‘€ì - GitHub‚Æ‚Ì˜AŒg"
         .Range("A1").Font.Size = 20
         .Range("A1").Font.Bold = True
         .Range("A1:H1").Merge
         .Range("A1").Interior.Color = RGB(64, 64, 64)
         .Range("A1").Font.Color = RGB(255, 255, 255)
 
-        ' ãƒªãƒ¢ãƒ¼ãƒˆã¨ã¯
-        .Range("A3").Value = "ãƒªãƒ¢ãƒ¼ãƒˆãƒªãƒã‚¸ãƒˆãƒªã¨ã¯?"
+        ' ƒŠƒ‚[ƒg‚Æ‚Í
+        .Range("A3").Value = "ƒŠƒ‚[ƒgƒŠƒ|ƒWƒgƒŠ‚Æ‚Í?"
         .Range("A3").Font.Size = 14
         .Range("A3").Font.Bold = True
         .Range("A3").Interior.Color = RGB(0, 112, 192)
         .Range("A3").Font.Color = RGB(255, 255, 255)
         .Range("A3:H3").Merge
 
-        .Range("A4").Value = "GitHubã€GitLabã€Bitbucketãªã©ã®ã‚µãƒ¼ãƒãƒ¼ä¸Šã«ã‚ã‚‹ãƒªãƒã‚¸ãƒˆãƒªã®ã“ã¨ã€‚"
+        .Range("A4").Value = "GitHubAGitLabABitbucket‚È‚Ç‚ÌƒT[ƒo[ã‚É‚ ‚éƒŠƒ|ƒWƒgƒŠ‚Ì‚±‚ÆB"
         .Range("A4:H4").Merge
-        .Range("A5").Value = "ãƒãƒ¼ãƒ ã§ã‚³ãƒ¼ãƒ‰ã‚’å…±æœ‰ã—ãŸã‚Šã€ãƒãƒƒã‚¯ã‚¢ãƒƒãƒ—ã¨ã—ã¦ä½¿ã£ãŸã‚Šã—ã¾ã™ã€‚"
+        .Range("A5").Value = "ƒ`[ƒ€‚ÅƒR[ƒh‚ğ‹¤—L‚µ‚½‚èAƒoƒbƒNƒAƒbƒv‚Æ‚µ‚Äg‚Á‚½‚è‚µ‚Ü‚·B"
         .Range("A5:H5").Merge
 
-        ' ã‚³ãƒãƒ³ãƒ‰ä¸€è¦§
-        .Range("A7").Value = "ãƒªãƒ¢ãƒ¼ãƒˆæ“ä½œã‚³ãƒãƒ³ãƒ‰"
+        ' ƒRƒ}ƒ“ƒhˆê——
+        .Range("A7").Value = "ƒŠƒ‚[ƒg‘€ìƒRƒ}ƒ“ƒh"
         .Range("A7").Font.Size = 14
         .Range("A7").Font.Bold = True
         .Range("A7").Interior.Color = RGB(0, 112, 192)
         .Range("A7").Font.Color = RGB(255, 255, 255)
         .Range("A7:H7").Merge
 
-        .Range("A8").Value = "ã‚³ãƒãƒ³ãƒ‰"
-        .Range("B8").Value = "èª¬æ˜"
-        .Range("C8").Value = "ä½¿ç”¨ä¾‹"
+        .Range("A8").Value = "ƒRƒ}ƒ“ƒh"
+        .Range("B8").Value = "à–¾"
+        .Range("C8").Value = "g—p—á"
         .Range("A8:C8").Font.Bold = True
         .Range("A8:C8").Interior.Color = RGB(180, 198, 231)
 
         Dim commands As Variant
         commands = Array( _
-            Array("git remote -v", "ç™»éŒ²ã•ã‚Œã¦ã„ã‚‹ãƒªãƒ¢ãƒ¼ãƒˆã‚’ç¢ºèª", "git remote -v"), _
-            Array("git remote add", "ãƒªãƒ¢ãƒ¼ãƒˆã‚’ç™»éŒ²", "git remote add origin https://..."), _
-            Array("git push", "ãƒ­ãƒ¼ã‚«ãƒ«ã®å¤‰æ›´ã‚’é€ä¿¡", "git push origin main"), _
-            Array("git push -u", "ä¸Šæµãƒ–ãƒ©ãƒ³ãƒã‚’è¨­å®šã—ã¦é€ä¿¡", "git push -u origin main"), _
-            Array("git pull", "ãƒªãƒ¢ãƒ¼ãƒˆã®å¤‰æ›´ã‚’å–å¾—ãƒ»çµ±åˆ", "git pull origin main"), _
-            Array("git fetch", "ãƒªãƒ¢ãƒ¼ãƒˆã®æƒ…å ±ã ã‘å–å¾—", "git fetch origin"), _
-            Array("git clone", "ãƒªãƒ¢ãƒ¼ãƒˆã‚’ã‚³ãƒ”ãƒ¼", "git clone https://github.com/...") _
+            Array("git remote -v", "“o˜^‚³‚ê‚Ä‚¢‚éƒŠƒ‚[ƒg‚ğŠm”F", "git remote -v"), _
+            Array("git remote add", "ƒŠƒ‚[ƒg‚ğ“o˜^", "git remote add origin https://..."), _
+            Array("git push", "ƒ[ƒJƒ‹‚Ì•ÏX‚ğ‘—M", "git push origin main"), _
+            Array("git push -u", "ã—¬ƒuƒ‰ƒ“ƒ`‚ğİ’è‚µ‚Ä‘—M", "git push -u origin main"), _
+            Array("git pull", "ƒŠƒ‚[ƒg‚Ì•ÏX‚ğæ“¾E“‡", "git pull origin main"), _
+            Array("git fetch", "ƒŠƒ‚[ƒg‚Ìî•ñ‚¾‚¯æ“¾", "git fetch origin"), _
+            Array("git clone", "ƒŠƒ‚[ƒg‚ğƒRƒs[", "git clone https://github.com/...") _
         )
 
         Dim i As Long
@@ -519,51 +519,51 @@ Private Sub FormatRemoteSheet()
         Next i
 
         ' push vs pull
-        .Range("A17").Value = "push ã¨ pull ã®é•ã„"
+        .Range("A17").Value = "push ‚Æ pull ‚Ìˆá‚¢"
         .Range("A17").Font.Size = 14
         .Range("A17").Font.Bold = True
         .Range("A17").Interior.Color = RGB(255, 192, 0)
         .Range("A17:H17").Merge
 
-        .Range("A18").Value = "ã‚³ãƒãƒ³ãƒ‰"
-        .Range("B18").Value = "æ–¹å‘"
-        .Range("C18").Value = "èª¬æ˜"
+        .Range("A18").Value = "ƒRƒ}ƒ“ƒh"
+        .Range("B18").Value = "•ûŒü"
+        .Range("C18").Value = "à–¾"
         .Range("A18:C18").Font.Bold = True
         .Range("A18:C18").Interior.Color = RGB(255, 230, 153)
 
         .Range("A19").Value = "git push"
         .Range("A19").Font.Name = "Consolas"
-        .Range("B19").Value = "ãƒ­ãƒ¼ã‚«ãƒ« â†’ ãƒªãƒ¢ãƒ¼ãƒˆ"
-        .Range("C19").Value = "è‡ªåˆ†ã®å¤‰æ›´ã‚’ã‚µãƒ¼ãƒãƒ¼ã«é€ã‚‹"
+        .Range("B19").Value = "ƒ[ƒJƒ‹ ¨ ƒŠƒ‚[ƒg"
+        .Range("C19").Value = "©•ª‚Ì•ÏX‚ğƒT[ƒo[‚É‘—‚é"
 
         .Range("A20").Value = "git pull"
         .Range("A20").Font.Name = "Consolas"
-        .Range("B20").Value = "ãƒªãƒ¢ãƒ¼ãƒˆ â†’ ãƒ­ãƒ¼ã‚«ãƒ«"
-        .Range("C20").Value = "ã‚µãƒ¼ãƒãƒ¼ã®å¤‰æ›´ã‚’è‡ªåˆ†ã«å–ã‚Šè¾¼ã‚€"
+        .Range("B20").Value = "ƒŠƒ‚[ƒg ¨ ƒ[ƒJƒ‹"
+        .Range("C20").Value = "ƒT[ƒo[‚Ì•ÏX‚ğ©•ª‚Éæ‚è‚Ş"
 
         .Range("A21").Value = "git fetch"
         .Range("A21").Font.Name = "Consolas"
-        .Range("B21").Value = "ãƒªãƒ¢ãƒ¼ãƒˆ â†’ ãƒ­ãƒ¼ã‚«ãƒ«(æƒ…å ±ã®ã¿)"
-        .Range("C21").Value = "å¤‰æ›´æƒ…å ±ã ã‘å–å¾—(çµ±åˆã¯ã—ãªã„)"
+        .Range("B21").Value = "ƒŠƒ‚[ƒg ¨ ƒ[ƒJƒ‹(î•ñ‚Ì‚İ)"
+        .Range("C21").Value = "•ÏXî•ñ‚¾‚¯æ“¾(“‡‚Í‚µ‚È‚¢)"
 
         ' fetch vs pull
-        .Range("A23").Value = "fetch ã¨ pull ã®é•ã„"
+        .Range("A23").Value = "fetch ‚Æ pull ‚Ìˆá‚¢"
         .Range("A23").Font.Size = 14
         .Range("A23").Font.Bold = True
         .Range("A23").Interior.Color = RGB(0, 176, 80)
         .Range("A23").Font.Color = RGB(255, 255, 255)
         .Range("A23:H23").Merge
 
-        .Range("A24").Value = "git fetch: ãƒªãƒ¢ãƒ¼ãƒˆã®æƒ…å ±ã‚’å–å¾—ã™ã‚‹ã ã‘ã€‚ä½œæ¥­ä¸­ã®ãƒ•ã‚¡ã‚¤ãƒ«ã¯å¤‰ã‚ã‚‰ãªã„ã€‚"
+        .Range("A24").Value = "git fetch: ƒŠƒ‚[ƒg‚Ìî•ñ‚ğæ“¾‚·‚é‚¾‚¯Bì‹Æ’†‚Ìƒtƒ@ƒCƒ‹‚Í•Ï‚í‚ç‚È‚¢B"
         .Range("A24:H24").Merge
-        .Range("A25").Value = "git pull:  git fetch + git mergeã€‚å–å¾—ã¨çµ±åˆã‚’ä¸€åº¦ã«è¡Œã†ã€‚"
+        .Range("A25").Value = "git pull:  git fetch + git mergeBæ“¾‚Æ“‡‚ğˆê“x‚És‚¤B"
         .Range("A25:H25").Merge
         .Range("A26").Value = ""
-        .Range("A27").Value = "å®‰å…¨ã«ç¢ºèªã—ãŸã„æ™‚ã¯ fetch â†’ å†…å®¹ç¢ºèª â†’ merge ã®æµã‚ŒãŒãŠã™ã™ã‚"
+        .Range("A27").Value = "ˆÀ‘S‚ÉŠm”F‚µ‚½‚¢‚Í fetch ¨ “à—eŠm”F ¨ merge ‚Ì—¬‚ê‚ª‚¨‚·‚·‚ß"
         .Range("A27").Font.Color = RGB(0, 112, 192)
         .Range("A27:H27").Merge
 
-        ' åˆ—å¹…
+        ' —ñ•
         .Columns("A").ColumnWidth = 22
         .Columns("B").ColumnWidth = 30
         .Columns("C").ColumnWidth = 45
@@ -571,15 +571,15 @@ Private Sub FormatRemoteSheet()
 End Sub
 
 '==============================================================================
-' å±¥æ­´ãƒ»å·®åˆ†ç¢ºèªã‚·ãƒ¼ãƒˆ
+' —š—ğE·•ªŠm”FƒV[ƒg
 '==============================================================================
 Private Sub FormatHistorySheet()
     Dim ws As Worksheet
-    Set ws = Sheets("å±¥æ­´ãƒ»å·®åˆ†ç¢ºèª")
+    Set ws = Sheets("—š—ğE·•ªŠm”F")
 
     With ws
-        ' ã‚¿ã‚¤ãƒˆãƒ«
-        .Range("A1").Value = "å±¥æ­´ãƒ»å·®åˆ†ç¢ºèª - å¤‰æ›´ã‚’è¿½è·¡ã™ã‚‹"
+        ' ƒ^ƒCƒgƒ‹
+        .Range("A1").Value = "—š—ğE·•ªŠm”F - •ÏX‚ğ’ÇÕ‚·‚é"
         .Range("A1").Font.Size = 20
         .Range("A1").Font.Bold = True
         .Range("A1:H1").Merge
@@ -587,29 +587,29 @@ Private Sub FormatHistorySheet()
         .Range("A1").Font.Color = RGB(255, 255, 255)
 
         ' git log
-        .Range("A3").Value = "å±¥æ­´ã‚’è¦‹ã‚‹ (git log)"
+        .Range("A3").Value = "—š—ğ‚ğŒ©‚é (git log)"
         .Range("A3").Font.Size = 14
         .Range("A3").Font.Bold = True
         .Range("A3").Interior.Color = RGB(68, 114, 196)
         .Range("A3").Font.Color = RGB(255, 255, 255)
         .Range("A3:H3").Merge
 
-        .Range("A4").Value = "ã‚³ãƒãƒ³ãƒ‰"
-        .Range("B4").Value = "èª¬æ˜"
+        .Range("A4").Value = "ƒRƒ}ƒ“ƒh"
+        .Range("B4").Value = "à–¾"
         .Range("A4:B4").Font.Bold = True
         .Range("A4:B4").Interior.Color = RGB(180, 198, 231)
 
         Dim logCommands As Variant
         logCommands = Array( _
-            Array("git log", "ã‚³ãƒŸãƒƒãƒˆå±¥æ­´ã‚’è¡¨ç¤º"), _
-            Array("git log --oneline", "1è¡Œã§ç°¡æ½”ã«è¡¨ç¤ºï¼ˆãŠã™ã™ã‚ï¼‰"), _
-            Array("git log -n 5", "æœ€æ–°5ä»¶ã ã‘è¡¨ç¤º"), _
-            Array("git log --graph", "ãƒ–ãƒ©ãƒ³ãƒã‚’ã‚°ãƒ©ãƒ•è¡¨ç¤º"), _
-            Array("git log --oneline --graph", "ã‚°ãƒ©ãƒ•ã‚’1è¡Œè¡¨ç¤º"), _
-            Array("git log -p", "å¤‰æ›´å†…å®¹ã‚‚è¡¨ç¤º"), _
-            Array("git log --author=""åå‰""", "ç‰¹å®šã®äººã®ã‚³ãƒŸãƒƒãƒˆã ã‘è¡¨ç¤º"), _
-            Array("git log --since=""2024-01-01""", "æŒ‡å®šæ—¥ä»¥é™ã®ã‚³ãƒŸãƒƒãƒˆ"), _
-            Array("git log ãƒ•ã‚¡ã‚¤ãƒ«å", "ç‰¹å®šãƒ•ã‚¡ã‚¤ãƒ«ã®å±¥æ­´") _
+            Array("git log", "ƒRƒ~ƒbƒg—š—ğ‚ğ•\¦"), _
+            Array("git log --oneline", "1s‚ÅŠÈŒ‰‚É•\¦i‚¨‚·‚·‚ßj"), _
+            Array("git log -n 5", "ÅV5Œ‚¾‚¯•\¦"), _
+            Array("git log --graph", "ƒuƒ‰ƒ“ƒ`‚ğƒOƒ‰ƒt•\¦"), _
+            Array("git log --oneline --graph", "ƒOƒ‰ƒt‚ğ1s•\¦"), _
+            Array("git log -p", "•ÏX“à—e‚à•\¦"), _
+            Array("git log --author=""–¼‘O""", "“Á’è‚Ìl‚ÌƒRƒ~ƒbƒg‚¾‚¯•\¦"), _
+            Array("git log --since=""2024-01-01""", "w’è“úˆÈ~‚ÌƒRƒ~ƒbƒg"), _
+            Array("git log ƒtƒ@ƒCƒ‹–¼", "“Á’èƒtƒ@ƒCƒ‹‚Ì—š—ğ") _
         )
 
         Dim i As Long
@@ -621,26 +621,26 @@ Private Sub FormatHistorySheet()
         Next i
 
         ' git diff
-        .Range("A15").Value = "å·®åˆ†ã‚’è¦‹ã‚‹ (git diff)"
+        .Range("A15").Value = "·•ª‚ğŒ©‚é (git diff)"
         .Range("A15").Font.Size = 14
         .Range("A15").Font.Bold = True
         .Range("A15").Interior.Color = RGB(0, 176, 80)
         .Range("A15").Font.Color = RGB(255, 255, 255)
         .Range("A15:H15").Merge
 
-        .Range("A16").Value = "ã‚³ãƒãƒ³ãƒ‰"
-        .Range("B16").Value = "èª¬æ˜"
+        .Range("A16").Value = "ƒRƒ}ƒ“ƒh"
+        .Range("B16").Value = "à–¾"
         .Range("A16:B16").Font.Bold = True
         .Range("A16:B16").Interior.Color = RGB(198, 224, 180)
 
         Dim diffCommands As Variant
         diffCommands = Array( _
-            Array("git diff", "ä½œæ¥­ãƒ‡ã‚£ãƒ¬ã‚¯ãƒˆãƒªã®å¤‰æ›´ã‚’è¡¨ç¤º"), _
-            Array("git diff --staged", "ã‚¹ãƒ†ãƒ¼ã‚¸ãƒ³ã‚°ã—ãŸå¤‰æ›´ã‚’è¡¨ç¤º"), _
-            Array("git diff HEAD", "æœ€å¾Œã®ã‚³ãƒŸãƒƒãƒˆã¨ã®å·®åˆ†"), _
-            Array("git diff ãƒ–ãƒ©ãƒ³ãƒ1 ãƒ–ãƒ©ãƒ³ãƒ2", "ãƒ–ãƒ©ãƒ³ãƒé–“ã®å·®åˆ†"), _
-            Array("git diff ã‚³ãƒŸãƒƒãƒˆID1 ã‚³ãƒŸãƒƒãƒˆID2", "ã‚³ãƒŸãƒƒãƒˆé–“ã®å·®åˆ†"), _
-            Array("git diff ãƒ•ã‚¡ã‚¤ãƒ«å", "ç‰¹å®šãƒ•ã‚¡ã‚¤ãƒ«ã®å·®åˆ†") _
+            Array("git diff", "ì‹ÆƒfƒBƒŒƒNƒgƒŠ‚Ì•ÏX‚ğ•\¦"), _
+            Array("git diff --staged", "ƒXƒe[ƒWƒ“ƒO‚µ‚½•ÏX‚ğ•\¦"), _
+            Array("git diff HEAD", "ÅŒã‚ÌƒRƒ~ƒbƒg‚Æ‚Ì·•ª"), _
+            Array("git diff ƒuƒ‰ƒ“ƒ`1 ƒuƒ‰ƒ“ƒ`2", "ƒuƒ‰ƒ“ƒ`ŠÔ‚Ì·•ª"), _
+            Array("git diff ƒRƒ~ƒbƒgID1 ƒRƒ~ƒbƒgID2", "ƒRƒ~ƒbƒgŠÔ‚Ì·•ª"), _
+            Array("git diff ƒtƒ@ƒCƒ‹–¼", "“Á’èƒtƒ@ƒCƒ‹‚Ì·•ª") _
         )
 
         For i = 0 To UBound(diffCommands)
@@ -650,8 +650,8 @@ Private Sub FormatHistorySheet()
             .Range("B" & (17 + i) & ":H" & (17 + i)).Merge
         Next i
 
-        ' ãã®ä»–
-        .Range("A24").Value = "ãã®ä»–ã®ç¢ºèªã‚³ãƒãƒ³ãƒ‰"
+        ' ‚»‚Ì‘¼
+        .Range("A24").Value = "‚»‚Ì‘¼‚ÌŠm”FƒRƒ}ƒ“ƒh"
         .Range("A24").Font.Size = 14
         .Range("A24").Font.Bold = True
         .Range("A24").Interior.Color = RGB(255, 192, 0)
@@ -659,14 +659,14 @@ Private Sub FormatHistorySheet()
 
         Dim otherCommands As Variant
         otherCommands = Array( _
-            Array("git show ã‚³ãƒŸãƒƒãƒˆID", "ç‰¹å®šã‚³ãƒŸãƒƒãƒˆã®è©³ç´°ã‚’è¡¨ç¤º"), _
-            Array("git blame ãƒ•ã‚¡ã‚¤ãƒ«å", "å„è¡Œã‚’èª°ãŒã„ã¤å¤‰æ›´ã—ãŸã‹è¡¨ç¤º"), _
-            Array("git shortlog", "ãƒ¦ãƒ¼ã‚¶ãƒ¼ã”ã¨ã®ã‚³ãƒŸãƒƒãƒˆæ•°"), _
-            Array("git reflog", "HEADã®ç§»å‹•å±¥æ­´ï¼ˆå¾©æ—§ã«ä¾¿åˆ©ï¼‰") _
+            Array("git show ƒRƒ~ƒbƒgID", "“Á’èƒRƒ~ƒbƒg‚ÌÚ×‚ğ•\¦"), _
+            Array("git blame ƒtƒ@ƒCƒ‹–¼", "Šes‚ğ’N‚ª‚¢‚Â•ÏX‚µ‚½‚©•\¦"), _
+            Array("git shortlog", "ƒ†[ƒU[‚²‚Æ‚ÌƒRƒ~ƒbƒg”"), _
+            Array("git reflog", "HEAD‚ÌˆÚ“®—š—ği•œ‹Œ‚É•Ö—˜j") _
         )
 
-        .Range("A25").Value = "ã‚³ãƒãƒ³ãƒ‰"
-        .Range("B25").Value = "èª¬æ˜"
+        .Range("A25").Value = "ƒRƒ}ƒ“ƒh"
+        .Range("B25").Value = "à–¾"
         .Range("A25:B25").Font.Bold = True
         .Range("A25:B25").Interior.Color = RGB(255, 230, 153)
 
@@ -677,54 +677,54 @@ Private Sub FormatHistorySheet()
             .Range("B" & (26 + i) & ":H" & (26 + i)).Merge
         Next i
 
-        ' åˆ—å¹…
+        ' —ñ•
         .Columns("A").ColumnWidth = 35
         .Columns("B").ColumnWidth = 50
     End With
 End Sub
 
 '==============================================================================
-' å–ã‚Šæ¶ˆã—ãƒ»ä¿®æ­£ã‚·ãƒ¼ãƒˆ
+' æ‚èÁ‚µEC³ƒV[ƒg
 '==============================================================================
 Private Sub FormatUndoSheet()
     Dim ws As Worksheet
-    Set ws = Sheets("å–ã‚Šæ¶ˆã—ãƒ»ä¿®æ­£")
+    Set ws = Sheets("æ‚èÁ‚µEC³")
 
     With ws
-        ' ã‚¿ã‚¤ãƒˆãƒ«
-        .Range("A1").Value = "å–ã‚Šæ¶ˆã—ãƒ»ä¿®æ­£ - é–“é•ã„ã‚’ç›´ã™"
+        ' ƒ^ƒCƒgƒ‹
+        .Range("A1").Value = "æ‚èÁ‚µEC³ - ŠÔˆá‚¢‚ğ’¼‚·"
         .Range("A1").Font.Size = 20
         .Range("A1").Font.Bold = True
         .Range("A1:H1").Merge
         .Range("A1").Interior.Color = RGB(64, 64, 64)
         .Range("A1").Font.Color = RGB(255, 255, 255)
 
-        ' è­¦å‘Š
-        .Range("A3").Value = "æ³¨æ„: ã“ã‚Œã‚‰ã®ã‚³ãƒãƒ³ãƒ‰ã¯å¤‰æ›´ã‚’å–ã‚Šæ¶ˆã—ã¾ã™ã€‚æ…é‡ã«ä½¿ã£ã¦ãã ã•ã„!"
+        ' Œx
+        .Range("A3").Value = "’ˆÓ: ‚±‚ê‚ç‚ÌƒRƒ}ƒ“ƒh‚Í•ÏX‚ğæ‚èÁ‚µ‚Ü‚·BTd‚Ég‚Á‚Ä‚­‚¾‚³‚¢!"
         .Range("A3").Font.Bold = True
         .Range("A3").Font.Color = RGB(192, 0, 0)
         .Range("A3:H3").Merge
 
-        ' ä½œæ¥­ãƒ‡ã‚£ãƒ¬ã‚¯ãƒˆãƒªã®å¤‰æ›´ã‚’å–ã‚Šæ¶ˆã™
-        .Range("A5").Value = "ä½œæ¥­ä¸­ã®å¤‰æ›´ã‚’å–ã‚Šæ¶ˆã™"
+        ' ì‹ÆƒfƒBƒŒƒNƒgƒŠ‚Ì•ÏX‚ğæ‚èÁ‚·
+        .Range("A5").Value = "ì‹Æ’†‚Ì•ÏX‚ğæ‚èÁ‚·"
         .Range("A5").Font.Size = 14
         .Range("A5").Font.Bold = True
         .Range("A5").Interior.Color = RGB(192, 80, 77)
         .Range("A5").Font.Color = RGB(255, 255, 255)
         .Range("A5:H5").Merge
 
-        .Range("A6").Value = "çŠ¶æ³"
-        .Range("B6").Value = "ã‚³ãƒãƒ³ãƒ‰"
-        .Range("C6").Value = "èª¬æ˜"
+        .Range("A6").Value = "ó‹µ"
+        .Range("B6").Value = "ƒRƒ}ƒ“ƒh"
+        .Range("C6").Value = "à–¾"
         .Range("A6:C6").Font.Bold = True
         .Range("A6:C6").Interior.Color = RGB(230, 184, 183)
 
         Dim undoCommands As Variant
         undoCommands = Array( _
-            Array("ãƒ•ã‚¡ã‚¤ãƒ«ã®å¤‰æ›´ã‚’å–ã‚Šæ¶ˆã—ãŸã„", "git checkout -- ãƒ•ã‚¡ã‚¤ãƒ«å", "æœ€å¾Œã®ã‚³ãƒŸãƒƒãƒˆçŠ¶æ…‹ã«æˆ»ã™"), _
-            Array("å…¨ãƒ•ã‚¡ã‚¤ãƒ«ã®å¤‰æ›´ã‚’å–ã‚Šæ¶ˆã—ãŸã„", "git checkout -- .", "å…¨ãƒ•ã‚¡ã‚¤ãƒ«ã‚’æˆ»ã™ï¼ˆå±é™ºï¼‰"), _
-            Array("git addã‚’å–ã‚Šæ¶ˆã—ãŸã„", "git reset HEAD ãƒ•ã‚¡ã‚¤ãƒ«å", "ã‚¹ãƒ†ãƒ¼ã‚¸ãƒ³ã‚°ã‚’è§£é™¤"), _
-            Array("git addã‚’å…¨éƒ¨å–ã‚Šæ¶ˆã—ãŸã„", "git reset HEAD", "å…¨ã¦ã®ã‚¹ãƒ†ãƒ¼ã‚¸ãƒ³ã‚°ã‚’è§£é™¤") _
+            Array("ƒtƒ@ƒCƒ‹‚Ì•ÏX‚ğæ‚èÁ‚µ‚½‚¢", "git checkout -- ƒtƒ@ƒCƒ‹–¼", "ÅŒã‚ÌƒRƒ~ƒbƒgó‘Ô‚É–ß‚·"), _
+            Array("‘Sƒtƒ@ƒCƒ‹‚Ì•ÏX‚ğæ‚èÁ‚µ‚½‚¢", "git checkout -- .", "‘Sƒtƒ@ƒCƒ‹‚ğ–ß‚·iŠëŒ¯j"), _
+            Array("git add‚ğæ‚èÁ‚µ‚½‚¢", "git reset HEAD ƒtƒ@ƒCƒ‹–¼", "ƒXƒe[ƒWƒ“ƒO‚ğ‰ğœ"), _
+            Array("git add‚ğ‘S•”æ‚èÁ‚µ‚½‚¢", "git reset HEAD", "‘S‚Ä‚ÌƒXƒe[ƒWƒ“ƒO‚ğ‰ğœ") _
         )
 
         Dim i As Long
@@ -735,8 +735,8 @@ Private Sub FormatUndoSheet()
             .Range("C" & (7 + i)).Value = undoCommands(i)(2)
         Next i
 
-        ' ã‚³ãƒŸãƒƒãƒˆã‚’ä¿®æ­£
-        .Range("A12").Value = "ã‚³ãƒŸãƒƒãƒˆã‚’ä¿®æ­£ã™ã‚‹"
+        ' ƒRƒ~ƒbƒg‚ğC³
+        .Range("A12").Value = "ƒRƒ~ƒbƒg‚ğC³‚·‚é"
         .Range("A12").Font.Size = 14
         .Range("A12").Font.Bold = True
         .Range("A12").Interior.Color = RGB(255, 192, 0)
@@ -744,15 +744,15 @@ Private Sub FormatUndoSheet()
 
         Dim commitCommands As Variant
         commitCommands = Array( _
-            Array("ç›´å‰ã®ã‚³ãƒŸãƒƒãƒˆãƒ¡ãƒƒã‚»ãƒ¼ã‚¸ã‚’ä¿®æ­£", "git commit --amend", "ã‚¨ãƒ‡ã‚£ã‚¿ãŒé–‹ã"), _
-            Array("ç›´å‰ã®ã‚³ãƒŸãƒƒãƒˆã«è¿½åŠ ã§å¤‰æ›´ã‚’å«ã‚ã‚‹", "git add ãƒ•ã‚¡ã‚¤ãƒ«å" & vbLf & "git commit --amend --no-edit", "ãƒ¡ãƒƒã‚»ãƒ¼ã‚¸ã¯å¤‰ãˆãªã„"), _
-            Array("ç›´å‰ã®ã‚³ãƒŸãƒƒãƒˆã‚’å–ã‚Šæ¶ˆã™(å¤‰æ›´ã¯æ®‹ã™)", "git reset --soft HEAD^", "ã‚¹ãƒ†ãƒ¼ã‚¸ãƒ³ã‚°çŠ¶æ…‹ã«æˆ»ã‚‹"), _
-            Array("ç›´å‰ã®ã‚³ãƒŸãƒƒãƒˆã‚’å–ã‚Šæ¶ˆã™(å¤‰æ›´ã‚‚æ¶ˆã™)", "git reset --hard HEAD^", "å®Œå…¨ã«æ¶ˆãˆã‚‹ï¼ˆå±é™ºï¼‰") _
+            Array("’¼‘O‚ÌƒRƒ~ƒbƒgƒƒbƒZ[ƒW‚ğC³", "git commit --amend", "ƒGƒfƒBƒ^‚ªŠJ‚­"), _
+            Array("’¼‘O‚ÌƒRƒ~ƒbƒg‚É’Ç‰Á‚Å•ÏX‚ğŠÜ‚ß‚é", "git add ƒtƒ@ƒCƒ‹–¼" & vbLf & "git commit --amend --no-edit", "ƒƒbƒZ[ƒW‚Í•Ï‚¦‚È‚¢"), _
+            Array("’¼‘O‚ÌƒRƒ~ƒbƒg‚ğæ‚èÁ‚·(•ÏX‚Íc‚·)", "git reset --soft HEAD^", "ƒXƒe[ƒWƒ“ƒOó‘Ô‚É–ß‚é"), _
+            Array("’¼‘O‚ÌƒRƒ~ƒbƒg‚ğæ‚èÁ‚·(•ÏX‚àÁ‚·)", "git reset --hard HEAD^", "Š®‘S‚ÉÁ‚¦‚éiŠëŒ¯j") _
         )
 
-        .Range("A13").Value = "çŠ¶æ³"
-        .Range("B13").Value = "ã‚³ãƒãƒ³ãƒ‰"
-        .Range("C13").Value = "èª¬æ˜"
+        .Range("A13").Value = "ó‹µ"
+        .Range("B13").Value = "ƒRƒ}ƒ“ƒh"
+        .Range("C13").Value = "à–¾"
         .Range("A13:C13").Font.Bold = True
         .Range("A13:C13").Interior.Color = RGB(255, 230, 153)
 
@@ -763,8 +763,8 @@ Private Sub FormatUndoSheet()
             .Range("C" & (14 + i)).Value = commitCommands(i)(2)
         Next i
 
-        ' reset ã®ç¨®é¡
-        .Range("A19").Value = "git reset ã®ã‚ªãƒ—ã‚·ãƒ§ãƒ³"
+        ' reset ‚Ìí—Ş
+        .Range("A19").Value = "git reset ‚ÌƒIƒvƒVƒ‡ƒ“"
         .Range("A19").Font.Size = 14
         .Range("A19").Font.Bold = True
         .Range("A19").Interior.Color = RGB(68, 114, 196)
@@ -773,14 +773,14 @@ Private Sub FormatUndoSheet()
 
         Dim resetOptions As Variant
         resetOptions = Array( _
-            Array("--soft", "ã‚³ãƒŸãƒƒãƒˆã ã‘å–ã‚Šæ¶ˆã™", "å¤‰æ›´ã¯ã‚¹ãƒ†ãƒ¼ã‚¸ãƒ³ã‚°ã«æ®‹ã‚‹"), _
-            Array("--mixed(ãƒ‡ãƒ•ã‚©ãƒ«ãƒˆ)", "ã‚³ãƒŸãƒƒãƒˆã¨ã‚¹ãƒ†ãƒ¼ã‚¸ãƒ³ã‚°ã‚’å–ã‚Šæ¶ˆã™", "å¤‰æ›´ã¯ä½œæ¥­ãƒ‡ã‚£ãƒ¬ã‚¯ãƒˆãƒªã«æ®‹ã‚‹"), _
-            Array("--hard", "å…¨ã¦å–ã‚Šæ¶ˆã™", "å¤‰æ›´ã‚‚æ¶ˆãˆã‚‹ï¼ˆå±é™º!ï¼‰") _
+            Array("--soft", "ƒRƒ~ƒbƒg‚¾‚¯æ‚èÁ‚·", "•ÏX‚ÍƒXƒe[ƒWƒ“ƒO‚Éc‚é"), _
+            Array("--mixed(ƒfƒtƒHƒ‹ƒg)", "ƒRƒ~ƒbƒg‚ÆƒXƒe[ƒWƒ“ƒO‚ğæ‚èÁ‚·", "•ÏX‚Íì‹ÆƒfƒBƒŒƒNƒgƒŠ‚Éc‚é"), _
+            Array("--hard", "‘S‚Äæ‚èÁ‚·", "•ÏX‚àÁ‚¦‚éiŠëŒ¯!j") _
         )
 
-        .Range("A20").Value = "ã‚ªãƒ—ã‚·ãƒ§ãƒ³"
-        .Range("B20").Value = "å‹•ä½œ"
-        .Range("C20").Value = "çµæœ"
+        .Range("A20").Value = "ƒIƒvƒVƒ‡ƒ“"
+        .Range("B20").Value = "“®ì"
+        .Range("C20").Value = "Œ‹‰Ê"
         .Range("A20:C20").Font.Bold = True
         .Range("A20:C20").Interior.Color = RGB(180, 198, 231)
 
@@ -792,22 +792,22 @@ Private Sub FormatUndoSheet()
         Next i
 
         ' revert
-        .Range("A25").Value = "å®‰å…¨ã«å–ã‚Šæ¶ˆã™ (git revert)"
+        .Range("A25").Value = "ˆÀ‘S‚Éæ‚èÁ‚· (git revert)"
         .Range("A25").Font.Size = 14
         .Range("A25").Font.Bold = True
         .Range("A25").Interior.Color = RGB(0, 176, 80)
         .Range("A25").Font.Color = RGB(255, 255, 255)
         .Range("A25:H25").Merge
 
-        .Range("A26").Value = "git revert ã‚³ãƒŸãƒƒãƒˆID"
+        .Range("A26").Value = "git revert ƒRƒ~ƒbƒgID"
         .Range("A26").Font.Name = "Consolas"
-        .Range("A27").Value = "æŒ‡å®šã—ãŸã‚³ãƒŸãƒƒãƒˆã‚’æ‰“ã¡æ¶ˆã™æ–°ã—ã„ã‚³ãƒŸãƒƒãƒˆã‚’ä½œæˆã—ã¾ã™ã€‚"
+        .Range("A27").Value = "w’è‚µ‚½ƒRƒ~ƒbƒg‚ğ‘Å‚¿Á‚·V‚µ‚¢ƒRƒ~ƒbƒg‚ğì¬‚µ‚Ü‚·B"
         .Range("A27:H27").Merge
-        .Range("A28").Value = "å±¥æ­´ã¯æ®‹ã‚‹ã®ã§ã€ãƒãƒ¼ãƒ é–‹ç™ºã§ã¯ reset ã‚ˆã‚Š revert ãŒå®‰å…¨ã§ã™ã€‚"
+        .Range("A28").Value = "—š—ğ‚Íc‚é‚Ì‚ÅAƒ`[ƒ€ŠJ”­‚Å‚Í reset ‚æ‚è revert ‚ªˆÀ‘S‚Å‚·B"
         .Range("A28").Font.Color = RGB(0, 112, 192)
         .Range("A28:H28").Merge
 
-        ' åˆ—å¹…
+        ' —ñ•
         .Columns("A").ColumnWidth = 35
         .Columns("B").ColumnWidth = 35
         .Columns("C").ColumnWidth = 35
@@ -815,15 +815,15 @@ Private Sub FormatUndoSheet()
 End Sub
 
 '==============================================================================
-' å®Ÿè·µã‚·ãƒŠãƒªã‚ªã‚·ãƒ¼ãƒˆ
+' À‘HƒVƒiƒŠƒIƒV[ƒg
 '==============================================================================
 Private Sub FormatScenarioSheet()
     Dim ws As Worksheet
-    Set ws = Sheets("å®Ÿè·µã‚·ãƒŠãƒªã‚ª")
+    Set ws = Sheets("À‘HƒVƒiƒŠƒI")
 
     With ws
-        ' ã‚¿ã‚¤ãƒˆãƒ«
-        .Range("A1").Value = "å®Ÿè·µã‚·ãƒŠãƒªã‚ª - ã‚ˆãã‚ã‚‹ä½œæ¥­ãƒ•ãƒ­ãƒ¼"
+        ' ƒ^ƒCƒgƒ‹
+        .Range("A1").Value = "À‘HƒVƒiƒŠƒI - ‚æ‚­‚ ‚éì‹Æƒtƒ["
         .Range("A1").Font.Size = 20
         .Range("A1").Font.Bold = True
         .Range("A1:H1").Merge
@@ -833,8 +833,8 @@ Private Sub FormatScenarioSheet()
         Dim row As Long
         row = 3
 
-        ' ã‚·ãƒŠãƒªã‚ª1
-        .Range("A" & row).Value = "ã‚·ãƒŠãƒªã‚ª1: æ–°è¦ãƒ—ãƒ­ã‚¸ã‚§ã‚¯ãƒˆã‚’å§‹ã‚ã‚‹"
+        ' ƒVƒiƒŠƒI1
+        .Range("A" & row).Value = "ƒVƒiƒŠƒI1: V‹KƒvƒƒWƒFƒNƒg‚ğn‚ß‚é"
         .Range("A" & row).Font.Size = 14
         .Range("A" & row).Font.Bold = True
         .Range("A" & row).Interior.Color = RGB(68, 114, 196)
@@ -844,12 +844,12 @@ Private Sub FormatScenarioSheet()
 
         Dim scenario1 As Variant
         scenario1 = Array( _
-            "mkdir my-project          # ãƒ—ãƒ­ã‚¸ã‚§ã‚¯ãƒˆãƒ•ã‚©ãƒ«ãƒ€ã‚’ä½œæˆ", _
-            "cd my-project             # ãƒ•ã‚©ãƒ«ãƒ€ã«ç§»å‹•", _
-            "git init                  # Gitãƒªãƒã‚¸ãƒˆãƒªã‚’åˆæœŸåŒ–", _
-            "(ãƒ•ã‚¡ã‚¤ãƒ«ã‚’ä½œæˆãƒ»ç·¨é›†)", _
-            "git add .                 # å…¨ãƒ•ã‚¡ã‚¤ãƒ«ã‚’ã‚¹ãƒ†ãƒ¼ã‚¸ãƒ³ã‚°", _
-            "git commit -m ""Initial commit""  # æœ€åˆã®ã‚³ãƒŸãƒƒãƒˆ" _
+            "mkdir my-project          # ƒvƒƒWƒFƒNƒgƒtƒHƒ‹ƒ_‚ğì¬", _
+            "cd my-project             # ƒtƒHƒ‹ƒ_‚ÉˆÚ“®", _
+            "git init                  # GitƒŠƒ|ƒWƒgƒŠ‚ğ‰Šú‰»", _
+            "(ƒtƒ@ƒCƒ‹‚ğì¬E•ÒW)", _
+            "git add .                 # ‘Sƒtƒ@ƒCƒ‹‚ğƒXƒe[ƒWƒ“ƒO", _
+            "git commit -m ""Initial commit""  # Å‰‚ÌƒRƒ~ƒbƒg" _
         )
 
         Dim i As Long
@@ -861,8 +861,8 @@ Private Sub FormatScenarioSheet()
         Next i
         row = row + 1
 
-        ' ã‚·ãƒŠãƒªã‚ª2
-        .Range("A" & row).Value = "ã‚·ãƒŠãƒªã‚ª2: GitHubã‹ã‚‰æ—¢å­˜ãƒ—ãƒ­ã‚¸ã‚§ã‚¯ãƒˆã‚’å–å¾—"
+        ' ƒVƒiƒŠƒI2
+        .Range("A" & row).Value = "ƒVƒiƒŠƒI2: GitHub‚©‚çŠù‘¶ƒvƒƒWƒFƒNƒg‚ğæ“¾"
         .Range("A" & row).Font.Size = 14
         .Range("A" & row).Font.Bold = True
         .Range("A" & row).Interior.Color = RGB(0, 176, 80)
@@ -872,10 +872,10 @@ Private Sub FormatScenarioSheet()
 
         Dim scenario2 As Variant
         scenario2 = Array( _
-            "git clone https://github.com/xxx/yyy.git  # ãƒªãƒã‚¸ãƒˆãƒªã‚’ã‚³ãƒ”ãƒ¼", _
-            "cd yyy                    # ãƒ•ã‚©ãƒ«ãƒ€ã«ç§»å‹•", _
-            "git branch -a             # ãƒ–ãƒ©ãƒ³ãƒä¸€è¦§ã‚’ç¢ºèª", _
-            "(å¿…è¦ã«å¿œã˜ã¦ãƒ–ãƒ©ãƒ³ãƒã‚’åˆ‡ã‚Šæ›¿ãˆ)" _
+            "git clone https://github.com/xxx/yyy.git  # ƒŠƒ|ƒWƒgƒŠ‚ğƒRƒs[", _
+            "cd yyy                    # ƒtƒHƒ‹ƒ_‚ÉˆÚ“®", _
+            "git branch -a             # ƒuƒ‰ƒ“ƒ`ˆê——‚ğŠm”F", _
+            "(•K—v‚É‰‚¶‚Äƒuƒ‰ƒ“ƒ`‚ğØ‚è‘Ö‚¦)" _
         )
 
         For i = 0 To UBound(scenario2)
@@ -886,8 +886,8 @@ Private Sub FormatScenarioSheet()
         Next i
         row = row + 1
 
-        ' ã‚·ãƒŠãƒªã‚ª3
-        .Range("A" & row).Value = "ã‚·ãƒŠãƒªã‚ª3: æ–°æ©Ÿèƒ½ã‚’é–‹ç™ºã™ã‚‹"
+        ' ƒVƒiƒŠƒI3
+        .Range("A" & row).Value = "ƒVƒiƒŠƒI3: V‹@”\‚ğŠJ”­‚·‚é"
         .Range("A" & row).Font.Size = 14
         .Range("A" & row).Font.Bold = True
         .Range("A" & row).Interior.Color = RGB(112, 48, 160)
@@ -897,15 +897,15 @@ Private Sub FormatScenarioSheet()
 
         Dim scenario3 As Variant
         scenario3 = Array( _
-            "git checkout main         # mainãƒ–ãƒ©ãƒ³ãƒã«ç§»å‹•", _
-            "git pull origin main      # æœ€æ–°ã‚’å–å¾—", _
-            "git checkout -b feature/new-function  # æ©Ÿèƒ½ãƒ–ãƒ©ãƒ³ãƒä½œæˆ", _
-            "(æ©Ÿèƒ½ã‚’å®Ÿè£…)", _
-            "git add .                 # å¤‰æ›´ã‚’ã‚¹ãƒ†ãƒ¼ã‚¸ãƒ³ã‚°", _
-            "git commit -m ""Add new function""  # ã‚³ãƒŸãƒƒãƒˆ", _
-            "git push -u origin feature/new-function  # ãƒªãƒ¢ãƒ¼ãƒˆã«é€ä¿¡", _
-            "(GitHubã§Pull Requestã‚’ä½œæˆ)", _
-            "(ãƒ¬ãƒ“ãƒ¥ãƒ¼å¾Œã€mainã«ãƒãƒ¼ã‚¸)" _
+            "git checkout main         # mainƒuƒ‰ƒ“ƒ`‚ÉˆÚ“®", _
+            "git pull origin main      # ÅV‚ğæ“¾", _
+            "git checkout -b feature/new-function  # ‹@”\ƒuƒ‰ƒ“ƒ`ì¬", _
+            "(‹@”\‚ğÀ‘•)", _
+            "git add .                 # •ÏX‚ğƒXƒe[ƒWƒ“ƒO", _
+            "git commit -m ""Add new function""  # ƒRƒ~ƒbƒg", _
+            "git push -u origin feature/new-function  # ƒŠƒ‚[ƒg‚É‘—M", _
+            "(GitHub‚ÅPull Request‚ğì¬)", _
+            "(ƒŒƒrƒ…[ŒãAmain‚Éƒ}[ƒW)" _
         )
 
         For i = 0 To UBound(scenario3)
@@ -916,8 +916,8 @@ Private Sub FormatScenarioSheet()
         Next i
         row = row + 1
 
-        ' ã‚·ãƒŠãƒªã‚ª4
-        .Range("A" & row).Value = "ã‚·ãƒŠãƒªã‚ª4: æœã‚¤ãƒã®ä½œæ¥­é–‹å§‹"
+        ' ƒVƒiƒŠƒI4
+        .Range("A" & row).Value = "ƒVƒiƒŠƒI4: ’©ƒCƒ`‚Ìì‹ÆŠJn"
         .Range("A" & row).Font.Size = 14
         .Range("A" & row).Font.Bold = True
         .Range("A" & row).Interior.Color = RGB(255, 192, 0)
@@ -926,12 +926,12 @@ Private Sub FormatScenarioSheet()
 
         Dim scenario4 As Variant
         scenario4 = Array( _
-            "git status                # ç¾åœ¨ã®çŠ¶æ…‹ç¢ºèª", _
-            "git checkout main         # mainã«ç§»å‹•ï¼ˆä½œæ¥­ãƒ–ãƒ©ãƒ³ãƒã«ã„ãŸå ´åˆï¼‰", _
-            "git pull origin main      # æœ€æ–°ã‚’å–å¾—", _
-            "git checkout feature/xxx  # ä½œæ¥­ãƒ–ãƒ©ãƒ³ãƒã«æˆ»ã‚‹", _
-            "git merge main            # mainã®å¤‰æ›´ã‚’å–ã‚Šè¾¼ã‚€ï¼ˆä»»æ„ï¼‰", _
-            "(ä½œæ¥­é–‹å§‹)" _
+            "git status                # Œ»İ‚Ìó‘ÔŠm”F", _
+            "git checkout main         # main‚ÉˆÚ“®iì‹Æƒuƒ‰ƒ“ƒ`‚É‚¢‚½ê‡j", _
+            "git pull origin main      # ÅV‚ğæ“¾", _
+            "git checkout feature/xxx  # ì‹Æƒuƒ‰ƒ“ƒ`‚É–ß‚é", _
+            "git merge main            # main‚Ì•ÏX‚ğæ‚è‚Şi”CˆÓj", _
+            "(ì‹ÆŠJn)" _
         )
 
         For i = 0 To UBound(scenario4)
@@ -941,47 +941,47 @@ Private Sub FormatScenarioSheet()
             row = row + 1
         Next i
 
-        ' åˆ—å¹…
+        ' —ñ•
         .Columns("A").ColumnWidth = 80
     End With
 End Sub
 
 '==============================================================================
-' ãƒˆãƒ©ãƒ–ãƒ«å¯¾å‡¦ã‚·ãƒ¼ãƒˆ
+' ƒgƒ‰ƒuƒ‹‘ÎˆƒV[ƒg
 '==============================================================================
 Private Sub FormatTroubleshootSheet()
     Dim ws As Worksheet
-    Set ws = Sheets("ãƒˆãƒ©ãƒ–ãƒ«å¯¾å‡¦")
+    Set ws = Sheets("ƒgƒ‰ƒuƒ‹‘Îˆ")
 
     With ws
-        ' ã‚¿ã‚¤ãƒˆãƒ«
-        .Range("A1").Value = "ãƒˆãƒ©ãƒ–ãƒ«å¯¾å‡¦ - å›°ã£ãŸæ™‚ã®è§£æ±ºæ³•"
+        ' ƒ^ƒCƒgƒ‹
+        .Range("A1").Value = "ƒgƒ‰ƒuƒ‹‘Îˆ - ¢‚Á‚½‚Ì‰ğŒˆ–@"
         .Range("A1").Font.Size = 20
         .Range("A1").Font.Bold = True
         .Range("A1:H1").Merge
         .Range("A1").Interior.Color = RGB(64, 64, 64)
         .Range("A1").Font.Color = RGB(255, 255, 255)
 
-        ' ãƒ˜ãƒƒãƒ€ãƒ¼
-        .Range("A3").Value = "å•é¡Œ"
-        .Range("B3").Value = "åŸå› "
-        .Range("C3").Value = "è§£æ±ºæ–¹æ³•"
+        ' ƒwƒbƒ_[
+        .Range("A3").Value = "–â‘è"
+        .Range("B3").Value = "Œ´ˆö"
+        .Range("C3").Value = "‰ğŒˆ•û–@"
         .Range("A3:C3").Font.Bold = True
         .Range("A3:C3").Interior.Color = RGB(192, 80, 77)
         .Range("A3:C3").Font.Color = RGB(255, 255, 255)
 
         Dim troubles As Variant
         troubles = Array( _
-            Array("git pushã§ããªã„", "ãƒªãƒ¢ãƒ¼ãƒˆã«æ–°ã—ã„å¤‰æ›´ãŒã‚ã‚‹", "git pull ã—ã¦ã‹ã‚‰ git push"), _
-            Array("ã‚³ãƒ³ãƒ•ãƒªã‚¯ãƒˆï¼ˆç«¶åˆï¼‰ãŒç™ºç”Ÿ", "åŒã˜ç®‡æ‰€ã‚’åˆ¥ã€…ã«å¤‰æ›´ã—ãŸ", "ãƒ•ã‚¡ã‚¤ãƒ«ã‚’ç·¨é›†ã—ã¦è§£æ±ºå¾Œ git add â†’ git commit"), _
-            Array("é–“é•ãˆã¦ã‚³ãƒŸãƒƒãƒˆã—ãŸ", "ã‚³ãƒŸãƒƒãƒˆå†…å®¹ã«èª¤ã‚Š", "git commit --amendï¼ˆç›´å‰ï¼‰ã¾ãŸã¯ git revert"), _
-            Array("å¤‰æ›´ã‚’æ¶ˆã—ã¦ã—ã¾ã£ãŸ", "git reset --hard ã‚’å®Ÿè¡Œ", "git reflog ã§ã‚³ãƒŸãƒƒãƒˆIDã‚’æ¢ã—ã¦ git checkout"), _
-            Array("ãƒ–ãƒ©ãƒ³ãƒã‚’é–“é•ãˆãŸ", "åˆ¥ã®ãƒ–ãƒ©ãƒ³ãƒã§ä½œæ¥­ã—ã¦ãŸ", "git stash â†’ git checkout â†’ git stash pop"), _
-            Array("addã—å¿˜ã‚ŒãŸãƒ•ã‚¡ã‚¤ãƒ«ãŒã‚ã‚‹", "ã‚³ãƒŸãƒƒãƒˆå¾Œã«æ°—ã¥ã„ãŸ", "git add â†’ git commit --amend --no-edit"), _
-            Array("ãƒ‘ã‚¹ãƒ¯ãƒ¼ãƒ‰ã‚’èã‹ã‚Œã‚‹", "èªè¨¼æƒ…å ±ãŒæœªè¨­å®š", "git config credential.helper store"), _
-            Array("å¤§ããªãƒ•ã‚¡ã‚¤ãƒ«ã‚’pushã§ããªã„", "GitHubã®å®¹é‡åˆ¶é™", "git reset HEAD^ ã§ã‚³ãƒŸãƒƒãƒˆå–æ¶ˆã—ã€.gitignoreã«è¿½åŠ "), _
-            Array("æ—¥æœ¬èªãƒ•ã‚¡ã‚¤ãƒ«åãŒæ–‡å­—åŒ–ã‘", "æ–‡å­—ã‚³ãƒ¼ãƒ‰è¨­å®š", "git config --global core.quotepath false"), _
-            Array("æ”¹è¡Œã‚³ãƒ¼ãƒ‰ã®è­¦å‘ŠãŒå‡ºã‚‹", "LF/CRLFæ··åœ¨", "git config --global core.autocrlf true (Windows)") _
+            Array("git push‚Å‚«‚È‚¢", "ƒŠƒ‚[ƒg‚ÉV‚µ‚¢•ÏX‚ª‚ ‚é", "git pull ‚µ‚Ä‚©‚ç git push"), _
+            Array("ƒRƒ“ƒtƒŠƒNƒgi‹£‡j‚ª”­¶", "“¯‚¶‰ÓŠ‚ğ•ÊX‚É•ÏX‚µ‚½", "ƒtƒ@ƒCƒ‹‚ğ•ÒW‚µ‚Ä‰ğŒˆŒã git add ¨ git commit"), _
+            Array("ŠÔˆá‚¦‚ÄƒRƒ~ƒbƒg‚µ‚½", "ƒRƒ~ƒbƒg“à—e‚ÉŒë‚è", "git commit --amendi’¼‘Oj‚Ü‚½‚Í git revert"), _
+            Array("•ÏX‚ğÁ‚µ‚Ä‚µ‚Ü‚Á‚½", "git reset --hard ‚ğÀs", "git reflog ‚ÅƒRƒ~ƒbƒgID‚ğ’T‚µ‚Ä git checkout"), _
+            Array("ƒuƒ‰ƒ“ƒ`‚ğŠÔˆá‚¦‚½", "•Ê‚Ìƒuƒ‰ƒ“ƒ`‚Åì‹Æ‚µ‚Ä‚½", "git stash ¨ git checkout ¨ git stash pop"), _
+            Array("add‚µ–Y‚ê‚½ƒtƒ@ƒCƒ‹‚ª‚ ‚é", "ƒRƒ~ƒbƒgŒã‚É‹C‚Ã‚¢‚½", "git add ¨ git commit --amend --no-edit"), _
+            Array("ƒpƒXƒ[ƒh‚ğ•·‚©‚ê‚é", "”FØî•ñ‚ª–¢İ’è", "git config credential.helper store"), _
+            Array("‘å‚«‚Èƒtƒ@ƒCƒ‹‚ğpush‚Å‚«‚È‚¢", "GitHub‚Ì—e—Ê§ŒÀ", "git reset HEAD^ ‚ÅƒRƒ~ƒbƒgæÁ‚µA.gitignore‚É’Ç‰Á"), _
+            Array("“ú–{Œêƒtƒ@ƒCƒ‹–¼‚ª•¶š‰»‚¯", "•¶šƒR[ƒhİ’è", "git config --global core.quotepath false"), _
+            Array("‰üsƒR[ƒh‚ÌŒx‚ªo‚é", "LF/CRLF¬İ", "git config --global core.autocrlf true (Windows)") _
         )
 
         Dim i As Long
@@ -992,8 +992,8 @@ Private Sub FormatTroubleshootSheet()
             .Range("C" & (4 + i)).Font.Name = "Consolas"
         Next i
 
-        ' ã‚³ãƒ³ãƒ•ãƒªã‚¯ãƒˆè§£æ±º
-        .Range("A15").Value = "ã‚³ãƒ³ãƒ•ãƒªã‚¯ãƒˆï¼ˆç«¶åˆï¼‰ã®è§£æ±ºæ–¹æ³•"
+        ' ƒRƒ“ƒtƒŠƒNƒg‰ğŒˆ
+        .Range("A15").Value = "ƒRƒ“ƒtƒŠƒNƒgi‹£‡j‚Ì‰ğŒˆ•û–@"
         .Range("A15").Font.Size = 14
         .Range("A15").Font.Bold = True
         .Range("A15").Interior.Color = RGB(255, 192, 0)
@@ -1001,17 +1001,17 @@ Private Sub FormatTroubleshootSheet()
 
         Dim conflict As Variant
         conflict = Array( _
-            "1. ã‚³ãƒ³ãƒ•ãƒªã‚¯ãƒˆãŒç™ºç”Ÿã—ãŸãƒ•ã‚¡ã‚¤ãƒ«ã‚’é–‹ã", _
-            "2. <<<<<<< HEAD ã¨ ======= ã¨ >>>>>>> ã®é–“ã®å†…å®¹ã‚’ç¢ºèª", _
-            "3. æ­£ã—ã„å†…å®¹ã«ãªã‚‹ã‚ˆã†ç·¨é›†ï¼ˆãƒãƒ¼ã‚«ãƒ¼ã‚‚å‰Šé™¤ï¼‰", _
-            "4. git add ãƒ•ã‚¡ã‚¤ãƒ«å", _
-            "5. git commitï¼ˆãƒãƒ¼ã‚¸ã‚³ãƒŸãƒƒãƒˆãŒä½œæˆã•ã‚Œã‚‹ï¼‰", _
+            "1. ƒRƒ“ƒtƒŠƒNƒg‚ª”­¶‚µ‚½ƒtƒ@ƒCƒ‹‚ğŠJ‚­", _
+            "2. <<<<<<< HEAD ‚Æ ======= ‚Æ >>>>>>> ‚ÌŠÔ‚Ì“à—e‚ğŠm”F", _
+            "3. ³‚µ‚¢“à—e‚É‚È‚é‚æ‚¤•ÒWiƒ}[ƒJ[‚àíœj", _
+            "4. git add ƒtƒ@ƒCƒ‹–¼", _
+            "5. git commitiƒ}[ƒWƒRƒ~ƒbƒg‚ªì¬‚³‚ê‚éj", _
             "", _
-            "ã€ãƒ•ã‚¡ã‚¤ãƒ«å†…ã®è¦‹æ–¹ã€‘", _
+            "yƒtƒ@ƒCƒ‹“à‚ÌŒ©•ûz", _
             "<<<<<<< HEAD", _
-            "è‡ªåˆ†ã®å¤‰æ›´å†…å®¹", _
+            "©•ª‚Ì•ÏX“à—e", _
             "=======", _
-            "ç›¸æ‰‹ã®å¤‰æ›´å†…å®¹", _
+            "‘Šè‚Ì•ÏX“à—e", _
             ">>>>>>> branch-name" _
         )
 
@@ -1021,8 +1021,8 @@ Private Sub FormatTroubleshootSheet()
             .Range("A" & (16 + i) & ":H" & (16 + i)).Merge
         Next i
 
-        ' å›°ã£ãŸæ™‚ã®åŸºæœ¬
-        .Range("A29").Value = "å›°ã£ãŸæ™‚ã®åŸºæœ¬è¡Œå‹•"
+        ' ¢‚Á‚½‚ÌŠî–{
+        .Range("A29").Value = "¢‚Á‚½‚ÌŠî–{s“®"
         .Range("A29").Font.Size = 14
         .Range("A29").Font.Bold = True
         .Range("A29").Interior.Color = RGB(0, 176, 80)
@@ -1031,10 +1031,10 @@ Private Sub FormatTroubleshootSheet()
 
         Dim basicActions As Variant
         basicActions = Array( _
-            "1. ã¾ãš git status ã§çŠ¶æ…‹ç¢ºèª", _
-            "2. git log --oneline ã§å±¥æ­´ç¢ºèª", _
-            "3. ç„¦ã‚‰ãªã„! å¤§æŠµã®æ“ä½œã¯å–ã‚Šæ¶ˆã›ã‚‹", _
-            "4. ã‚ã‹ã‚‰ãªã‘ã‚Œã° git reflogï¼ˆæœ€çµ‚æ‰‹æ®µï¼‰" _
+            "1. ‚Ü‚¸ git status ‚Åó‘ÔŠm”F", _
+            "2. git log --oneline ‚Å—š—ğŠm”F", _
+            "3. Å‚ç‚È‚¢! ‘å’ï‚Ì‘€ì‚Íæ‚èÁ‚¹‚é", _
+            "4. ‚í‚©‚ç‚È‚¯‚ê‚Î git reflogiÅIè’ij" _
         )
 
         For i = 0 To UBound(basicActions)
@@ -1042,7 +1042,7 @@ Private Sub FormatTroubleshootSheet()
             .Range("A" & (30 + i) & ":H" & (30 + i)).Merge
         Next i
 
-        ' åˆ—å¹…
+        ' —ñ•
         .Columns("A").ColumnWidth = 30
         .Columns("B").ColumnWidth = 30
         .Columns("C").ColumnWidth = 50
