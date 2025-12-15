@@ -398,6 +398,42 @@ README.mdを更新します...
 - 変数は明示的に宣言（Option Explicit使用）
 - 日本語のコメントで処理内容を説明
 
+- **メインシートの作成（必須）**:
+  - すべてのVBAツールは初期化時に「メインシート」を作成すること
+  - メインシートには以下を含める：
+    - ツールタイトル（色付きヘッダー）
+    - 設定入力欄（必要に応じてドロップダウン）
+    - 実行ボタン
+    - 使い方・説明文
+    - 必要な環境・動作条件
+  - 初期化用マクロ名: `Initialize[ツール名]`
+  - フォーマット用サブ: `Format[シート名]Sheet`
+  - 例:
+    ```vba
+    Public Sub InitializeSQLGenerator()
+        CreateSheet SHEET_MAIN
+        FormatMainSheet  ' メインシートのフォーマット
+        ' ...
+    End Sub
+    ```
+
+- **ドロップダウン選択時の自動処理**:
+  - ドロップダウンで値を選択した際に関連する項目を自動更新する場合は、`Worksheet_Change`イベントを使用すること
+  - 初期化時にシートモジュールへイベントコードを自動追加する実装を推奨
+  - VBAプロジェクトへのアクセスが許可されていない環境用に、手動更新ボタンも併設すること
+  - 例:
+    ```vba
+    ' 標準モジュール側
+    Public Sub OnSelectionChanged(ByVal changedRange As Range)
+        ' 変更されたセルに応じて処理
+    End Sub
+
+    ' シートモジュール側（自動追加）
+    Private Sub Worksheet_Change(ByVal Target As Range)
+        ModuleName.OnSelectionChanged Target
+    End Sub
+    ```
+
 #### JavaScript (.js)
 - ブラウザコンソールでの実行を想定
 - ブックマークレット形式も考慮
