@@ -880,6 +880,415 @@ Private Sub CreateBranchGraphSheet(ByRef commits() As CommitInfo, ByVal commitCo
 End Sub
 
 '==============================================================================
+' メインシート初期化
+'==============================================================================
+Public Sub InitializeGitLogVisualizer()
+    Dim ws As Worksheet
+    Dim mainSheetName As String
+
+    mainSheetName = "GitLogVisualizer"
+
+    On Error Resume Next
+    Application.DisplayAlerts = False
+
+    ' 既存のメインシートがあれば削除
+    For Each ws In ThisWorkbook.Worksheets
+        If ws.Name = mainSheetName Then
+            ws.Delete
+            Exit For
+        End If
+    Next ws
+
+    Application.DisplayAlerts = True
+    On Error GoTo 0
+
+    ' 新しいシートを作成
+    Set ws = ThisWorkbook.Worksheets.Add(Before:=ThisWorkbook.Worksheets(1))
+    ws.Name = mainSheetName
+
+    ' シートを初期化
+    FormatGitLogMainSheet ws
+
+    MsgBox "GitLogVisualizerシートを初期化しました。", vbInformation, "初期化完了"
+End Sub
+
+'==============================================================================
+' メインシートのフォーマット
+'==============================================================================
+Private Sub FormatGitLogMainSheet(ByRef ws As Worksheet)
+    Dim btn As Button
+
+    Application.ScreenUpdating = False
+
+    With ws
+        ' 全体の背景色を白に
+        .Cells.Interior.Color = RGB(255, 255, 255)
+
+        ' =================================================================
+        ' タイトルエリア (行1-3)
+        ' =================================================================
+        .Range("B2:H2").Merge
+        .Range("B2").Value = "Git Log 可視化ツール"
+        With .Range("B2")
+            .Font.Name = "Meiryo UI"
+            .Font.Size = 20
+            .Font.Bold = True
+            .Font.Color = RGB(255, 255, 255)
+            .HorizontalAlignment = xlCenter
+            .VerticalAlignment = xlCenter
+        End With
+        .Range("B2:H3").Interior.Color = RGB(68, 114, 196)
+        .Rows(2).RowHeight = 40
+        .Rows(3).RowHeight = 5
+
+        ' =================================================================
+        ' 説明エリア (行5-7)
+        ' =================================================================
+        .Range("B5:H5").Merge
+        .Range("B5").Value = "Gitリポジトリのコミット履歴を取得して、表形式・統計・グラフで視覚化します。"
+        With .Range("B5")
+            .Font.Name = "Meiryo UI"
+            .Font.Size = 11
+            .Font.Color = RGB(64, 64, 64)
+        End With
+
+        .Range("B6:H6").Merge
+        .Range("B6").Value = "全ブランチのコミット履歴を取得し、作者別・日別の統計やブランチグラフを生成します。"
+        With .Range("B6")
+            .Font.Name = "Meiryo UI"
+            .Font.Size = 10
+            .Font.Color = RGB(100, 100, 100)
+        End With
+
+        ' =================================================================
+        ' リポジトリ設定セクション (行9-15)
+        ' =================================================================
+        .Range("B9:H9").Merge
+        .Range("B9").Value = "リポジトリ設定"
+        With .Range("B9")
+            .Font.Name = "Meiryo UI"
+            .Font.Size = 14
+            .Font.Bold = True
+            .Font.Color = RGB(68, 114, 196)
+        End With
+
+        ' セクション下線
+        With .Range("B9:H9").Borders(xlEdgeBottom)
+            .LineStyle = xlContinuous
+            .Color = RGB(68, 114, 196)
+            .Weight = xlMedium
+        End With
+
+        ' リポジトリパス
+        .Range("B11").Value = "リポジトリパス:"
+        With .Range("B11")
+            .Font.Name = "Meiryo UI"
+            .Font.Size = 11
+            .Font.Bold = True
+        End With
+
+        .Range("C11:G11").Merge
+        .Range("C11").Value = GetDefaultRepoPath()
+        With .Range("C11:G11")
+            .Interior.Color = RGB(242, 242, 242)
+            .Font.Name = "Meiryo UI"
+            .Font.Size = 10
+            .HorizontalAlignment = xlLeft
+        End With
+        With .Range("C11:G11").Borders
+            .LineStyle = xlContinuous
+            .Color = RGB(200, 200, 200)
+        End With
+
+        ' 取得コミット数
+        .Range("B13").Value = "取得コミット数:"
+        With .Range("B13")
+            .Font.Name = "Meiryo UI"
+            .Font.Size = 11
+            .Font.Bold = True
+        End With
+
+        .Range("C13").Value = COMMIT_COUNT
+        With .Range("C13")
+            .Interior.Color = RGB(242, 242, 242)
+            .Font.Name = "Meiryo UI"
+            .Font.Size = 10
+            .Font.Bold = True
+            .NumberFormat = "#,##0"
+        End With
+        With .Range("C13").Borders
+            .LineStyle = xlContinuous
+            .Color = RGB(200, 200, 200)
+        End With
+
+        .Range("D13:G13").Merge
+        .Range("D13").Value = "※設定変更はVBAコード内で行います"
+        With .Range("D13")
+            .Font.Name = "Meiryo UI"
+            .Font.Size = 9
+            .Font.Color = RGB(128, 128, 128)
+        End With
+
+        ' =================================================================
+        ' ボタンエリア (行16-18)
+        ' =================================================================
+        .Rows(16).RowHeight = 10
+
+        ' 可視化実行ボタン
+        Set btn = .Buttons.Add(.Range("C17").Left, .Range("C17").Top, 160, 35)
+        With btn
+            .Name = "btnVisualizeGitLog"
+            .Caption = "Git Log を可視化"
+            .OnAction = "VisualizeGitLog"
+            .Font.Name = "Meiryo UI"
+            .Font.Size = 11
+            .Font.Bold = True
+        End With
+
+        ' =================================================================
+        ' 出力シートセクション (行21-30)
+        ' =================================================================
+        .Range("B21:H21").Merge
+        .Range("B21").Value = "出力シート一覧"
+        With .Range("B21")
+            .Font.Name = "Meiryo UI"
+            .Font.Size = 14
+            .Font.Bold = True
+            .Font.Color = RGB(68, 114, 196)
+        End With
+
+        ' セクション下線
+        With .Range("B21:H21").Borders(xlEdgeBottom)
+            .LineStyle = xlContinuous
+            .Color = RGB(68, 114, 196)
+            .Weight = xlMedium
+        End With
+
+        ' Dashboard
+        .Range("B23").Value = "Dashboard"
+        With .Range("B23")
+            .Font.Name = "Meiryo UI"
+            .Font.Size = 11
+            .Font.Bold = True
+            .Font.Color = RGB(68, 114, 196)
+        End With
+        .Range("C23:G23").Merge
+        .Range("C23").Value = "リポジトリ情報と統計サマリーを表示"
+        With .Range("C23")
+            .Font.Name = "Meiryo UI"
+            .Font.Size = 10
+        End With
+
+        ' CommitHistory
+        .Range("B24").Value = "CommitHistory"
+        With .Range("B24")
+            .Font.Name = "Meiryo UI"
+            .Font.Size = 11
+            .Font.Bold = True
+            .Font.Color = RGB(68, 114, 196)
+        End With
+        .Range("C24:G24").Merge
+        .Range("C24").Value = "コミット履歴の一覧表（ハッシュ、作者、日時、メッセージ等）"
+        With .Range("C24")
+            .Font.Name = "Meiryo UI"
+            .Font.Size = 10
+        End With
+
+        ' Statistics
+        .Range("B25").Value = "Statistics"
+        With .Range("B25")
+            .Font.Name = "Meiryo UI"
+            .Font.Size = 11
+            .Font.Bold = True
+            .Font.Color = RGB(68, 114, 196)
+        End With
+        .Range("C25:G25").Merge
+        .Range("C25").Value = "作者別・日別のコミット数統計"
+        With .Range("C25")
+            .Font.Name = "Meiryo UI"
+            .Font.Size = 10
+        End With
+
+        ' Charts
+        .Range("B26").Value = "Charts"
+        With .Range("B26")
+            .Font.Name = "Meiryo UI"
+            .Font.Size = 11
+            .Font.Bold = True
+            .Font.Color = RGB(68, 114, 196)
+        End With
+        .Range("C26:G26").Merge
+        .Range("C26").Value = "作者別コミット数（棒グラフ）、日別コミット数（折れ線グラフ）"
+        With .Range("C26")
+            .Font.Name = "Meiryo UI"
+            .Font.Size = 10
+        End With
+
+        ' BranchGraph
+        .Range("B27").Value = "BranchGraph"
+        With .Range("B27")
+            .Font.Name = "Meiryo UI"
+            .Font.Size = 11
+            .Font.Bold = True
+            .Font.Color = RGB(68, 114, 196)
+        End With
+        .Range("C27:G27").Merge
+        .Range("C27").Value = "ブランチ構造を視覚化（コミットノードと接続線）"
+        With .Range("C27")
+            .Font.Name = "Meiryo UI"
+            .Font.Size = 10
+        End With
+
+        ' =================================================================
+        ' ノード色凡例セクション (行30-37)
+        ' =================================================================
+        .Range("B30:H30").Merge
+        .Range("B30").Value = "ブランチグラフの色凡例"
+        With .Range("B30")
+            .Font.Name = "Meiryo UI"
+            .Font.Size = 14
+            .Font.Bold = True
+            .Font.Color = RGB(68, 114, 196)
+        End With
+
+        ' セクション下線
+        With .Range("B30:H30").Borders(xlEdgeBottom)
+            .LineStyle = xlContinuous
+            .Color = RGB(68, 114, 196)
+            .Weight = xlMedium
+        End With
+
+        ' 初期コミット
+        .Range("B32").Value = "●"
+        With .Range("B32")
+            .Font.Name = "Meiryo UI"
+            .Font.Size = 14
+            .Font.Color = RGB(255, 0, 0)
+            .HorizontalAlignment = xlCenter
+        End With
+        .Range("C32:E32").Merge
+        .Range("C32").Value = "初期コミット（親コミットなし）"
+        With .Range("C32")
+            .Font.Name = "Meiryo UI"
+            .Font.Size = 10
+        End With
+
+        ' 通常コミット
+        .Range("B33").Value = "●"
+        With .Range("B33")
+            .Font.Name = "Meiryo UI"
+            .Font.Size = 14
+            .Font.Color = RGB(0, 128, 255)
+            .HorizontalAlignment = xlCenter
+        End With
+        .Range("C33:E33").Merge
+        .Range("C33").Value = "通常コミット（親コミット1つ）"
+        With .Range("C33")
+            .Font.Name = "Meiryo UI"
+            .Font.Size = 10
+        End With
+
+        ' マージコミット
+        .Range("B34").Value = "●"
+        With .Range("B34")
+            .Font.Name = "Meiryo UI"
+            .Font.Size = 14
+            .Font.Color = RGB(0, 255, 0)
+            .HorizontalAlignment = xlCenter
+        End With
+        .Range("C34:E34").Merge
+        .Range("C34").Value = "マージコミット（親コミット2つ以上）"
+        With .Range("C34")
+            .Font.Name = "Meiryo UI"
+            .Font.Size = 10
+        End With
+
+        ' =================================================================
+        ' 使い方セクション (行38-46)
+        ' =================================================================
+        .Range("B38:H38").Merge
+        .Range("B38").Value = "使い方"
+        With .Range("B38")
+            .Font.Name = "Meiryo UI"
+            .Font.Size = 14
+            .Font.Bold = True
+            .Font.Color = RGB(68, 114, 196)
+        End With
+
+        ' セクション下線
+        With .Range("B38:H38").Borders(xlEdgeBottom)
+            .LineStyle = xlContinuous
+            .Color = RGB(68, 114, 196)
+            .Weight = xlMedium
+        End With
+
+        .Range("B40").Value = "1."
+        .Range("C40").Value = "VBAコード内でリポジトリパスを設定（DEFAULT_REPO_PATH_TEMPLATE）"
+        .Range("B41").Value = "2."
+        .Range("C41").Value = "「Git Log を可視化」ボタンをクリック"
+        .Range("B42").Value = "3."
+        .Range("C42").Value = "処理完了後、各シートに結果が出力されます"
+        .Range("B43").Value = "4."
+        .Range("C43").Value = "Dashboardシートから各統計情報を確認できます"
+
+        .Range("B40:B43").Font.Name = "Meiryo UI"
+        .Range("B40:B43").Font.Size = 10
+        .Range("B40:B43").Font.Bold = True
+        .Range("B40:B43").Font.Color = RGB(68, 114, 196)
+        .Range("C40:C43").Font.Name = "Meiryo UI"
+        .Range("C40:C43").Font.Size = 10
+
+        ' =================================================================
+        ' 必要環境セクション (行46-50)
+        ' =================================================================
+        .Range("B46:H46").Merge
+        .Range("B46").Value = "必要な環境"
+        With .Range("B46")
+            .Font.Name = "Meiryo UI"
+            .Font.Size = 14
+            .Font.Bold = True
+            .Font.Color = RGB(68, 114, 196)
+        End With
+
+        ' セクション下線
+        With .Range("B46:H46").Borders(xlEdgeBottom)
+            .LineStyle = xlContinuous
+            .Color = RGB(68, 114, 196)
+            .Weight = xlMedium
+        End With
+
+        .Range("B48").Value = "・"
+        .Range("C48").Value = "Microsoft Excel 2010以降"
+        .Range("B49").Value = "・"
+        .Range("C49").Value = "Gitがインストールされており、パスが通っていること"
+
+        .Range("B48:B49").Font.Name = "Meiryo UI"
+        .Range("B48:B49").Font.Size = 10
+        .Range("B48:B49").Font.Bold = True
+        .Range("C48:C49").Font.Name = "Meiryo UI"
+        .Range("C48:C49").Font.Size = 10
+
+        ' =================================================================
+        ' 列幅・行高の調整
+        ' =================================================================
+        .Columns("A").ColumnWidth = 3
+        .Columns("B").ColumnWidth = 18
+        .Columns("C").ColumnWidth = 15
+        .Columns("D").ColumnWidth = 12
+        .Columns("E").ColumnWidth = 15
+        .Columns("F").ColumnWidth = 12
+        .Columns("G").ColumnWidth = 15
+        .Columns("H").ColumnWidth = 12
+        .Columns("I").ColumnWidth = 3
+
+        ' セルA1を選択
+        .Range("A1").Select
+    End With
+
+    Application.ScreenUpdating = True
+End Sub
+
+'==============================================================================
 ' テスト用プロシージャ
 '==============================================================================
 Public Sub TestVisualizeGitLog()

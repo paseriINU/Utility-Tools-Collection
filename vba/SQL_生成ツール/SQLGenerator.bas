@@ -48,12 +48,15 @@ Private Const ROW_TITLE As Long = 1
 
 ' テーブル定義書インポート設定（デフォルト値）
 ' ※メインシートの「設定」から変更可能
-Private Const DEFAULT_TABLE_NAME_CELL As String = "E4"           ' テーブル名のセル位置
-Private Const DEFAULT_COLUMN_START_ROW As Long = 10               ' カラム定義開始行
+Private Const DEFAULT_TABLE_NAME_CELL As String = "J2"           ' テーブル名のセル位置
+Private Const DEFAULT_TABLE_DESC_CELL As String = "D2"           ' テーブル名称のセル位置
+Private Const DEFAULT_COLUMN_START_ROW As Long = 5                ' カラム定義開始行
 Private Const DEFAULT_COL_NUMBER As String = "A"                  ' カラム番号の列
-Private Const DEFAULT_COL_NAME As String = "B"                    ' カラム名の列
-Private Const DEFAULT_COL_DESCRIPTION As String = "C"             ' カラム説明の列
-Private Const DEFAULT_COL_DATATYPE As String = "D"                ' データ型の列
+Private Const DEFAULT_COL_ITEM_NAME As String = "C"               ' 項目名の列
+Private Const DEFAULT_COL_NAME As String = "D"                    ' カラム名の列
+Private Const DEFAULT_COL_DATATYPE As String = "E"                ' データ型の列
+Private Const DEFAULT_COL_LENGTH As String = "F"                  ' 桁数の列
+Private Const DEFAULT_COL_NULLABLE As String = "H"                ' NULL許可の列
 Private Const ROW_OPTIONS As Long = 3
 Private Const ROW_MAIN_TABLE As Long = 6
 Private Const ROW_JOIN_START As Long = 9
@@ -100,6 +103,9 @@ Public Sub InitializeSQLGenerator()
     FormatUnionSheet
     FormatHelpSheet
 
+    ' メインシートにWorksheet_Changeイベントを設定
+    SetupWorksheetChangeEvent
+
     ' メインシートをアクティブに
     Sheets(SHEET_MAIN).Activate
 
@@ -109,7 +115,8 @@ Public Sub InitializeSQLGenerator()
            "【使い方】" & vbCrLf & _
            "1. 「テーブル定義」シートにテーブル・カラム情報を登録" & vbCrLf & _
            "2. 「メイン」シートで条件を入力" & vbCrLf & _
-           "3. 「SQL生成」ボタンをクリック", vbInformation, "初期化完了"
+           "3. 「SQL生成」ボタンをクリック" & vbCrLf & vbCrLf & _
+           "※テーブル選択時にカラムが自動で絞り込まれます", vbInformation, "初期化完了"
 
     Exit Sub
 
@@ -139,6 +146,53 @@ Private Sub CreateSheet(ByVal sheetName As String)
         Set ws = ThisWorkbook.Sheets.Add(After:=ThisWorkbook.Sheets(ThisWorkbook.Sheets.Count))
         ws.Name = sheetName
     End If
+End Sub
+
+'==============================================================================
+' メインシートにWorksheet_Changeイベントを設定
+' ※VBAプロジェクトへのアクセス許可が必要
+'   「ファイル」→「オプション」→「トラストセンター」→「トラストセンターの設定」
+'   →「マクロの設定」→「VBAプロジェクト オブジェクト モデルへのアクセスを信頼する」
+'==============================================================================
+Private Sub SetupWorksheetChangeEvent()
+    On Error GoTo ManualSetup
+
+    Dim ws As Worksheet
+    Dim vbComp As Object
+    Dim codeModule As Object
+    Dim eventCode As String
+    Dim lineNum As Long
+
+    Set ws = Sheets(SHEET_MAIN)
+
+    ' シートのCodeNameを取得してVBComponentにアクセス
+    Set vbComp = ThisWorkbook.VBProject.VBComponents(ws.CodeName)
+    Set codeModule = vbComp.CodeModule
+
+    ' 既にWorksheet_Changeが存在するかチェック
+    On Error Resume Next
+    lineNum = 0
+    lineNum = codeModule.ProcStartLine("Worksheet_Change", 0)
+    On Error GoTo ManualSetup
+
+    ' 既に存在する場合はスキップ
+    If lineNum > 0 Then Exit Sub
+
+    ' イベントコードを追加
+    eventCode = vbCrLf & _
+        "Private Sub Worksheet_Change(ByVal Target As Range)" & vbCrLf & _
+        "    ' テーブル選択時にカラムドロップダウンを自動更新" & vbCrLf & _
+        "    SQLGenerator.OnTableSelectionChanged Target" & vbCrLf & _
+        "End Sub" & vbCrLf
+
+    codeModule.AddFromString eventCode
+
+    Exit Sub
+
+ManualSetup:
+    ' VBProjectへのアクセスが許可されていない場合は手動設定の案内
+    ' （初期化時にエラーを出さないよう静かに終了）
+    ' ボタンからの手動更新は引き続き使用可能
 End Sub
 
 '==============================================================================
@@ -210,7 +264,7 @@ Private Sub FormatMainSheet()
         Dim i As Long
         For i = 1 To 8
             .Range("A" & ROW_JOIN_START + 1 + i).Value = i
-            AddDropdown ws, "B" & ROW_JOIN_START + 1 + i, ",INNER JOIN,LEFT JOIN,RIGHT JOIN,FULL OUTER JOIN,CROSS JOIN"
+            AddDropdown ws, "B" & ROW_JOIN_START + 1 + i, ",INNER JOIN(両方に存在),LEFT JOIN(左を全て),RIGHT JOIN(右を全て),FULL OUTER JOIN(両方全て),CROSS JOIN(全組合せ)"
         Next i
 
         ' 取得カラム
@@ -236,7 +290,7 @@ Private Sub FormatMainSheet()
         ' カラム行
         For i = 1 To 20
             .Range("A" & ROW_COLUMNS_START + i - 1).Value = i
-            AddDropdown ws, "E" & ROW_COLUMNS_START + i - 1, ",COUNT,SUM,AVG,MAX,MIN,COUNT(DISTINCT)"
+            AddDropdown ws, "E" & ROW_COLUMNS_START + i - 1, ",COUNT(件数),SUM(合計),AVG(平均),MAX(最大),MIN(最小),COUNT(DISTINCT)(重複除外件数)"
         Next i
 
         ' WHERE条件
@@ -267,10 +321,10 @@ Private Sub FormatMainSheet()
             If i = 1 Then
                 AddDropdown ws, "B" & ROW_WHERE_START + i - 1, ""
             Else
-                AddDropdown ws, "B" & ROW_WHERE_START + i - 1, ",AND,OR"
+                AddDropdown ws, "B" & ROW_WHERE_START + i - 1, ",AND(かつ),OR(または)"
             End If
             AddDropdown ws, "C" & ROW_WHERE_START + i - 1, ",("
-            AddDropdown ws, "F" & ROW_WHERE_START + i - 1, ",=,<>,>,<,>=,<=,LIKE,NOT LIKE,IN,NOT IN,IS NULL,IS NOT NULL,BETWEEN,EXISTS,NOT EXISTS"
+            AddDropdown ws, "F" & ROW_WHERE_START + i - 1, ",=(等しい),<>(等しくない),>(より大きい),<(より小さい),>=(以上),<=(以下),LIKE(部分一致),NOT LIKE(部分不一致),IN(いずれか),NOT IN(いずれでもない),IS NULL(空),IS NOT NULL(空でない),BETWEEN(範囲),EXISTS(存在する),NOT EXISTS(存在しない)"
             AddDropdown ws, "H" & ROW_WHERE_START + i - 1, ",)"
         Next i
 
@@ -309,7 +363,7 @@ Private Sub FormatMainSheet()
             If i = 1 Then
                 AddDropdown ws, "B" & ROW_HAVING_START + i - 1, ""
             Else
-                AddDropdown ws, "B" & ROW_HAVING_START + i - 1, ",AND,OR"
+                AddDropdown ws, "B" & ROW_HAVING_START + i - 1, ",AND(かつ),OR(または)"
             End If
             .Range("C" & ROW_HAVING_START + i - 1 & ":J" & ROW_HAVING_START + i - 1).Merge
         Next i
@@ -336,8 +390,8 @@ Private Sub FormatMainSheet()
         ' ORDER BY行
         For i = 1 To 10
             .Range("A" & ROW_ORDERBY_START + i - 1).Value = i
-            AddDropdown ws, "D" & ROW_ORDERBY_START + i - 1, ",ASC,DESC"
-            AddDropdown ws, "E" & ROW_ORDERBY_START + i - 1, ",NULLS FIRST,NULLS LAST"
+            AddDropdown ws, "D" & ROW_ORDERBY_START + i - 1, ",ASC(昇順),DESC(降順)"
+            AddDropdown ws, "E" & ROW_ORDERBY_START + i - 1, ",NULLS FIRST(NULL先頭),NULLS LAST(NULL末尾)"
         Next i
 
         ' 件数制限
@@ -386,6 +440,8 @@ Private Sub FormatMainSheet()
         .Columns("H").ColumnWidth = 5
         .Columns("I").ColumnWidth = 10
         .Columns("J").ColumnWidth = 10
+        .Columns("K").ColumnWidth = 16
+        .Columns("L").ColumnWidth = 16
 
         ' ボタン追加
         AddButton ws, "K" & ROW_TITLE, "SQL生成", "GenerateSQL"
@@ -394,6 +450,7 @@ Private Sub FormatMainSheet()
         AddButton ws, "K" & ROW_JOIN_START, "コピー", "CopySQL"
         AddButton ws, "L" & ROW_TITLE, "プルダウン更新", "UpdateDropdownsFromTableDef"
         AddButton ws, "L" & ROW_OPTIONS, "別名更新", "RefreshAliasDropdowns"
+        AddButton ws, "L" & ROW_MAIN_TABLE, "カラム絞込", "RefreshColumnDropdownsByTable"
     End With
 End Sub
 
@@ -510,44 +567,51 @@ Private Sub FormatTableDefSheet()
         ' 設定項目
         .Range("J4").Value = "テーブル名セル"
         .Range("K4").Value = DEFAULT_TABLE_NAME_CELL
-        .Range("J5").Value = "カラム開始行"
-        .Range("K5").Value = DEFAULT_COLUMN_START_ROW
-        .Range("J6").Value = "カラム番号列"
-        .Range("K6").Value = DEFAULT_COL_NUMBER
-        .Range("J7").Value = "カラム名列"
-        .Range("K7").Value = DEFAULT_COL_NAME
-        .Range("J8").Value = "説明列"
-        .Range("K8").Value = DEFAULT_COL_DESCRIPTION
-        .Range("J9").Value = "データ型列"
-        .Range("K9").Value = DEFAULT_COL_DATATYPE
+        .Range("J5").Value = "テーブル名称セル"
+        .Range("K5").Value = DEFAULT_TABLE_DESC_CELL
+        .Range("J6").Value = "カラム開始行"
+        .Range("K6").Value = DEFAULT_COLUMN_START_ROW
+        .Range("J7").Value = "カラム番号列"
+        .Range("K7").Value = DEFAULT_COL_NUMBER
+        .Range("J8").Value = "項目名列"
+        .Range("K8").Value = DEFAULT_COL_ITEM_NAME
+        .Range("J9").Value = "カラム名列"
+        .Range("K9").Value = DEFAULT_COL_NAME
+        .Range("J10").Value = "データ型列"
+        .Range("K10").Value = DEFAULT_COL_DATATYPE
+        .Range("J11").Value = "桁数列"
+        .Range("K11").Value = DEFAULT_COL_LENGTH
+        .Range("J12").Value = "NULL列"
+        .Range("K12").Value = DEFAULT_COL_NULLABLE
 
         ' ヘッダー色
-        .Range("J4:J9").Font.Bold = True
-        .Range("J4:J9").Interior.Color = RGB(255, 250, 230)
+        .Range("J4:J12").Font.Bold = True
+        .Range("J4:J12").Interior.Color = RGB(255, 250, 230)
 
         ' フォルダパス設定
-        .Range("J10").Value = "フォルダパス設定"
-        .Range("J10").Font.Bold = True
-        .Range("J10").Interior.Color = RGB(255, 242, 204)
-        .Range("J10:K10").Merge
+        .Range("J14").Value = "フォルダパス設定"
+        .Range("J14").Font.Bold = True
+        .Range("J14").Interior.Color = RGB(255, 242, 204)
+        .Range("J14:K14").Merge
 
-        .Range("J11").Value = "フォルダ1"
-        .Range("K11").Value = ""
-        .Range("J12").Value = "フォルダ2"
-        .Range("K12").Value = ""
-        .Range("J11:J12").Font.Bold = True
-        .Range("J11:J12").Interior.Color = RGB(255, 250, 230)
+        .Range("J15").Value = "フォルダパス"
+        .Range("K15").Value = ""
+        .Range("J16").Value = "例外DB(+1列)"
+        .Range("K16").Value = ""
+        .Range("J15:J16").Font.Bold = True
+        .Range("J15:J16").Interior.Color = RGB(255, 250, 230)
 
         ' 説明
-        .Range("J14").Value = "※設定を変更することで、"
-        .Range("J15").Value = "  異なるフォーマットの定義書に対応。"
-        .Range("J16").Value = "※フォルダパスを設定すると、"
-        .Range("J17").Value = "  複数フォルダから一括インポート可能。"
-        .Range("J14:J17").Font.Size = 9
-        .Range("J14:J17").Font.Color = RGB(128, 128, 128)
+        .Range("J18").Value = "※設定を変更することで、"
+        .Range("J19").Value = "  異なるフォーマットの定義書に対応。"
+        .Range("J20").Value = "※フォルダパスに%USERNAME%を使用可能。"
+        .Range("J21").Value = "※1ファイル内の全シートを読み込みます。"
+        .Range("J22").Value = "※例外DBはシート名に含まれる場合、列を+1。"
+        .Range("J18:J22").Font.Size = 9
+        .Range("J18:J22").Font.Color = RGB(128, 128, 128)
 
         ' 列幅
-        .Columns("J").ColumnWidth = 15
+        .Columns("J").ColumnWidth = 16
         .Columns("K").ColumnWidth = 40
 
         ' ボタン追加
@@ -724,9 +788,11 @@ End Sub
 Private Sub AddDropdown(ByVal ws As Worksheet, ByVal cellAddr As String, ByVal listItems As String)
     With ws.Range(cellAddr).Validation
         .Delete
-        .Add Type:=xlValidateList, AlertStyle:=xlValidAlertStop, Formula1:=listItems
-        .IgnoreBlank = True
-        .InCellDropdown = True
+        If Len(listItems) > 0 Then
+            .Add Type:=xlValidateList, AlertStyle:=xlValidAlertStop, Formula1:=listItems
+            .IgnoreBlank = True
+            .InCellDropdown = True
+        End If
     End With
 End Sub
 
@@ -738,7 +804,7 @@ Private Sub AddButton(ByVal ws As Worksheet, ByVal cellAddr As String, ByVal cap
     Dim rng As Range
 
     Set rng = ws.Range(cellAddr)
-    Set btn = ws.Buttons.Add(rng.Left, rng.Top, 80, 25)
+    Set btn = ws.Buttons.Add(rng.Left, rng.Top, 110, 28)
     btn.OnAction = macroName
     btn.caption = caption
     btn.Font.Size = 10
@@ -871,9 +937,9 @@ Private Function GenerateSelectClause(ByVal ws As Worksheet) As String
 
     For i = ROW_COLUMNS_START To ROW_COLUMNS_END
         tableAlias = Trim(ws.Range("B" & i).Value)
-        columnName = Trim(ws.Range("C" & i).Value)
+        columnName = ExtractTableName(Trim(ws.Range("C" & i).Value))
         colAlias = Trim(ws.Range("D" & i).Value)
-        aggFunc = Trim(ws.Range("E" & i).Value)
+        aggFunc = ExtractTableName(Trim(ws.Range("E" & i).Value))
         subqueryNo = Trim(ws.Range("F" & i).Value)
 
         If columnName <> "" Or subqueryNo <> "" Then
@@ -942,7 +1008,7 @@ Private Function GenerateFromClause(ByVal ws As Worksheet) As String
     Dim joinAlias As String
     Dim joinCondition As String
 
-    mainTable = Trim(ws.Range("B" & ROW_MAIN_TABLE + 1).Value)
+    mainTable = ExtractTableName(Trim(ws.Range("B" & ROW_MAIN_TABLE + 1).Value))
     mainAlias = Trim(ws.Range("E" & ROW_MAIN_TABLE + 1).Value)
 
     If mainTable = "" Then
@@ -957,8 +1023,8 @@ Private Function GenerateFromClause(ByVal ws As Worksheet) As String
 
     ' JOIN句
     For i = ROW_JOIN_START + 2 To ROW_JOIN_END
-        joinType = Trim(ws.Range("B" & i).Value)
-        joinTable = Trim(ws.Range("C" & i).Value)
+        joinType = ExtractTableName(Trim(ws.Range("B" & i).Value))
+        joinTable = ExtractTableName(Trim(ws.Range("C" & i).Value))
         joinAlias = Trim(ws.Range("D" & i).Value)
         joinCondition = Trim(ws.Range("E" & i).Value)
 
@@ -967,7 +1033,7 @@ Private Function GenerateFromClause(ByVal ws As Worksheet) As String
             If joinAlias <> "" Then
                 result = result & " " & joinAlias
             End If
-            If joinCondition <> "" And joinType <> "CROSS JOIN" Then
+            If joinCondition <> "" And InStr(joinType, "CROSS") = 0 Then
                 result = result & " ON " & joinCondition
             End If
         End If
@@ -996,11 +1062,11 @@ Private Function GenerateWhereClause(ByVal ws As Worksheet) As String
     isFirst = True
 
     For i = ROW_WHERE_START To ROW_WHERE_END
-        andOr = Trim(ws.Range("B" & i).Value)
+        andOr = ExtractTableName(Trim(ws.Range("B" & i).Value))
         openParen = Trim(ws.Range("C" & i).Value)
         tableAlias = Trim(ws.Range("D" & i).Value)
-        columnName = Trim(ws.Range("E" & i).Value)
-        operator = Trim(ws.Range("F" & i).Value)
+        columnName = ExtractTableName(Trim(ws.Range("E" & i).Value))
+        operator = ExtractTableName(Trim(ws.Range("F" & i).Value))
         value = Trim(ws.Range("G" & i).Value)
         closeParen = Trim(ws.Range("H" & i).Value)
 
@@ -1153,9 +1219,9 @@ Private Function GenerateOrderByClause(ByVal ws As Worksheet) As String
 
     For i = ROW_ORDERBY_START To ROW_ORDERBY_END
         tableAlias = Trim(ws.Range("B" & i).Value)
-        columnName = Trim(ws.Range("C" & i).Value)
-        sortOrder = Trim(ws.Range("D" & i).Value)
-        nullsOrder = Trim(ws.Range("E" & i).Value)
+        columnName = ExtractTableName(Trim(ws.Range("C" & i).Value))
+        sortOrder = ExtractTableName(Trim(ws.Range("D" & i).Value))
+        nullsOrder = ExtractTableName(Trim(ws.Range("E" & i).Value))
 
         If columnName <> "" Then
             If tableAlias <> "" Then
@@ -1768,12 +1834,15 @@ End Sub
 
 '==============================================================================
 ' テーブル定義シートからテーブル一覧を取得
+' 形式: テーブル名(テーブル名称)
 '==============================================================================
 Private Function GetTableList() As String
     Dim ws As Worksheet
     Dim result As String
     Dim i As Long
     Dim tableName As String
+    Dim tableDesc As String
+    Dim displayName As String
 
     On Error Resume Next
     Set ws = Sheets(SHEET_TABLE_DEF)
@@ -1785,26 +1854,49 @@ Private Function GetTableList() As String
 
     result = ""
 
-    ' B列（テーブル名）を読み取り（6行目から開始）
+    ' B列（テーブル名）、C列（テーブル名称）を読み取り（6行目から開始）
     i = 6
     Do While ws.Range("B" & i).Value <> ""
         tableName = Trim(ws.Range("B" & i).Value)
+        tableDesc = Trim(ws.Range("C" & i).Value)
         If tableName <> "" Then
-            If result = "" Then
-                result = tableName
+            ' テーブル名称がある場合はカッコで追加
+            If tableDesc <> "" Then
+                displayName = tableName & "(" & tableDesc & ")"
             Else
-                result = result & "," & tableName
+                displayName = tableName
+            End If
+            If result = "" Then
+                result = displayName
+            Else
+                result = result & "," & displayName
             End If
         End If
         i = i + 1
-        If i > 100 Then Exit Do ' 安全制限
+        If i > 500 Then Exit Do ' 安全制限
     Loop
 
     GetTableList = result
 End Function
 
 '==============================================================================
+' 文字列からカッコ部分を除去（テーブル名、JOINタイプ等で使用）
+' 例: "USER_MASTER(ユーザー)" → "USER_MASTER"
+'     "INNER JOIN(両方に存在)" → "INNER JOIN"
+'==============================================================================
+Private Function ExtractTableName(ByVal displayName As String) As String
+    Dim pos As Long
+    pos = InStr(displayName, "(")
+    If pos > 0 Then
+        ExtractTableName = Left(displayName, pos - 1)
+    Else
+        ExtractTableName = displayName
+    End If
+End Function
+
+'==============================================================================
 ' テーブル定義シートから全カラム一覧を取得
+' 形式: カラム名(項目名)
 '==============================================================================
 Private Function GetAllColumnList() As String
     Dim ws As Worksheet
@@ -1812,6 +1904,8 @@ Private Function GetAllColumnList() As String
     Dim i As Long
     Dim tableName As String
     Dim columnName As String
+    Dim itemName As String
+    Dim displayName As String
     Dim dict As Object
 
     On Error Resume Next
@@ -1825,20 +1919,27 @@ Private Function GetAllColumnList() As String
     Set dict = CreateObject("Scripting.Dictionary")
     result = ""
 
-    ' E列（テーブル名）、F列（カラム名）を読み取り（6行目から開始）
+    ' E列（テーブル名）、F列（カラム名）、H列（項目名）を読み取り（6行目から開始）
     i = 6
     Do While ws.Range("E" & i).Value <> "" Or ws.Range("F" & i).Value <> ""
         tableName = Trim(ws.Range("E" & i).Value)
         columnName = Trim(ws.Range("F" & i).Value)
+        itemName = Trim(ws.Range("H" & i).Value)
 
         If columnName <> "" Then
             ' 重複チェック
             If Not dict.exists(columnName) Then
                 dict.Add columnName, True
-                If result = "" Then
-                    result = columnName
+                ' 項目名がある場合はカッコで追加
+                If itemName <> "" Then
+                    displayName = columnName & "(" & itemName & ")"
                 Else
-                    result = result & "," & columnName
+                    displayName = columnName
+                End If
+                If result = "" Then
+                    result = displayName
+                Else
+                    result = result & "," & displayName
                 End If
             End If
         End If
@@ -1853,7 +1954,7 @@ Private Function GetAllColumnList() As String
 End Function
 
 '==============================================================================
-' 指定テーブルのカラム一覧を取得
+' 指定テーブルのカラム一覧を取得（項目名付き）
 '==============================================================================
 Private Function GetColumnListForTable(ByVal targetTable As String) As String
     Dim ws As Worksheet
@@ -1861,6 +1962,8 @@ Private Function GetColumnListForTable(ByVal targetTable As String) As String
     Dim i As Long
     Dim tableName As String
     Dim columnName As String
+    Dim itemName As String
+    Dim displayName As String
 
     On Error Resume Next
     Set ws = Sheets(SHEET_TABLE_DEF)
@@ -1872,17 +1975,24 @@ Private Function GetColumnListForTable(ByVal targetTable As String) As String
 
     result = ""
 
-    ' E列（テーブル名）、F列（カラム名）を読み取り（6行目から開始）
+    ' E列（テーブル名）、F列（カラム名）、H列（項目名）を読み取り（6行目から開始）
     i = 6
     Do While ws.Range("E" & i).Value <> "" Or ws.Range("F" & i).Value <> ""
         tableName = Trim(ws.Range("E" & i).Value)
         columnName = Trim(ws.Range("F" & i).Value)
+        itemName = Trim(ws.Range("H" & i).Value)
 
         If UCase(tableName) = UCase(targetTable) And columnName <> "" Then
-            If result = "" Then
-                result = columnName
+            ' 項目名がある場合はカッコで追加
+            If itemName <> "" Then
+                displayName = columnName & "(" & itemName & ")"
             Else
-                result = result & "," & columnName
+                displayName = columnName
+            End If
+            If result = "" Then
+                result = displayName
+            Else
+                result = result & "," & displayName
             End If
         End If
         i = i + 1
@@ -1891,6 +2001,194 @@ Private Function GetColumnListForTable(ByVal targetTable As String) As String
 
     GetColumnListForTable = result
 End Function
+
+'==============================================================================
+' 選択されたテーブル（メイン＋JOIN）のカラム一覧を取得
+'==============================================================================
+Private Function GetColumnListForSelectedTables() As String
+    Dim wsMain As Worksheet
+    Dim result As String
+    Dim tableName As String
+    Dim columnList As String
+    Dim dict As Object
+    Dim i As Long
+    Dim cols() As String
+    Dim c As Long
+
+    Set wsMain = Sheets(SHEET_MAIN)
+    Set dict = CreateObject("Scripting.Dictionary")
+    result = ""
+
+    ' メインテーブルのカラムを取得
+    tableName = ExtractTableName(Trim(wsMain.Range("B" & ROW_MAIN_TABLE + 1).Value))
+    If tableName <> "" Then
+        columnList = GetColumnListForTable(tableName)
+        If columnList <> "" Then
+            cols = Split(columnList, ",")
+            For c = LBound(cols) To UBound(cols)
+                If Not dict.exists(cols(c)) Then
+                    dict.Add cols(c), True
+                    If result = "" Then
+                        result = cols(c)
+                    Else
+                        result = result & "," & cols(c)
+                    End If
+                End If
+            Next c
+        End If
+    End If
+
+    ' JOINテーブルのカラムを取得
+    For i = ROW_JOIN_START + 2 To ROW_JOIN_END
+        tableName = ExtractTableName(Trim(wsMain.Range("C" & i).Value))
+        If tableName <> "" Then
+            columnList = GetColumnListForTable(tableName)
+            If columnList <> "" Then
+                cols = Split(columnList, ",")
+                For c = LBound(cols) To UBound(cols)
+                    If Not dict.exists(cols(c)) Then
+                        dict.Add cols(c), True
+                        If result = "" Then
+                            result = cols(c)
+                        Else
+                            result = result & "," & cols(c)
+                        End If
+                    End If
+                Next c
+            End If
+        End If
+    Next i
+
+    ' 特殊なカラム名を先頭に追加
+    If result <> "" Then
+        result = "*," & result
+    End If
+
+    GetColumnListForSelectedTables = result
+End Function
+
+'==============================================================================
+' 選択テーブルに基づいてカラムドロップダウンを更新（ボタン用）
+'==============================================================================
+Public Sub RefreshColumnDropdownsByTable()
+    On Error GoTo ErrorHandler
+
+    Dim wsMain As Worksheet
+    Dim columnList As String
+    Dim i As Long
+    Dim tableCount As Long
+    Dim tableName As String
+
+    Set wsMain = Sheets(SHEET_MAIN)
+
+    ' 選択されたテーブルのカラム一覧を取得
+    columnList = GetColumnListForSelectedTables()
+
+    If columnList = "" Or columnList = "*" Then
+        MsgBox "テーブルが選択されていません。" & vbCrLf & _
+               "メインテーブルまたはJOINテーブルを選択してから実行してください。", vbExclamation, "確認"
+        Exit Sub
+    End If
+
+    ' カラム選択のプルダウンを更新
+    For i = ROW_COLUMNS_START To ROW_COLUMNS_END
+        AddDropdown wsMain, "C" & i, columnList
+    Next i
+
+    ' WHERE句のカラムプルダウンを更新
+    For i = ROW_WHERE_START To ROW_WHERE_END
+        AddDropdown wsMain, "E" & i, columnList
+    Next i
+
+    ' ORDER BY句のカラムプルダウンを更新
+    For i = ROW_ORDERBY_START To ROW_ORDERBY_END
+        AddDropdown wsMain, "C" & i, columnList
+    Next i
+
+    ' 選択されたテーブル数をカウント
+    tableCount = 0
+    tableName = ExtractTableName(Trim(wsMain.Range("B" & ROW_MAIN_TABLE + 1).Value))
+    If tableName <> "" Then tableCount = tableCount + 1
+
+    For i = ROW_JOIN_START + 2 To ROW_JOIN_END
+        tableName = ExtractTableName(Trim(wsMain.Range("C" & i).Value))
+        If tableName <> "" Then tableCount = tableCount + 1
+    Next i
+
+    MsgBox "カラムプルダウンを更新しました。" & vbCrLf & vbCrLf & _
+           "対象テーブル数: " & tableCount, vbInformation, "更新完了"
+
+    Exit Sub
+
+ErrorHandler:
+    MsgBox "エラーが発生しました: " & Err.Description, vbCritical, "エラー"
+End Sub
+
+'==============================================================================
+' テーブル選択時の自動カラム更新（Worksheet_Changeイベントから呼び出し）
+' 引数: changedRange - 変更されたセル範囲
+'==============================================================================
+Public Sub OnTableSelectionChanged(ByVal changedRange As Range)
+    On Error Resume Next
+
+    Dim wsMain As Worksheet
+    Dim targetRow As Long
+    Dim targetCol As String
+    Dim isTableCell As Boolean
+    Dim i As Long
+
+    Set wsMain = Sheets(SHEET_MAIN)
+
+    ' 変更されたセルがメインシートでない場合は終了
+    If changedRange.Worksheet.Name <> SHEET_MAIN Then Exit Sub
+
+    ' 変更されたセルがテーブル選択セルかチェック
+    isTableCell = False
+
+    ' メインテーブル（B7）
+    If changedRange.Row = ROW_MAIN_TABLE + 1 And changedRange.Column = 2 Then
+        isTableCell = True
+    End If
+
+    ' JOINテーブル（C11～C18）
+    If changedRange.Column = 3 Then
+        For i = ROW_JOIN_START + 2 To ROW_JOIN_END
+            If changedRange.Row = i Then
+                isTableCell = True
+                Exit For
+            End If
+        Next i
+    End If
+
+    ' テーブル選択セルでない場合は終了
+    If Not isTableCell Then Exit Sub
+
+    ' カラムドロップダウンを自動更新（メッセージなし）
+    Dim columnList As String
+    columnList = GetColumnListForSelectedTables()
+
+    ' テーブルが選択されていない場合は終了
+    If columnList = "" Or columnList = "*" Then Exit Sub
+
+    Application.EnableEvents = False
+
+    ' カラム選択のプルダウンを更新
+    For i = ROW_COLUMNS_START To ROW_COLUMNS_END
+        AddDropdown wsMain, "C" & i, columnList
+    Next i
+
+    ' WHERE句のカラムプルダウンを更新
+    For i = ROW_WHERE_START To ROW_WHERE_END
+        AddDropdown wsMain, "E" & i, columnList
+    Next i
+
+    ' ORDER BY句のカラムプルダウンを更新
+    For i = ROW_ORDERBY_START To ROW_ORDERBY_END
+        AddDropdown wsMain, "C" & i, columnList
+    Next i
+
+    Application.EnableEvents = True
+End Sub
 
 '==============================================================================
 ' メインシートから入力済みの別名一覧を取得
@@ -1994,128 +2292,105 @@ End Sub
 '   - カラム定義: A10行から開始
 '     - A列: カラム番号
 '     - B列: カラム名
-'     - C列: 説明
-'     - D列: データ型
+'     - C列: 項目名
+'     - D列: カラム名
+'     - E列: データ型
+'     - F列: 桁数
+'     - H列: NULL許可
 '
-' 複数フォルダ対応:
-'   - テーブル定義シートのK11, K12にフォルダパスを設定可能
-'   - 設定がない場合はダイアログで選択
+' フォルダパス対応:
+'   - テーブル定義シートのK15にフォルダパスを設定可能
+'   - %USERNAME%を環境変数として展開
+'   - 1ファイル内の全シートを読み込み
 '==============================================================================
 Public Sub ImportTableDefinitions()
     On Error GoTo ErrorHandler
 
     Dim wsDef As Worksheet
-    Dim folderPaths() As String
-    Dim folderCount As Long
     Dim folderPath As String
     Dim fileName As String
     Dim sourceWb As Workbook
     Dim sourceWs As Worksheet
     Dim tableNameCell As String
+    Dim tableDescCell As String
     Dim columnStartRow As Long
     Dim colNumber As String
+    Dim colItemName As String
     Dim colName As String
-    Dim colDescription As String
     Dim colDataType As String
+    Dim colLength As String
+    Dim colNullable As String
     Dim tableName As String
+    Dim tableDesc As String
     Dim tableCount As Long
     Dim columnCount As Long
     Dim nextTableRow As Long
     Dim nextColumnRow As Long
-    Dim i As Long
-    Dim j As Long
+    Dim sheetIdx As Long
     Dim currentRow As Long
+    Dim colNumberValue As Variant
     Dim colNameValue As String
-    Dim colDescValue As String
+    Dim colItemNameValue As String
     Dim colTypeValue As String
+    Dim colLengthValue As String
+    Dim colNullableValue As String
     Dim importedTables As String
-    Dim path1 As String
-    Dim path2 As String
-    Dim usePresetFolders As Boolean
+    Dim presetPath As String
+    Dim exceptionDbName As String
+    Dim colOffset As Long
+    Dim actualColItemName As String
+    Dim actualColName As String
+    Dim actualColDataType As String
+    Dim actualColLength As String
+    Dim actualColNullable As String
 
     Set wsDef = Sheets(SHEET_TABLE_DEF)
 
     ' 設定を取得
     tableNameCell = GetImportSetting(wsDef, "テーブル名セル", DEFAULT_TABLE_NAME_CELL)
+    tableDescCell = GetImportSetting(wsDef, "テーブル名称セル", DEFAULT_TABLE_DESC_CELL)
     columnStartRow = CLng(GetImportSetting(wsDef, "カラム開始行", CStr(DEFAULT_COLUMN_START_ROW)))
     colNumber = GetImportSetting(wsDef, "カラム番号列", DEFAULT_COL_NUMBER)
+    colItemName = GetImportSetting(wsDef, "項目名列", DEFAULT_COL_ITEM_NAME)
     colName = GetImportSetting(wsDef, "カラム名列", DEFAULT_COL_NAME)
-    colDescription = GetImportSetting(wsDef, "説明列", DEFAULT_COL_DESCRIPTION)
     colDataType = GetImportSetting(wsDef, "データ型列", DEFAULT_COL_DATATYPE)
+    colLength = GetImportSetting(wsDef, "桁数列", DEFAULT_COL_LENGTH)
+    colNullable = GetImportSetting(wsDef, "NULL列", DEFAULT_COL_NULLABLE)
 
     ' フォルダパス設定を取得
-    path1 = Trim(CStr(wsDef.Range("K11").Value))
-    path2 = Trim(CStr(wsDef.Range("K12").Value))
+    presetPath = Trim(CStr(wsDef.Range("K15").Value))
+    exceptionDbName = Trim(CStr(wsDef.Range("K16").Value))
 
-    ' フォルダパスの取得方法を決定
-    usePresetFolders = False
-    folderCount = 0
-
-    If path1 <> "" Or path2 <> "" Then
-        Dim usePreset As VbMsgBoxResult
-        usePreset = MsgBox("設定済みのフォルダパスを使用しますか？" & vbCrLf & vbCrLf & _
-                          "フォルダ1: " & IIf(path1 = "", "(未設定)", path1) & vbCrLf & _
-                          "フォルダ2: " & IIf(path2 = "", "(未設定)", path2) & vbCrLf & vbCrLf & _
-                          "「はい」: 設定済みフォルダを使用" & vbCrLf & _
-                          "「いいえ」: フォルダを手動で選択", _
-                          vbYesNoCancel + vbQuestion, "フォルダ選択")
-
-        If usePreset = vbCancel Then
-            Exit Sub
-        ElseIf usePreset = vbYes Then
-            usePresetFolders = True
-            ' 有効なパスをカウント
-            If path1 <> "" Then folderCount = folderCount + 1
-            If path2 <> "" Then folderCount = folderCount + 1
-
-            If folderCount = 0 Then
-                MsgBox "フォルダパスが設定されていません。" & vbCrLf & _
-                       "K11, K12セルにフォルダパスを入力してください。", vbExclamation, "エラー"
-                Exit Sub
-            End If
-
-            ReDim folderPaths(1 To folderCount)
-            j = 1
-            If path1 <> "" Then
-                folderPaths(j) = path1
-                j = j + 1
-            End If
-            If path2 <> "" Then
-                folderPaths(j) = path2
-            End If
-        End If
+    ' %USERNAME%を展開
+    If InStr(presetPath, "%USERNAME%") > 0 Then
+        presetPath = Replace(presetPath, "%USERNAME%", Environ("USERNAME"))
     End If
 
-    ' 手動でフォルダを選択する場合
-    If Not usePresetFolders Then
-        Dim selectCount As VbMsgBoxResult
-        selectCount = MsgBox("複数のフォルダからインポートしますか？" & vbCrLf & vbCrLf & _
-                            "「はい」: 2つのフォルダを選択" & vbCrLf & _
-                            "「いいえ」: 1つのフォルダを選択", _
-                            vbYesNoCancel + vbQuestion, "フォルダ数選択")
+    ' フォルダパスの決定（設定済みならそのまま使用、なければダイアログ表示）
+    If presetPath <> "" Then
+        folderPath = presetPath
+    Else
+        With Application.FileDialog(msoFileDialogFolderPicker)
+            .Title = "テーブル定義書フォルダを選択"
+            .AllowMultiSelect = False
+            If .Show = -1 Then
+                folderPath = .SelectedItems(1)
+            Else
+                MsgBox "フォルダ選択がキャンセルされました。", vbInformation, "キャンセル"
+                Exit Sub
+            End If
+        End With
+    End If
 
-        If selectCount = vbCancel Then
-            Exit Sub
-        ElseIf selectCount = vbYes Then
-            folderCount = 2
-        Else
-            folderCount = 1
-        End If
+    ' フォルダパスの末尾にバックスラッシュを追加
+    If Right(folderPath, 1) <> "\" And Right(folderPath, 1) <> "/" Then
+        folderPath = folderPath & "\"
+    End If
 
-        ReDim folderPaths(1 To folderCount)
-
-        For i = 1 To folderCount
-            With Application.FileDialog(msoFileDialogFolderPicker)
-                .Title = "テーブル定義書フォルダ " & i & "/" & folderCount & " を選択"
-                .AllowMultiSelect = False
-                If .Show = -1 Then
-                    folderPaths(i) = .SelectedItems(1)
-                Else
-                    MsgBox "フォルダ選択がキャンセルされました。", vbInformation, "キャンセル"
-                    Exit Sub
-                End If
-            End With
-        Next i
+    ' フォルダ存在チェック
+    If Dir(folderPath, vbDirectory) = "" Then
+        MsgBox "フォルダが見つかりません: " & folderPath, vbExclamation, "エラー"
+        Exit Sub
     End If
 
     ' 既存データをクリア（常に置換）
@@ -2135,41 +2410,41 @@ Public Sub ImportTableDefinitions()
     Application.ScreenUpdating = False
     Application.DisplayAlerts = False
 
-    ' 各フォルダを処理
-    For j = 1 To folderCount
-        folderPath = folderPaths(j)
+    ' フォルダ内のExcelファイルを処理
+    fileName = Dir(folderPath & "*.xls*")
 
-        ' フォルダパスの末尾にバックスラッシュを追加
-        If Right(folderPath, 1) <> "\" And Right(folderPath, 1) <> "/" Then
-            folderPath = folderPath & "\"
-        End If
+    Do While fileName <> ""
+        ' 自分自身をスキップ
+        If folderPath & fileName <> ThisWorkbook.FullName Then
+            ' ファイルを開く
+            Set sourceWb = Workbooks.Open(folderPath & fileName, ReadOnly:=True, UpdateLinks:=0)
 
-        ' フォルダ存在チェック
-        If Dir(folderPath, vbDirectory) = "" Then
-            MsgBox "フォルダが見つかりません: " & folderPath, vbExclamation, "警告"
-            GoTo NextFolder
-        End If
+            ' 全シートを処理
+            For sheetIdx = 1 To sourceWb.Sheets.Count
+                Set sourceWs = sourceWb.Sheets(sheetIdx)
 
-        ' フォルダ内のExcelファイルを処理
-        fileName = Dir(folderPath & "*.xls*")
+                ' シート名に例外DB名が含まれているか判定してオフセットを決定
+                colOffset = 0
+                If exceptionDbName <> "" And InStr(sourceWs.Name, exceptionDbName) > 0 Then
+                    colOffset = 1
+                End If
 
-        Do While fileName <> ""
-            ' 自分自身をスキップ
-            If folderPath & fileName <> ThisWorkbook.FullName Then
-                ' ファイルを開く
-                Set sourceWb = Workbooks.Open(folderPath & fileName, ReadOnly:=True, UpdateLinks:=0)
-
-                ' 最初のシートを使用
-                Set sourceWs = sourceWb.Sheets(1)
+                ' オフセットを適用した列名を計算
+                actualColItemName = Chr(Asc(colItemName) + colOffset)
+                actualColName = Chr(Asc(colName) + colOffset)
+                actualColDataType = Chr(Asc(colDataType) + colOffset)
+                actualColLength = Chr(Asc(colLength) + colOffset)
+                actualColNullable = Chr(Asc(colNullable) + colOffset)
 
                 ' テーブル名を取得
                 tableName = Trim(CStr(sourceWs.Range(tableNameCell).Value))
+                tableDesc = Trim(CStr(sourceWs.Range(tableDescCell).Value))
 
                 If tableName <> "" Then
                     ' テーブル一覧に追加
                     wsDef.Range("A" & nextTableRow).Value = tableCount + 1
                     wsDef.Range("B" & nextTableRow).Value = tableName
-                    wsDef.Range("C" & nextTableRow).Value = GetTableDescription(sourceWs)
+                    wsDef.Range("C" & nextTableRow).Value = tableDesc
                     nextTableRow = nextTableRow + 1
                     tableCount = tableCount + 1
 
@@ -2179,38 +2454,63 @@ Public Sub ImportTableDefinitions()
                     ' カラム定義を取得
                     currentRow = columnStartRow
                     Do While True
-                        colNameValue = Trim(CStr(sourceWs.Range(colName & currentRow).Value))
+                        ' カラム番号列の値を取得
+                        colNumberValue = sourceWs.Range(colNumber & currentRow).Value
+
+                        ' カラム番号が数値でない場合はスキップ
+                        If Not IsNumeric(colNumberValue) Then
+                            currentRow = currentRow + 1
+                            ' 安全制限
+                            If currentRow > 1000 Then Exit Do
+                            ' 空行が続いたら終了（10行連続で空なら終了）
+                            If currentRow > columnStartRow + 10 Then
+                                Dim emptyCount As Long
+                                emptyCount = 0
+                                Dim checkRow As Long
+                                For checkRow = currentRow - 10 To currentRow - 1
+                                    If Trim(CStr(sourceWs.Range(actualColName & checkRow).Value)) = "" Then
+                                        emptyCount = emptyCount + 1
+                                    End If
+                                Next checkRow
+                                If emptyCount >= 10 Then Exit Do
+                            End If
+                            GoTo NextRow
+                        End If
+
+                        colNameValue = Trim(CStr(sourceWs.Range(actualColName & currentRow).Value))
 
                         ' カラム名が空なら終了
                         If colNameValue = "" Then Exit Do
 
-                        colDescValue = Trim(CStr(sourceWs.Range(colDescription & currentRow).Value))
-                        colTypeValue = Trim(CStr(sourceWs.Range(colDataType & currentRow).Value))
+                        colItemNameValue = Trim(CStr(sourceWs.Range(actualColItemName & currentRow).Value))
+                        colTypeValue = Trim(CStr(sourceWs.Range(actualColDataType & currentRow).Value))
+                        colLengthValue = Trim(CStr(sourceWs.Range(actualColLength & currentRow).Value))
+                        colNullableValue = Trim(CStr(sourceWs.Range(actualColNullable & currentRow).Value))
 
                         ' カラム一覧に追加
                         wsDef.Range("E" & nextColumnRow).Value = tableName
                         wsDef.Range("F" & nextColumnRow).Value = colNameValue
-                        wsDef.Range("G" & nextColumnRow).Value = colTypeValue
-                        wsDef.Range("H" & nextColumnRow).Value = colDescValue
+                        wsDef.Range("G" & nextColumnRow).Value = colTypeValue & IIf(colLengthValue <> "", "(" & colLengthValue & ")", "")
+                        wsDef.Range("H" & nextColumnRow).Value = colItemNameValue
 
                         nextColumnRow = nextColumnRow + 1
                         columnCount = columnCount + 1
+
+NextRow:
                         currentRow = currentRow + 1
 
                         ' 安全制限
                         If currentRow > 1000 Then Exit Do
                     Loop
                 End If
+            Next sheetIdx
 
-                ' ファイルを閉じる
-                sourceWb.Close SaveChanges:=False
-            End If
+            ' ファイルを閉じる
+            sourceWb.Close SaveChanges:=False
+        End If
 
-            fileName = Dir()
-        Loop
-
-NextFolder:
-    Next j
+        fileName = Dir()
+    Loop
 
     Application.DisplayAlerts = True
     Application.ScreenUpdating = True
@@ -2223,7 +2523,6 @@ NextFolder:
                vbExclamation, "インポート結果"
     Else
         MsgBox "テーブル定義のインポートが完了しました。" & vbCrLf & vbCrLf & _
-               "処理フォルダ数: " & folderCount & vbCrLf & _
                "インポートしたテーブル数: " & tableCount & vbCrLf & _
                "インポートしたカラム数: " & columnCount & vbCrLf & vbCrLf & _
                "テーブル: " & importedTables, _
@@ -2313,44 +2612,51 @@ Public Sub InitializeImportSettings()
     ' 設定項目
     ws.Range("J4").Value = "テーブル名セル"
     ws.Range("K4").Value = DEFAULT_TABLE_NAME_CELL
-    ws.Range("J5").Value = "カラム開始行"
-    ws.Range("K5").Value = DEFAULT_COLUMN_START_ROW
-    ws.Range("J6").Value = "カラム番号列"
-    ws.Range("K6").Value = DEFAULT_COL_NUMBER
-    ws.Range("J7").Value = "カラム名列"
-    ws.Range("K7").Value = DEFAULT_COL_NAME
-    ws.Range("J8").Value = "説明列"
-    ws.Range("K8").Value = DEFAULT_COL_DESCRIPTION
-    ws.Range("J9").Value = "データ型列"
-    ws.Range("K9").Value = DEFAULT_COL_DATATYPE
+    ws.Range("J5").Value = "テーブル名称セル"
+    ws.Range("K5").Value = DEFAULT_TABLE_DESC_CELL
+    ws.Range("J6").Value = "カラム開始行"
+    ws.Range("K6").Value = DEFAULT_COLUMN_START_ROW
+    ws.Range("J7").Value = "カラム番号列"
+    ws.Range("K7").Value = DEFAULT_COL_NUMBER
+    ws.Range("J8").Value = "項目名列"
+    ws.Range("K8").Value = DEFAULT_COL_ITEM_NAME
+    ws.Range("J9").Value = "カラム名列"
+    ws.Range("K9").Value = DEFAULT_COL_NAME
+    ws.Range("J10").Value = "データ型列"
+    ws.Range("K10").Value = DEFAULT_COL_DATATYPE
+    ws.Range("J11").Value = "桁数列"
+    ws.Range("K11").Value = DEFAULT_COL_LENGTH
+    ws.Range("J12").Value = "NULL列"
+    ws.Range("K12").Value = DEFAULT_COL_NULLABLE
 
     ' ヘッダー色
-    ws.Range("J4:J9").Font.Bold = True
-    ws.Range("J4:J9").Interior.Color = RGB(255, 250, 230)
+    ws.Range("J4:J12").Font.Bold = True
+    ws.Range("J4:J12").Interior.Color = RGB(255, 250, 230)
 
     ' フォルダパス設定
-    ws.Range("J10").Value = "フォルダパス設定"
-    ws.Range("J10").Font.Bold = True
-    ws.Range("J10").Interior.Color = RGB(255, 242, 204)
-    ws.Range("J10:K10").Merge
+    ws.Range("J14").Value = "フォルダパス設定"
+    ws.Range("J14").Font.Bold = True
+    ws.Range("J14").Interior.Color = RGB(255, 242, 204)
+    ws.Range("J14:K14").Merge
 
-    ws.Range("J11").Value = "フォルダ1"
-    ws.Range("K11").Value = ""
-    ws.Range("J12").Value = "フォルダ2"
-    ws.Range("K12").Value = ""
-    ws.Range("J11:J12").Font.Bold = True
-    ws.Range("J11:J12").Interior.Color = RGB(255, 250, 230)
+    ws.Range("J15").Value = "フォルダパス"
+    ws.Range("K15").Value = ""
+    ws.Range("J16").Value = "例外DB(+1列)"
+    ws.Range("K16").Value = ""
+    ws.Range("J15:J16").Font.Bold = True
+    ws.Range("J15:J16").Interior.Color = RGB(255, 250, 230)
 
     ' 説明
-    ws.Range("J14").Value = "※設定を変更することで、"
-    ws.Range("J15").Value = "  異なるフォーマットの定義書に対応。"
-    ws.Range("J16").Value = "※フォルダパスを設定すると、"
-    ws.Range("J17").Value = "  複数フォルダから一括インポート可能。"
-    ws.Range("J14:J17").Font.Size = 9
-    ws.Range("J14:J17").Font.Color = RGB(128, 128, 128)
+    ws.Range("J18").Value = "※設定を変更することで、"
+    ws.Range("J19").Value = "  異なるフォーマットの定義書に対応。"
+    ws.Range("J20").Value = "※フォルダパスに%USERNAME%を使用可能。"
+    ws.Range("J21").Value = "※1ファイル内の全シートを読み込みます。"
+    ws.Range("J22").Value = "※例外DBはシート名に含まれる場合、列を+1。"
+    ws.Range("J18:J22").Font.Size = 9
+    ws.Range("J18:J22").Font.Color = RGB(128, 128, 128)
 
     ' 列幅
-    ws.Columns("J").ColumnWidth = 15
+    ws.Columns("J").ColumnWidth = 16
     ws.Columns("K").ColumnWidth = 40
 
     MsgBox "インポート設定を初期化しました。", vbInformation, "完了"
