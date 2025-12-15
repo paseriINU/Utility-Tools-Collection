@@ -956,7 +956,7 @@ Private Function GenerateFromClause(ByVal ws As Worksheet) As String
     Dim joinAlias As String
     Dim joinCondition As String
 
-    mainTable = Trim(ws.Range("B" & ROW_MAIN_TABLE + 1).Value)
+    mainTable = ExtractTableName(Trim(ws.Range("B" & ROW_MAIN_TABLE + 1).Value))
     mainAlias = Trim(ws.Range("E" & ROW_MAIN_TABLE + 1).Value)
 
     If mainTable = "" Then
@@ -972,7 +972,7 @@ Private Function GenerateFromClause(ByVal ws As Worksheet) As String
     ' JOIN句
     For i = ROW_JOIN_START + 2 To ROW_JOIN_END
         joinType = Trim(ws.Range("B" & i).Value)
-        joinTable = Trim(ws.Range("C" & i).Value)
+        joinTable = ExtractTableName(Trim(ws.Range("C" & i).Value))
         joinAlias = Trim(ws.Range("D" & i).Value)
         joinCondition = Trim(ws.Range("E" & i).Value)
 
@@ -1782,12 +1782,15 @@ End Sub
 
 '==============================================================================
 ' テーブル定義シートからテーブル一覧を取得
+' 形式: テーブル名(テーブル名称)
 '==============================================================================
 Private Function GetTableList() As String
     Dim ws As Worksheet
     Dim result As String
     Dim i As Long
     Dim tableName As String
+    Dim tableDesc As String
+    Dim displayName As String
 
     On Error Resume Next
     Set ws = Sheets(SHEET_TABLE_DEF)
@@ -1799,22 +1802,42 @@ Private Function GetTableList() As String
 
     result = ""
 
-    ' B列（テーブル名）を読み取り（6行目から開始）
+    ' B列（テーブル名）、C列（テーブル名称）を読み取り（6行目から開始）
     i = 6
     Do While ws.Range("B" & i).Value <> ""
         tableName = Trim(ws.Range("B" & i).Value)
+        tableDesc = Trim(ws.Range("C" & i).Value)
         If tableName <> "" Then
-            If result = "" Then
-                result = tableName
+            ' テーブル名称がある場合はカッコで追加
+            If tableDesc <> "" Then
+                displayName = tableName & "(" & tableDesc & ")"
             Else
-                result = result & "," & tableName
+                displayName = tableName
+            End If
+            If result = "" Then
+                result = displayName
+            Else
+                result = result & "," & displayName
             End If
         End If
         i = i + 1
-        If i > 100 Then Exit Do ' 安全制限
+        If i > 500 Then Exit Do ' 安全制限
     Loop
 
     GetTableList = result
+End Function
+
+'==============================================================================
+' テーブル名からカッコ部分を除去してテーブル名のみを取得
+'==============================================================================
+Private Function ExtractTableName(ByVal displayName As String) As String
+    Dim pos As Long
+    pos = InStr(displayName, "(")
+    If pos > 0 Then
+        ExtractTableName = Left(displayName, pos - 1)
+    Else
+        ExtractTableName = displayName
+    End If
 End Function
 
 '==============================================================================
