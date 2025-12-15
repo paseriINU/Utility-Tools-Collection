@@ -1010,7 +1010,7 @@ Private Sub FormatTroubleshootSheet()
             "【ファイル内の見方】", _
             "<<<<<<< HEAD", _
             "自分の変更内容", _
-            "=======", _
+            "'=======", _
             "相手の変更内容", _
             ">>>>>>> branch-name" _
         )
