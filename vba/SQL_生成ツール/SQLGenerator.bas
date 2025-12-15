@@ -544,16 +544,19 @@ Private Sub FormatTableDefSheet()
 
         .Range("J15").Value = "フォルダパス"
         .Range("K15").Value = ""
-        .Range("J15").Font.Bold = True
-        .Range("J15").Interior.Color = RGB(255, 250, 230)
+        .Range("J16").Value = "例外DB(+1列)"
+        .Range("K16").Value = ""
+        .Range("J15:J16").Font.Bold = True
+        .Range("J15:J16").Interior.Color = RGB(255, 250, 230)
 
         ' 説明
-        .Range("J17").Value = "※設定を変更することで、"
-        .Range("J18").Value = "  異なるフォーマットの定義書に対応。"
-        .Range("J19").Value = "※フォルダパスに%USERNAME%を使用可能。"
-        .Range("J20").Value = "※1ファイル内の全シートを読み込みます。"
-        .Range("J17:J20").Font.Size = 9
-        .Range("J17:J20").Font.Color = RGB(128, 128, 128)
+        .Range("J18").Value = "※設定を変更することで、"
+        .Range("J19").Value = "  異なるフォーマットの定義書に対応。"
+        .Range("J20").Value = "※フォルダパスに%USERNAME%を使用可能。"
+        .Range("J21").Value = "※1ファイル内の全シートを読み込みます。"
+        .Range("J22").Value = "※例外DBはシート名に含まれる場合、列を+1。"
+        .Range("J18:J22").Font.Size = 9
+        .Range("J18:J22").Font.Color = RGB(128, 128, 128)
 
         ' 列幅
         .Columns("J").ColumnWidth = 16
@@ -2049,6 +2052,13 @@ Public Sub ImportTableDefinitions()
     Dim colNullableValue As String
     Dim importedTables As String
     Dim presetPath As String
+    Dim exceptionDbName As String
+    Dim colOffset As Long
+    Dim actualColItemName As String
+    Dim actualColName As String
+    Dim actualColDataType As String
+    Dim actualColLength As String
+    Dim actualColNullable As String
 
     Set wsDef = Sheets(SHEET_TABLE_DEF)
 
@@ -2065,6 +2075,7 @@ Public Sub ImportTableDefinitions()
 
     ' フォルダパス設定を取得
     presetPath = Trim(CStr(wsDef.Range("K15").Value))
+    exceptionDbName = Trim(CStr(wsDef.Range("K16").Value))
 
     ' %USERNAME%を展開
     If InStr(presetPath, "%USERNAME%") > 0 Then
@@ -2128,6 +2139,19 @@ Public Sub ImportTableDefinitions()
             For sheetIdx = 1 To sourceWb.Sheets.Count
                 Set sourceWs = sourceWb.Sheets(sheetIdx)
 
+                ' シート名に例外DB名が含まれているか判定してオフセットを決定
+                colOffset = 0
+                If exceptionDbName <> "" And InStr(sourceWs.Name, exceptionDbName) > 0 Then
+                    colOffset = 1
+                End If
+
+                ' オフセットを適用した列名を計算
+                actualColItemName = Chr(Asc(colItemName) + colOffset)
+                actualColName = Chr(Asc(colName) + colOffset)
+                actualColDataType = Chr(Asc(colDataType) + colOffset)
+                actualColLength = Chr(Asc(colLength) + colOffset)
+                actualColNullable = Chr(Asc(colNullable) + colOffset)
+
                 ' テーブル名を取得
                 tableName = Trim(CStr(sourceWs.Range(tableNameCell).Value))
                 tableDesc = Trim(CStr(sourceWs.Range(tableDescCell).Value))
@@ -2160,7 +2184,7 @@ Public Sub ImportTableDefinitions()
                                 emptyCount = 0
                                 Dim checkRow As Long
                                 For checkRow = currentRow - 10 To currentRow - 1
-                                    If Trim(CStr(sourceWs.Range(colName & checkRow).Value)) = "" Then
+                                    If Trim(CStr(sourceWs.Range(actualColName & checkRow).Value)) = "" Then
                                         emptyCount = emptyCount + 1
                                     End If
                                 Next checkRow
@@ -2169,15 +2193,15 @@ Public Sub ImportTableDefinitions()
                             GoTo NextRow
                         End If
 
-                        colNameValue = Trim(CStr(sourceWs.Range(colName & currentRow).Value))
+                        colNameValue = Trim(CStr(sourceWs.Range(actualColName & currentRow).Value))
 
                         ' カラム名が空なら終了
                         If colNameValue = "" Then Exit Do
 
-                        colItemNameValue = Trim(CStr(sourceWs.Range(colItemName & currentRow).Value))
-                        colTypeValue = Trim(CStr(sourceWs.Range(colDataType & currentRow).Value))
-                        colLengthValue = Trim(CStr(sourceWs.Range(colLength & currentRow).Value))
-                        colNullableValue = Trim(CStr(sourceWs.Range(colNullable & currentRow).Value))
+                        colItemNameValue = Trim(CStr(sourceWs.Range(actualColItemName & currentRow).Value))
+                        colTypeValue = Trim(CStr(sourceWs.Range(actualColDataType & currentRow).Value))
+                        colLengthValue = Trim(CStr(sourceWs.Range(actualColLength & currentRow).Value))
+                        colNullableValue = Trim(CStr(sourceWs.Range(actualColNullable & currentRow).Value))
 
                         ' カラム一覧に追加
                         wsDef.Range("E" & nextColumnRow).Value = tableName
@@ -2333,16 +2357,19 @@ Public Sub InitializeImportSettings()
 
     ws.Range("J15").Value = "フォルダパス"
     ws.Range("K15").Value = ""
-    ws.Range("J15").Font.Bold = True
-    ws.Range("J15").Interior.Color = RGB(255, 250, 230)
+    ws.Range("J16").Value = "例外DB(+1列)"
+    ws.Range("K16").Value = ""
+    ws.Range("J15:J16").Font.Bold = True
+    ws.Range("J15:J16").Interior.Color = RGB(255, 250, 230)
 
     ' 説明
-    ws.Range("J17").Value = "※設定を変更することで、"
-    ws.Range("J18").Value = "  異なるフォーマットの定義書に対応。"
-    ws.Range("J19").Value = "※フォルダパスに%USERNAME%を使用可能。"
-    ws.Range("J20").Value = "※1ファイル内の全シートを読み込みます。"
-    ws.Range("J17:J20").Font.Size = 9
-    ws.Range("J17:J20").Font.Color = RGB(128, 128, 128)
+    ws.Range("J18").Value = "※設定を変更することで、"
+    ws.Range("J19").Value = "  異なるフォーマットの定義書に対応。"
+    ws.Range("J20").Value = "※フォルダパスに%USERNAME%を使用可能。"
+    ws.Range("J21").Value = "※1ファイル内の全シートを読み込みます。"
+    ws.Range("J22").Value = "※例外DBはシート名に含まれる場合、列を+1。"
+    ws.Range("J18:J22").Font.Size = 9
+    ws.Range("J18:J22").Font.Color = RGB(128, 128, 128)
 
     ' 列幅
     ws.Columns("J").ColumnWidth = 16
