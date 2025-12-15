@@ -239,7 +239,7 @@ Private Sub FormatMainSheet()
         ' カラム行
         For i = 1 To 20
             .Range("A" & ROW_COLUMNS_START + i - 1).Value = i
-            AddDropdown ws, "E" & ROW_COLUMNS_START + i - 1, ",COUNT,SUM,AVG,MAX,MIN,COUNT(DISTINCT)"
+            AddDropdown ws, "E" & ROW_COLUMNS_START + i - 1, ",COUNT(件数),SUM(合計),AVG(平均),MAX(最大),MIN(最小),COUNT(DISTINCT)(重複除外件数)"
         Next i
 
         ' WHERE条件
@@ -270,10 +270,10 @@ Private Sub FormatMainSheet()
             If i = 1 Then
                 AddDropdown ws, "B" & ROW_WHERE_START + i - 1, ""
             Else
-                AddDropdown ws, "B" & ROW_WHERE_START + i - 1, ",AND,OR"
+                AddDropdown ws, "B" & ROW_WHERE_START + i - 1, ",AND(かつ),OR(または)"
             End If
             AddDropdown ws, "C" & ROW_WHERE_START + i - 1, ",("
-            AddDropdown ws, "F" & ROW_WHERE_START + i - 1, ",=,<>,>,<,>=,<=,LIKE,NOT LIKE,IN,NOT IN,IS NULL,IS NOT NULL,BETWEEN,EXISTS,NOT EXISTS"
+            AddDropdown ws, "F" & ROW_WHERE_START + i - 1, ",=(等しい),<>(等しくない),>(より大きい),<(より小さい),>=(以上),<=(以下),LIKE(部分一致),NOT LIKE(部分不一致),IN(いずれか),NOT IN(いずれでもない),IS NULL(空),IS NOT NULL(空でない),BETWEEN(範囲),EXISTS(存在する),NOT EXISTS(存在しない)"
             AddDropdown ws, "H" & ROW_WHERE_START + i - 1, ",)"
         Next i
 
@@ -312,7 +312,7 @@ Private Sub FormatMainSheet()
             If i = 1 Then
                 AddDropdown ws, "B" & ROW_HAVING_START + i - 1, ""
             Else
-                AddDropdown ws, "B" & ROW_HAVING_START + i - 1, ",AND,OR"
+                AddDropdown ws, "B" & ROW_HAVING_START + i - 1, ",AND(かつ),OR(または)"
             End If
             .Range("C" & ROW_HAVING_START + i - 1 & ":J" & ROW_HAVING_START + i - 1).Merge
         Next i
@@ -339,8 +339,8 @@ Private Sub FormatMainSheet()
         ' ORDER BY行
         For i = 1 To 10
             .Range("A" & ROW_ORDERBY_START + i - 1).Value = i
-            AddDropdown ws, "D" & ROW_ORDERBY_START + i - 1, ",ASC,DESC"
-            AddDropdown ws, "E" & ROW_ORDERBY_START + i - 1, ",NULLS FIRST,NULLS LAST"
+            AddDropdown ws, "D" & ROW_ORDERBY_START + i - 1, ",ASC(昇順),DESC(降順)"
+            AddDropdown ws, "E" & ROW_ORDERBY_START + i - 1, ",NULLS FIRST(NULL先頭),NULLS LAST(NULL末尾)"
         Next i
 
         ' 件数制限
@@ -885,9 +885,9 @@ Private Function GenerateSelectClause(ByVal ws As Worksheet) As String
 
     For i = ROW_COLUMNS_START To ROW_COLUMNS_END
         tableAlias = Trim(ws.Range("B" & i).Value)
-        columnName = Trim(ws.Range("C" & i).Value)
+        columnName = ExtractTableName(Trim(ws.Range("C" & i).Value))
         colAlias = Trim(ws.Range("D" & i).Value)
-        aggFunc = Trim(ws.Range("E" & i).Value)
+        aggFunc = ExtractTableName(Trim(ws.Range("E" & i).Value))
         subqueryNo = Trim(ws.Range("F" & i).Value)
 
         If columnName <> "" Or subqueryNo <> "" Then
@@ -1010,11 +1010,11 @@ Private Function GenerateWhereClause(ByVal ws As Worksheet) As String
     isFirst = True
 
     For i = ROW_WHERE_START To ROW_WHERE_END
-        andOr = Trim(ws.Range("B" & i).Value)
+        andOr = ExtractTableName(Trim(ws.Range("B" & i).Value))
         openParen = Trim(ws.Range("C" & i).Value)
         tableAlias = Trim(ws.Range("D" & i).Value)
-        columnName = Trim(ws.Range("E" & i).Value)
-        operator = Trim(ws.Range("F" & i).Value)
+        columnName = ExtractTableName(Trim(ws.Range("E" & i).Value))
+        operator = ExtractTableName(Trim(ws.Range("F" & i).Value))
         value = Trim(ws.Range("G" & i).Value)
         closeParen = Trim(ws.Range("H" & i).Value)
 
@@ -1167,9 +1167,9 @@ Private Function GenerateOrderByClause(ByVal ws As Worksheet) As String
 
     For i = ROW_ORDERBY_START To ROW_ORDERBY_END
         tableAlias = Trim(ws.Range("B" & i).Value)
-        columnName = Trim(ws.Range("C" & i).Value)
-        sortOrder = Trim(ws.Range("D" & i).Value)
-        nullsOrder = Trim(ws.Range("E" & i).Value)
+        columnName = ExtractTableName(Trim(ws.Range("C" & i).Value))
+        sortOrder = ExtractTableName(Trim(ws.Range("D" & i).Value))
+        nullsOrder = ExtractTableName(Trim(ws.Range("E" & i).Value))
 
         If columnName <> "" Then
             If tableAlias <> "" Then
@@ -1844,6 +1844,7 @@ End Function
 
 '==============================================================================
 ' テーブル定義シートから全カラム一覧を取得
+' 形式: カラム名(項目名)
 '==============================================================================
 Private Function GetAllColumnList() As String
     Dim ws As Worksheet
@@ -1851,6 +1852,8 @@ Private Function GetAllColumnList() As String
     Dim i As Long
     Dim tableName As String
     Dim columnName As String
+    Dim itemName As String
+    Dim displayName As String
     Dim dict As Object
 
     On Error Resume Next
@@ -1864,20 +1867,27 @@ Private Function GetAllColumnList() As String
     Set dict = CreateObject("Scripting.Dictionary")
     result = ""
 
-    ' E列（テーブル名）、F列（カラム名）を読み取り（6行目から開始）
+    ' E列（テーブル名）、F列（カラム名）、H列（項目名）を読み取り（6行目から開始）
     i = 6
     Do While ws.Range("E" & i).Value <> "" Or ws.Range("F" & i).Value <> ""
         tableName = Trim(ws.Range("E" & i).Value)
         columnName = Trim(ws.Range("F" & i).Value)
+        itemName = Trim(ws.Range("H" & i).Value)
 
         If columnName <> "" Then
             ' 重複チェック
             If Not dict.exists(columnName) Then
                 dict.Add columnName, True
-                If result = "" Then
-                    result = columnName
+                ' 項目名がある場合はカッコで追加
+                If itemName <> "" Then
+                    displayName = columnName & "(" & itemName & ")"
                 Else
-                    result = result & "," & columnName
+                    displayName = columnName
+                End If
+                If result = "" Then
+                    result = displayName
+                Else
+                    result = result & "," & displayName
                 End If
             End If
         End If
