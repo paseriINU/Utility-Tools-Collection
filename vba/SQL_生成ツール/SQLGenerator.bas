@@ -50,7 +50,7 @@ Private Const ROW_TITLE As Long = 1
 ' ※メインシートの「設定」から変更可能
 Private Const DEFAULT_TABLE_NAME_CELL As String = "J2"           ' テーブル名のセル位置
 Private Const DEFAULT_TABLE_DESC_CELL As String = "D2"           ' テーブル名称のセル位置
-Private Const DEFAULT_COLUMN_START_ROW As Long = 10               ' カラム定義開始行
+Private Const DEFAULT_COLUMN_START_ROW As Long = 5                ' カラム定義開始行
 Private Const DEFAULT_COL_NUMBER As String = "A"                  ' カラム番号の列
 Private Const DEFAULT_COL_ITEM_NAME As String = "C"               ' 項目名の列
 Private Const DEFAULT_COL_NAME As String = "D"                    ' カラム名の列
@@ -2049,7 +2049,6 @@ Public Sub ImportTableDefinitions()
     Dim colNullableValue As String
     Dim importedTables As String
     Dim presetPath As String
-    Dim usePresetFolder As Boolean
 
     Set wsDef = Sheets(SHEET_TABLE_DEF)
 
@@ -2072,27 +2071,10 @@ Public Sub ImportTableDefinitions()
         presetPath = Replace(presetPath, "%USERNAME%", Environ("USERNAME"))
     End If
 
-    ' フォルダパスの取得方法を決定
-    usePresetFolder = False
-
+    ' フォルダパスの決定（設定済みならそのまま使用、なければダイアログ表示）
     If presetPath <> "" Then
-        Dim usePreset As VbMsgBoxResult
-        usePreset = MsgBox("設定済みのフォルダパスを使用しますか？" & vbCrLf & vbCrLf & _
-                          "フォルダ: " & presetPath & vbCrLf & vbCrLf & _
-                          "「はい」: 設定済みフォルダを使用" & vbCrLf & _
-                          "「いいえ」: フォルダを手動で選択", _
-                          vbYesNoCancel + vbQuestion, "フォルダ選択")
-
-        If usePreset = vbCancel Then
-            Exit Sub
-        ElseIf usePreset = vbYes Then
-            usePresetFolder = True
-            folderPath = presetPath
-        End If
-    End If
-
-    ' 手動でフォルダを選択する場合
-    If Not usePresetFolder Then
+        folderPath = presetPath
+    Else
         With Application.FileDialog(msoFileDialogFolderPicker)
             .Title = "テーブル定義書フォルダを選択"
             .AllowMultiSelect = False
