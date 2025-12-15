@@ -103,6 +103,9 @@ Public Sub InitializeSQLGenerator()
     FormatUnionSheet
     FormatHelpSheet
 
+    ' メインシートにWorksheet_Changeイベントを設定
+    SetupWorksheetChangeEvent
+
     ' メインシートをアクティブに
     Sheets(SHEET_MAIN).Activate
 
@@ -112,7 +115,8 @@ Public Sub InitializeSQLGenerator()
            "【使い方】" & vbCrLf & _
            "1. 「テーブル定義」シートにテーブル・カラム情報を登録" & vbCrLf & _
            "2. 「メイン」シートで条件を入力" & vbCrLf & _
-           "3. 「SQL生成」ボタンをクリック", vbInformation, "初期化完了"
+           "3. 「SQL生成」ボタンをクリック" & vbCrLf & vbCrLf & _
+           "※テーブル選択時にカラムが自動で絞り込まれます", vbInformation, "初期化完了"
 
     Exit Sub
 
@@ -142,6 +146,53 @@ Private Sub CreateSheet(ByVal sheetName As String)
         Set ws = ThisWorkbook.Sheets.Add(After:=ThisWorkbook.Sheets(ThisWorkbook.Sheets.Count))
         ws.Name = sheetName
     End If
+End Sub
+
+'==============================================================================
+' メインシートにWorksheet_Changeイベントを設定
+' ※VBAプロジェクトへのアクセス許可が必要
+'   「ファイル」→「オプション」→「トラストセンター」→「トラストセンターの設定」
+'   →「マクロの設定」→「VBAプロジェクト オブジェクト モデルへのアクセスを信頼する」
+'==============================================================================
+Private Sub SetupWorksheetChangeEvent()
+    On Error GoTo ManualSetup
+
+    Dim ws As Worksheet
+    Dim vbComp As Object
+    Dim codeModule As Object
+    Dim eventCode As String
+    Dim lineNum As Long
+
+    Set ws = Sheets(SHEET_MAIN)
+
+    ' シートのCodeNameを取得してVBComponentにアクセス
+    Set vbComp = ThisWorkbook.VBProject.VBComponents(ws.CodeName)
+    Set codeModule = vbComp.CodeModule
+
+    ' 既にWorksheet_Changeが存在するかチェック
+    On Error Resume Next
+    lineNum = 0
+    lineNum = codeModule.ProcStartLine("Worksheet_Change", 0)
+    On Error GoTo ManualSetup
+
+    ' 既に存在する場合はスキップ
+    If lineNum > 0 Then Exit Sub
+
+    ' イベントコードを追加
+    eventCode = vbCrLf & _
+        "Private Sub Worksheet_Change(ByVal Target As Range)" & vbCrLf & _
+        "    ' テーブル選択時にカラムドロップダウンを自動更新" & vbCrLf & _
+        "    SQLGenerator.OnTableSelectionChanged Target" & vbCrLf & _
+        "End Sub" & vbCrLf
+
+    codeModule.AddFromString eventCode
+
+    Exit Sub
+
+ManualSetup:
+    ' VBProjectへのアクセスが許可されていない場合は手動設定の案内
+    ' （初期化時にエラーを出さないよう静かに終了）
+    ' ボタンからの手動更新は引き続き使用可能
 End Sub
 
 '==============================================================================
@@ -2017,7 +2068,7 @@ Private Function GetColumnListForSelectedTables() As String
 End Function
 
 '==============================================================================
-' 選択テーブルに基づいてカラムドロップダウンを更新
+' 選択テーブルに基づいてカラムドロップダウンを更新（ボタン用）
 '==============================================================================
 Public Sub RefreshColumnDropdownsByTable()
     On Error GoTo ErrorHandler
@@ -2071,6 +2122,72 @@ Public Sub RefreshColumnDropdownsByTable()
 
 ErrorHandler:
     MsgBox "エラーが発生しました: " & Err.Description, vbCritical, "エラー"
+End Sub
+
+'==============================================================================
+' テーブル選択時の自動カラム更新（Worksheet_Changeイベントから呼び出し）
+' 引数: changedRange - 変更されたセル範囲
+'==============================================================================
+Public Sub OnTableSelectionChanged(ByVal changedRange As Range)
+    On Error Resume Next
+
+    Dim wsMain As Worksheet
+    Dim targetRow As Long
+    Dim targetCol As String
+    Dim isTableCell As Boolean
+    Dim i As Long
+
+    Set wsMain = Sheets(SHEET_MAIN)
+
+    ' 変更されたセルがメインシートでない場合は終了
+    If changedRange.Worksheet.Name <> SHEET_MAIN Then Exit Sub
+
+    ' 変更されたセルがテーブル選択セルかチェック
+    isTableCell = False
+
+    ' メインテーブル（B7）
+    If changedRange.Row = ROW_MAIN_TABLE + 1 And changedRange.Column = 2 Then
+        isTableCell = True
+    End If
+
+    ' JOINテーブル（C11～C18）
+    If changedRange.Column = 3 Then
+        For i = ROW_JOIN_START + 2 To ROW_JOIN_END
+            If changedRange.Row = i Then
+                isTableCell = True
+                Exit For
+            End If
+        Next i
+    End If
+
+    ' テーブル選択セルでない場合は終了
+    If Not isTableCell Then Exit Sub
+
+    ' カラムドロップダウンを自動更新（メッセージなし）
+    Dim columnList As String
+    columnList = GetColumnListForSelectedTables()
+
+    ' テーブルが選択されていない場合は終了
+    If columnList = "" Or columnList = "*" Then Exit Sub
+
+    Application.EnableEvents = False
+
+    ' カラム選択のプルダウンを更新
+    For i = ROW_COLUMNS_START To ROW_COLUMNS_END
+        AddDropdown wsMain, "C" & i, columnList
+    Next i
+
+    ' WHERE句のカラムプルダウンを更新
+    For i = ROW_WHERE_START To ROW_WHERE_END
+        AddDropdown wsMain, "E" & i, columnList
+    Next i
+
+    ' ORDER BY句のカラムプルダウンを更新
+    For i = ROW_ORDERBY_START To ROW_ORDERBY_END
+        AddDropdown wsMain, "C" & i, columnList
+    Next i
+
+    Application.EnableEvents = True
 End Sub
 
 '==============================================================================
