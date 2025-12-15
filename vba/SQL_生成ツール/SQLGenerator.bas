@@ -399,6 +399,7 @@ Private Sub FormatMainSheet()
         AddButton ws, "K" & ROW_JOIN_START, "コピー", "CopySQL"
         AddButton ws, "L" & ROW_TITLE, "プルダウン更新", "UpdateDropdownsFromTableDef"
         AddButton ws, "L" & ROW_OPTIONS, "別名更新", "RefreshAliasDropdowns"
+        AddButton ws, "L" & ROW_MAIN_TABLE, "カラム絞込", "RefreshColumnDropdownsByTable"
     End With
 End Sub
 
@@ -1902,7 +1903,7 @@ Private Function GetAllColumnList() As String
 End Function
 
 '==============================================================================
-' 指定テーブルのカラム一覧を取得
+' 指定テーブルのカラム一覧を取得（項目名付き）
 '==============================================================================
 Private Function GetColumnListForTable(ByVal targetTable As String) As String
     Dim ws As Worksheet
@@ -1910,6 +1911,8 @@ Private Function GetColumnListForTable(ByVal targetTable As String) As String
     Dim i As Long
     Dim tableName As String
     Dim columnName As String
+    Dim itemName As String
+    Dim displayName As String
 
     On Error Resume Next
     Set ws = Sheets(SHEET_TABLE_DEF)
@@ -1921,17 +1924,24 @@ Private Function GetColumnListForTable(ByVal targetTable As String) As String
 
     result = ""
 
-    ' E列（テーブル名）、F列（カラム名）を読み取り（6行目から開始）
+    ' E列（テーブル名）、F列（カラム名）、H列（項目名）を読み取り（6行目から開始）
     i = 6
     Do While ws.Range("E" & i).Value <> "" Or ws.Range("F" & i).Value <> ""
         tableName = Trim(ws.Range("E" & i).Value)
         columnName = Trim(ws.Range("F" & i).Value)
+        itemName = Trim(ws.Range("H" & i).Value)
 
         If UCase(tableName) = UCase(targetTable) And columnName <> "" Then
-            If result = "" Then
-                result = columnName
+            ' 項目名がある場合はカッコで追加
+            If itemName <> "" Then
+                displayName = columnName & "(" & itemName & ")"
             Else
-                result = result & "," & columnName
+                displayName = columnName
+            End If
+            If result = "" Then
+                result = displayName
+            Else
+                result = result & "," & displayName
             End If
         End If
         i = i + 1
@@ -1940,6 +1950,128 @@ Private Function GetColumnListForTable(ByVal targetTable As String) As String
 
     GetColumnListForTable = result
 End Function
+
+'==============================================================================
+' 選択されたテーブル（メイン＋JOIN）のカラム一覧を取得
+'==============================================================================
+Private Function GetColumnListForSelectedTables() As String
+    Dim wsMain As Worksheet
+    Dim result As String
+    Dim tableName As String
+    Dim columnList As String
+    Dim dict As Object
+    Dim i As Long
+    Dim cols() As String
+    Dim c As Long
+
+    Set wsMain = Sheets(SHEET_MAIN)
+    Set dict = CreateObject("Scripting.Dictionary")
+    result = ""
+
+    ' メインテーブルのカラムを取得
+    tableName = ExtractTableName(Trim(wsMain.Range("B" & ROW_MAIN_TABLE + 1).Value))
+    If tableName <> "" Then
+        columnList = GetColumnListForTable(tableName)
+        If columnList <> "" Then
+            cols = Split(columnList, ",")
+            For c = LBound(cols) To UBound(cols)
+                If Not dict.exists(cols(c)) Then
+                    dict.Add cols(c), True
+                    If result = "" Then
+                        result = cols(c)
+                    Else
+                        result = result & "," & cols(c)
+                    End If
+                End If
+            Next c
+        End If
+    End If
+
+    ' JOINテーブルのカラムを取得
+    For i = ROW_JOIN_START + 2 To ROW_JOIN_END
+        tableName = ExtractTableName(Trim(wsMain.Range("C" & i).Value))
+        If tableName <> "" Then
+            columnList = GetColumnListForTable(tableName)
+            If columnList <> "" Then
+                cols = Split(columnList, ",")
+                For c = LBound(cols) To UBound(cols)
+                    If Not dict.exists(cols(c)) Then
+                        dict.Add cols(c), True
+                        If result = "" Then
+                            result = cols(c)
+                        Else
+                            result = result & "," & cols(c)
+                        End If
+                    End If
+                Next c
+            End If
+        End If
+    Next i
+
+    ' 特殊なカラム名を先頭に追加
+    If result <> "" Then
+        result = "*," & result
+    End If
+
+    GetColumnListForSelectedTables = result
+End Function
+
+'==============================================================================
+' 選択テーブルに基づいてカラムドロップダウンを更新
+'==============================================================================
+Public Sub RefreshColumnDropdownsByTable()
+    On Error GoTo ErrorHandler
+
+    Dim wsMain As Worksheet
+    Dim columnList As String
+    Dim i As Long
+    Dim tableCount As Long
+    Dim tableName As String
+
+    Set wsMain = Sheets(SHEET_MAIN)
+
+    ' 選択されたテーブルのカラム一覧を取得
+    columnList = GetColumnListForSelectedTables()
+
+    If columnList = "" Or columnList = "*" Then
+        MsgBox "テーブルが選択されていません。" & vbCrLf & _
+               "メインテーブルまたはJOINテーブルを選択してから実行してください。", vbExclamation, "確認"
+        Exit Sub
+    End If
+
+    ' カラム選択のプルダウンを更新
+    For i = ROW_COLUMNS_START To ROW_COLUMNS_END
+        AddDropdown wsMain, "C" & i, columnList
+    Next i
+
+    ' WHERE句のカラムプルダウンを更新
+    For i = ROW_WHERE_START To ROW_WHERE_END
+        AddDropdown wsMain, "E" & i, columnList
+    Next i
+
+    ' ORDER BY句のカラムプルダウンを更新
+    For i = ROW_ORDERBY_START To ROW_ORDERBY_END
+        AddDropdown wsMain, "C" & i, columnList
+    Next i
+
+    ' 選択されたテーブル数をカウント
+    tableCount = 0
+    tableName = ExtractTableName(Trim(wsMain.Range("B" & ROW_MAIN_TABLE + 1).Value))
+    If tableName <> "" Then tableCount = tableCount + 1
+
+    For i = ROW_JOIN_START + 2 To ROW_JOIN_END
+        tableName = ExtractTableName(Trim(wsMain.Range("C" & i).Value))
+        If tableName <> "" Then tableCount = tableCount + 1
+    Next i
+
+    MsgBox "カラムプルダウンを更新しました。" & vbCrLf & vbCrLf & _
+           "対象テーブル数: " & tableCount, vbInformation, "更新完了"
+
+    Exit Sub
+
+ErrorHandler:
+    MsgBox "エラーが発生しました: " & Err.Description, vbCritical, "エラー"
+End Sub
 
 '==============================================================================
 ' メインシートから入力済みの別名一覧を取得
