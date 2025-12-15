@@ -724,9 +724,11 @@ End Sub
 Private Sub AddDropdown(ByVal ws As Worksheet, ByVal cellAddr As String, ByVal listItems As String)
     With ws.Range(cellAddr).Validation
         .Delete
-        .Add Type:=xlValidateList, AlertStyle:=xlValidAlertStop, Formula1:=listItems
-        .IgnoreBlank = True
-        .InCellDropdown = True
+        If Len(listItems) > 0 Then
+            .Add Type:=xlValidateList, AlertStyle:=xlValidAlertStop, Formula1:=listItems
+            .IgnoreBlank = True
+            .InCellDropdown = True
+        End If
     End With
 End Sub
 
