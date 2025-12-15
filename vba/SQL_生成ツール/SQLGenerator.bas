@@ -213,7 +213,7 @@ Private Sub FormatMainSheet()
         Dim i As Long
         For i = 1 To 8
             .Range("A" & ROW_JOIN_START + 1 + i).Value = i
-            AddDropdown ws, "B" & ROW_JOIN_START + 1 + i, ",INNER JOIN,LEFT JOIN,RIGHT JOIN,FULL OUTER JOIN,CROSS JOIN"
+            AddDropdown ws, "B" & ROW_JOIN_START + 1 + i, ",INNER JOIN(両方に存在),LEFT JOIN(左を全て),RIGHT JOIN(右を全て),FULL OUTER JOIN(両方全て),CROSS JOIN(全組合せ)"
         Next i
 
         ' 取得カラム
@@ -971,7 +971,7 @@ Private Function GenerateFromClause(ByVal ws As Worksheet) As String
 
     ' JOIN句
     For i = ROW_JOIN_START + 2 To ROW_JOIN_END
-        joinType = Trim(ws.Range("B" & i).Value)
+        joinType = ExtractTableName(Trim(ws.Range("B" & i).Value))
         joinTable = ExtractTableName(Trim(ws.Range("C" & i).Value))
         joinAlias = Trim(ws.Range("D" & i).Value)
         joinCondition = Trim(ws.Range("E" & i).Value)
@@ -981,7 +981,7 @@ Private Function GenerateFromClause(ByVal ws As Worksheet) As String
             If joinAlias <> "" Then
                 result = result & " " & joinAlias
             End If
-            If joinCondition <> "" And joinType <> "CROSS JOIN" Then
+            If joinCondition <> "" And InStr(joinType, "CROSS") = 0 Then
                 result = result & " ON " & joinCondition
             End If
         End If
@@ -1828,7 +1828,9 @@ Private Function GetTableList() As String
 End Function
 
 '==============================================================================
-' テーブル名からカッコ部分を除去してテーブル名のみを取得
+' 文字列からカッコ部分を除去（テーブル名、JOINタイプ等で使用）
+' 例: "USER_MASTER(ユーザー)" → "USER_MASTER"
+'     "INNER JOIN(両方に存在)" → "INNER JOIN"
 '==============================================================================
 Private Function ExtractTableName(ByVal displayName As String) As String
     Dim pos As Long
