@@ -386,6 +386,8 @@ Private Sub FormatMainSheet()
         .Columns("H").ColumnWidth = 5
         .Columns("I").ColumnWidth = 10
         .Columns("J").ColumnWidth = 10
+        .Columns("K").ColumnWidth = 16
+        .Columns("L").ColumnWidth = 16
 
         ' ボタン追加
         AddButton ws, "K" & ROW_TITLE, "SQL生成", "GenerateSQL"
@@ -547,7 +549,7 @@ Private Sub FormatTableDefSheet()
         .Range("J14:J17").Font.Color = RGB(128, 128, 128)
 
         ' 列幅
-        .Columns("J").ColumnWidth = 15
+        .Columns("J").ColumnWidth = 16
         .Columns("K").ColumnWidth = 40
 
         ' ボタン追加
@@ -740,7 +742,7 @@ Private Sub AddButton(ByVal ws As Worksheet, ByVal cellAddr As String, ByVal cap
     Dim rng As Range
 
     Set rng = ws.Range(cellAddr)
-    Set btn = ws.Buttons.Add(rng.Left, rng.Top, 80, 25)
+    Set btn = ws.Buttons.Add(rng.Left, rng.Top, 110, 28)
     btn.OnAction = macroName
     btn.caption = caption
     btn.Font.Size = 10
@@ -2352,7 +2354,7 @@ Public Sub InitializeImportSettings()
     ws.Range("J14:J17").Font.Color = RGB(128, 128, 128)
 
     ' 列幅
-    ws.Columns("J").ColumnWidth = 15
+    ws.Columns("J").ColumnWidth = 16
     ws.Columns("K").ColumnWidth = 40
 
     MsgBox "インポート設定を初期化しました。", vbInformation, "完了"
