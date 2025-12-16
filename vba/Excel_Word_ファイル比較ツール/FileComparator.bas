@@ -28,15 +28,6 @@ Option Explicit
 '==============================================================================
 ' 設定: ここを編集してください
 '==============================================================================
-' Excel比較: 最大行数（パフォーマンス対策）
-Private Const MAX_ROWS As Long = 10000
-
-' Excel比較: 最大列数
-Private Const MAX_COLS As Long = 256
-
-' Word比較: 最大段落数（パフォーマンス対策）
-Private Const MAX_PARAGRAPHS As Long = 5000
-
 ' 差異ハイライト色
 Private Const COLOR_CHANGED As Long = 65535      ' 黄色: 値変更
 Private Const COLOR_ADDED As Long = 5296274      ' 緑: 追加
@@ -643,9 +634,10 @@ Private Sub CompareWordDocuments(ByRef doc1 As Object, ByRef doc2 As Object, _
     Debug.Print "旧ファイル段落数: " & paraCount1
     Debug.Print "新ファイル段落数: " & paraCount2
 
-    ' 比較範囲を決定
+    ' 比較範囲を決定（使用範囲のみ比較、制限なし）
     maxParas = Application.WorksheetFunction.Max(paraCount1, paraCount2)
-    If maxParas > MAX_PARAGRAPHS Then maxParas = MAX_PARAGRAPHS
+
+    Debug.Print "比較範囲: " & maxParas & " 段落"
 
     ' 段落単位で比較
     For i = 1 To maxParas
@@ -687,14 +679,14 @@ Private Sub CompareWordDocuments(ByRef doc1 As Object, ByRef doc2 As Object, _
     ' 段落数の違いを報告
     If paraCount1 <> paraCount2 Then
         If paraCount1 > paraCount2 Then
-            For i = paraCount2 + 1 To Application.WorksheetFunction.Min(paraCount1, MAX_PARAGRAPHS)
+            For i = paraCount2 + 1 To paraCount1
                 text1 = CleanText(doc1.Paragraphs(i).Range.Text)
                 If Len(text1) > 0 Then
                     AddWordDifference differences, diffCount, i, "削除", text1, "(段落なし)"
                 End If
             Next i
         Else
-            For i = paraCount1 + 1 To Application.WorksheetFunction.Min(paraCount2, MAX_PARAGRAPHS)
+            For i = paraCount1 + 1 To paraCount2
                 text2 = CleanText(doc2.Paragraphs(i).Range.Text)
                 If Len(text2) > 0 Then
                     AddWordDifference differences, diffCount, i, "追加", "(段落なし)", text2
@@ -1378,26 +1370,14 @@ Private Sub FormatMainSheet(ByRef ws As Worksheet)
         ' 設定値の表示
         .Range("B31").Value = "Excel比較:"
         .Range("D31").Value = "使用範囲のみ比較（制限なし）"
-        .Range("B32").Value = "最大段落数（Word）:"
-        .Range("D32").Value = MAX_PARAGRAPHS
+        .Range("B32").Value = "Word比較:"
+        .Range("D32").Value = "全段落比較（制限なし）"
 
         .Range("B31:B32").Font.Name = "Meiryo UI"
         .Range("B31:B32").Font.Size = 10
-        .Range("D31").Font.Name = "Meiryo UI"
-        .Range("D31").Font.Size = 10
-        .Range("D31").Font.Color = RGB(0, 128, 0)
-        .Range("D32").Font.Name = "Meiryo UI"
-        .Range("D32").Font.Size = 10
-        .Range("D32").Font.Bold = True
-        .Range("D32").NumberFormat = "#,##0"
-
-        .Range("F31:H31").Merge
-        .Range("F31").Value = "※設定変更はVBAコード内で行います"
-        With .Range("F31")
-            .Font.Name = "Meiryo UI"
-            .Font.Size = 9
-            .Font.Color = RGB(128, 128, 128)
-        End With
+        .Range("D31:D32").Font.Name = "Meiryo UI"
+        .Range("D31:D32").Font.Size = 10
+        .Range("D31:D32").Font.Color = RGB(0, 128, 0)
 
         ' =================================================================
         ' 対応ファイル形式セクション (行37-43)
