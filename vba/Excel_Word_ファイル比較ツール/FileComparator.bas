@@ -1039,7 +1039,7 @@ End Sub
 ' メインシートのフォーマット
 '==============================================================================
 Private Sub FormatMainSheet(ByRef ws As Worksheet)
-    Dim btn As Button
+    Dim shp As Shape
 
     Application.ScreenUpdating = False
 
@@ -1079,67 +1079,50 @@ Private Sub FormatMainSheet(ByRef ws As Worksheet)
         ' ボタンエリア (行8-10)
         ' =================================================================
         .Rows(7).RowHeight = 15
+        .Rows(8).RowHeight = 50
 
-        ' Excel比較ボタン（緑系）
-        .Range("B9:C10").Merge
-        .Range("B9").Value = "Excel比較"
-        With .Range("B9")
-            .Font.Name = "Meiryo UI"
-            .Font.Size = 14
-            .Font.Bold = True
-            .Font.Color = RGB(255, 255, 255)
-            .HorizontalAlignment = xlCenter
-            .VerticalAlignment = xlCenter
-            .Interior.Color = RGB(76, 175, 80)  ' 緑
-        End With
-        With .Range("B9:C10").Borders
-            .LineStyle = xlContinuous
-            .Color = RGB(56, 142, 60)
-            .Weight = xlMedium
-        End With
-
-        ' Word比較ボタン（青系）
-        .Range("E9:F10").Merge
-        .Range("E9").Value = "Word比較"
-        With .Range("E9")
-            .Font.Name = "Meiryo UI"
-            .Font.Size = 14
-            .Font.Bold = True
-            .Font.Color = RGB(255, 255, 255)
-            .HorizontalAlignment = xlCenter
-            .VerticalAlignment = xlCenter
-            .Interior.Color = RGB(33, 150, 243)  ' 青
-        End With
-        With .Range("E9:F10").Borders
-            .LineStyle = xlContinuous
-            .Color = RGB(25, 118, 210)
-            .Weight = xlMedium
-        End With
-
-        .Rows(9).RowHeight = 25
-        .Rows(10).RowHeight = 25
-
-        ' ボタン用マクロ（セルクリックで実行）
-        Set btn = .Buttons.Add(.Range("B9").Left + 1, .Range("B9").Top + 1, .Range("B9:C10").Width - 2, .Range("B9:C10").Height - 2)
-        With btn
+        ' Excel比較ボタン（緑系）- 角丸四角形
+        Set shp = .Shapes.AddShape(msoShapeRoundedRectangle, _
+            .Range("B8").Left + 5, .Range("B8").Top + 5, 120, 40)
+        With shp
             .Name = "btnCompareExcel"
-            .Caption = ""
+            .Fill.ForeColor.RGB = RGB(76, 175, 80)  ' 緑
+            .Line.ForeColor.RGB = RGB(56, 142, 60)
+            .Line.Weight = 2
+            .TextFrame2.TextRange.Characters.Text = "Excel比較"
+            .TextFrame2.TextRange.Font.Fill.ForeColor.RGB = RGB(255, 255, 255)
+            .TextFrame2.TextRange.Font.Size = 14
+            .TextFrame2.TextRange.Font.Bold = msoTrue
+            .TextFrame2.TextRange.Font.Name = "Meiryo UI"
+            .TextFrame2.TextRange.ParagraphFormat.Alignment = msoAlignCenter
+            .TextFrame2.VerticalAnchor = msoAnchorMiddle
             .OnAction = "CompareExcelFiles"
         End With
 
-        Set btn = .Buttons.Add(.Range("E9").Left + 1, .Range("E9").Top + 1, .Range("E9:F10").Width - 2, .Range("E9:F10").Height - 2)
-        With btn
+        ' Word比較ボタン（青系）- 角丸四角形
+        Set shp = .Shapes.AddShape(msoShapeRoundedRectangle, _
+            .Range("E8").Left + 5, .Range("E8").Top + 5, 120, 40)
+        With shp
             .Name = "btnCompareWord"
-            .Caption = ""
+            .Fill.ForeColor.RGB = RGB(33, 150, 243)  ' 青
+            .Line.ForeColor.RGB = RGB(25, 118, 210)
+            .Line.Weight = 2
+            .TextFrame2.TextRange.Characters.Text = "Word比較"
+            .TextFrame2.TextRange.Font.Fill.ForeColor.RGB = RGB(255, 255, 255)
+            .TextFrame2.TextRange.Font.Size = 14
+            .TextFrame2.TextRange.Font.Bold = msoTrue
+            .TextFrame2.TextRange.Font.Name = "Meiryo UI"
+            .TextFrame2.TextRange.ParagraphFormat.Alignment = msoAlignCenter
+            .TextFrame2.VerticalAnchor = msoAnchorMiddle
             .OnAction = "CompareWordFiles"
         End With
 
         ' =================================================================
-        ' 色凡例セクション (行13-19)
+        ' 色凡例セクション (行11-16)
         ' =================================================================
-        .Range("B13:H13").Merge
-        .Range("B13").Value = "差異の色凡例"
-        With .Range("B13")
+        .Range("B11:H11").Merge
+        .Range("B11").Value = "差異の色凡例"
+        With .Range("B11")
             .Font.Name = "Meiryo UI"
             .Font.Size = 14
             .Font.Bold = True
@@ -1147,16 +1130,56 @@ Private Sub FormatMainSheet(ByRef ws As Worksheet)
         End With
 
         ' セクション下線
-        With .Range("B13:H13").Borders(xlEdgeBottom)
+        With .Range("B11:H11").Borders(xlEdgeBottom)
             .LineStyle = xlContinuous
             .Color = RGB(47, 84, 150)
             .Weight = xlMedium
         End With
 
         ' 変更
-        .Range("B15").Value = "変更"
-        With .Range("B15")
+        .Range("B13").Value = "変更"
+        With .Range("B13")
             .Interior.Color = COLOR_CHANGED
+            .Font.Name = "Meiryo UI"
+            .Font.Size = 11
+            .Font.Bold = True
+            .HorizontalAlignment = xlCenter
+        End With
+        With .Range("B13").Borders
+            .LineStyle = xlContinuous
+            .Color = RGB(200, 200, 200)
+        End With
+        .Range("C13:E13").Merge
+        .Range("C13").Value = "値が変更された箇所（黄色）"
+        With .Range("C13")
+            .Font.Name = "Meiryo UI"
+            .Font.Size = 10
+        End With
+
+        ' 追加
+        .Range("B14").Value = "追加"
+        With .Range("B14")
+            .Interior.Color = COLOR_ADDED
+            .Font.Name = "Meiryo UI"
+            .Font.Size = 11
+            .Font.Bold = True
+            .HorizontalAlignment = xlCenter
+        End With
+        With .Range("B14").Borders
+            .LineStyle = xlContinuous
+            .Color = RGB(200, 200, 200)
+        End With
+        .Range("C14:E14").Merge
+        .Range("C14").Value = "新ファイルで追加された箇所（緑）"
+        With .Range("C14")
+            .Font.Name = "Meiryo UI"
+            .Font.Size = 10
+        End With
+
+        ' 削除
+        .Range("B15").Value = "削除"
+        With .Range("B15")
+            .Interior.Color = COLOR_DELETED
             .Font.Name = "Meiryo UI"
             .Font.Size = 11
             .Font.Bold = True
@@ -1167,58 +1190,18 @@ Private Sub FormatMainSheet(ByRef ws As Worksheet)
             .Color = RGB(200, 200, 200)
         End With
         .Range("C15:E15").Merge
-        .Range("C15").Value = "値が変更された箇所（黄色）"
+        .Range("C15").Value = "新ファイルで削除された箇所（ピンク）"
         With .Range("C15")
             .Font.Name = "Meiryo UI"
             .Font.Size = 10
         End With
 
-        ' 追加
-        .Range("B16").Value = "追加"
-        With .Range("B16")
-            .Interior.Color = COLOR_ADDED
-            .Font.Name = "Meiryo UI"
-            .Font.Size = 11
-            .Font.Bold = True
-            .HorizontalAlignment = xlCenter
-        End With
-        With .Range("B16").Borders
-            .LineStyle = xlContinuous
-            .Color = RGB(200, 200, 200)
-        End With
-        .Range("C16:E16").Merge
-        .Range("C16").Value = "新ファイルで追加された箇所（緑）"
-        With .Range("C16")
-            .Font.Name = "Meiryo UI"
-            .Font.Size = 10
-        End With
-
-        ' 削除
-        .Range("B17").Value = "削除"
-        With .Range("B17")
-            .Interior.Color = COLOR_DELETED
-            .Font.Name = "Meiryo UI"
-            .Font.Size = 11
-            .Font.Bold = True
-            .HorizontalAlignment = xlCenter
-        End With
-        With .Range("B17").Borders
-            .LineStyle = xlContinuous
-            .Color = RGB(200, 200, 200)
-        End With
-        .Range("C17:E17").Merge
-        .Range("C17").Value = "新ファイルで削除された箇所（ピンク）"
-        With .Range("C17")
-            .Font.Name = "Meiryo UI"
-            .Font.Size = 10
-        End With
-
         ' =================================================================
-        ' 設定セクション (行20-25)
+        ' 設定セクション (行18-22)
         ' =================================================================
-        .Range("B20:H20").Merge
-        .Range("B20").Value = "現在の設定"
-        With .Range("B20")
+        .Range("B18:H18").Merge
+        .Range("B18").Value = "現在の設定"
+        With .Range("B18")
             .Font.Name = "Meiryo UI"
             .Font.Size = 14
             .Font.Bold = True
@@ -1226,30 +1209,30 @@ Private Sub FormatMainSheet(ByRef ws As Worksheet)
         End With
 
         ' セクション下線
-        With .Range("B20:H20").Borders(xlEdgeBottom)
+        With .Range("B18:H18").Borders(xlEdgeBottom)
             .LineStyle = xlContinuous
             .Color = RGB(47, 84, 150)
             .Weight = xlMedium
         End With
 
         ' 設定値の表示
-        .Range("B22").Value = "Excel比較:"
-        .Range("D22").Value = "使用範囲のみ比較（制限なし）"
-        .Range("B23").Value = "Word比較:"
-        .Range("D23").Value = "全段落・スタイル比較（制限なし）"
+        .Range("B20").Value = "Excel比較:"
+        .Range("D20").Value = "使用範囲のみ比較（制限なし）"
+        .Range("B21").Value = "Word比較:"
+        .Range("D21").Value = "全段落・スタイル比較（制限なし）"
 
-        .Range("B22:B23").Font.Name = "Meiryo UI"
-        .Range("B22:B23").Font.Size = 10
-        .Range("D22:D23").Font.Name = "Meiryo UI"
-        .Range("D22:D23").Font.Size = 10
-        .Range("D22:D23").Font.Color = RGB(0, 128, 0)
+        .Range("B20:B21").Font.Name = "Meiryo UI"
+        .Range("B20:B21").Font.Size = 10
+        .Range("D20:D21").Font.Name = "Meiryo UI"
+        .Range("D20:D21").Font.Size = 10
+        .Range("D20:D21").Font.Color = RGB(0, 128, 0)
 
         ' =================================================================
-        ' 対応ファイル形式セクション (行26-30)
+        ' 対応ファイル形式セクション (行24-28)
         ' =================================================================
-        .Range("B26:H26").Merge
-        .Range("B26").Value = "対応ファイル形式"
-        With .Range("B26")
+        .Range("B24:H24").Merge
+        .Range("B24").Value = "対応ファイル形式"
+        With .Range("B24")
             .Font.Name = "Meiryo UI"
             .Font.Size = 14
             .Font.Bold = True
@@ -1257,29 +1240,29 @@ Private Sub FormatMainSheet(ByRef ws As Worksheet)
         End With
 
         ' セクション下線
-        With .Range("B26:H26").Borders(xlEdgeBottom)
+        With .Range("B24:H24").Borders(xlEdgeBottom)
             .LineStyle = xlContinuous
             .Color = RGB(47, 84, 150)
             .Weight = xlMedium
         End With
 
-        .Range("B28").Value = "Excel:"
-        .Range("C28").Value = ".xlsx, .xlsm, .xls, .xlsb"
-        .Range("B29").Value = "Word:"
-        .Range("C29").Value = ".docx, .docm, .doc"
+        .Range("B26").Value = "Excel:"
+        .Range("C26").Value = ".xlsx, .xlsm, .xls, .xlsb"
+        .Range("B27").Value = "Word:"
+        .Range("C27").Value = ".docx, .docm, .doc"
 
-        .Range("B28:B29").Font.Name = "Meiryo UI"
-        .Range("B28:B29").Font.Size = 10
-        .Range("B28:B29").Font.Bold = True
-        .Range("C28:C29").Font.Name = "Meiryo UI"
-        .Range("C28:C29").Font.Size = 10
+        .Range("B26:B27").Font.Name = "Meiryo UI"
+        .Range("B26:B27").Font.Size = 10
+        .Range("B26:B27").Font.Bold = True
+        .Range("C26:C27").Font.Name = "Meiryo UI"
+        .Range("C26:C27").Font.Size = 10
 
         ' =================================================================
-        ' 使い方セクション (行32-38)
+        ' 使い方セクション (行30-35)
         ' =================================================================
-        .Range("B32:H32").Merge
-        .Range("B32").Value = "使い方"
-        With .Range("B32")
+        .Range("B30:H30").Merge
+        .Range("B30").Value = "使い方"
+        With .Range("B30")
             .Font.Name = "Meiryo UI"
             .Font.Size = 14
             .Font.Bold = True
@@ -1287,27 +1270,27 @@ Private Sub FormatMainSheet(ByRef ws As Worksheet)
         End With
 
         ' セクション下線
-        With .Range("B32:H32").Borders(xlEdgeBottom)
+        With .Range("B30:H30").Borders(xlEdgeBottom)
             .LineStyle = xlContinuous
             .Color = RGB(47, 84, 150)
             .Weight = xlMedium
         End With
 
-        .Range("B34").Value = "1."
-        .Range("C34").Value = "「Excel比較」または「Word比較」ボタンをクリック"
-        .Range("B35").Value = "2."
-        .Range("C35").Value = "1つ目のファイルを選択"
-        .Range("B36").Value = "3."
-        .Range("C36").Value = "2つ目のファイルを選択"
-        .Range("B37").Value = "4."
-        .Range("C37").Value = "比較結果が「CompareResult」シートに出力されます"
+        .Range("B32").Value = "1."
+        .Range("C32").Value = "「Excel比較」または「Word比較」ボタンをクリック"
+        .Range("B33").Value = "2."
+        .Range("C33").Value = "1つ目のファイルを選択"
+        .Range("B34").Value = "3."
+        .Range("C34").Value = "2つ目のファイルを選択"
+        .Range("B35").Value = "4."
+        .Range("C35").Value = "比較結果が「CompareResult」シートに出力されます"
 
-        .Range("B34:B37").Font.Name = "Meiryo UI"
-        .Range("B34:B37").Font.Size = 10
-        .Range("B34:B37").Font.Bold = True
-        .Range("B34:B37").Font.Color = RGB(47, 84, 150)
-        .Range("C34:C37").Font.Name = "Meiryo UI"
-        .Range("C34:C37").Font.Size = 10
+        .Range("B32:B35").Font.Name = "Meiryo UI"
+        .Range("B32:B35").Font.Size = 10
+        .Range("B32:B35").Font.Bold = True
+        .Range("B32:B35").Font.Color = RGB(47, 84, 150)
+        .Range("C32:C35").Font.Name = "Meiryo UI"
+        .Range("C32:C35").Font.Size = 10
 
         ' =================================================================
         ' 列幅・行高の調整
