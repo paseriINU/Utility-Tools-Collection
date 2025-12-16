@@ -784,12 +784,66 @@ End Sub
 
 '==============================================================================
 ' プルダウンリスト追加ヘルパー
+' ※255文字を超える場合は名前付き範囲を使用
 '==============================================================================
 Private Sub AddDropdown(ByVal ws As Worksheet, ByVal cellAddr As String, ByVal listItems As String)
+    Dim items() As String
+    Dim wsDef As Worksheet
+    Dim rangeName As String
+    Dim startRow As Long
+    Dim i As Long
+    Dim listRange As Range
+    Dim listHash As Long
+    Dim existingName As Name
+
     With ws.Range(cellAddr).Validation
         .Delete
         If Len(listItems) > 0 Then
-            .Add Type:=xlValidateList, AlertStyle:=xlValidAlertStop, Formula1:=listItems
+            ' 255文字以下の場合は直接設定
+            If Len(listItems) <= 255 Then
+                .Add Type:=xlValidateList, AlertStyle:=xlValidAlertStop, Formula1:=listItems
+            Else
+                ' 255文字を超える場合は名前付き範囲を使用
+                items = Split(listItems, ",")
+
+                ' テーブル定義シートのZ列に一時リストを作成
+                On Error Resume Next
+                Set wsDef = Sheets(SHEET_TABLE_DEF)
+                On Error GoTo 0
+
+                If Not wsDef Is Nothing Then
+                    ' リスト内容に基づいてユニークな名前を生成（同じリストは共有）
+                    listHash = Len(listItems) + UBound(items) * 100
+                    rangeName = "DropList_" & listHash
+
+                    ' 既存の名前付き範囲をチェック
+                    Set existingName = Nothing
+                    On Error Resume Next
+                    Set existingName = ThisWorkbook.Names(rangeName)
+                    On Error GoTo 0
+
+                    ' 名前付き範囲が存在しない場合のみ作成
+                    If existingName Is Nothing Then
+                        ' Z列の1行目から書き出し
+                        startRow = 1
+
+                        ' リストをZ列に縦方向に書き出し
+                        For i = LBound(items) To UBound(items)
+                            wsDef.Range("Z" & (startRow + i)).Value = Trim(items(i))
+                        Next i
+
+                        ' 範囲に名前を付ける
+                        Set listRange = wsDef.Range("Z" & startRow & ":Z" & (startRow + UBound(items)))
+                        ThisWorkbook.Names.Add Name:=rangeName, RefersTo:=listRange
+                    End If
+
+                    ' 名前付き範囲を参照してドロップダウンを設定
+                    .Add Type:=xlValidateList, AlertStyle:=xlValidAlertStop, Formula1:="=" & rangeName
+                Else
+                    ' テーブル定義シートがない場合は直接設定を試みる（エラーになる可能性あり）
+                    .Add Type:=xlValidateList, AlertStyle:=xlValidAlertStop, Formula1:=listItems
+                End If
+            End If
             .IgnoreBlank = True
             .InCellDropdown = True
         End If
@@ -2164,6 +2218,7 @@ Public Sub OnTableSelectionChanged(ByVal changedRange As Range)
     Dim targetCol As String
     Dim isTableCell As Boolean
     Dim i As Long
+    Dim nm As Name
 
     Set wsMain = Sheets(SHEET_MAIN)
 
@@ -2199,6 +2254,13 @@ Public Sub OnTableSelectionChanged(ByVal changedRange As Range)
     If columnList = "" Or columnList = "*" Then Exit Sub
 
     Application.EnableEvents = False
+
+    ' 既存のDropList_*名前付き範囲を削除（古いリストをクリア）
+    For Each nm In ThisWorkbook.Names
+        If Left(nm.Name, 9) = "DropList_" Then
+            nm.Delete
+        End If
+    Next nm
 
     ' カラム選択のプルダウンを更新
     For i = ROW_COLUMNS_START To ROW_COLUMNS_END
