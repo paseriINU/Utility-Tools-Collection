@@ -1,4 +1,4 @@
-# TFS to Git Sync Script
+# TFS_to_Git_同期ツール
 
 TFS（Team Foundation Server）のローカルディレクトリとGitリポジトリを同期するWindowsバッチスクリプトです。
 
