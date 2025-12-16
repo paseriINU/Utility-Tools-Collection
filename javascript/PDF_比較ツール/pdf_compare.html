@@ -1,0 +1,950 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF 比較ツール（WinMerge方式）</title>
+    <!-- PDF.js: ローカル優先、CDNフォールバック -->
+    <script>
+        // ライブラリ読み込み状態を管理
+        window.pdfJsLoaded = false;
+        window.pdfJsLoadError = null;
+
+        function loadScript(src) {
+            return new Promise((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = src;
+                script.onload = resolve;
+                script.onerror = reject;
+                document.head.appendChild(script);
+            });
+        }
+
+        async function initPdfJs() {
+            const localPath = 'lib/pdf.js';
+            const cdnPath = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+            const localWorker = 'lib/pdfworker.js';
+            const cdnWorker = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+            try {
+                // ローカルを試行
+                await loadScript(localPath);
+                pdfjsLib.GlobalWorkerOptions.workerSrc = localWorker;
+                window.pdfJsLoaded = true;
+                window.pdfJsSource = 'ローカル';
+                console.log('PDF.js loaded from local');
+            } catch (e) {
+                console.log('Local PDF.js not found, trying CDN...');
+                try {
+                    // CDNにフォールバック
+                    await loadScript(cdnPath);
+                    pdfjsLib.GlobalWorkerOptions.workerSrc = cdnWorker;
+                    window.pdfJsLoaded = true;
+                    window.pdfJsSource = 'CDN（オンライン）';
+                    console.log('PDF.js loaded from CDN');
+                } catch (e2) {
+                    window.pdfJsLoadError = 'PDF.jsの読み込みに失敗しました。インターネット接続を確認するか、lib/フォルダにpdf.jsを配置してください。';
+                    console.error('Failed to load PDF.js');
+                }
+            }
+
+            // 読み込み完了後にUIを更新
+            if (document.readyState === 'complete') {
+                updateLibraryStatus();
+            } else {
+                window.addEventListener('load', updateLibraryStatus);
+            }
+        }
+
+        function updateLibraryStatus() {
+            const statusEl = document.getElementById('libraryStatus');
+            if (statusEl) {
+                if (window.pdfJsLoaded) {
+                    statusEl.textContent = `ライブラリ: ${window.pdfJsSource}`;
+                    statusEl.style.color = window.pdfJsSource === 'ローカル' ? '#4caf50' : '#ff9800';
+                } else {
+                    statusEl.textContent = 'ライブラリ: 読み込み失敗';
+                    statusEl.style.color = '#f44336';
+                }
+            }
+
+            if (window.pdfJsLoadError) {
+                const errorDiv = document.getElementById('errorMessage');
+                if (errorDiv) {
+                    errorDiv.textContent = window.pdfJsLoadError;
+                    errorDiv.style.display = 'block';
+                }
+            }
+        }
+
+        // PDF.js初期化開始
+        initPdfJs();
+    </script>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Segoe UI', 'Meiryo UI', sans-serif;
+            background-color: #f5f5f5;
+            color: #333;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        header {
+            background: linear-gradient(135deg, #2f5496 0%, #1e3a5f 100%);
+            color: white;
+            padding: 20px;
+            text-align: center;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        header h1 {
+            font-size: 24px;
+            margin-bottom: 5px;
+        }
+
+        header p {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+
+        .upload-section {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .upload-box {
+            background: white;
+            border: 2px dashed #ccc;
+            border-radius: 8px;
+            padding: 30px;
+            text-align: center;
+            transition: all 0.3s;
+            cursor: pointer;
+        }
+
+        .upload-box:hover, .upload-box.dragover {
+            border-color: #2f5496;
+            background-color: #f0f4ff;
+        }
+
+        .upload-box.has-file {
+            border-style: solid;
+            border-color: #4caf50;
+            background-color: #e8f5e9;
+        }
+
+        .upload-box h3 {
+            color: #2f5496;
+            margin-bottom: 10px;
+        }
+
+        .upload-box p {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .upload-box .file-name {
+            color: #4caf50;
+            font-weight: bold;
+            margin-top: 10px;
+            word-break: break-all;
+        }
+
+        .upload-box input[type="file"] {
+            display: none;
+        }
+
+        .btn {
+            display: inline-block;
+            padding: 12px 30px;
+            font-size: 16px;
+            font-weight: bold;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background-color: #2f5496;
+            color: white;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            background-color: #1e3a5f;
+        }
+
+        .btn-primary:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+
+        .btn-secondary {
+            background-color: #4caf50;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background-color: #388e3c;
+        }
+
+        .actions {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .actions .btn {
+            margin: 0 10px;
+        }
+
+        .progress-section {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background-color: #e0e0e0;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-bottom: 10px;
+        }
+
+        .progress-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #4caf50 0%, #8bc34a 100%);
+            width: 0%;
+            transition: width 0.3s;
+        }
+
+        .progress-text {
+            text-align: center;
+            color: #666;
+        }
+
+        .result-section {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            display: none;
+        }
+
+        .result-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #e0e0e0;
+        }
+
+        .result-header h2 {
+            color: #2f5496;
+        }
+
+        .result-stats {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .stat-box {
+            background: #f5f5f5;
+            padding: 15px;
+            border-radius: 5px;
+            text-align: center;
+        }
+
+        .stat-box .number {
+            font-size: 28px;
+            font-weight: bold;
+        }
+
+        .stat-box .label {
+            font-size: 12px;
+            color: #666;
+        }
+
+        .stat-box.changed .number { color: #f9a825; }
+        .stat-box.added .number { color: #4caf50; }
+        .stat-box.deleted .number { color: #e91e63; }
+        .stat-box.total .number { color: #2f5496; }
+
+        .legend {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 14px;
+        }
+
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            border-radius: 3px;
+        }
+
+        .legend-color.changed { background-color: #fff9c4; }
+        .legend-color.added { background-color: #c8e6c9; }
+        .legend-color.deleted { background-color: #ffcdd2; }
+
+        .result-table-container {
+            overflow-x: auto;
+            max-height: 600px;
+            overflow-y: auto;
+        }
+
+        .result-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+
+        .result-table th {
+            background-color: #2f5496;
+            color: white;
+            padding: 12px 8px;
+            text-align: left;
+            position: sticky;
+            top: 0;
+            z-index: 1;
+        }
+
+        .result-table td {
+            padding: 10px 8px;
+            border-bottom: 1px solid #e0e0e0;
+            vertical-align: top;
+        }
+
+        .result-table tr.changed { background-color: #fff9c4; }
+        .result-table tr.added { background-color: #c8e6c9; }
+        .result-table tr.deleted { background-color: #ffcdd2; }
+
+        .result-table .line-no {
+            text-align: center;
+            font-family: monospace;
+            white-space: nowrap;
+        }
+
+        .result-table .diff-type {
+            text-align: center;
+            font-weight: bold;
+        }
+
+        .result-table .text-cell {
+            max-width: 400px;
+            word-break: break-word;
+            white-space: pre-wrap;
+        }
+
+        .no-diff {
+            text-align: center;
+            padding: 40px;
+            color: #4caf50;
+            font-size: 18px;
+        }
+
+        .error-message {
+            background-color: #ffebee;
+            color: #c62828;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        @media (max-width: 768px) {
+            .upload-section {
+                grid-template-columns: 1fr;
+            }
+
+            .result-stats {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>PDF 比較ツール（WinMerge方式）</h1>
+            <p>LCS（最長共通部分列）アルゴリズムによる高精度な差分検出</p>
+            <p id="libraryStatus" style="font-size: 12px; margin-top: 5px;">ライブラリ: 読み込み中...</p>
+        </header>
+
+        <div class="error-message" id="errorMessage"></div>
+
+        <div class="upload-section">
+            <div class="upload-box" id="uploadBox1" onclick="document.getElementById('file1').click()">
+                <h3>旧ファイル（比較元）</h3>
+                <p>クリックまたはドラッグ&ドロップでPDFを選択</p>
+                <div class="file-name" id="fileName1"></div>
+                <input type="file" id="file1" accept=".pdf" onchange="handleFileSelect(1, this)">
+            </div>
+
+            <div class="upload-box" id="uploadBox2" onclick="document.getElementById('file2').click()">
+                <h3>新ファイル（比較先）</h3>
+                <p>クリックまたはドラッグ&ドロップでPDFを選択</p>
+                <div class="file-name" id="fileName2"></div>
+                <input type="file" id="file2" accept=".pdf" onchange="handleFileSelect(2, this)">
+            </div>
+        </div>
+
+        <div class="actions">
+            <button class="btn btn-primary" id="compareBtn" onclick="comparePDFs()" disabled>
+                比較を実行
+            </button>
+            <button class="btn btn-secondary" id="exportBtn" onclick="exportCSV()" style="display: none;">
+                CSVエクスポート
+            </button>
+        </div>
+
+        <div class="progress-section" id="progressSection">
+            <div class="progress-bar">
+                <div class="progress-bar-fill" id="progressBar"></div>
+            </div>
+            <div class="progress-text" id="progressText">準備中...</div>
+        </div>
+
+        <div class="result-section" id="resultSection">
+            <div class="result-header">
+                <h2>比較結果</h2>
+                <div>
+                    <span id="resultTime"></span>
+                </div>
+            </div>
+
+            <div class="result-stats">
+                <div class="stat-box changed">
+                    <div class="number" id="statChanged">0</div>
+                    <div class="label">変更</div>
+                </div>
+                <div class="stat-box added">
+                    <div class="number" id="statAdded">0</div>
+                    <div class="label">追加</div>
+                </div>
+                <div class="stat-box deleted">
+                    <div class="number" id="statDeleted">0</div>
+                    <div class="label">削除</div>
+                </div>
+                <div class="stat-box total">
+                    <div class="number" id="statTotal">0</div>
+                    <div class="label">合計</div>
+                </div>
+            </div>
+
+            <div class="legend">
+                <div class="legend-item">
+                    <div class="legend-color changed"></div>
+                    <span>変更</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color added"></div>
+                    <span>追加</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color deleted"></div>
+                    <span>削除</span>
+                </div>
+            </div>
+
+            <div class="result-table-container">
+                <table class="result-table" id="resultTable">
+                    <thead>
+                        <tr>
+                            <th style="width: 50px;">No</th>
+                            <th style="width: 80px;">旧行番号</th>
+                            <th style="width: 80px;">新行番号</th>
+                            <th style="width: 80px;">差異タイプ</th>
+                            <th>旧ファイルのテキスト</th>
+                            <th>新ファイルのテキスト</th>
+                        </tr>
+                    </thead>
+                    <tbody id="resultBody">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // PDF.js worker設定は initPdfJs() で動的に設定されます
+
+        // グローバル変数
+        let file1Data = null;
+        let file2Data = null;
+        let currentDifferences = [];
+
+        // ドラッグ&ドロップ設定
+        ['uploadBox1', 'uploadBox2'].forEach((id, index) => {
+            const box = document.getElementById(id);
+            const fileNum = index + 1;
+
+            box.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                box.classList.add('dragover');
+            });
+
+            box.addEventListener('dragleave', () => {
+                box.classList.remove('dragover');
+            });
+
+            box.addEventListener('drop', (e) => {
+                e.preventDefault();
+                box.classList.remove('dragover');
+                const file = e.dataTransfer.files[0];
+                if (file && file.type === 'application/pdf') {
+                    document.getElementById(`file${fileNum}`).files = e.dataTransfer.files;
+                    handleFileSelect(fileNum, { files: [file] });
+                } else {
+                    showError('PDFファイルを選択してください。');
+                }
+            });
+        });
+
+        // ファイル選択処理
+        function handleFileSelect(fileNum, input) {
+            const file = input.files[0];
+            if (!file) return;
+
+            const box = document.getElementById(`uploadBox${fileNum}`);
+            const nameDiv = document.getElementById(`fileName${fileNum}`);
+
+            box.classList.add('has-file');
+            nameDiv.textContent = file.name;
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                if (fileNum === 1) {
+                    file1Data = new Uint8Array(e.target.result);
+                } else {
+                    file2Data = new Uint8Array(e.target.result);
+                }
+                updateCompareButton();
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        // 比較ボタンの状態更新
+        function updateCompareButton() {
+            const btn = document.getElementById('compareBtn');
+            btn.disabled = !(file1Data && file2Data);
+        }
+
+        // エラー表示
+        function showError(message) {
+            const errorDiv = document.getElementById('errorMessage');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+            setTimeout(() => {
+                errorDiv.style.display = 'none';
+            }, 5000);
+        }
+
+        // 進捗更新
+        function updateProgress(percent, text) {
+            document.getElementById('progressBar').style.width = percent + '%';
+            document.getElementById('progressText').textContent = text;
+        }
+
+        // PDFからテキスト抽出
+        async function extractTextFromPDF(pdfData, progressPrefix) {
+            const pdf = await pdfjsLib.getDocument({ data: pdfData }).promise;
+            const lines = [];
+            const totalPages = pdf.numPages;
+
+            for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
+                const page = await pdf.getPage(pageNum);
+                const textContent = await page.getTextContent();
+
+                // テキストアイテムを行ごとにグループ化
+                let currentY = null;
+                let currentLine = '';
+
+                textContent.items.forEach(item => {
+                    const y = Math.round(item.transform[5]);
+
+                    if (currentY === null) {
+                        currentY = y;
+                        currentLine = item.str;
+                    } else if (Math.abs(y - currentY) < 5) {
+                        // 同じ行
+                        currentLine += item.str;
+                    } else {
+                        // 新しい行
+                        if (currentLine.trim()) {
+                            lines.push(currentLine.trim());
+                        }
+                        currentY = y;
+                        currentLine = item.str;
+                    }
+                });
+
+                // 最後の行を追加
+                if (currentLine.trim()) {
+                    lines.push(currentLine.trim());
+                }
+
+                updateProgress(
+                    Math.round((pageNum / totalPages) * 40) + (progressPrefix === '新' ? 40 : 0),
+                    `${progressPrefix}ファイル: ${pageNum}/${totalPages} ページ処理中...`
+                );
+            }
+
+            return lines;
+        }
+
+        // LCSアルゴリズム（最長共通部分列）
+        function computeLCS(lines1, lines2) {
+            const n1 = lines1.length;
+            const n2 = lines2.length;
+
+            // メモリ効率のため、大きなファイルは簡易比較
+            if (Math.max(n1, n2) > 5000) {
+                return computeSimpleDiff(lines1, lines2);
+            }
+
+            // LCS行列の構築
+            const lcs = Array(n1 + 1).fill(null).map(() => Array(n2 + 1).fill(0));
+
+            for (let i = 1; i <= n1; i++) {
+                for (let j = 1; j <= n2; j++) {
+                    if (lines1[i - 1] === lines2[j - 1]) {
+                        lcs[i][j] = lcs[i - 1][j - 1] + 1;
+                    } else {
+                        lcs[i][j] = Math.max(lcs[i - 1][j], lcs[i][j - 1]);
+                    }
+                }
+
+                if (i % 100 === 0) {
+                    updateProgress(80 + Math.round((i / n1) * 15), `LCS計算中: ${i}/${n1}`);
+                }
+            }
+
+            // バックトラックして差分を抽出
+            return backtrackLCS(lcs, lines1, lines2, n1, n2);
+        }
+
+        // LCSバックトラック
+        function backtrackLCS(lcs, lines1, lines2, n1, n2) {
+            const tempDiffs = [];
+            let i = n1;
+            let j = n2;
+
+            while (i > 0 || j > 0) {
+                if (i > 0 && j > 0 && lines1[i - 1] === lines2[j - 1]) {
+                    // 一致
+                    i--;
+                    j--;
+                } else if (j > 0 && (i === 0 || lcs[i][j - 1] >= lcs[i - 1][j])) {
+                    // 追加
+                    if (lines2[j - 1].trim()) {
+                        tempDiffs.unshift({
+                            oldLineNo: 0,
+                            newLineNo: j,
+                            diffType: '追加',
+                            oldText: '',
+                            newText: lines2[j - 1]
+                        });
+                    }
+                    j--;
+                } else if (i > 0) {
+                    // 削除
+                    if (lines1[i - 1].trim()) {
+                        tempDiffs.unshift({
+                            oldLineNo: i,
+                            newLineNo: 0,
+                            diffType: '削除',
+                            oldText: lines1[i - 1],
+                            newText: ''
+                        });
+                    }
+                    i--;
+                } else {
+                    break;
+                }
+            }
+
+            // 隣接する削除と追加を「変更」にマージ
+            return mergeAdjacentChanges(tempDiffs);
+        }
+
+        // 隣接する削除と追加を「変更」にマージ
+        function mergeAdjacentChanges(diffs) {
+            const merged = [];
+            let i = 0;
+
+            while (i < diffs.length) {
+                if (i < diffs.length - 1 &&
+                    diffs[i].diffType === '削除' &&
+                    diffs[i + 1].diffType === '追加' &&
+                    Math.abs(diffs[i].oldLineNo - diffs[i + 1].newLineNo) <= 1) {
+                    // マージして「変更」に
+                    merged.push({
+                        oldLineNo: diffs[i].oldLineNo,
+                        newLineNo: diffs[i + 1].newLineNo,
+                        diffType: '変更',
+                        oldText: diffs[i].oldText,
+                        newText: diffs[i + 1].newText
+                    });
+                    i += 2;
+                } else {
+                    merged.push(diffs[i]);
+                    i++;
+                }
+            }
+
+            return merged;
+        }
+
+        // 簡易差分検出（大きなファイル用）
+        function computeSimpleDiff(lines1, lines2) {
+            const diffs = [];
+            let i1 = 0;
+            let i2 = 0;
+            const lookAhead = 50;
+
+            while (i1 < lines1.length || i2 < lines2.length) {
+                if (i1 < lines1.length && i2 < lines2.length) {
+                    if (lines1[i1] === lines2[i2]) {
+                        i1++;
+                        i2++;
+                    } else {
+                        let found = false;
+
+                        // 前方探索で追加を検出
+                        for (let j = i2 + 1; j < Math.min(i2 + lookAhead, lines2.length); j++) {
+                            if (lines1[i1] === lines2[j]) {
+                                while (i2 < j) {
+                                    if (lines2[i2].trim()) {
+                                        diffs.push({
+                                            oldLineNo: 0,
+                                            newLineNo: i2 + 1,
+                                            diffType: '追加',
+                                            oldText: '',
+                                            newText: lines2[i2]
+                                        });
+                                    }
+                                    i2++;
+                                }
+                                found = true;
+                                break;
+                            }
+                        }
+
+                        if (!found) {
+                            // 前方探索で削除を検出
+                            for (let j = i1 + 1; j < Math.min(i1 + lookAhead, lines1.length); j++) {
+                                if (lines1[j] === lines2[i2]) {
+                                    while (i1 < j) {
+                                        if (lines1[i1].trim()) {
+                                            diffs.push({
+                                                oldLineNo: i1 + 1,
+                                                newLineNo: 0,
+                                                diffType: '削除',
+                                                oldText: lines1[i1],
+                                                newText: ''
+                                            });
+                                        }
+                                        i1++;
+                                    }
+                                    found = true;
+                                    break;
+                                }
+                            }
+                        }
+
+                        if (!found) {
+                            // 変更として記録
+                            if (lines1[i1].trim() || lines2[i2].trim()) {
+                                diffs.push({
+                                    oldLineNo: i1 + 1,
+                                    newLineNo: i2 + 1,
+                                    diffType: '変更',
+                                    oldText: lines1[i1],
+                                    newText: lines2[i2]
+                                });
+                            }
+                            i1++;
+                            i2++;
+                        }
+                    }
+                } else if (i1 < lines1.length) {
+                    if (lines1[i1].trim()) {
+                        diffs.push({
+                            oldLineNo: i1 + 1,
+                            newLineNo: 0,
+                            diffType: '削除',
+                            oldText: lines1[i1],
+                            newText: ''
+                        });
+                    }
+                    i1++;
+                } else {
+                    if (lines2[i2].trim()) {
+                        diffs.push({
+                            oldLineNo: 0,
+                            newLineNo: i2 + 1,
+                            diffType: '追加',
+                            oldText: '',
+                            newText: lines2[i2]
+                        });
+                    }
+                    i2++;
+                }
+            }
+
+            return diffs;
+        }
+
+        // PDF比較実行
+        async function comparePDFs() {
+            try {
+                document.getElementById('progressSection').style.display = 'block';
+                document.getElementById('resultSection').style.display = 'none';
+                document.getElementById('exportBtn').style.display = 'none';
+                document.getElementById('compareBtn').disabled = true;
+
+                updateProgress(0, '旧ファイルを読み込み中...');
+
+                // PDFからテキスト抽出
+                const lines1 = await extractTextFromPDF(file1Data, '旧');
+                const lines2 = await extractTextFromPDF(file2Data, '新');
+
+                updateProgress(80, 'LCSアルゴリズムで差分を計算中...');
+
+                // LCS比較
+                currentDifferences = computeLCS(lines1, lines2);
+
+                updateProgress(95, '結果を表示中...');
+
+                // 結果表示
+                displayResults();
+
+                updateProgress(100, '完了');
+
+                setTimeout(() => {
+                    document.getElementById('progressSection').style.display = 'none';
+                    document.getElementById('resultSection').style.display = 'block';
+                    document.getElementById('exportBtn').style.display = 'inline-block';
+                    document.getElementById('compareBtn').disabled = false;
+                }, 500);
+
+            } catch (error) {
+                console.error(error);
+                showError('エラーが発生しました: ' + error.message);
+                document.getElementById('progressSection').style.display = 'none';
+                document.getElementById('compareBtn').disabled = false;
+            }
+        }
+
+        // 結果表示
+        function displayResults() {
+            const tbody = document.getElementById('resultBody');
+            tbody.innerHTML = '';
+
+            // 統計
+            let changed = 0, added = 0, deleted = 0;
+            currentDifferences.forEach(diff => {
+                if (diff.diffType === '変更') changed++;
+                else if (diff.diffType === '追加') added++;
+                else if (diff.diffType === '削除') deleted++;
+            });
+
+            document.getElementById('statChanged').textContent = changed;
+            document.getElementById('statAdded').textContent = added;
+            document.getElementById('statDeleted').textContent = deleted;
+            document.getElementById('statTotal').textContent = currentDifferences.length;
+            document.getElementById('resultTime').textContent =
+                '比較日時: ' + new Date().toLocaleString('ja-JP');
+
+            if (currentDifferences.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="no-diff">差異はありませんでした。2つのPDFは同一です。</td></tr>';
+                return;
+            }
+
+            // テーブル行を生成
+            currentDifferences.forEach((diff, index) => {
+                const tr = document.createElement('tr');
+                tr.className = diff.diffType === '変更' ? 'changed' :
+                               diff.diffType === '追加' ? 'added' : 'deleted';
+
+                tr.innerHTML = `
+                    <td class="line-no">${index + 1}</td>
+                    <td class="line-no">${diff.oldLineNo || '-'}</td>
+                    <td class="line-no">${diff.newLineNo || '-'}</td>
+                    <td class="diff-type">${diff.diffType}</td>
+                    <td class="text-cell">${escapeHtml(diff.oldText)}</td>
+                    <td class="text-cell">${escapeHtml(diff.newText)}</td>
+                `;
+
+                tbody.appendChild(tr);
+            });
+        }
+
+        // HTMLエスケープ
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // CSVエクスポート
+        function exportCSV() {
+            if (currentDifferences.length === 0) {
+                showError('エクスポートする差異がありません。');
+                return;
+            }
+
+            const BOM = '\uFEFF';
+            let csv = BOM + 'No,旧行番号,新行番号,差異タイプ,旧ファイルのテキスト,新ファイルのテキスト\n';
+
+            currentDifferences.forEach((diff, index) => {
+                const row = [
+                    index + 1,
+                    diff.oldLineNo || '-',
+                    diff.newLineNo || '-',
+                    diff.diffType,
+                    `"${(diff.oldText || '').replace(/"/g, '""')}"`,
+                    `"${(diff.newText || '').replace(/"/g, '""')}"`
+                ];
+                csv += row.join(',') + '\n';
+            });
+
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `PDF比較結果_${new Date().toISOString().slice(0, 10)}.csv`;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+    </script>
+</body>
+</html>
