@@ -55,7 +55,7 @@ if (-not $gitCommand) {
 $GIT_PROJECT_PATH = "C:\Users\$env:USERNAME\source\Git\project"
 
 # 保護ブランチリスト（削除不可）
-$ProtectedBranches = @("main", "master", "develop")
+$ProtectedBranches = @("main", "master")
 #endregion
 
 #region 初期化
