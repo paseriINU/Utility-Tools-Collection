@@ -169,7 +169,7 @@ function Main {
         Write-Host ""
         git status --short
         Write-Host ""
-        $confirm = Read-Host "続行しますか？ (y/N)"
+        $confirm = Read-Host "続行しますか？ (y/n)"
         if ($confirm -ne "y" -and $confirm -ne "Y") {
             Write-Host "キャンセルしました。" -ForegroundColor Yellow
             return 0
@@ -383,7 +383,7 @@ function Main {
             Write-Host "  --force で強制プッシュしますか？（最終手段）" -ForegroundColor Yellow
             Write-Host "  [警告] 他の人の変更を上書きする可能性があります！" -ForegroundColor Red
             Write-Host ""
-            $forceRetry = Read-Host "  --force で再試行しますか？ (y/N)"
+            $forceRetry = Read-Host "  --force で再試行しますか？ (y/n)"
 
             if ($forceRetry -eq "y" -or $forceRetry -eq "Y") {
                 Write-Host ""
