@@ -403,6 +403,55 @@ if ($choice -eq "1") {
     # すべて転送
     $filesToTransfer = $fileList
     Write-Color "[選択] すべてのファイルを転送します" "Green"
+
+    # 「すべてのファイル」モードの場合、転送先を事前にクリーンアップ
+    if ($transferMode -eq "all") {
+        # 転送ファイルの親ディレクトリを収集（重複排除）
+        $parentDirs = @{}
+        foreach ($file in $filesToTransfer) {
+            $linuxPath = $file.Path.Replace("\", "/")
+            $parentDir = Split-Path $linuxPath -Parent
+            if ($parentDir) {
+                $parentDir = $parentDir.Replace("\", "/")
+            } else {
+                $parentDir = ""  # ルート直下のファイル
+            }
+            $remoteParentDir = "${REMOTE_DIR}${parentDir}".TrimEnd("/")
+            if (-not $parentDirs.ContainsKey($remoteParentDir)) {
+                $parentDirs[$remoteParentDir] = $true
+            }
+        }
+
+        Write-Host ""
+        Write-Color "================================================================" "Yellow"
+        Write-Color "  警告: 転送先フォルダのクリーンアップ" "Yellow"
+        Write-Color "================================================================" "Yellow"
+        Write-Host ""
+        Write-Color "「すべてのファイル」モードが選択されました。" "Yellow"
+        Write-Color "転送先の各フォルダ内を削除してからコピーします。" "Yellow"
+        Write-Host ""
+        Write-Color "削除対象フォルダ:" "Red"
+        foreach ($dir in $parentDirs.Keys | Sort-Object) {
+            Write-Host "  - ${dir}/*"
+        }
+        Write-Host ""
+        Write-Color "※ フォルダ自体は削除されません（中身のみ削除）" "Gray"
+        Write-Host ""
+
+        do {
+            $cleanupConfirm = Read-Host "転送先フォルダをクリーンアップしますか？ (y/n)"
+            $cleanupConfirm = $cleanupConfirm.ToLower()
+        } while ($cleanupConfirm -notin @("y", "n"))
+
+        if ($cleanupConfirm -eq "y") {
+            $doCleanup = $true
+            $cleanupDirs = $parentDirs.Keys
+            Write-Color "[選択] 転送前にクリーンアップを実行します" "Green"
+        } else {
+            $doCleanup = $false
+            Write-Color "[選択] クリーンアップをスキップします（上書きモード）" "Yellow"
+        }
+    }
 } else {
     # 個別選択
     Write-Host ""
@@ -437,6 +486,43 @@ Write-Host ""
 # SCP/SSHコマンドを設定
 $scpCommand = "scp.exe"
 $sshCommand = "ssh.exe"
+
+#region クリーンアップ処理
+if ($doCleanup -eq $true) {
+    Write-Header "転送先フォルダのクリーンアップ"
+
+    foreach ($dir in $cleanupDirs | Sort-Object) {
+        Write-Color "[削除] ${dir}/* ..." "Yellow"
+
+        $sshArgs = @()
+
+        if ($SSH_KEY -ne "" -and (Test-Path $SSH_KEY)) {
+            $sshArgs += "-i"
+            $sshArgs += $SSH_KEY
+        }
+
+        if ($SSH_PORT -ne 22) {
+            $sshArgs += "-p"
+            $sshArgs += $SSH_PORT
+        }
+
+        $sshArgs += "${SSH_USER}@${SSH_HOST}"
+        # フォルダ内のファイルとサブディレクトリを削除（フォルダ自体は残す）
+        $sshArgs += "rm -rf '${dir}'/* 2>/dev/null; echo 'done'"
+
+        try {
+            $result = & $sshCommand $sshArgs 2>&1
+            Write-Color "  [OK] クリーンアップ完了" "Green"
+        } catch {
+            Write-Color "  [警告] クリーンアップ中にエラー: $($_.Exception.Message)" "Yellow"
+        }
+    }
+
+    Write-Host ""
+    Write-Color "[完了] クリーンアップが完了しました" "Green"
+    Write-Host ""
+}
+#endregion
 
 #region ファイル転送
 Write-Header "ファイル転送開始"
