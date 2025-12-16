@@ -169,7 +169,7 @@ if ([string]::IsNullOrEmpty($Config.JP1Password)) {
 }
 
 # 実行確認
-Write-Host "ジョブネットを起動しますか？ (Y/N)" -ForegroundColor Cyan
+Write-Host "ジョブネットを起動しますか？ (y/n)" -ForegroundColor Cyan
 $confirmation = Read-Host
 if ($confirmation -ne "Y" -and $confirmation -ne "y") {
     Write-Host "処理をキャンセルしました。" -ForegroundColor Yellow

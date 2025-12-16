@@ -240,6 +240,13 @@ Private Sub FormatMainSheet()
         .Range("G" & ROW_MAIN_TABLE + 1).Font.Color = RGB(128, 128, 128)
         .Range("G" & ROW_MAIN_TABLE + 1).Font.Size = 9
 
+        ' メインテーブルのドロップダウン（テーブル一覧）
+        Dim tableList As String
+        tableList = GetTableList()
+        If tableList <> "" Then
+            AddDropdown ws, "B" & ROW_MAIN_TABLE + 1, tableList, "TableList"
+        End If
+
         ' 結合テーブル（JOIN）
         .Range("A" & ROW_JOIN_START).Value = "結合テーブル (JOIN) - 複数テーブルを連結してデータを取得"
         .Range("A" & ROW_JOIN_START).Font.Bold = True
@@ -265,6 +272,10 @@ Private Sub FormatMainSheet()
         For i = 1 To 8
             .Range("A" & ROW_JOIN_START + 1 + i).Value = i
             AddDropdown ws, "B" & ROW_JOIN_START + 1 + i, ",INNER JOIN(両方に存在),LEFT JOIN(左を全て),RIGHT JOIN(右を全て),FULL OUTER JOIN(両方全て),CROSS JOIN(全組合せ)"
+            ' JOINテーブルのテーブル名ドロップダウン
+            If tableList <> "" Then
+                AddDropdown ws, "C" & ROW_JOIN_START + 1 + i, tableList, "TableList"
+            End If
         Next i
 
         ' 取得カラム
@@ -784,12 +795,78 @@ End Sub
 
 '==============================================================================
 ' プルダウンリスト追加ヘルパー
+' ※255文字を超える場合は名前付き範囲を使用
+' namePrefix: 名前付き範囲のプレフィックス（TableList/ColumnList等）
 '==============================================================================
-Private Sub AddDropdown(ByVal ws As Worksheet, ByVal cellAddr As String, ByVal listItems As String)
+Private Sub AddDropdown(ByVal ws As Worksheet, ByVal cellAddr As String, ByVal listItems As String, Optional ByVal namePrefix As String = "DropList")
+    Dim items() As String
+    Dim wsDef As Worksheet
+    Dim rangeName As String
+    Dim startRow As Long
+    Dim i As Long
+    Dim listRange As Range
+    Dim listHash As Long
+    Dim existingName As Name
+    Dim targetCol As String
+
     With ws.Range(cellAddr).Validation
         .Delete
         If Len(listItems) > 0 Then
-            .Add Type:=xlValidateList, AlertStyle:=xlValidAlertStop, Formula1:=listItems
+            ' 255文字以下の場合は直接設定
+            If Len(listItems) <= 255 Then
+                .Add Type:=xlValidateList, AlertStyle:=xlValidAlertStop, Formula1:=listItems
+            Else
+                ' 255文字を超える場合は名前付き範囲を使用
+                items = Split(listItems, ",")
+
+                ' テーブル定義シートに一時リストを作成
+                On Error Resume Next
+                Set wsDef = Sheets(SHEET_TABLE_DEF)
+                On Error GoTo 0
+
+                If Not wsDef Is Nothing Then
+                    ' プレフィックスに応じて異なる列を使用（データの上書きを防ぐ）
+                    Select Case namePrefix
+                        Case "TableList"
+                            targetCol = "Z"
+                        Case "ColumnList"
+                            targetCol = "AA"
+                        Case Else
+                            targetCol = "AB"
+                    End Select
+
+                    ' リスト内容に基づいてユニークな名前を生成（同じリストは共有）
+                    listHash = Len(listItems) + UBound(items) * 100
+                    rangeName = namePrefix & "_" & listHash
+
+                    ' 既存の名前付き範囲をチェック
+                    Set existingName = Nothing
+                    On Error Resume Next
+                    Set existingName = ThisWorkbook.Names(rangeName)
+                    On Error GoTo 0
+
+                    ' 名前付き範囲が存在しない場合のみ作成
+                    If existingName Is Nothing Then
+                        ' 1行目から書き出し
+                        startRow = 1
+
+                        ' リストを縦方向に書き出し
+                        For i = LBound(items) To UBound(items)
+                            wsDef.Range(targetCol & (startRow + i)).Value = Trim(items(i))
+                        Next i
+
+                        ' 範囲に名前を付ける
+                        Set listRange = wsDef.Range(targetCol & startRow & ":" & targetCol & (startRow + UBound(items)))
+                        ThisWorkbook.Names.Add Name:=rangeName, RefersTo:=listRange
+                    End If
+
+                    ' 名前付き範囲を参照してドロップダウンを設定
+                    .Add Type:=xlValidateList, AlertStyle:=xlValidAlertStop, Formula1:="=" & rangeName
+                Else
+                    ' テーブル定義シートがない場合は直接設定を試みる（エラーになる可能性あり）
+                    .Add Type:=xlValidateList, AlertStyle:=xlValidAlertStop, Formula1:=listItems
+                End If
+            End If
             .IgnoreBlank = True
             .InCellDropdown = True
         End If
@@ -809,6 +886,56 @@ Private Sub AddButton(ByVal ws As Worksheet, ByVal cellAddr As String, ByVal cap
     btn.caption = caption
     btn.Font.Size = 10
 End Sub
+
+'==============================================================================
+' セルアドレスの列をオフセット分ずらす
+' 例: "J2", 1 → "K2"  /  "D2", 1 → "E2"
+'==============================================================================
+Private Function OffsetCellColumn(ByVal cellAddr As String, ByVal colOffset As Long) As String
+    Dim colPart As String
+    Dim rowPart As String
+    Dim i As Long
+    Dim c As String
+
+    ' オフセットが0なら元のアドレスをそのまま返す
+    If colOffset = 0 Then
+        OffsetCellColumn = cellAddr
+        Exit Function
+    End If
+
+    ' 列部分と行部分を分離
+    colPart = ""
+    rowPart = ""
+    For i = 1 To Len(cellAddr)
+        c = Mid(cellAddr, i, 1)
+        If c >= "A" And c <= "Z" Then
+            colPart = colPart & c
+        ElseIf c >= "a" And c <= "z" Then
+            colPart = colPart & UCase(c)
+        Else
+            rowPart = Mid(cellAddr, i)
+            Exit For
+        End If
+    Next i
+
+    ' 列番号に変換してオフセットを適用
+    Dim colNum As Long
+    colNum = 0
+    For i = 1 To Len(colPart)
+        colNum = colNum * 26 + (Asc(Mid(colPart, i, 1)) - Asc("A") + 1)
+    Next i
+    colNum = colNum + colOffset
+
+    ' 列番号を文字に変換
+    Dim newColPart As String
+    newColPart = ""
+    Do While colNum > 0
+        newColPart = Chr(((colNum - 1) Mod 26) + Asc("A")) & newColPart
+        colNum = (colNum - 1) \ 26
+    Loop
+
+    OffsetCellColumn = newColPart & rowPart
+End Function
 
 '==============================================================================
 ' SQL生成メインプロシージャ
@@ -1487,7 +1614,7 @@ Public Sub SaveToHistory()
     description = InputBox("このSQLの説明を入力してください（省略可）:", "履歴保存")
 
     ' 次の空き行を探す
-    nextRow = wsHistory.Cells(wsHistory.Rows.Count, 1).End(xlUp).row + 1
+    nextRow = wsHistory.Cells(wsHistory.Rows.Count, 1).End(xlUp).Row + 1
     If nextRow < 4 Then nextRow = 4
 
     wsHistory.Range("A" & nextRow).Value = nextRow - 3
@@ -1775,35 +1902,35 @@ Public Sub UpdateDropdownsFromTableDef()
         Exit Sub
     End If
 
-    ' メインテーブルのプルダウンを更新
-    AddDropdown wsMain, "B" & ROW_MAIN_TABLE + 1, tableList
+    ' メインテーブルのプルダウンを更新（テーブル一覧用プレフィックス）
+    AddDropdown wsMain, "B" & ROW_MAIN_TABLE + 1, tableList, "TableList"
 
-    ' JOINテーブルのプルダウンを更新
+    ' JOINテーブルのプルダウンを更新（テーブル一覧用プレフィックス）
     For i = ROW_JOIN_START + 2 To ROW_JOIN_END
-        AddDropdown wsMain, "C" & i, tableList
+        AddDropdown wsMain, "C" & i, tableList, "TableList"
     Next i
 
-    ' カラム選択のプルダウンを更新（全テーブルの全カラム）
+    ' カラム選択のプルダウンを更新（全テーブルの全カラム、カラム一覧用プレフィックス）
     Dim columnList As String
     columnList = GetAllColumnList()
 
     For i = ROW_COLUMNS_START To ROW_COLUMNS_END
         If columnList <> "" Then
-            AddDropdown wsMain, "C" & i, columnList
+            AddDropdown wsMain, "C" & i, columnList, "ColumnList"
         End If
     Next i
 
-    ' WHERE句のカラムプルダウンを更新
+    ' WHERE句のカラムプルダウンを更新（カラム一覧用プレフィックス）
     For i = ROW_WHERE_START To ROW_WHERE_END
         If columnList <> "" Then
-            AddDropdown wsMain, "E" & i, columnList
+            AddDropdown wsMain, "E" & i, columnList, "ColumnList"
         End If
     Next i
 
-    ' ORDER BY句のカラムプルダウンを更新
+    ' ORDER BY句のカラムプルダウンを更新（カラム一覧用プレフィックス）
     For i = ROW_ORDERBY_START To ROW_ORDERBY_END
         If columnList <> "" Then
-            AddDropdown wsMain, "C" & i, columnList
+            AddDropdown wsMain, "C" & i, columnList, "ColumnList"
         End If
     Next i
 
@@ -1840,6 +1967,7 @@ Private Function GetTableList() As String
     Dim ws As Worksheet
     Dim result As String
     Dim i As Long
+    Dim lastRow As Long
     Dim tableName As String
     Dim tableDesc As String
     Dim displayName As String
@@ -1853,6 +1981,9 @@ Private Function GetTableList() As String
     On Error GoTo 0
 
     result = ""
+
+    ' B列の最終行を取得
+    lastRow = ws.Cells(ws.Rows.Count, "B").End(xlUp).Row
 
     ' B列（テーブル名）、C列（テーブル名称）を読み取り（6行目から開始）
     i = 6
@@ -1873,7 +2004,7 @@ Private Function GetTableList() As String
             End If
         End If
         i = i + 1
-        If i > 500 Then Exit Do ' 安全制限
+        If i > lastRow Then Exit Do ' 最終行を超えたら終了
     Loop
 
     GetTableList = result
@@ -1902,6 +2033,9 @@ Private Function GetAllColumnList() As String
     Dim ws As Worksheet
     Dim result As String
     Dim i As Long
+    Dim lastRowE As Long
+    Dim lastRowF As Long
+    Dim lastRow As Long
     Dim tableName As String
     Dim columnName As String
     Dim itemName As String
@@ -1918,6 +2052,15 @@ Private Function GetAllColumnList() As String
 
     Set dict = CreateObject("Scripting.Dictionary")
     result = ""
+
+    ' E列とF列の最終行を取得し、大きい方を使用
+    lastRowE = ws.Cells(ws.Rows.Count, "E").End(xlUp).Row
+    lastRowF = ws.Cells(ws.Rows.Count, "F").End(xlUp).Row
+    If lastRowE > lastRowF Then
+        lastRow = lastRowE
+    Else
+        lastRow = lastRowF
+    End If
 
     ' E列（テーブル名）、F列（カラム名）、H列（項目名）を読み取り（6行目から開始）
     i = 6
@@ -1944,7 +2087,7 @@ Private Function GetAllColumnList() As String
             End If
         End If
         i = i + 1
-        If i > 500 Then Exit Do ' 安全制限
+        If i > lastRow Then Exit Do ' 最終行を超えたら終了
     Loop
 
     ' 特殊なカラム名を追加
@@ -1960,6 +2103,9 @@ Private Function GetColumnListForTable(ByVal targetTable As String) As String
     Dim ws As Worksheet
     Dim result As String
     Dim i As Long
+    Dim lastRowE As Long
+    Dim lastRowF As Long
+    Dim lastRow As Long
     Dim tableName As String
     Dim columnName As String
     Dim itemName As String
@@ -1974,6 +2120,15 @@ Private Function GetColumnListForTable(ByVal targetTable As String) As String
     On Error GoTo 0
 
     result = ""
+
+    ' E列とF列の最終行を取得し、大きい方を使用
+    lastRowE = ws.Cells(ws.Rows.Count, "E").End(xlUp).Row
+    lastRowF = ws.Cells(ws.Rows.Count, "F").End(xlUp).Row
+    If lastRowE > lastRowF Then
+        lastRow = lastRowE
+    Else
+        lastRow = lastRowF
+    End If
 
     ' E列（テーブル名）、F列（カラム名）、H列（項目名）を読み取り（6行目から開始）
     i = 6
@@ -1996,7 +2151,7 @@ Private Function GetColumnListForTable(ByVal targetTable As String) As String
             End If
         End If
         i = i + 1
-        If i > 500 Then Exit Do ' 安全制限
+        If i > lastRow Then Exit Do ' 最終行を超えたら終了
     Loop
 
     GetColumnListForTable = result
@@ -2090,19 +2245,19 @@ Public Sub RefreshColumnDropdownsByTable()
         Exit Sub
     End If
 
-    ' カラム選択のプルダウンを更新
+    ' カラム選択のプルダウンを更新（カラム一覧用プレフィックス）
     For i = ROW_COLUMNS_START To ROW_COLUMNS_END
-        AddDropdown wsMain, "C" & i, columnList
+        AddDropdown wsMain, "C" & i, columnList, "ColumnList"
     Next i
 
-    ' WHERE句のカラムプルダウンを更新
+    ' WHERE句のカラムプルダウンを更新（カラム一覧用プレフィックス）
     For i = ROW_WHERE_START To ROW_WHERE_END
-        AddDropdown wsMain, "E" & i, columnList
+        AddDropdown wsMain, "E" & i, columnList, "ColumnList"
     Next i
 
-    ' ORDER BY句のカラムプルダウンを更新
+    ' ORDER BY句のカラムプルダウンを更新（カラム一覧用プレフィックス）
     For i = ROW_ORDERBY_START To ROW_ORDERBY_END
-        AddDropdown wsMain, "C" & i, columnList
+        AddDropdown wsMain, "C" & i, columnList, "ColumnList"
     Next i
 
     ' 選択されたテーブル数をカウント
@@ -2136,6 +2291,7 @@ Public Sub OnTableSelectionChanged(ByVal changedRange As Range)
     Dim targetCol As String
     Dim isTableCell As Boolean
     Dim i As Long
+    Dim nm As Name
 
     Set wsMain = Sheets(SHEET_MAIN)
 
@@ -2172,19 +2328,26 @@ Public Sub OnTableSelectionChanged(ByVal changedRange As Range)
 
     Application.EnableEvents = False
 
-    ' カラム選択のプルダウンを更新
+    ' 既存のColumnList_*名前付き範囲を削除（カラム用のみ、テーブル用は残す）
+    For Each nm In ThisWorkbook.Names
+        If Left(nm.Name, 11) = "ColumnList_" Then
+            nm.Delete
+        End If
+    Next nm
+
+    ' カラム選択のプルダウンを更新（カラム一覧用プレフィックス）
     For i = ROW_COLUMNS_START To ROW_COLUMNS_END
-        AddDropdown wsMain, "C" & i, columnList
+        AddDropdown wsMain, "C" & i, columnList, "ColumnList"
     Next i
 
-    ' WHERE句のカラムプルダウンを更新
+    ' WHERE句のカラムプルダウンを更新（カラム一覧用プレフィックス）
     For i = ROW_WHERE_START To ROW_WHERE_END
-        AddDropdown wsMain, "E" & i, columnList
+        AddDropdown wsMain, "E" & i, columnList, "ColumnList"
     Next i
 
-    ' ORDER BY句のカラムプルダウンを更新
+    ' ORDER BY句のカラムプルダウンを更新（カラム一覧用プレフィックス）
     For i = ROW_ORDERBY_START To ROW_ORDERBY_END
-        AddDropdown wsMain, "C" & i, columnList
+        AddDropdown wsMain, "C" & i, columnList, "ColumnList"
     Next i
 
     Application.EnableEvents = True
@@ -2343,6 +2506,10 @@ Public Sub ImportTableDefinitions()
     Dim actualColDataType As String
     Dim actualColLength As String
     Dim actualColNullable As String
+    Dim actualTableNameCell As String
+    Dim actualTableDescCell As String
+    Dim emptyCount As Long
+    Dim checkRow As Long
 
     Set wsDef = Sheets(SHEET_TABLE_DEF)
 
@@ -2395,10 +2562,10 @@ Public Sub ImportTableDefinitions()
 
     ' 既存データをクリア（常に置換）
     If wsDef.Range("B6").Value <> "" Then
-        wsDef.Range("A6:C" & wsDef.Cells(wsDef.Rows.Count, "B").End(xlUp).row).ClearContents
+        wsDef.Range("A6:C" & wsDef.Cells(wsDef.Rows.Count, "B").End(xlUp).Row).ClearContents
     End If
     If wsDef.Range("E6").Value <> "" Then
-        wsDef.Range("E6:H" & wsDef.Cells(wsDef.Rows.Count, "E").End(xlUp).row).ClearContents
+        wsDef.Range("E6:H" & wsDef.Cells(wsDef.Rows.Count, "E").End(xlUp).Row).ClearContents
     End If
     nextTableRow = 6
     nextColumnRow = 6
@@ -2423,10 +2590,14 @@ Public Sub ImportTableDefinitions()
             For sheetIdx = 1 To sourceWb.Sheets.Count
                 Set sourceWs = sourceWb.Sheets(sheetIdx)
 
-                ' シート名に例外DB名が含まれているか判定してオフセットを決定
+                ' シート名に例外DB名がカッコ内に含まれているか判定してオフセットを決定
+                ' 例: シート名「テーブル定義（AAA）」、例外DB名「AAA」→ 一致
                 colOffset = 0
-                If exceptionDbName <> "" And InStr(sourceWs.Name, exceptionDbName) > 0 Then
-                    colOffset = 1
+                If exceptionDbName <> "" Then
+                    If InStr(sourceWs.Name, "（" & exceptionDbName & "）") > 0 Or _
+                       InStr(sourceWs.Name, "(" & exceptionDbName & ")") > 0 Then
+                        colOffset = 1
+                    End If
                 End If
 
                 ' オフセットを適用した列名を計算
@@ -2436,9 +2607,13 @@ Public Sub ImportTableDefinitions()
                 actualColLength = Chr(Asc(colLength) + colOffset)
                 actualColNullable = Chr(Asc(colNullable) + colOffset)
 
+                ' テーブル名セルにもオフセットを適用
+                actualTableNameCell = OffsetCellColumn(tableNameCell, colOffset)
+                actualTableDescCell = OffsetCellColumn(tableDescCell, colOffset)
+
                 ' テーブル名を取得
-                tableName = Trim(CStr(sourceWs.Range(tableNameCell).Value))
-                tableDesc = Trim(CStr(sourceWs.Range(tableDescCell).Value))
+                tableName = Trim(CStr(sourceWs.Range(actualTableNameCell).Value))
+                tableDesc = Trim(CStr(sourceWs.Range(actualTableDescCell).Value))
 
                 If tableName <> "" Then
                     ' テーブル一覧に追加
@@ -2464,9 +2639,7 @@ Public Sub ImportTableDefinitions()
                             If currentRow > 1000 Then Exit Do
                             ' 空行が続いたら終了（10行連続で空なら終了）
                             If currentRow > columnStartRow + 10 Then
-                                Dim emptyCount As Long
                                 emptyCount = 0
-                                Dim checkRow As Long
                                 For checkRow = currentRow - 10 To currentRow - 1
                                     If Trim(CStr(sourceWs.Range(actualColName & checkRow).Value)) = "" Then
                                         emptyCount = emptyCount + 1

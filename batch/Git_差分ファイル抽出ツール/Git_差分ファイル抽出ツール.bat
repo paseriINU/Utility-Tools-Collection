@@ -18,8 +18,11 @@ exit /b %EXITCODE%
 
 # =============================================================================
 # Git Diff Extract Tool (PowerShell)
-# Gitブランチ間の差分ファイルを抽出してフォルダ構造を保ったままコピー
+# Gitブランチ間/コミット間の差分ファイルを抽出してフォルダ構造を保ったままコピー
 # =============================================================================
+
+# UTF-8出力設定
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
 # タイトル表示
 Write-Host ""
@@ -27,17 +30,6 @@ Write-Host "====================================================================
 Write-Host "  Git 差分ファイル抽出ツール" -ForegroundColor Cyan
 Write-Host "========================================================================" -ForegroundColor Cyan
 Write-Host ""
-Write-Host "[注意] ブランチ選択について" -ForegroundColor Yellow
-Write-Host "  比較元 = 修正前のブランチ（古いバージョン）" -ForegroundColor Gray
-Write-Host "  比較先 = 修正後のブランチ（新しいバージョン）" -ForegroundColor Gray
-Write-Host ""
-Write-Host "  出力フォルダ：" -ForegroundColor Gray
-Write-Host "    01_修正前 = 比較元ブランチのファイル" -ForegroundColor Gray
-Write-Host "    02_修正後 = 比較先ブランチのファイル" -ForegroundColor Gray
-Write-Host ""
-
-# UTF-8出力設定
-[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
 # Gitコマンドの存在確認
 $gitCommand = Get-Command git -ErrorAction SilentlyContinue
@@ -58,6 +50,9 @@ if (-not $gitCommand) {
     exit 1
 }
 
+# Git日本語表示設定
+git config --global core.quotepath false 2>&1 | Out-Null
+
 #region 設定セクション
 # Gitプロジェクトのパス
 $GIT_PROJECT_PATH = "C:\Users\$env:USERNAME\source\Git\project"
@@ -67,6 +62,9 @@ $INCLUDE_DELETED = $false
 
 # WinMergeのパス（空文字列の場合は自動検出）
 $WINMERGE_PATH = ""
+
+# コミット履歴の表示件数
+$COMMIT_HISTORY_COUNT = 20
 #endregion
 
 #region Gitリポジトリ確認
@@ -80,7 +78,6 @@ if (-not (Test-Path $GIT_PROJECT_PATH)) {
 
 Write-Host "Gitプロジェクトパス: $GIT_PROJECT_PATH" -ForegroundColor White
 Set-Location $GIT_PROJECT_PATH
-Write-Host ""
 
 # Gitリポジトリ確認
 git rev-parse --git-dir 2>&1 | Out-Null
@@ -96,7 +93,6 @@ $REPO_ROOT = $REPO_ROOT -replace '/', '\'
 Write-Host "リポジトリルート: $REPO_ROOT" -ForegroundColor White
 
 # $GIT_PROJECT_PATH から $REPO_ROOT への相対パス（サブディレクトリパス）を計算
-# 例: $REPO_ROOT = C:\repo, $GIT_PROJECT_PATH = C:\repo\src → $subDirPath = src
 $subDirPath = ""
 $repoRootNormalized = $REPO_ROOT.TrimEnd("\")
 $projectPathNormalized = $GIT_PROJECT_PATH.TrimEnd("\")
@@ -107,115 +103,435 @@ if ($projectPathNormalized.StartsWith($repoRootNormalized + "\")) {
 Write-Host ""
 #endregion
 
-#region ブランチ選択
-# すべてのブランチ一覧を取得
-Write-Host "ブランチ一覧を取得中..." -ForegroundColor Yellow
-Write-Host ""
-
-$allBranches = git branch --format="%(refname:short)" | ForEach-Object { $_.Trim() }
-
-if ($allBranches.Count -eq 0) {
-    Write-Host "[エラー] ブランチが見つかりません" -ForegroundColor Red
-    exit 1
-}
-
-# 比較元ブランチの選択
+#region モード選択
 Write-Host "========================================================================" -ForegroundColor Cyan
-Write-Host "  比較元ブランチ（修正前 / 古いバージョン）を選択してください" -ForegroundColor Cyan
+Write-Host "  比較モードを選択してください" -ForegroundColor Cyan
 Write-Host "========================================================================" -ForegroundColor Cyan
 Write-Host ""
-
-for ($i = 0; $i -lt $allBranches.Count; $i++) {
-    $displayNum = $i + 1
-    $branchName = $allBranches[$i]
-    Write-Host " $displayNum. $branchName"
-}
+Write-Host " 1. ブランチ間の比較（異なるブランチ同士を比較）"
+Write-Host " 2. コミット間の比較（同ブランチ内の特定コミット間を比較）"
 Write-Host ""
-Write-Host " 0. キャンセル"
+Write-Host " 0. 終了"
 Write-Host ""
 
-$maxNum = $allBranches.Count
-$baseSelection = Read-Host "番号を選択してください (0-$maxNum)"
+$modeSelection = Read-Host "選択 (0-2)"
 
-# キャンセル処理
-if ($baseSelection -eq "0") {
+if ($modeSelection -eq "0") {
     Write-Host "[キャンセル] 処理を中止しました" -ForegroundColor Yellow
     exit 0
 }
 
-# 入力検証
-if (-not $baseSelection -or $baseSelection -notmatch '^\d+$' -or [int]$baseSelection -lt 1 -or [int]$baseSelection -gt $maxNum) {
+if ($modeSelection -ne "1" -and $modeSelection -ne "2") {
     Write-Host "[エラー] 無効な選択です" -ForegroundColor Red
     exit 1
 }
 
-$BASE_BRANCH = $allBranches[[int]$baseSelection - 1]
-Write-Host ""
-Write-Host "[選択] 比較元ブランチ: $BASE_BRANCH" -ForegroundColor Green
-Write-Host ""
+$compareMode = $modeSelection
+#endregion
 
-# 比較先ブランチの選択
-Write-Host "========================================================================" -ForegroundColor Cyan
-Write-Host "  比較先ブランチ（修正後 / 新しいバージョン）を選択してください" -ForegroundColor Cyan
-Write-Host "========================================================================" -ForegroundColor Cyan
-Write-Host ""
+#region 共通関数: ブランチ選択/切り替え
+function Select-Branch {
+    param(
+        [string]$CurrentBranch,
+        [string]$Purpose = "操作"
+    )
 
-for ($i = 0; $i -lt $allBranches.Count; $i++) {
-    $displayNum = $i + 1
-    $branchName = $allBranches[$i]
+    $allBranches = @(git branch --format="%(refname:short)" | ForEach-Object { $_.Trim() })
 
-    # 比較元ブランチと同じ場合はマーク
-    if ($branchName -eq $BASE_BRANCH) {
-        Write-Host " $displayNum. $branchName [比較元]" -ForegroundColor Gray
-    } else {
+    if ($allBranches.Count -eq 0) {
+        Write-Host "[エラー] ブランチが見つかりません" -ForegroundColor Red
+        return $null
+    }
+
+    Write-Host ""
+    Write-Host "------------------------------------------------------------------------" -ForegroundColor Yellow
+    Write-Host " 現在のブランチ: $CurrentBranch" -ForegroundColor Yellow
+    Write-Host "------------------------------------------------------------------------" -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "ブランチ操作を選択してください:" -ForegroundColor Cyan
+    Write-Host " 1. このまま続行（$CurrentBranch）"
+    Write-Host " 2. ブランチを切り替える"
+    Write-Host ""
+    Write-Host " 0. キャンセル"
+    Write-Host ""
+
+    $branchChoice = Read-Host "選択 (0-2)"
+
+    switch ($branchChoice) {
+        "0" {
+            return $null
+        }
+        "1" {
+            return $CurrentBranch
+        }
+        "2" {
+            Write-Host ""
+            Write-Host "利用可能なブランチ:" -ForegroundColor Yellow
+            Write-Host ""
+
+            for ($i = 0; $i -lt $allBranches.Count; $i++) {
+                $displayNum = $i + 1
+                $branch = $allBranches[$i]
+                if ($branch -eq $CurrentBranch) {
+                    Write-Host " $displayNum. $branch [現在]" -ForegroundColor Gray
+                } else {
+                    Write-Host " $displayNum. $branch"
+                }
+            }
+            Write-Host ""
+            Write-Host " 0. キャンセル"
+            Write-Host ""
+
+            $maxNum = $allBranches.Count
+            $selection = Read-Host "ブランチ番号を入力 (0-$maxNum)"
+
+            if ($selection -eq "0") {
+                return $null
+            }
+
+            if ($selection -match '^\d+$' -and [int]$selection -ge 1 -and [int]$selection -le $maxNum) {
+                $selectedBranch = $allBranches[[int]$selection - 1]
+
+                if ($selectedBranch -ne $CurrentBranch) {
+                    git checkout $selectedBranch 2>&1 | Out-Null
+                    if ($LASTEXITCODE -ne 0) {
+                        Write-Host "[エラー] ブランチの切り替えに失敗しました" -ForegroundColor Red
+                        return $null
+                    }
+                    Write-Host "ブランチを切り替えました: $selectedBranch" -ForegroundColor Green
+                }
+                return $selectedBranch
+            } else {
+                Write-Host "[エラー] 無効な番号です" -ForegroundColor Red
+                return $null
+            }
+        }
+        default {
+            Write-Host "[エラー] 無効な選択です" -ForegroundColor Red
+            return $null
+        }
+    }
+}
+#endregion
+
+#region モード別処理
+if ($compareMode -eq "1") {
+    #region ブランチ間比較モード
+    Write-Host ""
+    Write-Host "========================================================================" -ForegroundColor Cyan
+    Write-Host "  ブランチ間比較モード" -ForegroundColor Cyan
+    Write-Host "========================================================================" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "[注意] ブランチ選択について" -ForegroundColor Yellow
+    Write-Host "  比較元 = 修正前のブランチ（古いバージョン）" -ForegroundColor Gray
+    Write-Host "  比較先 = 修正後のブランチ（新しいバージョン）" -ForegroundColor Gray
+    Write-Host ""
+
+    # すべてのブランチ一覧を取得
+    $allBranches = @(git branch --format="%(refname:short)" | ForEach-Object { $_.Trim() })
+
+    if ($allBranches.Count -eq 0) {
+        Write-Host "[エラー] ブランチが見つかりません" -ForegroundColor Red
+        exit 1
+    }
+
+    # 比較元ブランチの選択
+    Write-Host "========================================================================" -ForegroundColor Cyan
+    Write-Host "  比較元ブランチ（修正前 / 古いバージョン）を選択してください" -ForegroundColor Cyan
+    Write-Host "========================================================================" -ForegroundColor Cyan
+    Write-Host ""
+
+    for ($i = 0; $i -lt $allBranches.Count; $i++) {
+        $displayNum = $i + 1
+        $branchName = $allBranches[$i]
         Write-Host " $displayNum. $branchName"
     }
-}
-Write-Host ""
-Write-Host " 0. キャンセル"
-Write-Host ""
+    Write-Host ""
+    Write-Host " 0. キャンセル"
+    Write-Host ""
 
-$targetSelection = Read-Host "番号を選択してください (0-$maxNum)"
+    $maxNum = $allBranches.Count
+    $baseSelection = Read-Host "番号を選択してください (0-$maxNum)"
 
-# キャンセル処理
-if ($targetSelection -eq "0") {
-    Write-Host "[キャンセル] 処理を中止しました" -ForegroundColor Yellow
-    exit 0
-}
-
-# 入力検証
-if (-not $targetSelection -or $targetSelection -notmatch '^\d+$' -or [int]$targetSelection -lt 1 -or [int]$targetSelection -gt $maxNum) {
-    Write-Host "[エラー] 無効な選択です" -ForegroundColor Red
-    exit 1
-}
-
-$TARGET_BRANCH = $allBranches[[int]$targetSelection - 1]
-
-# 同じブランチが選択された場合の警告
-if ($BASE_BRANCH -eq $TARGET_BRANCH) {
-    Write-Host "[警告] 比較元と比較先が同じブランチです" -ForegroundColor Yellow
-    $continue = Read-Host "続行しますか? (y/n)"
-    if ($continue -ne "y") {
-        Write-Host "処理を中止しました" -ForegroundColor Yellow
+    if ($baseSelection -eq "0") {
+        Write-Host "[キャンセル] 処理を中止しました" -ForegroundColor Yellow
         exit 0
     }
+
+    if (-not $baseSelection -or $baseSelection -notmatch '^\d+$' -or [int]$baseSelection -lt 1 -or [int]$baseSelection -gt $maxNum) {
+        Write-Host "[エラー] 無効な選択です" -ForegroundColor Red
+        exit 1
+    }
+
+    $BASE_REF = $allBranches[[int]$baseSelection - 1]
+    Write-Host ""
+    Write-Host "[選択] 比較元ブランチ: $BASE_REF" -ForegroundColor Green
+    Write-Host ""
+
+    # 比較先ブランチの選択
+    Write-Host "========================================================================" -ForegroundColor Cyan
+    Write-Host "  比較先ブランチ（修正後 / 新しいバージョン）を選択してください" -ForegroundColor Cyan
+    Write-Host "========================================================================" -ForegroundColor Cyan
+    Write-Host ""
+
+    for ($i = 0; $i -lt $allBranches.Count; $i++) {
+        $displayNum = $i + 1
+        $branchName = $allBranches[$i]
+
+        if ($branchName -eq $BASE_REF) {
+            Write-Host " $displayNum. $branchName [比較元]" -ForegroundColor Gray
+        } else {
+            Write-Host " $displayNum. $branchName"
+        }
+    }
+    Write-Host ""
+    Write-Host " 0. キャンセル"
+    Write-Host ""
+
+    $targetSelection = Read-Host "番号を選択してください (0-$maxNum)"
+
+    if ($targetSelection -eq "0") {
+        Write-Host "[キャンセル] 処理を中止しました" -ForegroundColor Yellow
+        exit 0
+    }
+
+    if (-not $targetSelection -or $targetSelection -notmatch '^\d+$' -or [int]$targetSelection -lt 1 -or [int]$targetSelection -gt $maxNum) {
+        Write-Host "[エラー] 無効な選択です" -ForegroundColor Red
+        exit 1
+    }
+
+    $TARGET_REF = $allBranches[[int]$targetSelection - 1]
+
+    if ($BASE_REF -eq $TARGET_REF) {
+        Write-Host "[警告] 比較元と比較先が同じブランチです" -ForegroundColor Yellow
+        $continue = Read-Host "続行しますか? (y/n)"
+        if ($continue -ne "y") {
+            Write-Host "処理を中止しました" -ForegroundColor Yellow
+            exit 0
+        }
+    }
+
+    Write-Host ""
+    Write-Host "[選択] 比較先ブランチ: $TARGET_REF" -ForegroundColor Green
+
+    $BASE_LABEL = $BASE_REF
+    $TARGET_LABEL = $TARGET_REF
+    #endregion
+
+} else {
+    #region コミット間比較モード
+    Write-Host ""
+    Write-Host "========================================================================" -ForegroundColor Cyan
+    Write-Host "  コミット間比較モード" -ForegroundColor Cyan
+    Write-Host "========================================================================" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "[注意] コミット選択について" -ForegroundColor Yellow
+    Write-Host "  比較元 = 修正前のコミット（古い時点）" -ForegroundColor Gray
+    Write-Host "  比較先 = 修正後のコミット（新しい時点）" -ForegroundColor Gray
+    Write-Host ""
+
+    # 現在のブランチを取得
+    $currentBranch = git branch --show-current
+
+    # ブランチ選択/切り替え
+    $selectedBranch = Select-Branch -CurrentBranch $currentBranch -Purpose "コミット比較"
+
+    if ($null -eq $selectedBranch) {
+        Write-Host "[キャンセル] 処理を中止しました" -ForegroundColor Yellow
+        exit 0
+    }
+
+    $workingBranch = $selectedBranch
+
+    # コミット履歴を取得
+    Write-Host ""
+    Write-Host "========================================================================" -ForegroundColor Cyan
+    Write-Host "  ブランチ '$workingBranch' のコミット履歴" -ForegroundColor Cyan
+    Write-Host "========================================================================" -ForegroundColor Cyan
+    Write-Host ""
+
+    $commitLog = @(git log --oneline -n $COMMIT_HISTORY_COUNT --format="%h|%ai|%s" | ForEach-Object {
+        $parts = $_ -split '\|', 3
+        [PSCustomObject]@{
+            Hash = $parts[0]
+            Date = ($parts[1] -split ' ')[0]
+            Message = if ($parts[2].Length -gt 50) { $parts[2].Substring(0, 47) + "..." } else { $parts[2] }
+        }
+    })
+
+    if ($commitLog.Count -eq 0) {
+        Write-Host "[エラー] コミット履歴が見つかりません" -ForegroundColor Red
+        exit 1
+    }
+
+    # ブランチの起点（分岐元）を検出 - すべてのブランチから最も近い分岐点を探す
+    $branchBase = $null
+    $branchBaseLabel = ""
+    $baseBranchName = ""
+
+    $allBranchesForBase = @(git branch --format="%(refname:short)" | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne $workingBranch })
+
+    if ($allBranchesForBase.Count -gt 0) {
+        $bestMergeBase = $null
+        $bestDistance = [int]::MaxValue
+        $bestBranchName = ""
+
+        foreach ($candidateBranch in $allBranchesForBase) {
+            $mergeBase = git merge-base $workingBranch $candidateBranch 2>$null
+            if ($LASTEXITCODE -eq 0 -and $mergeBase) {
+                # 現在のブランチのHEADから分岐点までのコミット数を計算
+                $distance = git rev-list --count "${mergeBase}..HEAD" 2>$null
+                if ($LASTEXITCODE -eq 0 -and $distance -lt $bestDistance -and $distance -gt 0) {
+                    $bestDistance = $distance
+                    $bestMergeBase = $mergeBase
+                    $bestBranchName = $candidateBranch
+                }
+            }
+        }
+
+        if ($bestMergeBase) {
+            $branchBase = $bestMergeBase.Substring(0, 7)
+            $baseBranchName = $bestBranchName
+            # 分岐点のコミット情報を取得
+            $baseInfo = git log -1 --format="%ai|%s" $bestMergeBase 2>$null
+            if ($baseInfo) {
+                $baseParts = $baseInfo -split '\|', 2
+                $baseDate = ($baseParts[0] -split ' ')[0]
+                $baseMsg = if ($baseParts[1].Length -gt 40) { $baseParts[1].Substring(0, 37) + "..." } else { $baseParts[1] }
+                $branchBaseLabel = "[$branchBase] $baseDate $baseMsg"
+            }
+        }
+    }
+
+    # 比較元コミットの選択
+    Write-Host "比較元コミット（修正前 / 古い時点）を選択してください:" -ForegroundColor Yellow
+    Write-Host ""
+
+    for ($i = 0; $i -lt $commitLog.Count; $i++) {
+        $displayNum = $i + 1
+        $commit = $commitLog[$i]
+        Write-Host " $displayNum. [$($commit.Hash)] $($commit.Date) $($commit.Message)"
+    }
+
+    # ブランチ起点の選択肢を追加
+    $hasBranchBase = $false
+    if ($branchBase -and $branchBaseLabel) {
+        $branchBaseNum = $commitLog.Count + 1
+        Write-Host ""
+        Write-Host " $branchBaseNum. $branchBaseLabel [${baseBranchName}からの分岐点]" -ForegroundColor Magenta
+        $hasBranchBase = $true
+    }
+
+    Write-Host ""
+    Write-Host " 0. キャンセル"
+    Write-Host ""
+
+    $maxNum = if ($hasBranchBase) { $commitLog.Count + 1 } else { $commitLog.Count }
+    $baseSelection = Read-Host "番号を選択してください (0-$maxNum)"
+
+    if ($baseSelection -eq "0") {
+        Write-Host "[キャンセル] 処理を中止しました" -ForegroundColor Yellow
+        exit 0
+    }
+
+    if (-not $baseSelection -or $baseSelection -notmatch '^\d+$' -or [int]$baseSelection -lt 1 -or [int]$baseSelection -gt $maxNum) {
+        Write-Host "[エラー] 無効な選択です" -ForegroundColor Red
+        exit 1
+    }
+
+    # ブランチ起点が選択された場合
+    if ($hasBranchBase -and [int]$baseSelection -eq $branchBaseNum) {
+        $BASE_REF = $branchBase
+        $BASE_LABEL = "${branchBaseLabel} [${baseBranchName}からの分岐点]"
+        Write-Host ""
+        Write-Host "[選択] 比較元: ${baseBranchName}からの分岐点 [$branchBase]" -ForegroundColor Green
+    } else {
+        $baseCommit = $commitLog[[int]$baseSelection - 1]
+        $BASE_REF = $baseCommit.Hash
+        $BASE_LABEL = "[$($baseCommit.Hash)] $($baseCommit.Message)"
+        Write-Host ""
+        Write-Host "[選択] 比較元コミット: [$($baseCommit.Hash)] $($baseCommit.Message)" -ForegroundColor Green
+    }
+    Write-Host ""
+
+    # 比較先コミットの選択
+    Write-Host "========================================================================" -ForegroundColor Cyan
+    Write-Host "  比較先コミット（修正後 / 新しい時点）を選択してください" -ForegroundColor Cyan
+    Write-Host "========================================================================" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host " ※ HEADを選択すると、現在の最新状態と比較します" -ForegroundColor Gray
+    Write-Host ""
+
+    # HEADオプションを追加
+    Write-Host " 1. HEAD（現在の最新状態）" -ForegroundColor Cyan
+
+    for ($i = 0; $i -lt $commitLog.Count; $i++) {
+        $displayNum = $i + 2
+        $commit = $commitLog[$i]
+        if ($commit.Hash -eq $BASE_REF) {
+            Write-Host " $displayNum. [$($commit.Hash)] $($commit.Date) $($commit.Message) [比較元]" -ForegroundColor Gray
+        } else {
+            Write-Host " $displayNum. [$($commit.Hash)] $($commit.Date) $($commit.Message)"
+        }
+    }
+    Write-Host ""
+    Write-Host " 0. キャンセル"
+    Write-Host ""
+
+    $maxNum = $commitLog.Count + 1
+    $targetSelection = Read-Host "番号を選択してください (0-$maxNum)"
+
+    if ($targetSelection -eq "0") {
+        Write-Host "[キャンセル] 処理を中止しました" -ForegroundColor Yellow
+        exit 0
+    }
+
+    if (-not $targetSelection -or $targetSelection -notmatch '^\d+$' -or [int]$targetSelection -lt 1 -or [int]$targetSelection -gt $maxNum) {
+        Write-Host "[エラー] 無効な選択です" -ForegroundColor Red
+        exit 1
+    }
+
+    if ($targetSelection -eq "1") {
+        $TARGET_REF = "HEAD"
+        $TARGET_LABEL = "HEAD（最新）"
+        Write-Host ""
+        Write-Host "[選択] 比較先: HEAD（現在の最新状態）" -ForegroundColor Green
+    } else {
+        $targetCommit = $commitLog[[int]$targetSelection - 2]
+        $TARGET_REF = $targetCommit.Hash
+        $TARGET_LABEL = "[$($targetCommit.Hash)] $($targetCommit.Message)"
+
+        if ($BASE_REF -eq $TARGET_REF) {
+            Write-Host "[警告] 比較元と比較先が同じコミットです" -ForegroundColor Yellow
+            $continue = Read-Host "続行しますか? (y/n)"
+            if ($continue -ne "y") {
+                Write-Host "処理を中止しました" -ForegroundColor Yellow
+                exit 0
+            }
+        }
+
+        Write-Host ""
+        Write-Host "[選択] 比較先コミット: [$($targetCommit.Hash)] $($targetCommit.Message)" -ForegroundColor Green
+    }
+    #endregion
 }
+#endregion
 
-Write-Host ""
-Write-Host "[選択] 比較先ブランチ: $TARGET_BRANCH" -ForegroundColor Green
+#region 出力先フォルダ設定
 Write-Host ""
 
-# 出力先フォルダ（デスクトップ + タイムスタンプ）
 $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
 $OUTPUT_DIR = "$env:USERPROFILE\Desktop\git_diff_$timestamp"
 $OUTPUT_DIR_BEFORE = "$OUTPUT_DIR\01_修正前"
 $OUTPUT_DIR_AFTER = "$OUTPUT_DIR\02_修正後"
 
-Write-Host "比較元ブランチ  : $BASE_BRANCH" -ForegroundColor White
-Write-Host "比較先ブランチ  : $TARGET_BRANCH" -ForegroundColor White
+Write-Host "------------------------------------------------------------------------" -ForegroundColor White
+Write-Host "比較元          : $BASE_LABEL" -ForegroundColor White
+Write-Host "比較先          : $TARGET_LABEL" -ForegroundColor White
 Write-Host "出力先フォルダ  : $OUTPUT_DIR" -ForegroundColor White
-Write-Host "  01_修正前     : 比較元($BASE_BRANCH)のファイル" -ForegroundColor Gray
-Write-Host "  02_修正後     : 比較先($TARGET_BRANCH)のファイル" -ForegroundColor Gray
+Write-Host "  01_修正前     : 比較元のファイル" -ForegroundColor Gray
+Write-Host "  02_修正後     : 比較先のファイル" -ForegroundColor Gray
+Write-Host "------------------------------------------------------------------------" -ForegroundColor White
 Write-Host ""
 #endregion
 
@@ -244,16 +560,14 @@ Write-Host ""
 
 # 差分ファイルリストを取得
 if ($INCLUDE_DELETED) {
-    # 削除されたファイルも含める
-    $diffFiles = git diff --name-only "$BASE_BRANCH..$TARGET_BRANCH"
+    $diffFiles = git diff --name-only "$BASE_REF..$TARGET_REF"
 } else {
-    # 削除されたファイルを除外（追加・変更のみ）
-    $diffFiles = git diff --name-only --diff-filter=ACMR "$BASE_BRANCH..$TARGET_BRANCH"
+    $diffFiles = git diff --name-only --diff-filter=ACMR "$BASE_REF..$TARGET_REF"
 }
 
 if (-not $diffFiles -or $diffFiles.Count -eq 0) {
     Write-Host "[情報] 差分ファイルが見つかりませんでした" -ForegroundColor Yellow
-    Write-Host "2つのブランチは同じ内容です" -ForegroundColor Yellow
+    Write-Host "比較対象は同じ内容です" -ForegroundColor Yellow
     exit 0
 }
 
@@ -263,7 +577,6 @@ foreach ($file in $diffFiles) {
     if ($subDirPath -ne "") {
         $subDirPathLinux = $subDirPath.Replace("\", "/")
         if ($file.StartsWith($subDirPathLinux + "/")) {
-            # サブディレクトリパスを除去して相対パスに変換
             $relativePath = $file.Substring($subDirPathLinux.Length + 1)
             $filteredFiles += [PSCustomObject]@{
                 OriginalPath = $file
@@ -294,18 +607,16 @@ Write-Host ""
 $COPY_COUNT_BEFORE = 0
 $COPY_COUNT_AFTER = 0
 $ERROR_COUNT = 0
-$SKIP_COUNT = 0
 
 foreach ($fileObj in $filteredFiles) {
     $originalPath = $fileObj.OriginalPath
     $relativePath = $fileObj.RelativePath
 
-    # Unixスタイルのパスをバックスラッシュに変換
     $relativePathWin = $relativePath -replace '/', '\'
 
     Write-Host "[処理] $relativePath" -ForegroundColor Cyan
 
-    # 01_修正前（比較元ブランチ）のファイルをコピー
+    # 01_修正前（比較元）のファイルをコピー
     $destFileBefore = Join-Path $OUTPUT_DIR_BEFORE $relativePathWin
     $destDirBefore = Split-Path -Path $destFileBefore -Parent
     if (-not (Test-Path $destDirBefore)) {
@@ -313,7 +624,7 @@ foreach ($fileObj in $filteredFiles) {
     }
 
     try {
-        $contentBefore = git show "${BASE_BRANCH}:${originalPath}" 2>&1
+        $contentBefore = git show "${BASE_REF}:${originalPath}" 2>&1
         if ($LASTEXITCODE -eq 0) {
             [System.IO.File]::WriteAllText($destFileBefore, ($contentBefore -join "`n"), [System.Text.Encoding]::UTF8)
             Write-Host "  [01_修正前] コピー完了" -ForegroundColor Green
@@ -326,7 +637,7 @@ foreach ($fileObj in $filteredFiles) {
         $ERROR_COUNT++
     }
 
-    # 02_修正後（比較先ブランチ）のファイルをコピー
+    # 02_修正後（比較先）のファイルをコピー
     $destFileAfter = Join-Path $OUTPUT_DIR_AFTER $relativePathWin
     $destDirAfter = Split-Path -Path $destFileAfter -Parent
     if (-not (Test-Path $destDirAfter)) {
@@ -334,7 +645,7 @@ foreach ($fileObj in $filteredFiles) {
     }
 
     try {
-        $contentAfter = git show "${TARGET_BRANCH}:${originalPath}" 2>&1
+        $contentAfter = git show "${TARGET_REF}:${originalPath}" 2>&1
         if ($LASTEXITCODE -eq 0) {
             [System.IO.File]::WriteAllText($destFileAfter, ($contentAfter -join "`n"), [System.Text.Encoding]::UTF8)
             Write-Host "  [02_修正後] コピー完了" -ForegroundColor Green
@@ -364,8 +675,8 @@ if ($ERROR_COUNT -gt 0) {
 
 Write-Host ""
 Write-Host "出力先: $OUTPUT_DIR" -ForegroundColor White
-Write-Host "  01_修正前: 比較元($BASE_BRANCH)のファイル" -ForegroundColor Gray
-Write-Host "  02_修正後: 比較先($TARGET_BRANCH)のファイル" -ForegroundColor Gray
+Write-Host "  01_修正前: 比較元のファイル" -ForegroundColor Gray
+Write-Host "  02_修正後: 比較先のファイル" -ForegroundColor Gray
 Write-Host ""
 #endregion
 
@@ -375,7 +686,6 @@ Write-Host ""
 # WinMergeのパスを検出
 $winmergePath = $WINMERGE_PATH
 if ($winmergePath -eq "") {
-    # 自動検出（一般的なインストールパス）
     $possiblePaths = @(
         "${env:ProgramFiles}\WinMerge\WinMergeU.exe",
         "${env:ProgramFiles(x86)}\WinMerge\WinMergeU.exe",
@@ -394,8 +704,9 @@ if ($winmergePath -ne "" -and (Test-Path $winmergePath)) {
     if ($openWinMerge -eq "y") {
         Write-Host ""
         Write-Host "WinMergeを起動中..." -ForegroundColor Cyan
-        # WinMergeでフォルダ比較（/r: 再帰的比較）
-        & $winmergePath "/r" $OUTPUT_DIR_BEFORE $OUTPUT_DIR_AFTER
+        Write-Host "（このウィンドウは自動的に閉じます）" -ForegroundColor Gray
+        Start-Process -FilePath $winmergePath -ArgumentList "/r", "/e", "-cfg", "Settings/DirViewExpandSubdirs=1", $OUTPUT_DIR_BEFORE, $OUTPUT_DIR_AFTER
+        [Environment]::Exit(0)
     }
 } else {
     Write-Host "[情報] WinMergeが見つかりません。手動で比較してください。" -ForegroundColor Yellow
