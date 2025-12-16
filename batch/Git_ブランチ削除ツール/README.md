@@ -8,7 +8,7 @@ Gitのリモートブランチとローカルブランチを**数字で選択し
 
 - ✅ **数字で選択** - ブランチ名を入力せず番号で選択
 - ✅ **一覧表示** - すべてのブランチを見やすく表示
-- ✅ **安全な削除** - main/master/develop は保護
+- ✅ **安全な削除** - main/master は保護
 - ✅ **確認ダイアログ** - 削除前に必ず確認
 - ✅ **リモート＆ローカル同時削除** - 両方を一度に削除可能
 
@@ -381,7 +381,7 @@ git push origin --delete branch1 branch2 branch3
 
 ### 4. 保護ブランチ
 
-main/master/developは保護されていますが、必要に応じて手動で削除できます：
+main/masterは保護されていますが、必要に応じて手動で削除できます：
 
 ```bash
 # どうしても削除が必要な場合（非推奨）
@@ -402,7 +402,7 @@ git push origin --delete main
 $GIT_PROJECT_PATH = "C:\Users\$env:USERNAME\source\Git\project"
 
 # 保護ブランチリスト（削除不可）
-$ProtectedBranches = @("main", "master", "develop", "production")  # ← production を追加
+$ProtectedBranches = @("main", "master", "develop", "production")  # ← develop, production を追加
 #endregion
 ```
 
