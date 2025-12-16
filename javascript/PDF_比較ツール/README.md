@@ -66,14 +66,14 @@ Word比較ツールと同じLCSアルゴリズムを使用しています。
 
 - **PDF.js** (Mozilla) - PDFからテキストを抽出
   - バージョン: 3.11.174
-  - ローカルパス: `lib/pdf.js` および `lib/pdfworker.js`
+  - ローカルパス: `lib/pdf.min.js` および `lib/pdf.worker.min.js`
   - CDN: `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js`
 
 ### ライブラリ読み込み方式
 
 **ローカル優先・CDNフォールバック方式**を採用しています：
 
-1. 最初に `lib/pdf.js` からローカル読み込みを試行
+1. 最初に `lib/pdf.min.js` からローカル読み込みを試行
 2. ローカルファイルがない場合、CDNから自動的に読み込み
 3. 画面ヘッダーに読み込み元を表示（緑:ローカル、オレンジ:CDN）
 
@@ -120,8 +120,8 @@ lib/フォルダにライブラリファイルが同梱されているため、�
 PDF_比較ツール/
 ├── pdf_compare.html
 └── lib/
-    ├── pdf.js        ← PDF.jsライブラリ
-    └── pdfworker.js  ← PDF.jsワーカー
+    ├── pdf.min.js        ← PDF.jsライブラリ
+    └── pdf.worker.min.js ← PDF.jsワーカー
 ```
 
 ### 読み込み状態の確認
@@ -142,11 +142,7 @@ PDF_比較ツール/
    - https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js
    - https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js
 
-2. ダウンロードしたファイルをリネーム：
-   - `pdf.min.js` → `pdf.js`
-   - `pdf.worker.min.js` → `pdfworker.js`
-
-3. lib/フォルダに配置
+2. lib/フォルダに配置（既存ファイルを上書き）
 
 ## ライセンス
 
@@ -155,9 +151,8 @@ MIT License
 ## 更新履歴
 
 - **2025-12-16**: ライブラリ同梱版
-  - lib/フォルダにpdf.jsを同梱
+  - lib/フォルダにpdf.min.js、pdf.worker.min.jsを同梱
   - オフライン環境でそのまま動作可能
-  - ファイル名をシンプル化（pdf.js, pdfworker.js）
 
 - **2025-12-16**: 初版リリース
   - PDF.jsによるテキスト抽出
