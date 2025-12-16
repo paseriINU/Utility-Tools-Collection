@@ -364,30 +364,41 @@ if ($compareMode -eq "1") {
         exit 1
     }
 
-    # ブランチの起点（分岐元）を検出
+    # ブランチの起点（分岐元）を検出 - すべてのブランチから最も近い分岐点を探す
     $branchBase = $null
     $branchBaseLabel = ""
     $baseBranchName = ""
 
-    # main または master との分岐点を探す
-    $possibleBaseBranches = @("main", "master", "develop")
-    foreach ($baseBranch in $possibleBaseBranches) {
-        # ブランチが存在するか確認
-        $branchExists = git branch --list $baseBranch 2>$null
-        if ($branchExists -and $baseBranch -ne $workingBranch) {
-            $mergeBase = git merge-base $workingBranch $baseBranch 2>$null
+    $allBranchesForBase = @(git branch --format="%(refname:short)" | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne $workingBranch })
+
+    if ($allBranchesForBase.Count -gt 0) {
+        $bestMergeBase = $null
+        $bestDistance = [int]::MaxValue
+        $bestBranchName = ""
+
+        foreach ($candidateBranch in $allBranchesForBase) {
+            $mergeBase = git merge-base $workingBranch $candidateBranch 2>$null
             if ($LASTEXITCODE -eq 0 -and $mergeBase) {
-                $branchBase = $mergeBase.Substring(0, 7)
-                $baseBranchName = $baseBranch
-                # 分岐点のコミット情報を取得
-                $baseInfo = git log -1 --format="%ai|%s" $mergeBase 2>$null
-                if ($baseInfo) {
-                    $baseParts = $baseInfo -split '\|', 2
-                    $baseDate = ($baseParts[0] -split ' ')[0]
-                    $baseMsg = if ($baseParts[1].Length -gt 40) { $baseParts[1].Substring(0, 37) + "..." } else { $baseParts[1] }
-                    $branchBaseLabel = "[$branchBase] $baseDate $baseMsg"
+                # 現在のブランチのHEADから分岐点までのコミット数を計算
+                $distance = git rev-list --count "${mergeBase}..HEAD" 2>$null
+                if ($LASTEXITCODE -eq 0 -and $distance -lt $bestDistance -and $distance -gt 0) {
+                    $bestDistance = $distance
+                    $bestMergeBase = $mergeBase
+                    $bestBranchName = $candidateBranch
                 }
-                break
+            }
+        }
+
+        if ($bestMergeBase) {
+            $branchBase = $bestMergeBase.Substring(0, 7)
+            $baseBranchName = $bestBranchName
+            # 分岐点のコミット情報を取得
+            $baseInfo = git log -1 --format="%ai|%s" $bestMergeBase 2>$null
+            if ($baseInfo) {
+                $baseParts = $baseInfo -split '\|', 2
+                $baseDate = ($baseParts[0] -split ' ')[0]
+                $baseMsg = if ($baseParts[1].Length -gt 40) { $baseParts[1].Substring(0, 37) + "..." } else { $baseParts[1] }
+                $branchBaseLabel = "[$branchBase] $baseDate $baseMsg"
             }
         }
     }
