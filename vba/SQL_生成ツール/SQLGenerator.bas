@@ -1840,6 +1840,7 @@ Private Function GetTableList() As String
     Dim ws As Worksheet
     Dim result As String
     Dim i As Long
+    Dim lastRow As Long
     Dim tableName As String
     Dim tableDesc As String
     Dim displayName As String
@@ -1853,6 +1854,9 @@ Private Function GetTableList() As String
     On Error GoTo 0
 
     result = ""
+
+    ' B列の最終行を取得
+    lastRow = ws.Cells(ws.Rows.Count, "B").End(xlUp).Row
 
     ' B列（テーブル名）、C列（テーブル名称）を読み取り（6行目から開始）
     i = 6
@@ -1873,7 +1877,7 @@ Private Function GetTableList() As String
             End If
         End If
         i = i + 1
-        If i > 500 Then Exit Do ' 安全制限
+        If i > lastRow Then Exit Do ' 最終行を超えたら終了
     Loop
 
     GetTableList = result
@@ -1902,6 +1906,9 @@ Private Function GetAllColumnList() As String
     Dim ws As Worksheet
     Dim result As String
     Dim i As Long
+    Dim lastRowE As Long
+    Dim lastRowF As Long
+    Dim lastRow As Long
     Dim tableName As String
     Dim columnName As String
     Dim itemName As String
@@ -1918,6 +1925,15 @@ Private Function GetAllColumnList() As String
 
     Set dict = CreateObject("Scripting.Dictionary")
     result = ""
+
+    ' E列とF列の最終行を取得し、大きい方を使用
+    lastRowE = ws.Cells(ws.Rows.Count, "E").End(xlUp).Row
+    lastRowF = ws.Cells(ws.Rows.Count, "F").End(xlUp).Row
+    If lastRowE > lastRowF Then
+        lastRow = lastRowE
+    Else
+        lastRow = lastRowF
+    End If
 
     ' E列（テーブル名）、F列（カラム名）、H列（項目名）を読み取り（6行目から開始）
     i = 6
@@ -1944,7 +1960,7 @@ Private Function GetAllColumnList() As String
             End If
         End If
         i = i + 1
-        If i > 500 Then Exit Do ' 安全制限
+        If i > lastRow Then Exit Do ' 最終行を超えたら終了
     Loop
 
     ' 特殊なカラム名を追加
@@ -1960,6 +1976,9 @@ Private Function GetColumnListForTable(ByVal targetTable As String) As String
     Dim ws As Worksheet
     Dim result As String
     Dim i As Long
+    Dim lastRowE As Long
+    Dim lastRowF As Long
+    Dim lastRow As Long
     Dim tableName As String
     Dim columnName As String
     Dim itemName As String
@@ -1974,6 +1993,15 @@ Private Function GetColumnListForTable(ByVal targetTable As String) As String
     On Error GoTo 0
 
     result = ""
+
+    ' E列とF列の最終行を取得し、大きい方を使用
+    lastRowE = ws.Cells(ws.Rows.Count, "E").End(xlUp).Row
+    lastRowF = ws.Cells(ws.Rows.Count, "F").End(xlUp).Row
+    If lastRowE > lastRowF Then
+        lastRow = lastRowE
+    Else
+        lastRow = lastRowF
+    End If
 
     ' E列（テーブル名）、F列（カラム名）、H列（項目名）を読み取り（6行目から開始）
     i = 6
@@ -1996,7 +2024,7 @@ Private Function GetColumnListForTable(ByVal targetTable As String) As String
             End If
         End If
         i = i + 1
-        If i > 500 Then Exit Do ' 安全制限
+        If i > lastRow Then Exit Do ' 最終行を超えたら終了
     Loop
 
     GetColumnListForTable = result
