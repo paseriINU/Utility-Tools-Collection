@@ -66,14 +66,14 @@ Word比較ツールと同じLCSアルゴリズムを使用しています。
 
 - **PDF.js** (Mozilla) - PDFからテキストを抽出
   - バージョン: 3.11.174
-  - ローカルパス: `lib/pdf.min.js` および `lib/pdf.worker.min.js`
+  - ローカルパス: `lib/pdf.js` および `lib/pdfworker.js`
   - CDN: `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js`
 
 ### ライブラリ読み込み方式
 
 **ローカル優先・CDNフォールバック方式**を採用しています：
 
-1. 最初に `lib/pdf.min.js` からローカル読み込みを試行
+1. 最初に `lib/pdf.js` からローカル読み込みを試行
 2. ローカルファイルがない場合、CDNから自動的に読み込み
 3. 画面ヘッダーに読み込み元を表示（緑:ローカル、オレンジ:CDN）
 
@@ -112,75 +112,17 @@ Word比較ツールと同じLCSアルゴリズムを使用しています。
 
 ## オフライン使用（IT制限環境対応）
 
-インターネット接続が制限された環境でも使用できる2つの方法を提供しています。
+lib/フォルダにライブラリファイルが同梱されているため、オフライン環境でもそのまま動作します。
 
----
-
-### 方法1: ライブラリファイルを持ち込む（推奨）
-
-別のインターネット接続可能なPCでライブラリをダウンロードし、制限環境に持ち込む方法です。
-
-#### 手順
-
-**Step 1: インターネット接続可能なPCで以下をダウンロード**
-
-| ファイル | ダウンロードURL |
-|---------|----------------|
-| pdf.min.js | https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js |
-| pdf.worker.min.js | https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js |
-
-ブラウザで上記URLを開き、「名前を付けて保存」または右クリック→「リンク先を保存」でダウンロードしてください。
-
-**コマンドラインの場合:**
-```bash
-curl -o pdf.min.js https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js
-curl -o pdf.worker.min.js https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js
-```
-
-**Step 2: ファイルを制限環境に転送**
-
-USBメモリ、ファイルサーバ、メール添付などで制限環境に転送します。
-
-**Step 3: lib/フォルダに配置**
+### フォルダ構成
 
 ```
 PDF_比較ツール/
 ├── pdf_compare.html
-├── pdf_compare_standalone.html  ← 方法2で使用
 └── lib/
-    ├── pdf.min.js        ← ここに配置
-    └── pdf.worker.min.js ← ここに配置
+    ├── pdf.js        ← PDF.jsライブラリ
+    └── pdfworker.js  ← PDF.jsワーカー
 ```
-
-**Step 4: 動作確認**
-
-`pdf_compare.html`をブラウザで開き、ヘッダーに「ライブラリ: ローカル」（緑色）と表示されれば成功です。
-
----
-
-### 方法2: スタンドアローン版を使用
-
-ライブラリがHTML内に埋め込まれた単一ファイル版です。依存ファイルなしで動作します。
-
-#### 使い方
-
-`pdf_compare_standalone.html` をダブルクリックで開くだけで使用できます。
-
-#### 特徴
-
-- **ファイル1つで完結** - lib/フォルダ不要
-- **どの環境でも動作** - 依存関係なし
-- **ファイルサイズ**: 約700KB（ライブラリ埋め込みのため）
-
-#### 自分でスタンドアローン版を作成する場合
-
-1. `pdf_compare_standalone.html` をテキストエディタで開く
-2. `/* === PDF.JS LIBRARY CODE HERE === */` の箇所を探す
-3. ダウンロードした `pdf.min.js` の内容をコピー&ペースト
-4. 同様に `pdf.worker.min.js` の内容も指定箇所にペースト
-5. 保存して完了
-
----
 
 ### 読み込み状態の確認
 
@@ -189,9 +131,22 @@ PDF_比較ツール/
 | 表示 | 色 | 状態 |
 |-----|---|-----|
 | ライブラリ: ローカル | 緑 | lib/フォルダから読み込み成功 |
-| ライブラリ: 埋め込み | 緑 | HTML内蔵ライブラリを使用 |
 | ライブラリ: CDN（オンライン） | オレンジ | インターネットから読み込み |
 | ライブラリ: 読み込み失敗 | 赤 | エラー（対処が必要） |
+
+### ライブラリを更新する場合
+
+新しいバージョンのpdf.jsを使用したい場合：
+
+1. 以下からダウンロード：
+   - https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js
+   - https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js
+
+2. ダウンロードしたファイルをリネーム：
+   - `pdf.min.js` → `pdf.js`
+   - `pdf.worker.min.js` → `pdfworker.js`
+
+3. lib/フォルダに配置
 
 ## ライセンス
 
@@ -199,15 +154,10 @@ MIT License
 
 ## 更新履歴
 
-- **2025-12-16**: IT制限環境対応強化
-  - スタンドアローン版(pdf_compare_standalone.html)を追加
-  - ライブラリ埋め込み方式による完全オフライン動作
-  - README.mdに詳細な導入手順を追記
-
-- **2025-12-16**: オフライン対応
-  - ローカル優先・CDNフォールバック方式を実装
-  - lib/フォルダにライブラリを配置すれば完全オフラインで動作
-  - ライブラリ読み込み元をヘッダーに表示
+- **2025-12-16**: ライブラリ同梱版
+  - lib/フォルダにpdf.jsを同梱
+  - オフライン環境でそのまま動作可能
+  - ファイル名をシンプル化（pdf.js, pdfworker.js）
 
 - **2025-12-16**: 初版リリース
   - PDF.jsによるテキスト抽出
