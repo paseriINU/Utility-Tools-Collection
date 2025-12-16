@@ -807,6 +807,7 @@ Private Sub AddDropdown(ByVal ws As Worksheet, ByVal cellAddr As String, ByVal l
     Dim listRange As Range
     Dim listHash As Long
     Dim existingName As Name
+    Dim targetCol As String
 
     With ws.Range(cellAddr).Validation
         .Delete
@@ -818,12 +819,22 @@ Private Sub AddDropdown(ByVal ws As Worksheet, ByVal cellAddr As String, ByVal l
                 ' 255文字を超える場合は名前付き範囲を使用
                 items = Split(listItems, ",")
 
-                ' テーブル定義シートのZ列に一時リストを作成
+                ' テーブル定義シートに一時リストを作成
                 On Error Resume Next
                 Set wsDef = Sheets(SHEET_TABLE_DEF)
                 On Error GoTo 0
 
                 If Not wsDef Is Nothing Then
+                    ' プレフィックスに応じて異なる列を使用（データの上書きを防ぐ）
+                    Select Case namePrefix
+                        Case "TableList"
+                            targetCol = "Z"
+                        Case "ColumnList"
+                            targetCol = "AA"
+                        Case Else
+                            targetCol = "AB"
+                    End Select
+
                     ' リスト内容に基づいてユニークな名前を生成（同じリストは共有）
                     listHash = Len(listItems) + UBound(items) * 100
                     rangeName = namePrefix & "_" & listHash
@@ -836,16 +847,16 @@ Private Sub AddDropdown(ByVal ws As Worksheet, ByVal cellAddr As String, ByVal l
 
                     ' 名前付き範囲が存在しない場合のみ作成
                     If existingName Is Nothing Then
-                        ' Z列の1行目から書き出し
+                        ' 1行目から書き出し
                         startRow = 1
 
-                        ' リストをZ列に縦方向に書き出し
+                        ' リストを縦方向に書き出し
                         For i = LBound(items) To UBound(items)
-                            wsDef.Range("Z" & (startRow + i)).Value = Trim(items(i))
+                            wsDef.Range(targetCol & (startRow + i)).Value = Trim(items(i))
                         Next i
 
                         ' 範囲に名前を付ける
-                        Set listRange = wsDef.Range("Z" & startRow & ":Z" & (startRow + UBound(items)))
+                        Set listRange = wsDef.Range(targetCol & startRow & ":" & targetCol & (startRow + UBound(items)))
                         ThisWorkbook.Names.Add Name:=rangeName, RefersTo:=listRange
                     End If
 
