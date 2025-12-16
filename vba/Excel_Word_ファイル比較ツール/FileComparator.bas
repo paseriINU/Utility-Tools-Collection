@@ -142,6 +142,100 @@ ErrorHandler:
 End Sub
 
 '==============================================================================
+' Excel専用比較プロシージャ（ボタン用）
+'==============================================================================
+Public Sub CompareExcelFiles()
+    Dim file1Path As String
+    Dim file2Path As String
+
+    On Error GoTo ErrorHandler
+
+    ' 1つ目のExcelファイル選択
+    MsgBox "2つのExcelファイルを比較します。" & vbCrLf & vbCrLf & _
+           "まず、1つ目のExcelファイル（旧ファイル）を選択してください。", _
+           vbInformation, "Excel ファイル比較"
+
+    file1Path = SelectExcelFile("1つ目のExcelファイル（旧ファイル）を選択")
+    If file1Path = "" Then
+        MsgBox "ファイル選択がキャンセルされました。", vbExclamation
+        Exit Sub
+    End If
+
+    ' 2つ目のExcelファイル選択
+    MsgBox "次に、2つ目のExcelファイル（新ファイル）を選択してください。", _
+           vbInformation, "Excel ファイル比較"
+
+    file2Path = SelectExcelFile("2つ目のExcelファイル（新ファイル）を選択")
+    If file2Path = "" Then
+        MsgBox "ファイル選択がキャンセルされました。", vbExclamation
+        Exit Sub
+    End If
+
+    ' 同じファイルが選択された場合
+    If LCase(file1Path) = LCase(file2Path) Then
+        MsgBox "同じファイルが選択されました。異なるファイルを選択してください。", vbExclamation
+        Exit Sub
+    End If
+
+    ' Excel比較を実行
+    CompareExcelFilesInternal file1Path, file2Path
+
+    Exit Sub
+
+ErrorHandler:
+    MsgBox "エラーが発生しました: " & vbCrLf & vbCrLf & _
+           "エラー番号: " & Err.Number & vbCrLf & _
+           "エラー内容: " & Err.Description, vbCritical, "エラー"
+End Sub
+
+'==============================================================================
+' Word専用比較プロシージャ（ボタン用）
+'==============================================================================
+Public Sub CompareWordFiles()
+    Dim file1Path As String
+    Dim file2Path As String
+
+    On Error GoTo ErrorHandler
+
+    ' 1つ目のWordファイル選択
+    MsgBox "2つのWordファイルを比較します。" & vbCrLf & vbCrLf & _
+           "まず、1つ目のWordファイル（旧ファイル）を選択してください。", _
+           vbInformation, "Word ファイル比較"
+
+    file1Path = SelectWordFile("1つ目のWordファイル（旧ファイル）を選択")
+    If file1Path = "" Then
+        MsgBox "ファイル選択がキャンセルされました。", vbExclamation
+        Exit Sub
+    End If
+
+    ' 2つ目のWordファイル選択
+    MsgBox "次に、2つ目のWordファイル（新ファイル）を選択してください。", _
+           vbInformation, "Word ファイル比較"
+
+    file2Path = SelectWordFile("2つ目のWordファイル（新ファイル）を選択")
+    If file2Path = "" Then
+        MsgBox "ファイル選択がキャンセルされました。", vbExclamation
+        Exit Sub
+    End If
+
+    ' 同じファイルが選択された場合
+    If LCase(file1Path) = LCase(file2Path) Then
+        MsgBox "同じファイルが選択されました。異なるファイルを選択してください。", vbExclamation
+        Exit Sub
+    End If
+
+    ' Word比較を実行
+    CompareWordFilesInternal file1Path, file2Path
+
+    Exit Sub
+
+ErrorHandler:
+    MsgBox "エラーが発生しました: " & vbCrLf & vbCrLf & _
+           "エラー番号: " & Err.Number & vbCrLf & _
+           "エラー内容: " & Err.Description, vbCritical, "エラー"
+End Sub
+
+'==============================================================================
 ' ファイルタイプを判定
 '==============================================================================
 Private Function GetFileType(ByVal filePath As String) As Integer
@@ -490,13 +584,11 @@ Private Sub CompareSheets(ByRef ws1 As Worksheet, ByRef ws2 As Worksheet, _
     lastRow2 = GetLastRow(ws2)
     lastCol2 = GetLastCol(ws2)
 
-    ' 比較範囲を決定
+    ' 比較範囲を決定（使用範囲のみ比較、制限なし）
     maxRow = Application.WorksheetFunction.Max(lastRow1, lastRow2)
     maxCol = Application.WorksheetFunction.Max(lastCol1, lastCol2)
 
-    ' 最大値を制限
-    If maxRow > MAX_ROWS Then maxRow = MAX_ROWS
-    If maxCol > MAX_COLS Then maxCol = MAX_COLS
+    Debug.Print "  比較範囲: " & maxRow & " 行 x " & maxCol & " 列"
 
     ' セル単位で比較
     For r = 1 To maxRow
@@ -742,6 +834,8 @@ Private Sub CreateExcelResultSheet(ByRef differences() As ExcelDifferenceInfo, B
     Dim ws As Worksheet
     Dim i As Long
     Dim row As Long
+    Dim hyperlinkAddr1 As String
+    Dim hyperlinkAddr2 As String
 
     ' 既存の結果シートがあれば削除
     On Error Resume Next
@@ -787,9 +881,11 @@ Private Sub CreateExcelResultSheet(ByRef differences() As ExcelDifferenceInfo, B
         .Range("D10").Value = "差異タイプ"
         .Range("E10").Value = "旧ファイルの値"
         .Range("F10").Value = "新ファイルの値"
+        .Range("G10").Value = "旧ファイル"
+        .Range("H10").Value = "新ファイル"
 
         ' ヘッダー書式
-        With .Range("A10:F10")
+        With .Range("A10:H10")
             .Font.Bold = True
             .Interior.Color = RGB(68, 114, 196)
             .Font.Color = RGB(255, 255, 255)
@@ -807,14 +903,40 @@ Private Sub CreateExcelResultSheet(ByRef differences() As ExcelDifferenceInfo, B
             .Cells(row, 5).Value = differences(i).OldValue
             .Cells(row, 6).Value = differences(i).NewValue
 
+            ' シート全体の差異でない場合はハイパーリンクを追加
+            If differences(i).CellAddress <> "(シート全体)" Then
+                ' 旧ファイルへのハイパーリンク
+                hyperlinkAddr1 = file1Path & "#'" & differences(i).SheetName & "'!" & differences(i).CellAddress
+                .Hyperlinks.Add Anchor:=.Cells(row, 7), Address:=hyperlinkAddr1, TextToDisplay:="移動"
+                With .Cells(row, 7)
+                    .Font.Color = RGB(0, 102, 204)
+                    .Font.Underline = xlUnderlineStyleSingle
+                    .HorizontalAlignment = xlCenter
+                End With
+
+                ' 新ファイルへのハイパーリンク
+                hyperlinkAddr2 = file2Path & "#'" & differences(i).SheetName & "'!" & differences(i).CellAddress
+                .Hyperlinks.Add Anchor:=.Cells(row, 8), Address:=hyperlinkAddr2, TextToDisplay:="移動"
+                With .Cells(row, 8)
+                    .Font.Color = RGB(0, 102, 204)
+                    .Font.Underline = xlUnderlineStyleSingle
+                    .HorizontalAlignment = xlCenter
+                End With
+            Else
+                .Cells(row, 7).Value = "-"
+                .Cells(row, 8).Value = "-"
+                .Cells(row, 7).HorizontalAlignment = xlCenter
+                .Cells(row, 8).HorizontalAlignment = xlCenter
+            End If
+
             ' 差異タイプによって行に色を付ける
             Select Case differences(i).DiffType
                 Case "変更"
-                    .Range(.Cells(row, 1), .Cells(row, 6)).Interior.Color = COLOR_CHANGED
+                    .Range(.Cells(row, 1), .Cells(row, 8)).Interior.Color = COLOR_CHANGED
                 Case "追加", "シート追加"
-                    .Range(.Cells(row, 1), .Cells(row, 6)).Interior.Color = COLOR_ADDED
+                    .Range(.Cells(row, 1), .Cells(row, 8)).Interior.Color = COLOR_ADDED
                 Case "削除", "シート削除"
-                    .Range(.Cells(row, 1), .Cells(row, 6)).Interior.Color = COLOR_DELETED
+                    .Range(.Cells(row, 1), .Cells(row, 8)).Interior.Color = COLOR_DELETED
             End Select
         Next i
 
@@ -825,9 +947,11 @@ Private Sub CreateExcelResultSheet(ByRef differences() As ExcelDifferenceInfo, B
         .Columns("D").ColumnWidth = 12
         .Columns("E").ColumnWidth = 30
         .Columns("F").ColumnWidth = 30
+        .Columns("G").ColumnWidth = 10
+        .Columns("H").ColumnWidth = 10
 
         ' フィルターを設定
-        .Range("A10:F10").AutoFilter
+        .Range("A10:H10").AutoFilter
 
         ' ウィンドウ枠の固定
         .Rows(11).Select
@@ -1111,25 +1235,46 @@ Private Sub FormatMainSheet(ByRef ws As Worksheet)
         ' =================================================================
         .Rows(16).RowHeight = 10
 
-        ' 比較実行ボタン
-        Set btn = .Buttons.Add(.Range("C17").Left, .Range("C17").Top, 140, 35)
+        ' Excel比較ボタン
+        Set btn = .Buttons.Add(.Range("B17").Left, .Range("B17").Top, 120, 35)
         With btn
-            .Name = "btnCompareFiles"
-            .Caption = "ファイルを比較"
-            .OnAction = "CompareFiles"
+            .Name = "btnCompareExcel"
+            .Caption = "Excel比較"
+            .OnAction = "CompareExcelFiles"
             .Font.Name = "Meiryo UI"
             .Font.Size = 11
             .Font.Bold = True
         End With
 
-        ' ハイライトクリアボタン
-        Set btn = .Buttons.Add(.Range("E17").Left, .Range("E17").Top, 140, 35)
+        ' Word比較ボタン
+        Set btn = .Buttons.Add(.Range("D17").Left, .Range("D17").Top, 120, 35)
         With btn
-            .Name = "btnClearHighlight"
-            .Caption = "ハイライトをクリア"
-            .OnAction = "ClearHighlight"
+            .Name = "btnCompareWord"
+            .Caption = "Word比較"
+            .OnAction = "CompareWordFiles"
             .Font.Name = "Meiryo UI"
             .Font.Size = 11
+            .Font.Bold = True
+        End With
+
+        ' 自動判定比較ボタン（従来機能）
+        Set btn = .Buttons.Add(.Range("F17").Left, .Range("F17").Top, 120, 35)
+        With btn
+            .Name = "btnCompareFiles"
+            .Caption = "自動判定比較"
+            .OnAction = "CompareFiles"
+            .Font.Name = "Meiryo UI"
+            .Font.Size = 10
+        End With
+
+        ' ハイライトクリアボタン
+        Set btn = .Buttons.Add(.Range("H17").Left, .Range("H17").Top, 100, 35)
+        With btn
+            .Name = "btnClearHighlight"
+            .Caption = "クリア"
+            .OnAction = "ClearHighlight"
+            .Font.Name = "Meiryo UI"
+            .Font.Size = 10
         End With
 
         ' =================================================================
@@ -1231,19 +1376,20 @@ Private Sub FormatMainSheet(ByRef ws As Worksheet)
         End With
 
         ' 設定値の表示
-        .Range("B31").Value = "最大行数（Excel）:"
-        .Range("D31").Value = MAX_ROWS
-        .Range("B32").Value = "最大列数（Excel）:"
-        .Range("D32").Value = MAX_COLS
-        .Range("B33").Value = "最大段落数（Word）:"
-        .Range("D33").Value = MAX_PARAGRAPHS
+        .Range("B31").Value = "Excel比較:"
+        .Range("D31").Value = "使用範囲のみ比較（制限なし）"
+        .Range("B32").Value = "最大段落数（Word）:"
+        .Range("D32").Value = MAX_PARAGRAPHS
 
-        .Range("B31:B33").Font.Name = "Meiryo UI"
-        .Range("B31:B33").Font.Size = 10
-        .Range("D31:D33").Font.Name = "Meiryo UI"
-        .Range("D31:D33").Font.Size = 10
-        .Range("D31:D33").Font.Bold = True
-        .Range("D31:D33").NumberFormat = "#,##0"
+        .Range("B31:B32").Font.Name = "Meiryo UI"
+        .Range("B31:B32").Font.Size = 10
+        .Range("D31").Font.Name = "Meiryo UI"
+        .Range("D31").Font.Size = 10
+        .Range("D31").Font.Color = RGB(0, 128, 0)
+        .Range("D32").Font.Name = "Meiryo UI"
+        .Range("D32").Font.Size = 10
+        .Range("D32").Font.Bold = True
+        .Range("D32").NumberFormat = "#,##0"
 
         .Range("F31:H31").Merge
         .Range("F31").Value = "※設定変更はVBAコード内で行います"
