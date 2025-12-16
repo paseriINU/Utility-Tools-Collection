@@ -70,22 +70,11 @@ $Config = @{
 }
 
 # 環境設定（複数環境対応）
-# 環境名と対応するバッチファイルパスを定義
-$ENVIRONMENTS = @(
-    @{
-        Name = "tst1t"
-        BatchPath = "C:\Scripts\tst1t\backup.bat"
-    },
-    @{
-        Name = "tst2t"
-        BatchPath = "C:\Scripts\tst2t\backup.bat"
-    }
-    # 環境を追加する場合は以下のように追記:
-    # ,@{
-    #     Name = "tst3t"
-    #     BatchPath = "C:\Scripts\tst3t\backup.bat"
-    # }
-)
+# パステンプレート（{0}に環境名が入る）
+$BATCH_PATH_TEMPLATE = "C:\Scripts\{0}\{0}_test.bat"
+
+# 環境名の配列（追加・削除する場合はここを編集）
+$ENVIRONMENTS = @("tst1t", "tst2t")
 ```
 
 ### 3. 実行
@@ -127,24 +116,21 @@ cd batch\リモートバッチ実行ツール
 
 ### 環境選択機能
 
-`$ENVIRONMENTS` 配列に環境を定義すると、実行時に環境を選択できます：
+`$ENVIRONMENTS` 配列に環境名を定義すると、実行時に環境を選択できます。
+バッチファイルのパスは `$BATCH_PATH_TEMPLATE` のテンプレートから自動生成されます：
 
 ```powershell
-$ENVIRONMENTS = @(
-    @{
-        Name = "tst1t"
-        BatchPath = "C:\Scripts\tst1t\backup.bat"
-    },
-    @{
-        Name = "tst2t"
-        BatchPath = "C:\Scripts\tst2t\backup.bat"
-    },
-    @{
-        Name = "production"
-        BatchPath = "C:\Scripts\production\daily_batch.bat"
-    }
-)
+# パステンプレート（{0}に環境名が入る）
+$BATCH_PATH_TEMPLATE = "C:\Scripts\{0}\{0}_test.bat"
+
+# 環境名の配列
+$ENVIRONMENTS = @("tst1t", "tst2t", "production")
 ```
+
+上記の場合、以下のパスが自動生成されます：
+- `tst1t` → `C:\Scripts\tst1t\tst1t_test.bat`
+- `tst2t` → `C:\Scripts\tst2t\tst2t_test.bat`
+- `production` → `C:\Scripts\production\production_test.bat`
 
 **環境の追加・削除**は、配列に要素を追加・削除するだけで対応可能です。
 メニューは配列の内容に基づいて動的に生成されます。
@@ -152,12 +138,7 @@ $ENVIRONMENTS = @(
 **単一環境のみ使用する場合**も、配列に1つだけ定義：
 
 ```powershell
-$ENVIRONMENTS = @(
-    @{
-        Name = "production"
-        BatchPath = "C:\Scripts\production\daily_batch.bat"
-    }
-)
+$ENVIRONMENTS = @("production")
 ```
 
 ### WinRM設定の自動構成

@@ -53,21 +53,17 @@ TFS_to_Git_同期ツール/
 `TFS_to_Git_同期ツール.bat` をテキストエディタで開き、設定セクションを編集します:
 
 ```powershell
-$Config = @{
-    # TFSディレクトリパス
-    TFS_DIR = "C:\Path\To\TFS\Project"
-
-    # Gitリポジトリディレクトリパス
-    GIT_REPO_DIR = "C:\Path\To\Git\Project"
-}
+#region 設定セクション
+# TFSとGitのディレクトリパスを設定（固定値）
+$TFS_DIR = "C:\Users\$env:USERNAME\source"
+$GIT_REPO_DIR = "C:\Users\$env:USERNAME\source\Git\project"
+#endregion
 ```
 
 **例:**
 ```powershell
-$Config = @{
-    TFS_DIR = "C:\Work\TFS\MyProject"
-    GIT_REPO_DIR = "D:\Repository\MyProject"
-}
+$TFS_DIR = "C:\Work\TFS\MyProject"
+$GIT_REPO_DIR = "D:\Repository\MyProject"
 ```
 
 ### 2. 実行
@@ -85,7 +81,8 @@ TFS_to_Git_同期ツール.bat
 ```
 1. このまま続行
 2. ブランチを切り替える
-3. 終了
+
+0. 終了
 ```
 
 ### 4. 同期実行
@@ -119,11 +116,12 @@ Gitディレクトリ: D:\Repository\MyProject
   feature/new-feature
 
 ブランチ操作を選択してください:
-1. このまま続行
-2. ブランチを切り替える
-3. 終了
+ 1. このまま続行
+ 2. ブランチを切り替える
 
-選択 (1-3): 1
+ 0. 終了
+
+選択 (0-2): 1
 
 ========================================
 同期処理を開始します

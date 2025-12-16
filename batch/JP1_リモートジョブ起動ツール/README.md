@@ -77,26 +77,34 @@ Windows Remote Management (HTTP-In)  True
 
 ### 1. バッチファイルを編集
 
-`JP1_リモートジョブ起動ツール.bat`をテキストエディタで開き、以下の設定項目を編集します：
+`JP1_リモートジョブ起動ツール.bat`をテキストエディタで開き、設定セクションを編集します：
 
-```batch
-rem JP1/AJS3が稼働しているリモートサーバ
-set JP1_SERVER=192.168.1.100
+```powershell
+$Config = @{
+    # JP1/AJS3が稼働しているリモートサーバ
+    JP1Server = "192.168.1.100"
 
-rem リモートサーバのユーザー名（Windowsログインユーザー）
-set REMOTE_USER=Administrator
+    # リモートサーバのユーザー名（Windowsログインユーザー）
+    RemoteUser = "Administrator"
 
-rem JP1ユーザー名
-set JP1_USER=jp1admin
+    # リモートサーバのパスワード（空の場合は実行時に入力）
+    RemotePassword = ""
 
-rem JP1パスワード（空の場合は実行時に入力を求めます）
-set JP1_PASSWORD=
+    # JP1ユーザー名
+    JP1User = "jp1admin"
 
-rem 起動するジョブネットのフルパス
-set JOBNET_PATH=/main_unit/jobgroup1/daily_batch
+    # JP1パスワード（空の場合は実行時に入力）
+    JP1Password = ""
 
-rem ajsentryコマンドのパス（リモートサーバ上）
-set AJSENTRY_PATH=C:\Program Files\HITACHI\JP1AJS3\bin\ajsentry.exe
+    # 起動するジョブネットのフルパス
+    JobnetPath = "/main_unit/jobgroup1/daily_batch"
+
+    # ajsentryコマンドのパス（リモートサーバ上）
+    AjsentryPath = "C:\Program Files\HITACHI\JP1AJS3\bin\ajsentry.exe"
+
+    # HTTPS接続を使用する場合は $true
+    UseSSL = $false
+}
 ```
 
 ### 2. 実行
@@ -164,12 +172,14 @@ KAVS1820-I ajsentryコマンドが正常終了しました。
 
 | 設定項目 | 説明 | 例 |
 |---------|------|---|
-| JP1_SERVER | JP1サーバのホスト名またはIPアドレス | `192.168.1.100` |
-| REMOTE_USER | リモートサーバのWindowsユーザー名 | `Administrator` |
-| JP1_USER | JP1ユーザー名 | `jp1admin` |
-| JP1_PASSWORD | JP1パスワード（空の場合は実行時入力） | ` `（空推奨） |
-| JOBNET_PATH | ジョブネットのフルパス | `/main_unit/jobgroup1/daily_batch` |
-| AJSENTRY_PATH | リモートサーバ上のajsentryパス | `C:\Program Files\HITACHI\JP1AJS3\bin\ajsentry.exe` |
+| JP1Server | JP1サーバのホスト名またはIPアドレス | `192.168.1.100` |
+| RemoteUser | リモートサーバのWindowsユーザー名 | `Administrator` |
+| RemotePassword | リモートサーバのパスワード（空の場合は実行時入力） | ` `（空推奨） |
+| JP1User | JP1ユーザー名 | `jp1admin` |
+| JP1Password | JP1パスワード（空の場合は実行時入力） | ` `（空推奨） |
+| JobnetPath | ジョブネットのフルパス | `/main_unit/jobgroup1/daily_batch` |
+| AjsentryPath | リモートサーバ上のajsentryパス | `C:\Program Files\HITACHI\JP1AJS3\bin\ajsentry.exe` |
+| UseSSL | HTTPS接続を使用するか | `$false` |
 
 ---
 
