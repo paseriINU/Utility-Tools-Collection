@@ -240,6 +240,13 @@ Private Sub FormatMainSheet()
         .Range("G" & ROW_MAIN_TABLE + 1).Font.Color = RGB(128, 128, 128)
         .Range("G" & ROW_MAIN_TABLE + 1).Font.Size = 9
 
+        ' メインテーブルのドロップダウン（テーブル一覧）
+        Dim tableList As String
+        tableList = GetTableList()
+        If tableList <> "" Then
+            AddDropdown ws, "B" & ROW_MAIN_TABLE + 1, tableList, "TableList"
+        End If
+
         ' 結合テーブル（JOIN）
         .Range("A" & ROW_JOIN_START).Value = "結合テーブル (JOIN) - 複数テーブルを連結してデータを取得"
         .Range("A" & ROW_JOIN_START).Font.Bold = True
@@ -265,6 +272,10 @@ Private Sub FormatMainSheet()
         For i = 1 To 8
             .Range("A" & ROW_JOIN_START + 1 + i).Value = i
             AddDropdown ws, "B" & ROW_JOIN_START + 1 + i, ",INNER JOIN(両方に存在),LEFT JOIN(左を全て),RIGHT JOIN(右を全て),FULL OUTER JOIN(両方全て),CROSS JOIN(全組合せ)"
+            ' JOINテーブルのテーブル名ドロップダウン
+            If tableList <> "" Then
+                AddDropdown ws, "C" & ROW_JOIN_START + 1 + i, tableList, "TableList"
+            End If
         Next i
 
         ' 取得カラム
