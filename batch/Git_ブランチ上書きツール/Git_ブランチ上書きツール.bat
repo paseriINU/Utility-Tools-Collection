@@ -253,24 +253,44 @@ function Main {
     Write-Host "----------------------------------------------------------------" -ForegroundColor DarkGray
     Write-Host ""
     Write-Host "  変更後、リモートリポジトリにプッシュしますか？" -ForegroundColor White
-    Write-Host "  （--force-with-lease オプションが使用されます）" -ForegroundColor Gray
     Write-Host ""
-    Write-Host "   1. リモートにプッシュする" -ForegroundColor White
-    Write-Host "   2. ローカルのみ変更（プッシュしない）" -ForegroundColor White
+    Write-Host "   1. --force-with-lease でプッシュ（推奨）" -ForegroundColor White
+    Write-Host "      他の人がプッシュしていた場合は失敗し、安全" -ForegroundColor DarkGray
+    Write-Host ""
+    Write-Host "   2. --force でプッシュ（最終手段）" -ForegroundColor Yellow
+    Write-Host "      他の人の変更も上書きするため注意が必要" -ForegroundColor DarkGray
+    Write-Host ""
+    Write-Host "   3. ローカルのみ変更（プッシュしない）" -ForegroundColor White
     Write-Host ""
     Write-Host "   0. キャンセル" -ForegroundColor DarkGray
     Write-Host ""
 
-    $pushChoice = Read-Host "選択 (0-2)"
+    $pushChoice = Read-Host "選択 (0-3)"
 
     $pushToRemote = $false
+    $forceMode = ""
     switch ($pushChoice) {
         "0" {
             Write-Host "キャンセルしました。" -ForegroundColor Yellow
             return 0
         }
-        "1" { $pushToRemote = $true }
-        "2" { $pushToRemote = $false }
+        "1" {
+            $pushToRemote = $true
+            $forceMode = "--force-with-lease"
+        }
+        "2" {
+            Write-Host ""
+            Write-Host "[警告] --force は他の人の変更を上書きする可能性があります！" -ForegroundColor Red
+            $forceConfirm = Read-Host "本当に --force を使用しますか？ (y/N)"
+            if ($forceConfirm -eq "y" -or $forceConfirm -eq "Y") {
+                $pushToRemote = $true
+                $forceMode = "--force"
+            } else {
+                Write-Host "キャンセルしました。" -ForegroundColor Yellow
+                return 0
+            }
+        }
+        "3" { $pushToRemote = $false }
         default {
             Write-Host "[エラー] 無効な選択です。" -ForegroundColor Red
             return 1
@@ -299,7 +319,7 @@ function Main {
     Write-Host "    $(if($createBackup){'3'}else{'2'}). git reset --hard $sourceBranch" -ForegroundColor Gray
 
     if ($pushToRemote) {
-        Write-Host "    $(if($createBackup){'4'}else{'3'}). git push --force-with-lease origin $targetBranch" -ForegroundColor Gray
+        Write-Host "    $(if($createBackup){'4'}else{'3'}). git push $forceMode origin $targetBranch" -ForegroundColor Gray
     }
 
     Write-Host ""
@@ -371,14 +391,14 @@ function Main {
     # リモートにプッシュ
     if ($pushToRemote) {
         $step++
-        Write-Host "[$step/$totalSteps] リモートにプッシュ中 (--force-with-lease)..." -ForegroundColor Cyan
+        Write-Host "[$step/$totalSteps] リモートにプッシュ中 ($forceMode)..." -ForegroundColor Cyan
 
-        git push --force-with-lease origin $targetBranch 2>&1
+        git push $forceMode origin $targetBranch 2>&1
 
         if ($LASTEXITCODE -ne 0) {
             Write-Host "[エラー] プッシュに失敗しました。" -ForegroundColor Red
             Write-Host "  ローカルの変更は完了しています。" -ForegroundColor Yellow
-            Write-Host "  手動でプッシュしてください: git push --force-with-lease origin $targetBranch" -ForegroundColor Yellow
+            Write-Host "  手動でプッシュしてください: git push $forceMode origin $targetBranch" -ForegroundColor Yellow
             return 1
         }
 
