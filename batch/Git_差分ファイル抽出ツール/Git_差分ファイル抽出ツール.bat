@@ -394,8 +394,14 @@ if ($winmergePath -ne "" -and (Test-Path $winmergePath)) {
     if ($openWinMerge -eq "y") {
         Write-Host ""
         Write-Host "WinMergeを起動中..." -ForegroundColor Cyan
-        # WinMergeでフォルダ比較（/r: 再帰的比較）
-        & $winmergePath "/r" $OUTPUT_DIR_BEFORE $OUTPUT_DIR_AFTER
+        Write-Host "（このウィンドウは自動的に閉じます）" -ForegroundColor Gray
+        # WinMergeでフォルダ比較
+        # /r: 再帰的比較
+        # /e: ESCキーで閉じる
+        # -cfg Settings/DirViewExpandSubdirs=1: サブフォルダを展開した状態で表示
+        Start-Process -FilePath $winmergePath -ArgumentList "/r", "/e", "-cfg", "Settings/DirViewExpandSubdirs=1", $OUTPUT_DIR_BEFORE, $OUTPUT_DIR_AFTER
+        # WinMerge起動後、コンソールを閉じる
+        [Environment]::Exit(0)
     }
 } else {
     Write-Host "[情報] WinMergeが見つかりません。手動で比較してください。" -ForegroundColor Yellow
