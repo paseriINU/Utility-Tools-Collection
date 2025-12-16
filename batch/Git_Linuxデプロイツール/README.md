@@ -268,11 +268,11 @@ Git_Linuxデプロイツール.bat
 ========================================
 
 [転送] index.html
-  ✓ 成功
+  [OK] 成功
 [転送] style.css
-  ✓ 成功
+  [OK] 成功
 [転送] script.js
-  ✓ 成功
+  [OK] 成功
 
 ========================================
   転送結果
@@ -305,9 +305,9 @@ Git_Linuxデプロイツール.bat
 [選択] 2 個のファイルを転送します
 
 [転送] index.html
-  ✓ 成功
+  [OK] 成功
 [転送] style.css
-  ✓ 成功
+  [OK] 成功
 
 ========================================
   転送結果
@@ -397,7 +397,7 @@ Windows OpenSSH Client をインストールしてください：
 
 **エラー**:
 ```
-✗ 失敗 (終了コード: 255)
+[NG] 失敗 (終了コード: 255)
 ```
 
 **原因**:
@@ -449,7 +449,7 @@ Permission denied (publickey,password)
 
 **エラー**:
 ```
-✗ 失敗: No such file or directory
+[NG] 失敗: No such file or directory
 ```
 
 **解決方法**:
