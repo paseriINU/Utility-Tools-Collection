@@ -364,6 +364,34 @@ if ($compareMode -eq "1") {
         exit 1
     }
 
+    # ブランチの起点（分岐元）を検出
+    $branchBase = $null
+    $branchBaseLabel = ""
+    $baseBranchName = ""
+
+    # main または master との分岐点を探す
+    $possibleBaseBranches = @("main", "master", "develop")
+    foreach ($baseBranch in $possibleBaseBranches) {
+        # ブランチが存在するか確認
+        $branchExists = git branch --list $baseBranch 2>$null
+        if ($branchExists -and $baseBranch -ne $workingBranch) {
+            $mergeBase = git merge-base $workingBranch $baseBranch 2>$null
+            if ($LASTEXITCODE -eq 0 -and $mergeBase) {
+                $branchBase = $mergeBase.Substring(0, 7)
+                $baseBranchName = $baseBranch
+                # 分岐点のコミット情報を取得
+                $baseInfo = git log -1 --format="%ai|%s" $mergeBase 2>$null
+                if ($baseInfo) {
+                    $baseParts = $baseInfo -split '\|', 2
+                    $baseDate = ($baseParts[0] -split ' ')[0]
+                    $baseMsg = if ($baseParts[1].Length -gt 40) { $baseParts[1].Substring(0, 37) + "..." } else { $baseParts[1] }
+                    $branchBaseLabel = "[$branchBase] $baseDate $baseMsg"
+                }
+                break
+            }
+        }
+    }
+
     # 比較元コミットの選択
     Write-Host "比較元コミット（修正前 / 古い時点）を選択してください:" -ForegroundColor Yellow
     Write-Host ""
@@ -373,11 +401,21 @@ if ($compareMode -eq "1") {
         $commit = $commitLog[$i]
         Write-Host " $displayNum. [$($commit.Hash)] $($commit.Date) $($commit.Message)"
     }
+
+    # ブランチ起点の選択肢を追加
+    $hasBranchBase = $false
+    if ($branchBase -and $branchBaseLabel) {
+        $branchBaseNum = $commitLog.Count + 1
+        Write-Host ""
+        Write-Host " $branchBaseNum. $branchBaseLabel [${baseBranchName}からの分岐点]" -ForegroundColor Magenta
+        $hasBranchBase = $true
+    }
+
     Write-Host ""
     Write-Host " 0. キャンセル"
     Write-Host ""
 
-    $maxNum = $commitLog.Count
+    $maxNum = if ($hasBranchBase) { $commitLog.Count + 1 } else { $commitLog.Count }
     $baseSelection = Read-Host "番号を選択してください (0-$maxNum)"
 
     if ($baseSelection -eq "0") {
@@ -390,10 +428,19 @@ if ($compareMode -eq "1") {
         exit 1
     }
 
-    $baseCommit = $commitLog[[int]$baseSelection - 1]
-    $BASE_REF = $baseCommit.Hash
-    Write-Host ""
-    Write-Host "[選択] 比較元コミット: [$($baseCommit.Hash)] $($baseCommit.Message)" -ForegroundColor Green
+    # ブランチ起点が選択された場合
+    if ($hasBranchBase -and [int]$baseSelection -eq $branchBaseNum) {
+        $BASE_REF = $branchBase
+        $BASE_LABEL = "${branchBaseLabel} [${baseBranchName}からの分岐点]"
+        Write-Host ""
+        Write-Host "[選択] 比較元: ${baseBranchName}からの分岐点 [$branchBase]" -ForegroundColor Green
+    } else {
+        $baseCommit = $commitLog[[int]$baseSelection - 1]
+        $BASE_REF = $baseCommit.Hash
+        $BASE_LABEL = "[$($baseCommit.Hash)] $($baseCommit.Message)"
+        Write-Host ""
+        Write-Host "[選択] 比較元コミット: [$($baseCommit.Hash)] $($baseCommit.Message)" -ForegroundColor Green
+    }
     Write-Host ""
 
     # 比較先コミットの選択
@@ -455,8 +502,6 @@ if ($compareMode -eq "1") {
         Write-Host ""
         Write-Host "[選択] 比較先コミット: [$($targetCommit.Hash)] $($targetCommit.Message)" -ForegroundColor Green
     }
-
-    $BASE_LABEL = "[$($baseCommit.Hash)] $($baseCommit.Message)"
     #endregion
 }
 #endregion
