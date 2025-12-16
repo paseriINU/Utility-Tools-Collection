@@ -54,9 +54,11 @@ End Type
 '==============================================================================
 Private Type WordDifferenceInfo
     ParagraphNo As Long      ' 段落番号
-    DiffType As String       ' 差異タイプ（変更/追加/削除）
+    DiffType As String       ' 差異タイプ（変更/追加/削除/スタイル変更）
     OldText As String        ' 旧ファイルのテキスト
     NewText As String        ' 新ファイルのテキスト
+    OldStyle As String       ' 旧ファイルのスタイル情報
+    NewStyle As String       ' 新ファイルのスタイル情報
 End Type
 
 '==============================================================================
@@ -617,7 +619,7 @@ Private Sub CompareSheets(ByRef ws1 As Worksheet, ByRef ws2 As Worksheet, _
 End Sub
 
 '==============================================================================
-' Word文書を段落単位で比較
+' Word文書を段落単位で比較（テキスト＋スタイル）
 '==============================================================================
 Private Sub CompareWordDocuments(ByRef doc1 As Object, ByRef doc2 As Object, _
                                   ByRef differences() As WordDifferenceInfo, ByRef diffCount As Long)
@@ -627,6 +629,8 @@ Private Sub CompareWordDocuments(ByRef doc1 As Object, ByRef doc2 As Object, _
     Dim i As Long
     Dim text1 As String
     Dim text2 As String
+    Dim style1 As String
+    Dim style2 As String
 
     paraCount1 = doc1.Paragraphs.Count
     paraCount2 = doc2.Paragraphs.Count
@@ -641,32 +645,39 @@ Private Sub CompareWordDocuments(ByRef doc1 As Object, ByRef doc2 As Object, _
 
     ' 段落単位で比較
     For i = 1 To maxParas
-        ' 旧ファイルのテキスト取得
+        ' 旧ファイルのテキストとスタイル取得
         If i <= paraCount1 Then
             text1 = CleanText(doc1.Paragraphs(i).Range.Text)
+            style1 = GetParagraphStyleInfo(doc1.Paragraphs(i))
         Else
             text1 = ""
+            style1 = ""
         End If
 
-        ' 新ファイルのテキスト取得
+        ' 新ファイルのテキストとスタイル取得
         If i <= paraCount2 Then
             text2 = CleanText(doc2.Paragraphs(i).Range.Text)
+            style2 = GetParagraphStyleInfo(doc2.Paragraphs(i))
         Else
             text2 = ""
+            style2 = ""
         End If
 
-        ' 比較
+        ' テキスト比較
         If text1 <> text2 Then
             If Len(text1) = 0 And Len(text2) > 0 Then
                 ' 追加
-                AddWordDifference differences, diffCount, i, "追加", "(空)", text2
+                AddWordDifferenceWithStyle differences, diffCount, i, "追加", "(空)", text2, "", style2
             ElseIf Len(text1) > 0 And Len(text2) = 0 Then
                 ' 削除
-                AddWordDifference differences, diffCount, i, "削除", text1, "(空)"
+                AddWordDifferenceWithStyle differences, diffCount, i, "削除", text1, "(空)", style1, ""
             Else
                 ' 変更
-                AddWordDifference differences, diffCount, i, "変更", text1, text2
+                AddWordDifferenceWithStyle differences, diffCount, i, "変更", text1, text2, style1, style2
             End If
+        ' テキストが同じでもスタイルが異なる場合
+        ElseIf style1 <> style2 And Len(text1) > 0 Then
+            AddWordDifferenceWithStyle differences, diffCount, i, "スタイル変更", text1, text2, style1, style2
         End If
 
         ' 進捗表示（100段落ごと）
@@ -681,20 +692,65 @@ Private Sub CompareWordDocuments(ByRef doc1 As Object, ByRef doc2 As Object, _
         If paraCount1 > paraCount2 Then
             For i = paraCount2 + 1 To paraCount1
                 text1 = CleanText(doc1.Paragraphs(i).Range.Text)
+                style1 = GetParagraphStyleInfo(doc1.Paragraphs(i))
                 If Len(text1) > 0 Then
-                    AddWordDifference differences, diffCount, i, "削除", text1, "(段落なし)"
+                    AddWordDifferenceWithStyle differences, diffCount, i, "削除", text1, "(段落なし)", style1, ""
                 End If
             Next i
         Else
             For i = paraCount1 + 1 To paraCount2
                 text2 = CleanText(doc2.Paragraphs(i).Range.Text)
+                style2 = GetParagraphStyleInfo(doc2.Paragraphs(i))
                 If Len(text2) > 0 Then
-                    AddWordDifference differences, diffCount, i, "追加", "(段落なし)", text2
+                    AddWordDifferenceWithStyle differences, diffCount, i, "追加", "(段落なし)", text2, "", style2
                 End If
             Next i
         End If
     End If
 End Sub
+
+'==============================================================================
+' 段落のスタイル情報を取得
+'==============================================================================
+Private Function GetParagraphStyleInfo(ByRef para As Object) As String
+    Dim styleInfo As String
+    Dim fontName As String
+    Dim fontSize As Single
+    Dim isBold As Boolean
+    Dim isItalic As Boolean
+    Dim styleName As String
+
+    On Error Resume Next
+
+    ' スタイル名
+    styleName = para.Style.NameLocal
+    If Err.Number <> 0 Then styleName = "(不明)"
+    Err.Clear
+
+    ' フォント情報（段落の最初の文字から取得）
+    fontName = para.Range.Font.Name
+    If Err.Number <> 0 Or fontName = "" Then fontName = "(混在)"
+    Err.Clear
+
+    fontSize = para.Range.Font.Size
+    If Err.Number <> 0 Or fontSize = 9999999 Then
+        fontSize = 0
+    End If
+    Err.Clear
+
+    ' 太字・斜体（wdUndefined=-9999999の場合は混在）
+    isBold = (para.Range.Font.Bold = True)
+    isItalic = (para.Range.Font.Italic = True)
+
+    On Error GoTo 0
+
+    ' スタイル情報を文字列化
+    styleInfo = "[" & styleName & "] " & fontName & " " & Format(fontSize, "0.0") & "pt"
+    If isBold Then styleInfo = styleInfo & " 太字"
+    If isItalic Then styleInfo = styleInfo & " 斜体"
+
+    GetParagraphStyleInfo = styleInfo
+End Function
 
 '==============================================================================
 ' 値の比較（数値の微小差異を考慮）
@@ -800,6 +856,17 @@ End Sub
 Private Sub AddWordDifference(ByRef differences() As WordDifferenceInfo, ByRef diffCount As Long, _
                                ByVal paraNo As Long, ByVal diffType As String, _
                                ByVal oldText As String, ByVal newText As String)
+    ' スタイル情報なしで追加
+    AddWordDifferenceWithStyle differences, diffCount, paraNo, diffType, oldText, newText, "", ""
+End Sub
+
+'==============================================================================
+' Word差異を追加（スタイル情報付き）
+'==============================================================================
+Private Sub AddWordDifferenceWithStyle(ByRef differences() As WordDifferenceInfo, ByRef diffCount As Long, _
+                               ByVal paraNo As Long, ByVal diffType As String, _
+                               ByVal oldText As String, ByVal newText As String, _
+                               ByVal oldStyle As String, ByVal newStyle As String)
     ' 配列を拡張
     If diffCount = 0 Then
         ReDim differences(0 To 0)
@@ -813,6 +880,8 @@ Private Sub AddWordDifference(ByRef differences() As WordDifferenceInfo, ByRef d
         .DiffType = diffType
         .OldText = Left(oldText, 500)  ' 長すぎるテキストを切り詰め
         .NewText = Left(newText, 500)
+        .OldStyle = oldStyle
+        .NewStyle = newStyle
     End With
 
     diffCount = diffCount + 1
@@ -999,6 +1068,8 @@ Private Sub CreateWordResultSheet(ByRef differences() As WordDifferenceInfo, ByV
         .Range("C8").Interior.Color = COLOR_ADDED
         .Range("D8").Value = "削除"
         .Range("D8").Interior.Color = COLOR_DELETED
+        .Range("E8").Value = "スタイル変更"
+        .Range("E8").Interior.Color = RGB(204, 153, 255)  ' 薄紫
 
         ' ヘッダー
         .Range("A10").Value = "No"
@@ -1006,9 +1077,11 @@ Private Sub CreateWordResultSheet(ByRef differences() As WordDifferenceInfo, ByV
         .Range("C10").Value = "差異タイプ"
         .Range("D10").Value = "旧ファイルのテキスト"
         .Range("E10").Value = "新ファイルのテキスト"
+        .Range("F10").Value = "旧スタイル"
+        .Range("G10").Value = "新スタイル"
 
         ' ヘッダー書式
-        With .Range("A10:E10")
+        With .Range("A10:G10")
             .Font.Bold = True
             .Interior.Color = RGB(68, 114, 196)
             .Font.Color = RGB(255, 255, 255)
@@ -1024,6 +1097,8 @@ Private Sub CreateWordResultSheet(ByRef differences() As WordDifferenceInfo, ByV
             .Cells(row, 3).Value = differences(i).DiffType
             .Cells(row, 4).Value = differences(i).OldText
             .Cells(row, 5).Value = differences(i).NewText
+            .Cells(row, 6).Value = differences(i).OldStyle
+            .Cells(row, 7).Value = differences(i).NewStyle
 
             ' テキストを折り返し
             .Cells(row, 4).WrapText = True
@@ -1032,23 +1107,27 @@ Private Sub CreateWordResultSheet(ByRef differences() As WordDifferenceInfo, ByV
             ' 差異タイプによって行に色を付ける
             Select Case differences(i).DiffType
                 Case "変更"
-                    .Range(.Cells(row, 1), .Cells(row, 5)).Interior.Color = COLOR_CHANGED
+                    .Range(.Cells(row, 1), .Cells(row, 7)).Interior.Color = COLOR_CHANGED
                 Case "追加"
-                    .Range(.Cells(row, 1), .Cells(row, 5)).Interior.Color = COLOR_ADDED
+                    .Range(.Cells(row, 1), .Cells(row, 7)).Interior.Color = COLOR_ADDED
                 Case "削除"
-                    .Range(.Cells(row, 1), .Cells(row, 5)).Interior.Color = COLOR_DELETED
+                    .Range(.Cells(row, 1), .Cells(row, 7)).Interior.Color = COLOR_DELETED
+                Case "スタイル変更"
+                    .Range(.Cells(row, 1), .Cells(row, 7)).Interior.Color = RGB(204, 153, 255)  ' 薄紫
             End Select
         Next i
 
         ' 列幅調整
         .Columns("A").ColumnWidth = 6
         .Columns("B").ColumnWidth = 10
-        .Columns("C").ColumnWidth = 12
-        .Columns("D").ColumnWidth = 50
-        .Columns("E").ColumnWidth = 50
+        .Columns("C").ColumnWidth = 14
+        .Columns("D").ColumnWidth = 40
+        .Columns("E").ColumnWidth = 40
+        .Columns("F").ColumnWidth = 30
+        .Columns("G").ColumnWidth = 30
 
         ' フィルターを設定
-        .Range("A10:E10").AutoFilter
+        .Range("A10:G10").AutoFilter
 
         ' ウィンドウ枠の固定
         .Rows(11).Select
