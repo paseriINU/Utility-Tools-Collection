@@ -4,8 +4,82 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PDF 比較ツール（WinMerge方式）</title>
-    <!-- PDF.js CDN -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <!-- PDF.js: ローカル優先、CDNフォールバック -->
+    <script>
+        // ライブラリ読み込み状態を管理
+        window.pdfJsLoaded = false;
+        window.pdfJsLoadError = null;
+
+        function loadScript(src) {
+            return new Promise((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = src;
+                script.onload = resolve;
+                script.onerror = reject;
+                document.head.appendChild(script);
+            });
+        }
+
+        async function initPdfJs() {
+            const localPath = 'lib/pdf.min.js';
+            const cdnPath = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+            const localWorker = 'lib/pdf.worker.min.js';
+            const cdnWorker = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+            try {
+                // ローカルを試行
+                await loadScript(localPath);
+                pdfjsLib.GlobalWorkerOptions.workerSrc = localWorker;
+                window.pdfJsLoaded = true;
+                window.pdfJsSource = 'ローカル';
+                console.log('PDF.js loaded from local');
+            } catch (e) {
+                console.log('Local PDF.js not found, trying CDN...');
+                try {
+                    // CDNにフォールバック
+                    await loadScript(cdnPath);
+                    pdfjsLib.GlobalWorkerOptions.workerSrc = cdnWorker;
+                    window.pdfJsLoaded = true;
+                    window.pdfJsSource = 'CDN（オンライン）';
+                    console.log('PDF.js loaded from CDN');
+                } catch (e2) {
+                    window.pdfJsLoadError = 'PDF.jsの読み込みに失敗しました。インターネット接続を確認するか、lib/フォルダにpdf.jsを配置してください。';
+                    console.error('Failed to load PDF.js');
+                }
+            }
+
+            // 読み込み完了後にUIを更新
+            if (document.readyState === 'complete') {
+                updateLibraryStatus();
+            } else {
+                window.addEventListener('load', updateLibraryStatus);
+            }
+        }
+
+        function updateLibraryStatus() {
+            const statusEl = document.getElementById('libraryStatus');
+            if (statusEl) {
+                if (window.pdfJsLoaded) {
+                    statusEl.textContent = `ライブラリ: ${window.pdfJsSource}`;
+                    statusEl.style.color = window.pdfJsSource === 'ローカル' ? '#4caf50' : '#ff9800';
+                } else {
+                    statusEl.textContent = 'ライブラリ: 読み込み失敗';
+                    statusEl.style.color = '#f44336';
+                }
+            }
+
+            if (window.pdfJsLoadError) {
+                const errorDiv = document.getElementById('errorMessage');
+                if (errorDiv) {
+                    errorDiv.textContent = window.pdfJsLoadError;
+                    errorDiv.style.display = 'block';
+                }
+            }
+        }
+
+        // PDF.js初期化開始
+        initPdfJs();
+    </script>
     <style>
         * {
             box-sizing: border-box;
@@ -321,6 +395,7 @@
         <header>
             <h1>PDF 比較ツール（WinMerge方式）</h1>
             <p>LCS（最長共通部分列）アルゴリズムによる高精度な差分検出</p>
+            <p id="libraryStatus" style="font-size: 12px; margin-top: 5px;">ライブラリ: 読み込み中...</p>
         </header>
 
         <div class="error-message" id="errorMessage"></div>
@@ -419,8 +494,7 @@
     </div>
 
     <script>
-        // PDF.js worker設定
-        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        // PDF.js worker設定は initPdfJs() で動的に設定されます
 
         // グローバル変数
         let file1Data = null;

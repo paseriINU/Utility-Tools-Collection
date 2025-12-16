@@ -1,0 +1,7 @@
+# このフォルダにPDF.jsライブラリを配置してください
+#
+# ダウンロード元:
+# - https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js
+# - https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js
+#
+# 配置後、HTMLファイルを開くと自動的にローカルライブラリが使用されます
