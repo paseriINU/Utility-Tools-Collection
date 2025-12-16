@@ -27,7 +27,7 @@ exit /b %EXITCODE%
 #
 # 注意:
 #   - 上書き後は元に戻せません（バックアップブランチ作成を推奨）
-#   - リモートへのプッシュには --force が必要です
+#   - リモートへのプッシュには --force-with-lease が必要です
 #==============================================================================
 
 # タイトル表示
@@ -89,12 +89,18 @@ function Select-Branch {
     param (
         [string]$Title,
         [string[]]$Branches,
-        [string]$ExcludeBranch = ""
+        [string]$ExcludeBranch = "",
+        [string[]]$ExcludeBranches = @()
     )
 
-    # 除外ブランチを除く
+    # 除外ブランチを除く（単一）
     if ($ExcludeBranch) {
         $Branches = $Branches | Where-Object { $_ -ne $ExcludeBranch }
+    }
+
+    # 除外ブランチを除く（複数）
+    if ($ExcludeBranches.Count -gt 0) {
+        $Branches = $Branches | Where-Object { $_ -notin $ExcludeBranches }
     }
 
     if ($Branches.Count -eq 0) {
@@ -193,8 +199,10 @@ function Main {
 
     #--------------------------------------------------------------------------
     # ターゲットブランチ選択（上書き対象）
+    # ※ main/master は保護のため選択不可
     #--------------------------------------------------------------------------
-    $targetBranch = Select-Branch -Title "ターゲットブランチを選択（上書き対象）" -Branches $branches -ExcludeBranch $sourceBranch
+    $protectedBranches = @("main", "master")
+    $targetBranch = Select-Branch -Title "ターゲットブランチを選択（上書き対象）※main/masterは保護" -Branches $branches -ExcludeBranch $sourceBranch -ExcludeBranches $protectedBranches
 
     if (-not $targetBranch) {
         Write-Host "キャンセルしました。" -ForegroundColor Yellow
@@ -203,20 +211,6 @@ function Main {
 
     Write-Host ""
     Write-Host "[選択] ターゲットブランチ: $targetBranch" -ForegroundColor Green
-
-    #--------------------------------------------------------------------------
-    # main/master ブランチの警告
-    #--------------------------------------------------------------------------
-    if ($targetBranch -eq "main" -or $targetBranch -eq "master") {
-        Write-Host ""
-        Write-Host "================================================================" -ForegroundColor Red
-        Write-Host "  [警告] $targetBranch ブランチを上書きしようとしています！" -ForegroundColor Red
-        Write-Host "================================================================" -ForegroundColor Red
-        Write-Host ""
-        Write-Host "  これは通常、保護されるべきブランチです。" -ForegroundColor Yellow
-        Write-Host "  本当に上書きしてよいか確認してください。" -ForegroundColor Yellow
-        Write-Host ""
-    }
 
     #--------------------------------------------------------------------------
     # バックアップブランチの作成確認
@@ -259,7 +253,7 @@ function Main {
     Write-Host "----------------------------------------------------------------" -ForegroundColor DarkGray
     Write-Host ""
     Write-Host "  変更後、リモートリポジトリにプッシュしますか？" -ForegroundColor White
-    Write-Host "  （--force オプションが使用されます）" -ForegroundColor Gray
+    Write-Host "  （--force-with-lease オプションが使用されます）" -ForegroundColor Gray
     Write-Host ""
     Write-Host "   1. リモートにプッシュする" -ForegroundColor White
     Write-Host "   2. ローカルのみ変更（プッシュしない）" -ForegroundColor White
@@ -305,7 +299,7 @@ function Main {
     Write-Host "    $(if($createBackup){'3'}else{'2'}). git reset --hard $sourceBranch" -ForegroundColor Gray
 
     if ($pushToRemote) {
-        Write-Host "    $(if($createBackup){'4'}else{'3'}). git push --force origin $targetBranch" -ForegroundColor Gray
+        Write-Host "    $(if($createBackup){'4'}else{'3'}). git push --force-with-lease origin $targetBranch" -ForegroundColor Gray
     }
 
     Write-Host ""
@@ -377,14 +371,14 @@ function Main {
     # リモートにプッシュ
     if ($pushToRemote) {
         $step++
-        Write-Host "[$step/$totalSteps] リモートにプッシュ中 (--force)..." -ForegroundColor Cyan
+        Write-Host "[$step/$totalSteps] リモートにプッシュ中 (--force-with-lease)..." -ForegroundColor Cyan
 
-        git push --force origin $targetBranch 2>&1
+        git push --force-with-lease origin $targetBranch 2>&1
 
         if ($LASTEXITCODE -ne 0) {
             Write-Host "[エラー] プッシュに失敗しました。" -ForegroundColor Red
             Write-Host "  ローカルの変更は完了しています。" -ForegroundColor Yellow
-            Write-Host "  手動でプッシュしてください: git push --force origin $targetBranch" -ForegroundColor Yellow
+            Write-Host "  手動でプッシュしてください: git push --force-with-lease origin $targetBranch" -ForegroundColor Yellow
             return 1
         }
 

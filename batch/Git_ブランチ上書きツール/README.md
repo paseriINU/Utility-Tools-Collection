@@ -33,13 +33,14 @@
 3. **ターゲットブランチを選択**（上書き対象）
    - 一覧から番号で選択
    - このブランチが上書きされます
+   - ※ main/master は保護のため選択不可
 
 4. **バックアップの作成を選択**
    - 推奨: バックアップを作成する
    - バックアップブランチ名: `backup/[ブランチ名]_[日時]`
 
 5. **リモートプッシュを選択**
-   - リモートに反映する場合は `--force` でプッシュ
+   - リモートに反映する場合は `--force-with-lease` でプッシュ
    - ローカルのみの変更も可能
 
 6. **最終確認**
@@ -58,14 +59,14 @@ git checkout target
 git reset --hard source
 
 # リモートにプッシュ（オプション）
-git push --force origin target
+git push --force-with-lease origin target
 ```
 
 ## 機能
 
 ### 安全機能
 
-- **main/master 警告**: 保護ブランチを上書き対象にした場合、警告を表示
+- **main/master 保護**: main/master ブランチは上書き対象として選択不可
 - **バックアップ作成**: 上書き前に自動でバックアップブランチを作成可能
 - **複数回の確認**: 各ステップで確認プロンプトを表示
 - **最終確認**: `yes` の完全入力を要求（誤操作防止）
@@ -81,7 +82,7 @@ git push --force origin target
 
 1. **取り消し不可**: `git reset --hard` は取り消せません。必ずバックアップを作成してください。
 
-2. **force push**: リモートへのプッシュには `--force` が使用されます。共有リポジトリでは他のメンバーに影響があります。
+2. **force-with-lease**: リモートへのプッシュには `--force-with-lease` が使用されます。他の人がプッシュした場合は失敗し、安全です。
 
 3. **未コミット変更**: 作業中の変更がある場合は、事前にコミットまたはスタッシュしてください。
 
@@ -99,7 +100,7 @@ git checkout target
 git reset --hard backup/target_20241216_123456
 
 # リモートに反映（必要な場合）
-git push --force origin target
+git push --force-with-lease origin target
 ```
 
 ## トラブルシューティング

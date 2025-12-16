@@ -68,8 +68,8 @@
 - **[Git ブランチ上書きツール](batch/Git_ブランチ上書きツール/)**: Gitブランチを別のブランチで完全上書き
   - git reset --hard 方式で完全置換
   - バックアップブランチの自動作成機能
-  - main/masterブランチへの警告機能
-  - リモートへのforce push対応
+  - main/masterブランチは保護（選択不可）
+  - リモートへの --force-with-lease 対応
   - ダブルクリックで実行可能
 
 - **[Git Linuxデプロイツール](batch/Git_Linuxデプロイツール/)**: Git変更ファイルをLinuxサーバーに転送
