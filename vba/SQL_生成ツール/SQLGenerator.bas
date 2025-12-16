@@ -1487,7 +1487,7 @@ Public Sub SaveToHistory()
     description = InputBox("このSQLの説明を入力してください（省略可）:", "履歴保存")
 
     ' 次の空き行を探す
-    nextRow = wsHistory.Cells(wsHistory.Rows.Count, 1).End(xlUp).row + 1
+    nextRow = wsHistory.Cells(wsHistory.Rows.Count, 1).End(xlUp).Row + 1
     If nextRow < 4 Then nextRow = 4
 
     wsHistory.Range("A" & nextRow).Value = nextRow - 3
@@ -2423,10 +2423,10 @@ Public Sub ImportTableDefinitions()
 
     ' 既存データをクリア（常に置換）
     If wsDef.Range("B6").Value <> "" Then
-        wsDef.Range("A6:C" & wsDef.Cells(wsDef.Rows.Count, "B").End(xlUp).row).ClearContents
+        wsDef.Range("A6:C" & wsDef.Cells(wsDef.Rows.Count, "B").End(xlUp).Row).ClearContents
     End If
     If wsDef.Range("E6").Value <> "" Then
-        wsDef.Range("E6:H" & wsDef.Cells(wsDef.Rows.Count, "E").End(xlUp).row).ClearContents
+        wsDef.Range("E6:H" & wsDef.Cells(wsDef.Rows.Count, "E").End(xlUp).Row).ClearContents
     End If
     nextTableRow = 6
     nextColumnRow = 6
