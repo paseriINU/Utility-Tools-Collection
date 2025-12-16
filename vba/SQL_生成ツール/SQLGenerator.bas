@@ -785,8 +785,9 @@ End Sub
 '==============================================================================
 ' プルダウンリスト追加ヘルパー
 ' ※255文字を超える場合は名前付き範囲を使用
+' namePrefix: 名前付き範囲のプレフィックス（TableList/ColumnList等）
 '==============================================================================
-Private Sub AddDropdown(ByVal ws As Worksheet, ByVal cellAddr As String, ByVal listItems As String)
+Private Sub AddDropdown(ByVal ws As Worksheet, ByVal cellAddr As String, ByVal listItems As String, Optional ByVal namePrefix As String = "DropList")
     Dim items() As String
     Dim wsDef As Worksheet
     Dim rangeName As String
@@ -814,7 +815,7 @@ Private Sub AddDropdown(ByVal ws As Worksheet, ByVal cellAddr As String, ByVal l
                 If Not wsDef Is Nothing Then
                     ' リスト内容に基づいてユニークな名前を生成（同じリストは共有）
                     listHash = Len(listItems) + UBound(items) * 100
-                    rangeName = "DropList_" & listHash
+                    rangeName = namePrefix & "_" & listHash
 
                     ' 既存の名前付き範囲をチェック
                     Set existingName = Nothing
@@ -1879,35 +1880,35 @@ Public Sub UpdateDropdownsFromTableDef()
         Exit Sub
     End If
 
-    ' メインテーブルのプルダウンを更新
-    AddDropdown wsMain, "B" & ROW_MAIN_TABLE + 1, tableList
+    ' メインテーブルのプルダウンを更新（テーブル一覧用プレフィックス）
+    AddDropdown wsMain, "B" & ROW_MAIN_TABLE + 1, tableList, "TableList"
 
-    ' JOINテーブルのプルダウンを更新
+    ' JOINテーブルのプルダウンを更新（テーブル一覧用プレフィックス）
     For i = ROW_JOIN_START + 2 To ROW_JOIN_END
-        AddDropdown wsMain, "C" & i, tableList
+        AddDropdown wsMain, "C" & i, tableList, "TableList"
     Next i
 
-    ' カラム選択のプルダウンを更新（全テーブルの全カラム）
+    ' カラム選択のプルダウンを更新（全テーブルの全カラム、カラム一覧用プレフィックス）
     Dim columnList As String
     columnList = GetAllColumnList()
 
     For i = ROW_COLUMNS_START To ROW_COLUMNS_END
         If columnList <> "" Then
-            AddDropdown wsMain, "C" & i, columnList
+            AddDropdown wsMain, "C" & i, columnList, "ColumnList"
         End If
     Next i
 
-    ' WHERE句のカラムプルダウンを更新
+    ' WHERE句のカラムプルダウンを更新（カラム一覧用プレフィックス）
     For i = ROW_WHERE_START To ROW_WHERE_END
         If columnList <> "" Then
-            AddDropdown wsMain, "E" & i, columnList
+            AddDropdown wsMain, "E" & i, columnList, "ColumnList"
         End If
     Next i
 
-    ' ORDER BY句のカラムプルダウンを更新
+    ' ORDER BY句のカラムプルダウンを更新（カラム一覧用プレフィックス）
     For i = ROW_ORDERBY_START To ROW_ORDERBY_END
         If columnList <> "" Then
-            AddDropdown wsMain, "C" & i, columnList
+            AddDropdown wsMain, "C" & i, columnList, "ColumnList"
         End If
     Next i
 
@@ -2222,19 +2223,19 @@ Public Sub RefreshColumnDropdownsByTable()
         Exit Sub
     End If
 
-    ' カラム選択のプルダウンを更新
+    ' カラム選択のプルダウンを更新（カラム一覧用プレフィックス）
     For i = ROW_COLUMNS_START To ROW_COLUMNS_END
-        AddDropdown wsMain, "C" & i, columnList
+        AddDropdown wsMain, "C" & i, columnList, "ColumnList"
     Next i
 
-    ' WHERE句のカラムプルダウンを更新
+    ' WHERE句のカラムプルダウンを更新（カラム一覧用プレフィックス）
     For i = ROW_WHERE_START To ROW_WHERE_END
-        AddDropdown wsMain, "E" & i, columnList
+        AddDropdown wsMain, "E" & i, columnList, "ColumnList"
     Next i
 
-    ' ORDER BY句のカラムプルダウンを更新
+    ' ORDER BY句のカラムプルダウンを更新（カラム一覧用プレフィックス）
     For i = ROW_ORDERBY_START To ROW_ORDERBY_END
-        AddDropdown wsMain, "C" & i, columnList
+        AddDropdown wsMain, "C" & i, columnList, "ColumnList"
     Next i
 
     ' 選択されたテーブル数をカウント
@@ -2305,26 +2306,26 @@ Public Sub OnTableSelectionChanged(ByVal changedRange As Range)
 
     Application.EnableEvents = False
 
-    ' 既存のDropList_*名前付き範囲を削除（古いリストをクリア）
+    ' 既存のColumnList_*名前付き範囲を削除（カラム用のみ、テーブル用は残す）
     For Each nm In ThisWorkbook.Names
-        If Left(nm.Name, 9) = "DropList_" Then
+        If Left(nm.Name, 11) = "ColumnList_" Then
             nm.Delete
         End If
     Next nm
 
-    ' カラム選択のプルダウンを更新
+    ' カラム選択のプルダウンを更新（カラム一覧用プレフィックス）
     For i = ROW_COLUMNS_START To ROW_COLUMNS_END
-        AddDropdown wsMain, "C" & i, columnList
+        AddDropdown wsMain, "C" & i, columnList, "ColumnList"
     Next i
 
-    ' WHERE句のカラムプルダウンを更新
+    ' WHERE句のカラムプルダウンを更新（カラム一覧用プレフィックス）
     For i = ROW_WHERE_START To ROW_WHERE_END
-        AddDropdown wsMain, "E" & i, columnList
+        AddDropdown wsMain, "E" & i, columnList, "ColumnList"
     Next i
 
-    ' ORDER BY句のカラムプルダウンを更新
+    ' ORDER BY句のカラムプルダウンを更新（カラム一覧用プレフィックス）
     For i = ROW_ORDERBY_START To ROW_ORDERBY_END
-        AddDropdown wsMain, "C" & i, columnList
+        AddDropdown wsMain, "C" & i, columnList, "ColumnList"
     Next i
 
     Application.EnableEvents = True
