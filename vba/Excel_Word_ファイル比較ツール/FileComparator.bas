@@ -1078,12 +1078,25 @@ Private Sub FormatMainSheet(ByRef ws As Worksheet)
         ' =================================================================
         ' ボタンエリア (行8-10)
         ' =================================================================
+        Dim btnLeft As Double
+        Dim btnTop As Double
+        Dim btnWidth As Double
+        Dim btnHeight As Double
+        Dim btnGap As Double
+
         .Rows(7).RowHeight = 15
         .Rows(8).RowHeight = 50
 
+        ' ボタンサイズと位置の設定（固定値で統一）
+        btnWidth = 130
+        btnHeight = 40
+        btnGap = 30
+        btnLeft = .Range("B8").Left + 10
+        btnTop = .Range("B8").Top + 5
+
         ' Excel比較ボタン（緑系）- 角丸四角形
         Set shp = .Shapes.AddShape(msoShapeRoundedRectangle, _
-            .Range("B8").Left + 5, .Range("B8").Top + 5, 120, 40)
+            btnLeft, btnTop, btnWidth, btnHeight)
         With shp
             .Name = "btnCompareExcel"
             .Fill.ForeColor.RGB = RGB(76, 175, 80)  ' 緑
@@ -1099,9 +1112,9 @@ Private Sub FormatMainSheet(ByRef ws As Worksheet)
             .OnAction = "CompareExcelFiles"
         End With
 
-        ' Word比較ボタン（青系）- 角丸四角形
+        ' Word比較ボタン（青系）- 角丸四角形（Excel比較ボタンの右側に固定間隔で配置）
         Set shp = .Shapes.AddShape(msoShapeRoundedRectangle, _
-            .Range("E8").Left + 5, .Range("E8").Top + 5, 120, 40)
+            btnLeft + btnWidth + btnGap, btnTop, btnWidth, btnHeight)
         With shp
             .Name = "btnCompareWord"
             .Fill.ForeColor.RGB = RGB(33, 150, 243)  ' 青
