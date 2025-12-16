@@ -33,11 +33,6 @@ Private Const COLOR_CHANGED As Long = 65535      ' 黄色: 値変更
 Private Const COLOR_ADDED As Long = 5296274      ' 緑: 追加
 Private Const COLOR_DELETED As Long = 13421823   ' 赤: 削除
 
-' ファイルタイプ定数
-Private Const FILE_TYPE_UNKNOWN As Integer = 0
-Private Const FILE_TYPE_EXCEL As Integer = 1
-Private Const FILE_TYPE_WORD As Integer = 2
-
 '==============================================================================
 ' データ構造: Excel比較用
 '==============================================================================
@@ -60,79 +55,6 @@ Private Type WordDifferenceInfo
     OldStyle As String       ' 旧ファイルのスタイル情報
     NewStyle As String       ' 新ファイルのスタイル情報
 End Type
-
-'==============================================================================
-' メインプロシージャ: ファイルを比較
-'==============================================================================
-Public Sub CompareFiles()
-    Dim file1Path As String
-    Dim file2Path As String
-    Dim fileType As Integer
-
-    On Error GoTo ErrorHandler
-
-    ' 1つ目のファイル選択（Excel/Word両方選択可能）
-    MsgBox "2つのファイルを比較します。" & vbCrLf & vbCrLf & _
-           "まず、1つ目のファイル（旧ファイル）を選択してください。" & vbCrLf & _
-           "（ExcelまたはWordファイルを選択できます）", _
-           vbInformation, "ファイル比較ツール"
-
-    file1Path = SelectAnyFile("1つ目のファイル（旧ファイル）を選択")
-    If file1Path = "" Then
-        MsgBox "ファイル選択がキャンセルされました。", vbExclamation
-        Exit Sub
-    End If
-
-    ' ファイルタイプを判定
-    fileType = GetFileType(file1Path)
-
-    If fileType = FILE_TYPE_UNKNOWN Then
-        MsgBox "選択されたファイルはExcelでもWordでもありません。" & vbCrLf & _
-               "Excel(.xlsx/.xlsm/.xls/.xlsb)またはWord(.docx/.docm/.doc)ファイルを選択してください。", _
-               vbExclamation
-        Exit Sub
-    End If
-
-    ' 2つ目のファイル選択（1つ目と同じタイプのみ）
-    If fileType = FILE_TYPE_EXCEL Then
-        MsgBox "Excelファイルが選択されました。" & vbCrLf & vbCrLf & _
-               "次に、2つ目のExcelファイル（新ファイル）を選択してください。", _
-               vbInformation, "Excel ファイル比較"
-
-        file2Path = SelectExcelFile("2つ目のExcelファイル（新ファイル）を選択")
-    Else
-        MsgBox "Wordファイルが選択されました。" & vbCrLf & vbCrLf & _
-               "次に、2つ目のWordファイル（新ファイル）を選択してください。", _
-               vbInformation, "Word ファイル比較"
-
-        file2Path = SelectWordFile("2つ目のWordファイル（新ファイル）を選択")
-    End If
-
-    If file2Path = "" Then
-        MsgBox "ファイル選択がキャンセルされました。", vbExclamation
-        Exit Sub
-    End If
-
-    ' 同じファイルが選択された場合
-    If LCase(file1Path) = LCase(file2Path) Then
-        MsgBox "同じファイルが選択されました。異なるファイルを選択してください。", vbExclamation
-        Exit Sub
-    End If
-
-    ' ファイルタイプに応じて比較を実行
-    If fileType = FILE_TYPE_EXCEL Then
-        CompareExcelFilesInternal file1Path, file2Path
-    Else
-        CompareWordFilesInternal file1Path, file2Path
-    End If
-
-    Exit Sub
-
-ErrorHandler:
-    MsgBox "エラーが発生しました: " & vbCrLf & vbCrLf & _
-           "エラー番号: " & Err.Number & vbCrLf & _
-           "エラー内容: " & Err.Description, vbCritical, "エラー"
-End Sub
 
 '==============================================================================
 ' Excel専用比較プロシージャ（ボタン用）
@@ -227,64 +149,6 @@ ErrorHandler:
            "エラー番号: " & Err.Number & vbCrLf & _
            "エラー内容: " & Err.Description, vbCritical, "エラー"
 End Sub
-
-'==============================================================================
-' ファイルタイプを判定
-'==============================================================================
-Private Function GetFileType(ByVal filePath As String) As Integer
-    Dim ext As String
-
-    ext = LCase(GetFileExtension(filePath))
-
-    Select Case ext
-        Case "xlsx", "xlsm", "xls", "xlsb"
-            GetFileType = FILE_TYPE_EXCEL
-        Case "docx", "docm", "doc"
-            GetFileType = FILE_TYPE_WORD
-        Case Else
-            GetFileType = FILE_TYPE_UNKNOWN
-    End Select
-End Function
-
-'==============================================================================
-' ファイル拡張子を取得
-'==============================================================================
-Private Function GetFileExtension(ByVal filePath As String) As String
-    Dim pos As Long
-
-    pos = InStrRev(filePath, ".")
-    If pos > 0 Then
-        GetFileExtension = Mid(filePath, pos + 1)
-    Else
-        GetFileExtension = ""
-    End If
-End Function
-
-'==============================================================================
-' 任意のファイル選択ダイアログ（Excel/Word両方）
-'==============================================================================
-Private Function SelectAnyFile(ByVal dialogTitle As String) As String
-    Dim fd As Object
-
-    Set fd = Application.FileDialog(msoFileDialogFilePicker)
-
-    With fd
-        .Title = dialogTitle
-        .Filters.Clear
-        .Filters.Add "Excel/Word ファイル", "*.xlsx;*.xlsm;*.xls;*.xlsb;*.docx;*.docm;*.doc"
-        .Filters.Add "Excel ファイル", "*.xlsx;*.xlsm;*.xls;*.xlsb"
-        .Filters.Add "Word ファイル", "*.docx;*.docm;*.doc"
-        .Filters.Add "すべてのファイル", "*.*"
-        .FilterIndex = 1
-        .AllowMultiSelect = False
-
-        If .Show = -1 Then
-            SelectAnyFile = .SelectedItems(1)
-        Else
-            SelectAnyFile = ""
-        End If
-    End With
-End Function
 
 '==============================================================================
 ' Excelファイル選択ダイアログ
@@ -1139,25 +1003,6 @@ Private Sub CreateWordResultSheet(ByRef differences() As WordDifferenceInfo, ByV
 End Sub
 
 '==============================================================================
-' ハイライトをクリア
-'==============================================================================
-Public Sub ClearHighlight()
-    Dim ws As Worksheet
-
-    Set ws = ActiveSheet
-
-    ' 背景色をクリア
-    ws.Cells.Interior.ColorIndex = xlNone
-
-    ' コメントをクリア
-    On Error Resume Next
-    ws.Cells.ClearComments
-    On Error GoTo 0
-
-    MsgBox "ハイライトとコメントをクリアしました。", vbInformation, "処理完了"
-End Sub
-
-'==============================================================================
 ' メインシート初期化
 '==============================================================================
 Public Sub InitializeFileComparator()
@@ -1307,7 +1152,7 @@ Private Sub FormatMainSheet(ByRef ws As Worksheet)
         .Rows(16).RowHeight = 10
 
         ' Excel比較ボタン
-        Set btn = .Buttons.Add(.Range("B17").Left, .Range("B17").Top, 120, 35)
+        Set btn = .Buttons.Add(.Range("C17").Left, .Range("C17").Top, 120, 35)
         With btn
             .Name = "btnCompareExcel"
             .Caption = "Excel比較"
@@ -1318,7 +1163,7 @@ Private Sub FormatMainSheet(ByRef ws As Worksheet)
         End With
 
         ' Word比較ボタン
-        Set btn = .Buttons.Add(.Range("D17").Left, .Range("D17").Top, 120, 35)
+        Set btn = .Buttons.Add(.Range("E17").Left, .Range("E17").Top, 120, 35)
         With btn
             .Name = "btnCompareWord"
             .Caption = "Word比較"
@@ -1326,26 +1171,6 @@ Private Sub FormatMainSheet(ByRef ws As Worksheet)
             .Font.Name = "Meiryo UI"
             .Font.Size = 11
             .Font.Bold = True
-        End With
-
-        ' 自動判定比較ボタン（従来機能）
-        Set btn = .Buttons.Add(.Range("F17").Left, .Range("F17").Top, 120, 35)
-        With btn
-            .Name = "btnCompareFiles"
-            .Caption = "自動判定比較"
-            .OnAction = "CompareFiles"
-            .Font.Name = "Meiryo UI"
-            .Font.Size = 10
-        End With
-
-        ' ハイライトクリアボタン
-        Set btn = .Buttons.Add(.Range("H17").Left, .Range("H17").Top, 100, 35)
-        With btn
-            .Name = "btnClearHighlight"
-            .Caption = "クリア"
-            .OnAction = "ClearHighlight"
-            .Font.Name = "Meiryo UI"
-            .Font.Size = 10
         End With
 
         ' =================================================================
@@ -1541,11 +1366,4 @@ Private Sub FormatMainSheet(ByRef ws As Worksheet)
     End With
 
     Application.ScreenUpdating = True
-End Sub
-
-'==============================================================================
-' テスト用プロシージャ
-'==============================================================================
-Public Sub TestCompareFiles()
-    CompareFiles
 End Sub
