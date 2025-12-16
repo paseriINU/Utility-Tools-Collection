@@ -98,8 +98,15 @@ function Delete-RemoteBranch {
     Write-Host "リモートブランチ一覧を取得中..." -ForegroundColor Yellow
     Write-Host ""
 
-    # リモートブランチ一覧取得（HEAD除外）
-    $remoteBranches = @(git branch -r | Where-Object { $_ -notlike "*HEAD*" } | ForEach-Object { $_.Trim() })
+    # リモートブランチ一覧取得（HEAD除外、保護ブランチ除外）
+    $remoteBranches = @(git branch -r | Where-Object { $_ -notlike "*HEAD*" } | ForEach-Object {
+        $branchFullName = $_.Trim()
+        $branchShortName = $branchFullName -replace "^[^/]+/", ""
+        # 保護ブランチは除外
+        if ($ProtectedBranches -notcontains $branchShortName) {
+            $branchFullName
+        }
+    } | Where-Object { $_ })
 
     if ($remoteBranches.Count -eq 0) {
         Write-Host "リモートブランチが見つかりません" -ForegroundColor Yellow
@@ -366,10 +373,14 @@ function Delete-BothBranches {
         $ProtectedBranches -notcontains $_
     })
 
-    # リモートブランチ一覧
+    # リモートブランチ一覧（保護ブランチ除外）
     $remoteBranches = @(git branch -r | Where-Object { $_ -notlike "*HEAD*" } | ForEach-Object {
-        ($_ -replace "$remoteName/", "").Trim()
-    })
+        $branchName = ($_ -replace "$remoteName/", "").Trim()
+        # 保護ブランチは除外
+        if ($ProtectedBranches -notcontains $branchName) {
+            $branchName
+        }
+    } | Where-Object { $_ })
 
     # 共通ブランチを検索
     $commonBranches = @($localBranches | Where-Object { $remoteBranches -contains $_ })
