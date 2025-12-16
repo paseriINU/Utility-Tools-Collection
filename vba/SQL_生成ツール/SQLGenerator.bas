@@ -865,6 +865,56 @@ Private Sub AddButton(ByVal ws As Worksheet, ByVal cellAddr As String, ByVal cap
 End Sub
 
 '==============================================================================
+' セルアドレスの列をオフセット分ずらす
+' 例: "J2", 1 → "K2"  /  "D2", 1 → "E2"
+'==============================================================================
+Private Function OffsetCellColumn(ByVal cellAddr As String, ByVal colOffset As Long) As String
+    Dim colPart As String
+    Dim rowPart As String
+    Dim i As Long
+    Dim c As String
+
+    ' オフセットが0なら元のアドレスをそのまま返す
+    If colOffset = 0 Then
+        OffsetCellColumn = cellAddr
+        Exit Function
+    End If
+
+    ' 列部分と行部分を分離
+    colPart = ""
+    rowPart = ""
+    For i = 1 To Len(cellAddr)
+        c = Mid(cellAddr, i, 1)
+        If c >= "A" And c <= "Z" Then
+            colPart = colPart & c
+        ElseIf c >= "a" And c <= "z" Then
+            colPart = colPart & UCase(c)
+        Else
+            rowPart = Mid(cellAddr, i)
+            Exit For
+        End If
+    Next i
+
+    ' 列番号に変換してオフセットを適用
+    Dim colNum As Long
+    colNum = 0
+    For i = 1 To Len(colPart)
+        colNum = colNum * 26 + (Asc(Mid(colPart, i, 1)) - Asc("A") + 1)
+    Next i
+    colNum = colNum + colOffset
+
+    ' 列番号を文字に変換
+    Dim newColPart As String
+    newColPart = ""
+    Do While colNum > 0
+        newColPart = Chr(((colNum - 1) Mod 26) + Asc("A")) & newColPart
+        colNum = (colNum - 1) \ 26
+    Loop
+
+    OffsetCellColumn = newColPart & rowPart
+End Function
+
+'==============================================================================
 ' SQL生成メインプロシージャ
 '==============================================================================
 Public Sub GenerateSQL()
@@ -2433,6 +2483,10 @@ Public Sub ImportTableDefinitions()
     Dim actualColDataType As String
     Dim actualColLength As String
     Dim actualColNullable As String
+    Dim actualTableNameCell As String
+    Dim actualTableDescCell As String
+    Dim emptyCount As Long
+    Dim checkRow As Long
 
     Set wsDef = Sheets(SHEET_TABLE_DEF)
 
@@ -2513,10 +2567,14 @@ Public Sub ImportTableDefinitions()
             For sheetIdx = 1 To sourceWb.Sheets.Count
                 Set sourceWs = sourceWb.Sheets(sheetIdx)
 
-                ' シート名に例外DB名が含まれているか判定してオフセットを決定
+                ' シート名に例外DB名がカッコ内に含まれているか判定してオフセットを決定
+                ' 例: シート名「テーブル定義（AAA）」、例外DB名「AAA」→ 一致
                 colOffset = 0
-                If exceptionDbName <> "" And InStr(sourceWs.Name, exceptionDbName) > 0 Then
-                    colOffset = 1
+                If exceptionDbName <> "" Then
+                    If InStr(sourceWs.Name, "（" & exceptionDbName & "）") > 0 Or _
+                       InStr(sourceWs.Name, "(" & exceptionDbName & ")") > 0 Then
+                        colOffset = 1
+                    End If
                 End If
 
                 ' オフセットを適用した列名を計算
@@ -2526,9 +2584,13 @@ Public Sub ImportTableDefinitions()
                 actualColLength = Chr(Asc(colLength) + colOffset)
                 actualColNullable = Chr(Asc(colNullable) + colOffset)
 
+                ' テーブル名セルにもオフセットを適用
+                actualTableNameCell = OffsetCellColumn(tableNameCell, colOffset)
+                actualTableDescCell = OffsetCellColumn(tableDescCell, colOffset)
+
                 ' テーブル名を取得
-                tableName = Trim(CStr(sourceWs.Range(tableNameCell).Value))
-                tableDesc = Trim(CStr(sourceWs.Range(tableDescCell).Value))
+                tableName = Trim(CStr(sourceWs.Range(actualTableNameCell).Value))
+                tableDesc = Trim(CStr(sourceWs.Range(actualTableDescCell).Value))
 
                 If tableName <> "" Then
                     ' テーブル一覧に追加
@@ -2554,9 +2616,7 @@ Public Sub ImportTableDefinitions()
                             If currentRow > 1000 Then Exit Do
                             ' 空行が続いたら終了（10行連続で空なら終了）
                             If currentRow > columnStartRow + 10 Then
-                                Dim emptyCount As Long
                                 emptyCount = 0
-                                Dim checkRow As Long
                                 For checkRow = currentRow - 10 To currentRow - 1
                                     If Trim(CStr(sourceWs.Range(actualColName & checkRow).Value)) = "" Then
                                         emptyCount = emptyCount + 1
