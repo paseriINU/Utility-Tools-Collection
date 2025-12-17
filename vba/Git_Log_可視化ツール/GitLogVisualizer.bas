@@ -506,7 +506,7 @@ CheckCommitCount:
     CreateBranchGraphSheet commits, commitCount, gitRepoPath
 
     ' 履歴シートをアクティブに
-    Sheets(SHEET_HISTORY).Select
+    ThisWorkbook.Sheets(SHEET_HISTORY).Select
 
     Debug.Print "========================================="
     Debug.Print "処理完了"
@@ -751,7 +751,7 @@ End Sub
 '==============================================================================
 Private Sub CreateHistorySheet(ByRef commits() As CommitInfo, ByVal commitCount As Long, ByVal repoPath As String)
     Dim ws As Worksheet
-    Set ws = Sheets(SHEET_HISTORY)
+    Set ws = ThisWorkbook.Sheets(SHEET_HISTORY)
 
     With ws
         ' タイトル
@@ -873,7 +873,7 @@ End Sub
 '==============================================================================
 Private Sub CreateBranchGraphSheet(ByRef commits() As CommitInfo, ByVal commitCount As Long, ByVal repoPath As String)
     Dim ws As Worksheet
-    Set ws = Sheets(SHEET_BRANCH_GRAPH)
+    Set ws = ThisWorkbook.Sheets(SHEET_BRANCH_GRAPH)
 
     ' シートの図形をすべて削除
     Dim shp As Object
