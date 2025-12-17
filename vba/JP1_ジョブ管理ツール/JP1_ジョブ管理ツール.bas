@@ -69,12 +69,31 @@ Private Function BuildGetJobListScript(config As Object) As String
     script = script & "$cred = New-Object System.Management.Automation.PSCredential('" & config("RemoteUser") & "', $securePass)" & vbCrLf
     script = script & vbCrLf
 
-    ' WinRM設定
+    ' WinRM設定の保存と自動設定
+    script = script & "$originalTrustedHosts = $null" & vbCrLf
+    script = script & "$winrmConfigChanged = $false" & vbCrLf
+    script = script & "$winrmServiceWasStarted = $false" & vbCrLf
+    script = script & vbCrLf
+
     script = script & "try {" & vbCrLf
-    script = script & "  $originalTH = (Get-Item WSMan:\localhost\Client\TrustedHosts -ErrorAction SilentlyContinue).Value" & vbCrLf
-    script = script & "  if ($originalTH -notmatch '" & config("JP1Server") & "') {" & vbCrLf
-    script = script & "    if ($originalTH) { Set-Item WSMan:\localhost\Client\TrustedHosts -Value ""$originalTH," & config("JP1Server") & """ -Force -Confirm:`$false }" & vbCrLf
-    script = script & "    else { Set-Item WSMan:\localhost\Client\TrustedHosts -Value '" & config("JP1Server") & "' -Force -Confirm:`$false }" & vbCrLf
+    script = script & "  # 現在のTrustedHostsを取得" & vbCrLf
+    script = script & "  $originalTrustedHosts = (Get-Item WSMan:\localhost\Client\TrustedHosts -ErrorAction SilentlyContinue).Value" & vbCrLf
+    script = script & vbCrLf
+    script = script & "  # WinRMサービスの起動確認" & vbCrLf
+    script = script & "  $winrmService = Get-Service -Name WinRM -ErrorAction SilentlyContinue" & vbCrLf
+    script = script & "  if ($winrmService.Status -ne 'Running') {" & vbCrLf
+    script = script & "    Start-Service -Name WinRM -ErrorAction Stop" & vbCrLf
+    script = script & "    $winrmServiceWasStarted = $true" & vbCrLf
+    script = script & "  }" & vbCrLf
+    script = script & vbCrLf
+    script = script & "  # TrustedHostsに接続先を追加（必要な場合のみ）" & vbCrLf
+    script = script & "  if ($originalTrustedHosts -notmatch '" & config("JP1Server") & "') {" & vbCrLf
+    script = script & "    if ($originalTrustedHosts) {" & vbCrLf
+    script = script & "      Set-Item WSMan:\localhost\Client\TrustedHosts -Value ""$originalTrustedHosts," & config("JP1Server") & """ -Force -Confirm:`$false" & vbCrLf
+    script = script & "    } else {" & vbCrLf
+    script = script & "      Set-Item WSMan:\localhost\Client\TrustedHosts -Value '" & config("JP1Server") & "' -Force -Confirm:`$false" & vbCrLf
+    script = script & "    }" & vbCrLf
+    script = script & "    $winrmConfigChanged = $true" & vbCrLf
     script = script & "  }" & vbCrLf
     script = script & vbCrLf
 
@@ -96,8 +115,16 @@ Private Function BuildGetJobListScript(config As Object) As String
     script = script & "} catch {" & vbCrLf
     script = script & "  Write-Output ""ERROR: $($_.Exception.Message)""" & vbCrLf
     script = script & "} finally {" & vbCrLf
-    script = script & "  if ($originalTH -ne $null) {" & vbCrLf
-    script = script & "    Set-Item WSMan:\localhost\Client\TrustedHosts -Value $originalTH -Force -Confirm:`$false -ErrorAction SilentlyContinue" & vbCrLf
+    script = script & "  # WinRM設定の復元" & vbCrLf
+    script = script & "  if ($winrmConfigChanged) {" & vbCrLf
+    script = script & "    if ($originalTrustedHosts) {" & vbCrLf
+    script = script & "      Set-Item WSMan:\localhost\Client\TrustedHosts -Value $originalTrustedHosts -Force -Confirm:`$false -ErrorAction SilentlyContinue" & vbCrLf
+    script = script & "    } else {" & vbCrLf
+    script = script & "      Clear-Item WSMan:\localhost\Client\TrustedHosts -Force -Confirm:`$false -ErrorAction SilentlyContinue" & vbCrLf
+    script = script & "    }" & vbCrLf
+    script = script & "  }" & vbCrLf
+    script = script & "  if ($winrmServiceWasStarted) {" & vbCrLf
+    script = script & "    Stop-Service -Name WinRM -Force -ErrorAction SilentlyContinue" & vbCrLf
     script = script & "  }" & vbCrLf
     script = script & "}" & vbCrLf
 
@@ -474,12 +501,31 @@ Private Function BuildExecuteJobScript(config As Object, jobnetPath As String, w
     script = script & "$cred = New-Object System.Management.Automation.PSCredential('" & config("RemoteUser") & "', $securePass)" & vbCrLf
     script = script & vbCrLf
 
-    ' WinRM設定
+    ' WinRM設定の保存と自動設定
+    script = script & "$originalTrustedHosts = $null" & vbCrLf
+    script = script & "$winrmConfigChanged = $false" & vbCrLf
+    script = script & "$winrmServiceWasStarted = $false" & vbCrLf
+    script = script & vbCrLf
+
     script = script & "try {" & vbCrLf
-    script = script & "  $originalTH = (Get-Item WSMan:\localhost\Client\TrustedHosts -ErrorAction SilentlyContinue).Value" & vbCrLf
-    script = script & "  if ($originalTH -notmatch '" & config("JP1Server") & "') {" & vbCrLf
-    script = script & "    if ($originalTH) { Set-Item WSMan:\localhost\Client\TrustedHosts -Value ""$originalTH," & config("JP1Server") & """ -Force -Confirm:`$false }" & vbCrLf
-    script = script & "    else { Set-Item WSMan:\localhost\Client\TrustedHosts -Value '" & config("JP1Server") & "' -Force -Confirm:`$false }" & vbCrLf
+    script = script & "  # 現在のTrustedHostsを取得" & vbCrLf
+    script = script & "  $originalTrustedHosts = (Get-Item WSMan:\localhost\Client\TrustedHosts -ErrorAction SilentlyContinue).Value" & vbCrLf
+    script = script & vbCrLf
+    script = script & "  # WinRMサービスの起動確認" & vbCrLf
+    script = script & "  $winrmService = Get-Service -Name WinRM -ErrorAction SilentlyContinue" & vbCrLf
+    script = script & "  if ($winrmService.Status -ne 'Running') {" & vbCrLf
+    script = script & "    Start-Service -Name WinRM -ErrorAction Stop" & vbCrLf
+    script = script & "    $winrmServiceWasStarted = $true" & vbCrLf
+    script = script & "  }" & vbCrLf
+    script = script & vbCrLf
+    script = script & "  # TrustedHostsに接続先を追加（必要な場合のみ）" & vbCrLf
+    script = script & "  if ($originalTrustedHosts -notmatch '" & config("JP1Server") & "') {" & vbCrLf
+    script = script & "    if ($originalTrustedHosts) {" & vbCrLf
+    script = script & "      Set-Item WSMan:\localhost\Client\TrustedHosts -Value ""$originalTrustedHosts," & config("JP1Server") & """ -Force -Confirm:`$false" & vbCrLf
+    script = script & "    } else {" & vbCrLf
+    script = script & "      Set-Item WSMan:\localhost\Client\TrustedHosts -Value '" & config("JP1Server") & "' -Force -Confirm:`$false" & vbCrLf
+    script = script & "    }" & vbCrLf
+    script = script & "    $winrmConfigChanged = $true" & vbCrLf
     script = script & "  }" & vbCrLf
     script = script & vbCrLf
 
@@ -555,8 +601,16 @@ Private Function BuildExecuteJobScript(config As Object, jobnetPath As String, w
     script = script & "} catch {" & vbCrLf
     script = script & "  Write-Output ""ERROR: $($_.Exception.Message)""" & vbCrLf
     script = script & "} finally {" & vbCrLf
-    script = script & "  if ($originalTH -ne $null) {" & vbCrLf
-    script = script & "    Set-Item WSMan:\localhost\Client\TrustedHosts -Value $originalTH -Force -Confirm:`$false -ErrorAction SilentlyContinue" & vbCrLf
+    script = script & "  # WinRM設定の復元" & vbCrLf
+    script = script & "  if ($winrmConfigChanged) {" & vbCrLf
+    script = script & "    if ($originalTrustedHosts) {" & vbCrLf
+    script = script & "      Set-Item WSMan:\localhost\Client\TrustedHosts -Value $originalTrustedHosts -Force -Confirm:`$false -ErrorAction SilentlyContinue" & vbCrLf
+    script = script & "    } else {" & vbCrLf
+    script = script & "      Clear-Item WSMan:\localhost\Client\TrustedHosts -Force -Confirm:`$false -ErrorAction SilentlyContinue" & vbCrLf
+    script = script & "    }" & vbCrLf
+    script = script & "  }" & vbCrLf
+    script = script & "  if ($winrmServiceWasStarted) {" & vbCrLf
+    script = script & "    Stop-Service -Name WinRM -Force -ErrorAction SilentlyContinue" & vbCrLf
     script = script & "  }" & vbCrLf
     script = script & "}" & vbCrLf
 
