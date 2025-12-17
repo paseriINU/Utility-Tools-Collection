@@ -259,6 +259,8 @@ PR URL: https://github.com/user/repo/pull/123
 
 - **PowerShellスクリプト (.ps1) → ハイブリッド.bat形式を推奨**:
   - **重要**: PowerShellを使用する場合は、`.ps1`ファイルではなく、ポリグロットパターンを使用した`.bat`形式で作成すること
+  - **重要**: `Get-Content` (`gc`) でファイルを読み込む際は、必ず `-Encoding UTF8` を指定すること
+    - UTF-8エンコーディングを指定しないと、日本語などのマルチバイト文字が文字化けする原因となる
   - ポリグロットパターン（標準版）:
     ```batch
     <# :
@@ -266,7 +268,7 @@ PR URL: https://github.com/user/repo/pull/123
     chcp 65001 >nul
     title ツール名
     setlocal
-    powershell -NoProfile -ExecutionPolicy Bypass -Command "iex ((gc '%~f0') -join \"`n\")"
+    powershell -NoProfile -ExecutionPolicy Bypass -Command "iex ((gc '%~f0' -Encoding UTF8) -join \"`n\")"
     set EXITCODE=%ERRORLEVEL%
     pause
     exit /b %EXITCODE%
@@ -296,7 +298,7 @@ PR URL: https://github.com/user/repo/pull/123
         exit /b
     )
 
-    powershell -NoProfile -ExecutionPolicy Bypass -Command "$scriptDir=('%~dp0' -replace '\\$',''); iex ((gc '%~f0') -join \"`n\")"
+    powershell -NoProfile -ExecutionPolicy Bypass -Command "$scriptDir=('%~dp0' -replace '\\$',''); iex ((gc '%~f0' -Encoding UTF8) -join \"`n\")"
     set EXITCODE=%ERRORLEVEL%
     pause
     exit /b %EXITCODE%
@@ -324,7 +326,7 @@ PR URL: https://github.com/user/repo/pull/123
     rem UNCパス対応（PushD/PopDで自動マッピング）
     pushd "%~dp0"
 
-    powershell -NoProfile -ExecutionPolicy Bypass -Command "$scriptDir=('%~dp0' -replace '\\$',''); try { iex ((gc '%~f0') -join \"`n\") } finally { Set-Location C:\ }"
+    powershell -NoProfile -ExecutionPolicy Bypass -Command "$scriptDir=('%~dp0' -replace '\\$',''); try { iex ((gc '%~f0' -Encoding UTF8) -join \"`n\") } finally { Set-Location C:\ }"
     set EXITCODE=%ERRORLEVEL%
 
     popd
