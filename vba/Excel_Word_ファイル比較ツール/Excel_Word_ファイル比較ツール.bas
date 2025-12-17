@@ -28,10 +28,85 @@
 '   - COLOR_* 定数は Setup モジュールで定義されています
 '
 ' 作成日: 2025-12-11
-' 更新日: 2025-12-17 - セットアップモジュールを分離
+' 更新日: 2025-12-17 - Word比較のパフォーマンス最適化
+'          - スタイル情報の遅延取得（差分段落のみ取得）
+'          - ハッシュによる同一テキスト事前マッチング
+'          - DoEvents呼び出し頻度の最適化
 '==============================================================================
 
 Option Explicit
+
+'==============================================================================
+' モジュールレベル変数: テキスト一致段落のスタイル比較用
+'==============================================================================
+Private g_MatchedOld() As Long    ' 旧ファイルの段落番号
+Private g_MatchedNew() As Long    ' 新ファイルの段落番号
+Private g_MatchedCount As Long    ' ペア数
+
+'==============================================================================
+' 進捗表示用ヘルパー関数
+'==============================================================================
+Private Sub ShowProgress(ByVal phase As String, ByVal current As Long, ByVal total As Long)
+    Dim pct As Long
+    Dim progressBar As String
+    Dim barLength As Long
+    Dim filledLength As Long
+    Dim i As Long
+
+    If total > 0 Then
+        pct = CLng((current / total) * 100)
+    Else
+        pct = 0
+    End If
+
+    ' プログレスバー（20文字幅）
+    barLength = 20
+    filledLength = CLng(barLength * current / IIf(total > 0, total, 1))
+    progressBar = ""
+    For i = 1 To filledLength
+        progressBar = progressBar & ChrW(&H2588)  ' █
+    Next i
+    For i = filledLength + 1 To barLength
+        progressBar = progressBar & ChrW(&H2591)  ' ░
+    Next i
+
+    Application.StatusBar = phase & " " & progressBar & " " & pct & "% (" & current & "/" & total & ")"
+    DoEvents
+End Sub
+
+Private Sub ClearProgress()
+    Application.StatusBar = False
+End Sub
+
+'==============================================================================
+' メインシートのチェックボックス状態を取得
+' True: LCSモード、False: 簡易モード
+'==============================================================================
+Private Function GetUseLCSMode() As Boolean
+    Dim ws As Worksheet
+    Dim chkBox As CheckBox
+
+    On Error Resume Next
+
+    ' メインシートを取得
+    Set ws = ThisWorkbook.Worksheets("メイン")
+    If ws Is Nothing Then
+        GetUseLCSMode = False  ' メインシートがない場合は簡易モード
+        Exit Function
+    End If
+
+    ' チェックボックスを取得
+    Set chkBox = ws.CheckBoxes("chkUseLCS")
+    If chkBox Is Nothing Then
+        GetUseLCSMode = False  ' チェックボックスがない場合は簡易モード
+        Exit Function
+    End If
+
+    ' チェック状態を返す
+    GetUseLCSMode = (chkBox.Value = xlOn)
+
+    On Error GoTo 0
+End Function
 
 '==============================================================================
 ' データ構造: Excel比較用
@@ -362,10 +437,12 @@ Private Sub CompareWordFilesInternal(ByVal file1Path As String, ByVal file2Path 
 
 Cleanup:
     Application.ScreenUpdating = True
+    ClearProgress
     Exit Sub
 
 ErrorHandler:
     Application.ScreenUpdating = True
+    ClearProgress
 
     ' 開いたドキュメントを閉じる
     On Error Resume Next
@@ -485,6 +562,7 @@ End Sub
 
 '==============================================================================
 ' Word文書を段落単位で比較（WinMerge方式：LCSアルゴリズム使用）
+' 【最適化版】スタイル情報は差分検出後に必要な段落のみ取得
 '==============================================================================
 Private Sub CompareWordDocuments(ByRef doc1 As Object, ByRef doc2 As Object, _
                                   ByRef differences() As WordDifferenceInfo, ByRef diffCount As Long)
@@ -492,8 +570,6 @@ Private Sub CompareWordDocuments(ByRef doc1 As Object, ByRef doc2 As Object, _
     Dim paraCount2 As Long
     Dim texts1() As String
     Dim texts2() As String
-    Dim styles1() As String
-    Dim styles2() As String
     Dim i As Long
 
     paraCount1 = doc1.Paragraphs.Count
@@ -502,40 +578,235 @@ Private Sub CompareWordDocuments(ByRef doc1 As Object, ByRef doc2 As Object, _
     Debug.Print "旧ファイル段落数: " & paraCount1
     Debug.Print "新ファイル段落数: " & paraCount2
     Debug.Print "WinMerge方式（LCSアルゴリズム）で比較します..."
+    Debug.Print "【最適化モード】スタイル情報は差分段落のみ取得"
 
-    ' 段落テキストとスタイルを配列に取得
+    ' 段落テキストのみを配列に取得（スタイルは後で必要な段落のみ取得）
     ReDim texts1(1 To paraCount1)
-    ReDim styles1(1 To paraCount1)
     For i = 1 To paraCount1
         texts1(i) = CleanText(doc1.Paragraphs(i).Range.Text)
-        styles1(i) = GetParagraphStyleInfo(doc1.Paragraphs(i))
-        If i Mod 100 = 0 Then
-            Debug.Print "  旧ファイル: " & i & " / " & paraCount1 & " 段落読み込み中..."
-            DoEvents
+        If i Mod 50 = 0 Or i = paraCount1 Then
+            ShowProgress "[1/4] 旧ファイル読込", i, paraCount1
         End If
     Next i
 
     ReDim texts2(1 To paraCount2)
-    ReDim styles2(1 To paraCount2)
     For i = 1 To paraCount2
         texts2(i) = CleanText(doc2.Paragraphs(i).Range.Text)
-        styles2(i) = GetParagraphStyleInfo(doc2.Paragraphs(i))
-        If i Mod 100 = 0 Then
-            Debug.Print "  新ファイル: " & i & " / " & paraCount2 & " 段落読み込み中..."
-            DoEvents
+        If i Mod 50 = 0 Or i = paraCount2 Then
+            ShowProgress "[2/4] 新ファイル読込", i, paraCount2
         End If
     Next i
 
-    ' LCSベースの差分検出を実行
+    ' LCSベースの差分検出を実行（スタイル情報なしで高速計算）
     Debug.Print "差分を計算中..."
-    ComputeLCSDiff texts1, texts2, styles1, styles2, paraCount1, paraCount2, differences, diffCount
+    ComputeLCSDiffOptimized texts1, texts2, paraCount1, paraCount2, differences, diffCount
+
+    ' 差分が検出された段落のみスタイル情報を取得（遅延評価）
+    Debug.Print "差分段落のスタイル情報を取得中..."
+    FetchStylesForDifferences doc1, doc2, differences, diffCount
 
     Debug.Print "差分計算完了: " & diffCount & " 件の差異を検出"
 End Sub
 
 '==============================================================================
-' LCSベースの差分検出（Myers差分アルゴリズムの簡易版）
+' 差分が検出された段落のみスタイル情報を取得（遅延評価）
+' また、テキスト一致段落のスタイル比較も実行
+'==============================================================================
+Private Sub FetchStylesForDifferences(ByRef doc1 As Object, ByRef doc2 As Object, _
+                                       ByRef differences() As WordDifferenceInfo, ByRef diffCount As Long)
+    Dim i As Long
+    Dim oldParaNo As Long
+    Dim newParaNo As Long
+    Dim fetchedCount As Long
+    Dim oldStyle As String
+    Dim newStyle As String
+    Dim oldText As String
+
+    Dim totalStyleWork As Long
+    totalStyleWork = diffCount + g_MatchedCount
+    Dim styleProgress As Long
+    styleProgress = 0
+
+    ' 1. 既存の差分にスタイル情報を追加
+    If diffCount > 0 Then
+        fetchedCount = 0
+        For i = 0 To diffCount - 1
+            oldParaNo = differences(i).OldParagraphNo
+            newParaNo = differences(i).NewParagraphNo
+
+            ' 旧ファイルの段落スタイルを取得
+            If oldParaNo > 0 And oldParaNo <= doc1.Paragraphs.Count Then
+                differences(i).OldStyle = GetParagraphStyleInfo(doc1.Paragraphs(oldParaNo))
+            End If
+
+            ' 新ファイルの段落スタイルを取得
+            If newParaNo > 0 And newParaNo <= doc2.Paragraphs.Count Then
+                differences(i).NewStyle = GetParagraphStyleInfo(doc2.Paragraphs(newParaNo))
+            End If
+
+            fetchedCount = fetchedCount + 1
+            styleProgress = styleProgress + 1
+            If fetchedCount Mod 20 = 0 Or fetchedCount = diffCount Then
+                ShowProgress "[4/4] スタイル取得", styleProgress, totalStyleWork
+            End If
+        Next i
+    End If
+
+    ' 2. テキスト一致段落のスタイル比較（スタイル変更の検出）
+    If g_MatchedCount > 0 Then
+        Debug.Print "  テキスト一致段落のスタイル比較: " & g_MatchedCount & " 件"
+
+        Dim styleCheckCount As Long
+        styleCheckCount = 0
+
+        For i = 0 To g_MatchedCount - 1
+            oldParaNo = g_MatchedOld(i)
+            newParaNo = g_MatchedNew(i)
+
+            ' 両方の段落が有効範囲内かチェック
+            If oldParaNo > 0 And oldParaNo <= doc1.Paragraphs.Count And _
+               newParaNo > 0 And newParaNo <= doc2.Paragraphs.Count Then
+
+                oldStyle = GetParagraphStyleInfo(doc1.Paragraphs(oldParaNo))
+                newStyle = GetParagraphStyleInfo(doc2.Paragraphs(newParaNo))
+
+                ' スタイルが異なる場合は差分として追加
+                If oldStyle <> newStyle Then
+                    oldText = CleanText(doc1.Paragraphs(oldParaNo).Range.Text)
+                    AddWordDiffNew differences, diffCount, oldParaNo, newParaNo, "スタイル変更", _
+                        oldText, oldText, oldStyle, newStyle
+                End If
+            End If
+
+            styleCheckCount = styleCheckCount + 1
+            styleProgress = styleProgress + 1
+            If styleCheckCount Mod 50 = 0 Or styleCheckCount = g_MatchedCount Then
+                ShowProgress "[4/4] スタイル比較", styleProgress, totalStyleWork
+            End If
+        Next i
+
+        ' モジュールレベル変数をクリア
+        g_MatchedCount = 0
+        Erase g_MatchedOld
+        Erase g_MatchedNew
+    End If
+
+    ' 進捗表示をクリア
+    ClearProgress
+End Sub
+
+'==============================================================================
+' LCSベースの差分検出（最適化版：スタイル情報なし、ハッシュ事前マッチング付き）
 ' WinMergeのような行単位の差分を検出します
+'
+' 比較モード:
+'   - デフォルト（チェックなし）: 簡易比較モード（高速）
+'   - チェックあり: LCSアルゴリズム（厳密、大規模な構造変更に対応）
+'==============================================================================
+Private Sub ComputeLCSDiffOptimized(ByRef texts1() As String, ByRef texts2() As String, _
+                                     ByVal n1 As Long, ByVal n2 As Long, _
+                                     ByRef differences() As WordDifferenceInfo, ByRef diffCount As Long)
+    Dim lcsMatrix() As Long
+    Dim i As Long, j As Long
+    Dim maxLen As Long
+    Dim textHash1 As Object  ' Dictionary: テキスト -> 段落番号の配列
+    Dim textHash2 As Object
+    Dim uniqueTexts1 As Long, uniqueTexts2 As Long
+    Dim commonTexts As Long
+    Dim useLCS As Boolean
+
+    ' チェックボックスの状態を取得
+    useLCS = GetUseLCSMode()
+
+    ' ハッシュマップを作成して同一テキストを事前に特定
+    Set textHash1 = CreateObject("Scripting.Dictionary")
+    Set textHash2 = CreateObject("Scripting.Dictionary")
+
+    ' 旧ファイルのテキストをハッシュ化
+    For i = 1 To n1
+        If Not textHash1.exists(texts1(i)) Then
+            textHash1.Add texts1(i), i
+        End If
+    Next i
+    uniqueTexts1 = textHash1.Count
+
+    ' 新ファイルのテキストをハッシュ化
+    For i = 1 To n2
+        If Not textHash2.exists(texts2(i)) Then
+            textHash2.Add texts2(i), i
+        End If
+    Next i
+    uniqueTexts2 = textHash2.Count
+
+    ' 共通テキストの数をカウント
+    commonTexts = 0
+    For Each i In textHash1.Keys
+        If textHash2.exists(i) Then
+            commonTexts = commonTexts + 1
+        End If
+    Next i
+
+    Debug.Print "  ユニークテキスト数: 旧=" & uniqueTexts1 & ", 新=" & uniqueTexts2 & ", 共通=" & commonTexts
+
+    Set textHash1 = Nothing
+    Set textHash2 = Nothing
+
+    ' 比較モードの決定
+    maxLen = Application.WorksheetFunction.Max(n1, n2)
+
+    If Not useLCS Then
+        ' 簡易比較モード（デフォルト）
+        Debug.Print "比較モード: 簡易比較（高速）"
+        ComputeSimpleDiffOptimized texts1, texts2, n1, n2, differences, diffCount
+        Exit Sub
+    End If
+
+    ' LCSモード
+    Debug.Print "比較モード: LCSアルゴリズム（厳密）"
+
+    ' メモリ制限チェック（10000段落を超える場合は警告）
+    If maxLen > 10000 Then
+        Dim result As VbMsgBoxResult
+        result = MsgBox("段落数が " & maxLen & " あります。" & vbCrLf & vbCrLf & _
+                        "LCSアルゴリズムは大量のメモリと時間を使用します。" & vbCrLf & _
+                        "処理に数分～数十分かかる可能性があります。" & vbCrLf & vbCrLf & _
+                        "続行しますか？", vbYesNo + vbExclamation, "警告")
+        If result = vbNo Then
+            Debug.Print "ユーザーがキャンセル。簡易比較モードにフォールバック"
+            ComputeSimpleDiffOptimized texts1, texts2, n1, n2, differences, diffCount
+            Exit Sub
+        End If
+    End If
+
+    ' LCS行列を初期化 (0-indexed: 0 to n)
+    ReDim lcsMatrix(0 To n1, 0 To n2)
+
+    ' LCS行列を構築
+    For i = 1 To n1
+        For j = 1 To n2
+            If texts1(i) = texts2(j) Then
+                lcsMatrix(i, j) = lcsMatrix(i - 1, j - 1) + 1
+            Else
+                If lcsMatrix(i - 1, j) >= lcsMatrix(i, j - 1) Then
+                    lcsMatrix(i, j) = lcsMatrix(i - 1, j)
+                Else
+                    lcsMatrix(i, j) = lcsMatrix(i, j - 1)
+                End If
+            End If
+        Next j
+
+        ' 進捗表示
+        If i Mod 100 = 0 Or i = n1 Then
+            ShowProgress "[3/4] 差分計算(LCS)", i, n1
+        End If
+    Next i
+
+    ' バックトラックして差分を抽出（スタイル情報なし）
+    BacktrackLCSOptimized lcsMatrix, texts1, texts2, n1, n2, differences, diffCount
+End Sub
+
+'==============================================================================
+' LCSベースの差分検出（旧版：互換性のために残す）
 '==============================================================================
 Private Sub ComputeLCSDiff(ByRef texts1() As String, ByRef texts2() As String, _
                            ByRef styles1() As String, ByRef styles2() As String, _
@@ -582,7 +853,100 @@ Private Sub ComputeLCSDiff(ByRef texts1() As String, ByRef texts2() As String, _
 End Sub
 
 '==============================================================================
-' LCS行列をバックトラックして差分を抽出
+' LCS行列をバックトラックして差分を抽出（最適化版：スタイル情報なし）
+' matchedPairs: テキストが一致した段落ペアを格納（後でスタイル比較用）
+'==============================================================================
+Private Sub BacktrackLCSOptimized(ByRef lcsMatrix() As Long, _
+                                   ByRef texts1() As String, ByRef texts2() As String, _
+                                   ByVal n1 As Long, ByVal n2 As Long, _
+                                   ByRef differences() As WordDifferenceInfo, ByRef diffCount As Long)
+    Dim i As Long, j As Long
+    Dim tempDiffs() As WordDifferenceInfo
+    Dim tempCount As Long
+    Dim k As Long
+
+    ' テキスト一致した段落ペアを記録（後でスタイル比較用）
+    Dim matchedOld() As Long
+    Dim matchedNew() As Long
+    Dim matchedCount As Long
+
+    matchedCount = 0
+    ReDim matchedOld(0 To 0)
+    ReDim matchedNew(0 To 0)
+
+    ' 一時的な差分配列（逆順で格納される）
+    tempCount = 0
+    ReDim tempDiffs(0 To 0)
+
+    i = n1
+    j = n2
+
+    ' バックトラック
+    Do While i > 0 Or j > 0
+        If i > 0 And j > 0 And texts1(i) = texts2(j) Then
+            ' 一致：スタイル比較用に段落ペアを記録（空行以外）
+            If Len(texts1(i)) > 0 Then
+                If matchedCount = 0 Then
+                    ReDim matchedOld(0 To 0)
+                    ReDim matchedNew(0 To 0)
+                Else
+                    ReDim Preserve matchedOld(0 To matchedCount)
+                    ReDim Preserve matchedNew(0 To matchedCount)
+                End If
+                matchedOld(matchedCount) = i
+                matchedNew(matchedCount) = j
+                matchedCount = matchedCount + 1
+            End If
+            i = i - 1
+            j = j - 1
+        ElseIf j > 0 And (i = 0 Or lcsMatrix(i, j - 1) >= lcsMatrix(i - 1, j)) Then
+            ' 新ファイルで追加された行
+            If Len(texts2(j)) > 0 Then
+                AddTempWordDiff tempDiffs, tempCount, 0, j, "追加", _
+                    "", texts2(j), "", ""
+            End If
+            j = j - 1
+        ElseIf i > 0 And (j = 0 Or lcsMatrix(i - 1, j) > lcsMatrix(i, j - 1)) Then
+            ' 旧ファイルから削除された行
+            If Len(texts1(i)) > 0 Then
+                AddTempWordDiff tempDiffs, tempCount, i, 0, "削除", _
+                    texts1(i), "", "", ""
+            End If
+            i = i - 1
+        Else
+            ' 両方とも0の場合は終了
+            Exit Do
+        End If
+    Loop
+
+    ' 逆順を正順に変換して結果配列に格納
+    diffCount = tempCount
+    If tempCount > 0 Then
+        ReDim differences(0 To tempCount - 1)
+        For k = 0 To tempCount - 1
+            differences(k) = tempDiffs(tempCount - 1 - k)
+        Next k
+    Else
+        ReDim differences(0 To 0)
+    End If
+
+    ' 隣接する削除と追加を「変更」にマージ
+    MergeAdjacentChanges differences, diffCount
+
+    ' テキスト一致段落のスタイル比較用ペアをモジュールレベル変数に保存
+    g_MatchedCount = matchedCount
+    If matchedCount > 0 Then
+        ReDim g_MatchedOld(0 To matchedCount - 1)
+        ReDim g_MatchedNew(0 To matchedCount - 1)
+        For k = 0 To matchedCount - 1
+            g_MatchedOld(k) = matchedOld(k)
+            g_MatchedNew(k) = matchedNew(k)
+        Next k
+    End If
+End Sub
+
+'==============================================================================
+' LCS行列をバックトラックして差分を抽出（旧版：互換性のために残す）
 '==============================================================================
 Private Sub BacktrackLCS(ByRef lcsMatrix() As Long, _
                          ByRef texts1() As String, ByRef texts2() As String, _
@@ -831,6 +1195,136 @@ Private Sub ComputeSimpleDiff(ByRef texts1() As String, ByRef texts2() As String
             DoEvents
         End If
     Loop
+End Sub
+
+'==============================================================================
+' 簡易差分検出（最適化版：スタイル情報なし）
+'==============================================================================
+Private Sub ComputeSimpleDiffOptimized(ByRef texts1() As String, ByRef texts2() As String, _
+                                        ByVal n1 As Long, ByVal n2 As Long, _
+                                        ByRef differences() As WordDifferenceInfo, ByRef diffCount As Long)
+    Dim i1 As Long, i2 As Long
+    Dim matchFound As Boolean
+    Dim lookAhead As Long
+    Dim j As Long
+
+    ' テキスト一致した段落ペアを記録（後でスタイル比較用）
+    Dim matchedOld() As Long
+    Dim matchedNew() As Long
+    Dim matchedCount As Long
+
+    matchedCount = 0
+    ReDim matchedOld(0 To 0)
+    ReDim matchedNew(0 To 0)
+
+    diffCount = 0
+    ReDim differences(0 To 0)
+
+    i1 = 1
+    i2 = 1
+    lookAhead = 50  ' 前方探索の範囲
+
+    Do While i1 <= n1 Or i2 <= n2
+        ' 両方に残りがある場合
+        If i1 <= n1 And i2 <= n2 Then
+            If texts1(i1) = texts2(i2) Then
+                ' 一致：スタイル比較用に段落ペアを記録（空行以外）
+                If Len(texts1(i1)) > 0 Then
+                    If matchedCount = 0 Then
+                        ReDim matchedOld(0 To 0)
+                        ReDim matchedNew(0 To 0)
+                    Else
+                        ReDim Preserve matchedOld(0 To matchedCount)
+                        ReDim Preserve matchedNew(0 To matchedCount)
+                    End If
+                    matchedOld(matchedCount) = i1
+                    matchedNew(matchedCount) = i2
+                    matchedCount = matchedCount + 1
+                End If
+                i1 = i1 + 1
+                i2 = i2 + 1
+            Else
+                ' 不一致：前方探索で同期点を探す
+                matchFound = False
+
+                ' 新ファイルで追加された行を探す
+                For j = i2 + 1 To Application.WorksheetFunction.Min(i2 + lookAhead, n2)
+                    If texts1(i1) = texts2(j) Then
+                        ' i2 から j-1 までが追加
+                        Do While i2 < j
+                            If Len(texts2(i2)) > 0 Then
+                                AddWordDiffNew differences, diffCount, 0, i2, "追加", _
+                                    "", texts2(i2), "", ""
+                            End If
+                            i2 = i2 + 1
+                        Loop
+                        matchFound = True
+                        Exit For
+                    End If
+                Next j
+
+                If Not matchFound Then
+                    ' 旧ファイルから削除された行を探す
+                    For j = i1 + 1 To Application.WorksheetFunction.Min(i1 + lookAhead, n1)
+                        If texts1(j) = texts2(i2) Then
+                            ' i1 から j-1 までが削除
+                            Do While i1 < j
+                                If Len(texts1(i1)) > 0 Then
+                                    AddWordDiffNew differences, diffCount, i1, 0, "削除", _
+                                        texts1(i1), "", "", ""
+                                End If
+                                i1 = i1 + 1
+                            Loop
+                            matchFound = True
+                            Exit For
+                        End If
+                    Next j
+                End If
+
+                If Not matchFound Then
+                    ' 同期点が見つからない：変更として記録
+                    If Len(texts1(i1)) > 0 Or Len(texts2(i2)) > 0 Then
+                        AddWordDiffNew differences, diffCount, i1, i2, "変更", _
+                            texts1(i1), texts2(i2), "", ""
+                    End If
+                    i1 = i1 + 1
+                    i2 = i2 + 1
+                End If
+            End If
+        ' 旧ファイルのみ残り
+        ElseIf i1 <= n1 Then
+            If Len(texts1(i1)) > 0 Then
+                AddWordDiffNew differences, diffCount, i1, 0, "削除", _
+                    texts1(i1), "", "", ""
+            End If
+            i1 = i1 + 1
+        ' 新ファイルのみ残り
+        Else
+            If Len(texts2(i2)) > 0 Then
+                AddWordDiffNew differences, diffCount, 0, i2, "追加", _
+                    "", texts2(i2), "", ""
+            End If
+            i2 = i2 + 1
+        End If
+
+        ' 進捗表示
+        If (i1 + i2) Mod 100 = 0 Then
+            ShowProgress "[3/4] 差分計算(簡易)", i1 + i2, n1 + n2
+        End If
+    Loop
+    ShowProgress "[3/4] 差分計算(簡易)", n1 + n2, n1 + n2
+
+    ' テキスト一致段落のスタイル比較用ペアをモジュールレベル変数に保存
+    g_MatchedCount = matchedCount
+    If matchedCount > 0 Then
+        ReDim g_MatchedOld(0 To matchedCount - 1)
+        ReDim g_MatchedNew(0 To matchedCount - 1)
+        Dim k As Long
+        For k = 0 To matchedCount - 1
+            g_MatchedOld(k) = matchedOld(k)
+            g_MatchedNew(k) = matchedNew(k)
+        Next k
+    End If
 End Sub
 
 '==============================================================================

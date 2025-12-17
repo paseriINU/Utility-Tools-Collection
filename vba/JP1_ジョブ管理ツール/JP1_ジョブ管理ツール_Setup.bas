@@ -155,7 +155,9 @@ Private Sub FormatMainSheet()
     AddDropdown ws, ws.Cells(ROW_WAIT_COMPLETION + 4, COL_SETTING_VALUE), "はい,いいえ"
 
     ws.Cells(ROW_TIMEOUT + 4, 1).Value = "タイムアウト（秒）"
-    ws.Cells(ROW_TIMEOUT + 4, COL_SETTING_VALUE).Value = 3600
+    ws.Cells(ROW_TIMEOUT + 4, COL_SETTING_VALUE).Value = 0
+    ws.Cells(ROW_TIMEOUT + 4, 4).Value = "※0=無制限"
+    ws.Cells(ROW_TIMEOUT + 4, 4).Font.Color = RGB(128, 128, 128)
 
     ws.Cells(ROW_POLLING_INTERVAL + 4, 1).Value = "状態確認間隔（秒）"
     ws.Cells(ROW_POLLING_INTERVAL + 4, COL_SETTING_VALUE).Value = 10

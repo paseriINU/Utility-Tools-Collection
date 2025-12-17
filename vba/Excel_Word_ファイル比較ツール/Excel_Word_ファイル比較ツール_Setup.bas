@@ -234,7 +234,7 @@ Private Sub FormatMainSheet(ByRef ws As Worksheet)
         ' 設定セクション (行18-22)
         ' =================================================================
         .Range("B18:H18").Merge
-        .Range("B18").Value = "現在の設定"
+        .Range("B18").Value = "Word比較オプション"
         With .Range("B18")
             .Font.Name = "Meiryo UI"
             .Font.Size = 14
@@ -249,17 +249,40 @@ Private Sub FormatMainSheet(ByRef ws As Worksheet)
             .Weight = xlMedium
         End With
 
-        ' 設定値の表示
-        .Range("B20").Value = "Excel比較:"
-        .Range("D20").Value = "使用範囲のみ比較（制限なし）"
-        .Range("B21").Value = "Word比較:"
-        .Range("D21").Value = "WinMerge方式（LCSアルゴリズム）"
+        ' チェックボックス用のセル
+        .Range("B20").Value = ""  ' チェックボックス用スペース
+        .Range("C20:F20").Merge
+        .Range("C20").Value = "厳密比較（LCS）を使用する（処理時間が長くなります）"
+        With .Range("C20")
+            .Font.Name = "Meiryo UI"
+            .Font.Size = 10
+        End With
 
-        .Range("B20:B21").Font.Name = "Meiryo UI"
-        .Range("B20:B21").Font.Size = 10
-        .Range("D20:D21").Font.Name = "Meiryo UI"
-        .Range("D20:D21").Font.Size = 10
-        .Range("D20:D21").Font.Color = RGB(0, 128, 0)
+        ' チェックボックスを追加（ActiveXではなくフォームコントロール）
+        Dim chkBox As CheckBox
+        Set chkBox = .CheckBoxes.Add(.Range("B20").Left + 5, .Range("B20").Top + 2, 15, 15)
+        With chkBox
+            .Name = "chkUseLCS"
+            .Caption = ""
+            .Value = xlOff  ' デフォルトはオフ（簡易モード）
+        End With
+
+        ' 説明テキスト
+        .Range("C21:G21").Merge
+        .Range("C21").Value = "　チェックなし: 簡易比較（高速、通常はこちらで十分）"
+        With .Range("C21")
+            .Font.Name = "Meiryo UI"
+            .Font.Size = 9
+            .Font.Color = RGB(100, 100, 100)
+        End With
+
+        .Range("C22:G22").Merge
+        .Range("C22").Value = "　チェックあり: LCSアルゴリズム（大規模な構造変更に対応）"
+        With .Range("C22")
+            .Font.Name = "Meiryo UI"
+            .Font.Size = 9
+            .Font.Color = RGB(100, 100, 100)
+        End With
 
         ' =================================================================
         ' 対応ファイル形式セクション (行24-28)
