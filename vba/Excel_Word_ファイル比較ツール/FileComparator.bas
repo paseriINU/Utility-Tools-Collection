@@ -249,7 +249,7 @@ Private Sub CompareExcelFilesInternal(ByVal file1Path As String, ByVal file2Path
 
         MsgBox "比較が完了しました。" & vbCrLf & vbCrLf & _
                "検出された差異: " & diffCount & " 件" & vbCrLf & vbCrLf & _
-               "結果は「CompareResult」シートに出力されました。", _
+               "結果は「比較結果」シートに出力されました。", _
                vbInformation, "処理完了"
     Else
         Debug.Print "========================================="
@@ -352,7 +352,7 @@ Private Sub CompareWordFilesInternal(ByVal file1Path As String, ByVal file2Path 
 
         MsgBox "比較が完了しました。" & vbCrLf & vbCrLf & _
                "検出された差異: " & diffCount & " 件" & vbCrLf & vbCrLf & _
-               "結果は「CompareResult」シートに出力されました。", _
+               "結果は「比較結果」シートに出力されました。", _
                vbInformation, "処理完了"
     Else
         Debug.Print "========================================="
@@ -1023,13 +1023,13 @@ Private Sub CreateExcelResultSheet(ByRef differences() As ExcelDifferenceInfo, B
     ' 既存の結果シートがあれば削除
     On Error Resume Next
     Application.DisplayAlerts = False
-    ThisWorkbook.Worksheets("CompareResult").Delete
+    ThisWorkbook.Worksheets("比較結果").Delete
     Application.DisplayAlerts = True
     On Error GoTo 0
 
     ' 新しいシートを作成
     Set ws = ThisWorkbook.Worksheets.Add(After:=ThisWorkbook.Worksheets(ThisWorkbook.Worksheets.Count))
-    ws.Name = "CompareResult"
+    ws.Name = "比較結果"
 
     With ws
         ' タイトル
@@ -1159,13 +1159,13 @@ Private Sub CreateWordResultSheet(ByRef differences() As WordDifferenceInfo, ByV
     ' 既存の結果シートがあれば削除
     On Error Resume Next
     Application.DisplayAlerts = False
-    ThisWorkbook.Worksheets("CompareResult").Delete
+    ThisWorkbook.Worksheets("比較結果").Delete
     Application.DisplayAlerts = True
     On Error GoTo 0
 
     ' 新しいシートを作成
     Set ws = ThisWorkbook.Worksheets.Add(After:=ThisWorkbook.Worksheets(ThisWorkbook.Worksheets.Count))
-    ws.Name = "CompareResult"
+    ws.Name = "比較結果"
 
     With ws
         ' タイトル
@@ -1206,9 +1206,11 @@ Private Sub CreateWordResultSheet(ByRef differences() As WordDifferenceInfo, ByV
         .Range("F11").Value = "新ファイルのテキスト"
         .Range("G11").Value = "旧スタイル"
         .Range("H11").Value = "新スタイル"
+        .Range("I11").Value = "旧ファイル"
+        .Range("J11").Value = "新ファイル"
 
         ' ヘッダー書式
-        With .Range("A11:H11")
+        With .Range("A11:J11")
             .Font.Bold = True
             .Interior.Color = RGB(68, 114, 196)
             .Font.Color = RGB(255, 255, 255)
@@ -1249,16 +1251,42 @@ Private Sub CreateWordResultSheet(ByRef differences() As WordDifferenceInfo, ByV
             .Cells(row, 5).WrapText = True
             .Cells(row, 6).WrapText = True
 
+            ' 旧ファイルへのハイパーリンク
+            If differences(i).OldParagraphNo > 0 Then
+                .Hyperlinks.Add Anchor:=.Cells(row, 9), Address:=file1Path, TextToDisplay:="開く"
+                With .Cells(row, 9)
+                    .Font.Color = RGB(0, 102, 204)
+                    .Font.Underline = xlUnderlineStyleSingle
+                    .HorizontalAlignment = xlCenter
+                End With
+            Else
+                .Cells(row, 9).Value = "-"
+                .Cells(row, 9).HorizontalAlignment = xlCenter
+            End If
+
+            ' 新ファイルへのハイパーリンク
+            If differences(i).NewParagraphNo > 0 Then
+                .Hyperlinks.Add Anchor:=.Cells(row, 10), Address:=file2Path, TextToDisplay:="開く"
+                With .Cells(row, 10)
+                    .Font.Color = RGB(0, 102, 204)
+                    .Font.Underline = xlUnderlineStyleSingle
+                    .HorizontalAlignment = xlCenter
+                End With
+            Else
+                .Cells(row, 10).Value = "-"
+                .Cells(row, 10).HorizontalAlignment = xlCenter
+            End If
+
             ' 差異タイプによって行に色を付ける
             Select Case differences(i).DiffType
                 Case "変更"
-                    .Range(.Cells(row, 1), .Cells(row, 8)).Interior.Color = COLOR_CHANGED
+                    .Range(.Cells(row, 1), .Cells(row, 10)).Interior.Color = COLOR_CHANGED
                 Case "追加"
-                    .Range(.Cells(row, 1), .Cells(row, 8)).Interior.Color = COLOR_ADDED
+                    .Range(.Cells(row, 1), .Cells(row, 10)).Interior.Color = COLOR_ADDED
                 Case "削除"
-                    .Range(.Cells(row, 1), .Cells(row, 8)).Interior.Color = COLOR_DELETED
+                    .Range(.Cells(row, 1), .Cells(row, 10)).Interior.Color = COLOR_DELETED
                 Case "スタイル変更"
-                    .Range(.Cells(row, 1), .Cells(row, 8)).Interior.Color = RGB(204, 153, 255)  ' 薄紫
+                    .Range(.Cells(row, 1), .Cells(row, 10)).Interior.Color = RGB(204, 153, 255)  ' 薄紫
             End Select
         Next i
 
@@ -1271,9 +1299,11 @@ Private Sub CreateWordResultSheet(ByRef differences() As WordDifferenceInfo, ByV
         .Columns("F").ColumnWidth = 40
         .Columns("G").ColumnWidth = 25
         .Columns("H").ColumnWidth = 25
+        .Columns("I").ColumnWidth = 10
+        .Columns("J").ColumnWidth = 10
 
         ' フィルターを設定
-        .Range("A11:H11").AutoFilter
+        .Range("A11:J11").AutoFilter
 
         ' ウィンドウ枠の固定
         .Rows(12).Select
@@ -1578,7 +1608,7 @@ Private Sub FormatMainSheet(ByRef ws As Worksheet)
         .Range("B34").Value = "3."
         .Range("C34").Value = "2つ目のファイルを選択"
         .Range("B35").Value = "4."
-        .Range("C35").Value = "比較結果が「CompareResult」シートに出力されます"
+        .Range("C35").Value = "比較結果が「比較結果」シートに出力されます"
 
         .Range("B32:B35").Font.Name = "Meiryo UI"
         .Range("B32:B35").Font.Size = 10
