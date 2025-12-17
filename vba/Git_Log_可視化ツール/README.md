@@ -205,12 +205,14 @@ Git Log 可視化処理を開始します
 
 **メインシートで直接入力**:
 - D8セルにリポジトリパスを入力するだけで設定完了
-- 環境変数（%USERNAME%など）は使用できません
+- **環境変数が使用可能**: `%USERNAME%`、`%USERPROFILE%`、`%HOMEDRIVE%` など
 - フルパスで指定してください
 
 **正しい例**:
 ```
-C:\Users\YourName\MyProject
+C:\Users\%USERNAME%\source\Git\project    ← 環境変数OK
+C:\Users\YourName\MyProject               ← フルパスOK
+%USERPROFILE%\Documents\MyRepo            ← 環境変数OK
 D:\Projects\MyRepo
 \\server\share\project
 ```
@@ -220,6 +222,15 @@ D:\Projects\MyRepo
 C:\Users\YourName\MyProject\    ← 末尾の \ は不要
 C:/Users/YourName/MyProject     ← スラッシュは不可（バックスラッシュを使用）
 ```
+
+**使用可能な環境変数の例**:
+| 環境変数 | 展開例 |
+|---------|--------|
+| %USERNAME% | YourName |
+| %USERPROFILE% | C:\Users\YourName |
+| %HOMEDRIVE% | C: |
+| %HOMEPATH% | \Users\YourName |
+| %APPDATA% | C:\Users\YourName\AppData\Roaming |
 
 ### Gitコマンドのパス
 
@@ -325,6 +336,7 @@ command = "cmd /c cd /d """ & repoPath & """ && " & _
 - **2025-12-17**: 大幅リニューアル
   - シート名を日本語化（メイン、履歴、ブランチグラフ）
   - メインシートに設定入力欄を追加（リポジトリパス、取得件数）
+  - **リポジトリパスで環境変数（%USERNAME%等）が使用可能に**
   - 履歴シートを15列に拡張（フルハッシュ、メール、曜日、種別、変更量、親コミット数を追加）
   - コミット種別による行の色分けを追加（初期=赤、マージ=緑）
   - Statistics（統計）とCharts（グラフ）シートを廃止

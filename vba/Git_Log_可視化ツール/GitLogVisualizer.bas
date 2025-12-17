@@ -152,7 +152,7 @@ Private Sub FormatMainSheet(ByRef ws As Worksheet)
         End With
 
         .Range("D8:G8").Merge
-        .Range("D8").Value = "C:\Users\" & Environ("USERNAME") & "\source\Git\project"
+        .Range("D8").Value = "C:\Users\%USERNAME%\source\Git\project"
         With .Range("D8:G8")
             .Interior.Color = RGB(255, 255, 230)
             .Font.Name = "Meiryo UI"
@@ -161,6 +161,16 @@ Private Sub FormatMainSheet(ByRef ws As Worksheet)
         With .Range("D8:G8").Borders
             .LineStyle = xlContinuous
             .Color = RGB(200, 200, 200)
+        End With
+
+        ' 環境変数の説明
+        .Range("D9:G9").Merge
+        .Range("D9").Value = "※ %USERNAME% などの環境変数が使用可能"
+        With .Range("D9")
+            .Font.Name = "Meiryo UI"
+            .Font.Size = 9
+            .Font.Color = RGB(100, 100, 100)
+            .Font.Italic = True
         End With
 
         ' 取得コミット数
@@ -341,15 +351,56 @@ Private Sub FormatMainSheet(ByRef ws As Worksheet)
 End Sub
 
 '==============================================================================
+' 環境変数を展開する (%USERNAME% など)
+'==============================================================================
+Private Function ExpandEnvironmentVariables(ByVal path As String) As String
+    Dim result As String
+    Dim startPos As Long
+    Dim endPos As Long
+    Dim varName As String
+    Dim varValue As String
+
+    result = path
+
+    ' %VAR% 形式の環境変数をすべて展開
+    startPos = InStr(result, "%")
+    Do While startPos > 0
+        endPos = InStr(startPos + 1, result, "%")
+        If endPos > startPos + 1 Then
+            varName = Mid(result, startPos + 1, endPos - startPos - 1)
+            varValue = Environ(varName)
+            If Len(varValue) > 0 Then
+                result = Left(result, startPos - 1) & varValue & Mid(result, endPos + 1)
+            Else
+                ' 環境変数が見つからない場合はスキップして次を探す
+                startPos = endPos
+            End If
+            startPos = InStr(startPos + Len(varValue), result, "%")
+        Else
+            ' 閉じる % がない場合は終了
+            Exit Do
+        End If
+    Loop
+
+    ExpandEnvironmentVariables = result
+End Function
+
+'==============================================================================
 ' メインシートから設定値を取得
 '==============================================================================
 Private Function GetRepoPathFromMainSheet() As String
+    Dim rawPath As String
+
     On Error Resume Next
-    GetRepoPathFromMainSheet = ThisWorkbook.Sheets(SHEET_MAIN).Range(CELL_REPO_PATH).Value
+    rawPath = ThisWorkbook.Sheets(SHEET_MAIN).Range(CELL_REPO_PATH).Value
     If Err.Number <> 0 Then
         GetRepoPathFromMainSheet = ""
+        Exit Function
     End If
     On Error GoTo 0
+
+    ' 環境変数を展開
+    GetRepoPathFromMainSheet = ExpandEnvironmentVariables(rawPath)
 End Function
 
 Private Function GetCommitCountFromMainSheet() As Long
