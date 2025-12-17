@@ -1,7 +1,7 @@
 <# :
 @echo off
 chcp 65001 >nul
-title SSH公開鍵配置ツール
+title Git 開発環境初期設定ツール
 setlocal
 
 powershell -NoProfile -ExecutionPolicy Bypass -Command "iex ((gc '%~f0' -Encoding UTF8) -join \"`n\")"
@@ -12,7 +12,7 @@ exit /b %EXITCODE%
 : #>
 
 #==============================================================================
-# SSH公開鍵配置ツール
+# Git 開発環境初期設定ツール
 #==============================================================================
 #
 # 機能:
@@ -82,7 +82,7 @@ function Write-Header {
 # タイトル表示
 Write-Host ""
 Write-Color "================================================================" "Cyan"
-Write-Color "  SSH公開鍵配置ツール" "Cyan"
+Write-Color "  Git 開発環境初期設定ツール" "Cyan"
 Write-Color "================================================================" "Cyan"
 Write-Host ""
 
