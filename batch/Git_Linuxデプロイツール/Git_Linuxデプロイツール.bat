@@ -492,7 +492,7 @@ if ($choice -eq "1") {
     $filesToTransfer = $fileList
     Write-Color "[選択] すべてのファイルを転送します" "Green"
 
-    # 「すべてのファイル」モードの場合、転送先を事前にクリーンアップ
+    # 「すべてのファイル」モードの場合、転送方法を選択
     if ($transferMode -eq "all") {
         # 転送ファイルの親ディレクトリを収集（重複排除）
         $parentDirs = @{}
@@ -511,33 +511,56 @@ if ($choice -eq "1") {
         }
 
         Write-Host ""
-        Write-Color "================================================================" "Yellow"
-        Write-Color "  警告: 転送先フォルダのクリーンアップ" "Yellow"
-        Write-Color "================================================================" "Yellow"
+        Write-Color "================================================================" "Cyan"
+        Write-Color "転送方法を選択してください" "Cyan"
+        Write-Color "================================================================" "Cyan"
         Write-Host ""
-        Write-Color "「すべてのファイル」モードが選択されました。" "Yellow"
-        Write-Color "転送先の各フォルダ内を削除してからコピーします。" "Yellow"
+        Write-Host " 1. 上書き転送（既存ファイルを残す）"
+        Write-Host " 2. クリーンアップしてから転送（対象フォルダの中身を削除）"
         Write-Host ""
-        Write-Color "削除対象フォルダ:" "Red"
-        foreach ($dir in $parentDirs.Keys | Sort-Object) {
-            Write-Host "  - ${dir}/*"
-        }
-        Write-Host ""
-        Write-Color "※ フォルダ自体は削除されません（中身のみ削除）" "Gray"
+        Write-Host " 0. キャンセル"
         Write-Host ""
 
         do {
-            $cleanupConfirm = Read-Host "転送先フォルダをクリーンアップしますか？ (y/n)"
-            $cleanupConfirm = $cleanupConfirm.ToLower()
-        } while ($cleanupConfirm -notin @("y", "n"))
+            $transferMethod = Read-Host "番号を入力 (0-2)"
+            if ($transferMethod -eq "0") {
+                Write-Color "[キャンセル] 処理を中止しました" "Yellow"
+                exit 0
+            }
+        } while ($transferMethod -notin @("1", "2"))
 
-        if ($cleanupConfirm -eq "y") {
-            $doCleanup = $true
-            $cleanupDirs = $parentDirs.Keys
-            Write-Color "[選択] 転送前にクリーンアップを実行します" "Green"
+        if ($transferMethod -eq "2") {
+            Write-Host ""
+            Write-Color "================================================================" "Yellow"
+            Write-Color "  警告: 転送先フォルダのクリーンアップ" "Yellow"
+            Write-Color "================================================================" "Yellow"
+            Write-Host ""
+            Write-Color "以下のフォルダ内のファイルが削除されます:" "Yellow"
+            Write-Host ""
+            Write-Color "削除対象フォルダ:" "Red"
+            foreach ($dir in $parentDirs.Keys | Sort-Object) {
+                Write-Host "  - ${dir}/*"
+            }
+            Write-Host ""
+            Write-Color "※ フォルダ自体は削除されません（中身のみ削除）" "Gray"
+            Write-Host ""
+
+            do {
+                $cleanupConfirm = Read-Host "本当にクリーンアップしますか？ (y/n)"
+                $cleanupConfirm = $cleanupConfirm.ToLower()
+            } while ($cleanupConfirm -notin @("y", "n"))
+
+            if ($cleanupConfirm -eq "y") {
+                $doCleanup = $true
+                $cleanupDirs = $parentDirs.Keys
+                Write-Color "[選択] 転送前にクリーンアップを実行します" "Green"
+            } else {
+                $doCleanup = $false
+                Write-Color "[選択] クリーンアップをキャンセルしました（上書きモード）" "Yellow"
+            }
         } else {
             $doCleanup = $false
-            Write-Color "[選択] クリーンアップをスキップします（上書きモード）" "Yellow"
+            Write-Color "[選択] 上書きモードで転送します" "Green"
         }
     }
 } else {
