@@ -207,13 +207,16 @@ if ($branchChoice -eq "2") {
     Write-Color "================================================================" "Cyan"
     Write-Host ""
 
-    $branches = git branch --list 2>&1 | ForEach-Object {
-        $_.Trim().TrimStart("* ")
-    }
+    $branches = @(git branch --list 2>&1 | ForEach-Object {
+        $_ -replace '^\*?\s*', ''
+    })
+
+    $currentBranchTrimmed = $currentBranch -replace '\s', ''
 
     $branchIndex = 1
     foreach ($branch in $branches) {
-        if ($branch -eq $currentBranch) {
+        $branchTrimmed = $branch -replace '\s', ''
+        if ($branchTrimmed -eq $currentBranchTrimmed) {
             Write-Host ("{0,3}. {1} (現在)" -f $branchIndex, $branch) -ForegroundColor Yellow
         } else {
             Write-Host ("{0,3}. {1}" -f $branchIndex, $branch)
@@ -233,9 +236,10 @@ if ($branchChoice -eq "2") {
         $selectedBranchIndex = [int]$selectedBranchNum - 1
     } while ($selectedBranchIndex -lt 0 -or $selectedBranchIndex -ge $branches.Count)
 
-    $targetBranch = $branches[$selectedBranchIndex].Trim()
+    $targetBranch = $branches[$selectedBranchIndex]
+    $targetBranchTrimmed = $targetBranch -replace '\s', ''
 
-    if ($targetBranch.Trim() -ne $currentBranch.Trim()) {
+    if ($targetBranchTrimmed -ne $currentBranchTrimmed) {
         Write-Host ""
         Write-Color "[実行] ブランチを切り替え中: $targetBranch" "Yellow"
 
