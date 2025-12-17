@@ -471,6 +471,56 @@ PR URL: https://github.com/user/repo/pull/123
 - 変数は明示的に宣言（Option Explicit使用）
 - 日本語のコメントで処理内容を説明
 
+- **モジュール分離（必須）**:
+  - VBAツールは以下の2つのモジュールに分離すること：
+    1. **初期化モジュール** (`[ツール名]_Setup.bas`): シート作成・フォーマット処理
+    2. **メインモジュール** (`[ツール名].bas`): ビジネスロジック・実行処理
+  - **初期化モジュールの役割**:
+    - シート作成（`CreateSheet`）
+    - ヘッダー・フォーマット設定（`Format[シート名]Sheet`）
+    - ボタン配置
+    - 初期値設定
+  - **メインモジュールの役割**:
+    - ユーザー操作に応じた処理
+    - データ取得・加工
+    - 外部連携（PowerShell実行など）
+  - 初期化は最初の1回だけ実行するため、分離することでメンテナンス性が向上
+  - 例:
+    ```
+    JP1_ジョブ管理ツール/
+    ├── JP1_ジョブ管理ツール_Setup.bas  # 初期化モジュール
+    └── JP1_ジョブ管理ツール.bas        # メインモジュール
+    ```
+
+- **初期化モジュールの実装例**:
+  ```vba
+  ' JP1_ジョブ管理ツール_Setup.bas
+  Attribute VB_Name = "JP1_JobManager_Setup"
+  Option Explicit
+
+  ' シート名定数（メインモジュールと共有）
+  Public Const SHEET_MAIN As String = "メイン"
+  Public Const SHEET_JOBLIST As String = "ジョブ一覧"
+
+  Public Sub InitializeJP1Manager()
+      Application.ScreenUpdating = False
+      CreateSheet SHEET_MAIN
+      CreateSheet SHEET_JOBLIST
+      FormatMainSheet
+      FormatJobListSheet
+      Application.ScreenUpdating = True
+      MsgBox "初期化が完了しました。", vbInformation
+  End Sub
+
+  Private Sub CreateSheet(sheetName As String)
+      ' シート作成処理
+  End Sub
+
+  Private Sub FormatMainSheet()
+      ' メインシートのフォーマット
+  End Sub
+  ```
+
 - **メインシートの作成（必須）**:
   - すべてのVBAツールは初期化時に「メインシート」を作成すること
   - メインシートには以下を含める：
@@ -481,14 +531,6 @@ PR URL: https://github.com/user/repo/pull/123
     - 必要な環境・動作条件
   - 初期化用マクロ名: `Initialize[ツール名]`
   - フォーマット用サブ: `Format[シート名]Sheet`
-  - 例:
-    ```vba
-    Public Sub InitializeSQLGenerator()
-        CreateSheet SHEET_MAIN
-        FormatMainSheet  ' メインシートのフォーマット
-        ' ...
-    End Sub
-    ```
 
 - **ドロップダウン選択時の自動処理**:
   - ドロップダウンで値を選択した際に関連する項目を自動更新する場合は、`Worksheet_Change`イベントを使用すること
