@@ -173,20 +173,17 @@ function Main {
         Write-Host ""
 
         $targetPath = Read-Host "パス"
+        Write-Host ""
     }
 
     if ($targetPath) {
         # パスに移動
         $targetPath = $targetPath.Trim('"').Trim("'")  # 引用符を除去
-        if (Test-Path $targetPath -PathType Container) {
-            Set-Location $targetPath
-            Write-Host "[OK] パスを変更しました: $targetPath" -ForegroundColor Green
-            Write-Host ""
-        } else {
-            Write-Host ""
+        if (-not (Test-Path $targetPath -PathType Container)) {
             Write-Host "[エラー] 指定されたパスが存在しません: $targetPath" -ForegroundColor Red
             return 1
         }
+        Set-Location $targetPath
     }
 
     # Gitリポジトリの確認
