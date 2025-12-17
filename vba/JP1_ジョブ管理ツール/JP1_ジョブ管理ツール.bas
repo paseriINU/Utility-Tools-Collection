@@ -34,6 +34,7 @@ Private Const COL_LAST_STATUS As Long = 5
 Private Const COL_LAST_EXEC_TIME As Long = 6
 Private Const COL_LAST_END_TIME As Long = 7
 Private Const COL_LAST_RETURN_CODE As Long = 8
+Private Const COL_LAST_MESSAGE As Long = 9
 Private Const ROW_JOBLIST_HEADER As Long = 3
 Private Const ROW_JOBLIST_DATA_START As Long = 4
 
@@ -193,7 +194,7 @@ Private Sub FormatJobListSheet()
     ws.Cells.Clear
 
     ' タイトル
-    With ws.Range("A1:H1")
+    With ws.Range("A1:I1")
         .Merge
         .Value = "ジョブネット一覧"
         .Font.Size = 14
@@ -216,8 +217,9 @@ Private Sub FormatJobListSheet()
     ws.Cells(ROW_JOBLIST_HEADER, COL_LAST_EXEC_TIME).Value = "開始時刻"
     ws.Cells(ROW_JOBLIST_HEADER, COL_LAST_END_TIME).Value = "終了時刻"
     ws.Cells(ROW_JOBLIST_HEADER, COL_LAST_RETURN_CODE).Value = "戻り値"
+    ws.Cells(ROW_JOBLIST_HEADER, COL_LAST_MESSAGE).Value = "詳細メッセージ"
 
-    With ws.Range(ws.Cells(ROW_JOBLIST_HEADER, COL_ORDER), ws.Cells(ROW_JOBLIST_HEADER, COL_LAST_RETURN_CODE))
+    With ws.Range(ws.Cells(ROW_JOBLIST_HEADER, COL_ORDER), ws.Cells(ROW_JOBLIST_HEADER, COL_LAST_MESSAGE))
         .Font.Bold = True
         .Interior.Color = RGB(79, 129, 189)
         .Font.Color = RGB(255, 255, 255)
@@ -234,9 +236,10 @@ Private Sub FormatJobListSheet()
     ws.Columns(COL_LAST_EXEC_TIME).ColumnWidth = 18
     ws.Columns(COL_LAST_END_TIME).ColumnWidth = 18
     ws.Columns(COL_LAST_RETURN_CODE).ColumnWidth = 8
+    ws.Columns(COL_LAST_MESSAGE).ColumnWidth = 50
 
     ' フィルター設定
-    ws.Range(ws.Cells(ROW_JOBLIST_HEADER, COL_ORDER), ws.Cells(ROW_JOBLIST_HEADER, COL_LAST_RETURN_CODE)).AutoFilter
+    ws.Range(ws.Cells(ROW_JOBLIST_HEADER, COL_ORDER), ws.Cells(ROW_JOBLIST_HEADER, COL_LAST_MESSAGE)).AutoFilter
 End Sub
 
 '==============================================================================
@@ -387,7 +390,7 @@ Private Sub ParseJobListResult(result As String)
     Dim lastRow As Long
     lastRow = ws.Cells(ws.Rows.Count, COL_JOBNET_PATH).End(xlUp).Row
     If lastRow >= ROW_JOBLIST_DATA_START Then
-        ws.Range(ws.Cells(ROW_JOBLIST_DATA_START, COL_ORDER), ws.Cells(lastRow, COL_LAST_RETURN_CODE)).ClearContents
+        ws.Range(ws.Cells(ROW_JOBLIST_DATA_START, COL_ORDER), ws.Cells(lastRow, COL_LAST_MESSAGE)).ClearContents
     End If
 
     ' 結果をパース
@@ -431,7 +434,7 @@ Private Sub ParseJobListResult(result As String)
                 End With
 
                 ' 罫線
-                ws.Range(ws.Cells(row, COL_ORDER), ws.Cells(row, COL_LAST_RETURN_CODE)).Borders.LineStyle = xlContinuous
+                ws.Range(ws.Cells(row, COL_ORDER), ws.Cells(row, COL_LAST_MESSAGE)).Borders.LineStyle = xlContinuous
 
                 row = row + 1
             End If
@@ -846,6 +849,11 @@ Private Sub UpdateJobListStatus(row As Long, result As Object)
     ws.Cells(row, COL_LAST_EXEC_TIME).Value = result("StartTime")
     ws.Cells(row, COL_LAST_END_TIME).Value = result("EndTime")
 
+    ' 詳細メッセージを記録
+    If result("Message") <> "" Then
+        ws.Cells(row, COL_LAST_MESSAGE).Value = result("Message")
+    End If
+
     ' 色付け
     If result("Status") = "正常終了" Then
         ws.Cells(row, COL_LAST_STATUS).Interior.Color = RGB(198, 239, 206)
@@ -869,7 +877,7 @@ Public Sub ClearJobList()
     lastRow = ws.Cells(ws.Rows.Count, COL_JOBNET_PATH).End(xlUp).Row
 
     If lastRow >= ROW_JOBLIST_DATA_START Then
-        ws.Range(ws.Cells(ROW_JOBLIST_DATA_START, COL_ORDER), ws.Cells(lastRow, COL_LAST_RETURN_CODE)).Clear
+        ws.Range(ws.Cells(ROW_JOBLIST_DATA_START, COL_ORDER), ws.Cells(lastRow, COL_LAST_MESSAGE)).Clear
     End If
 
     MsgBox "クリアしました。", vbInformation
