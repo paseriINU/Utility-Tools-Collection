@@ -1155,6 +1155,11 @@ Private Sub CreateWordResultSheet(ByRef differences() As WordDifferenceInfo, ByV
     Dim row As Long
     Dim oldParaStr As String
     Dim newParaStr As String
+    Dim shp As Shape
+    Dim btnLeft As Double
+    Dim btnTop As Double
+    Dim btnWidth As Double
+    Dim btnHeight As Double
 
     ' 既存の結果シートがあれば削除
     On Error Resume Next
@@ -1186,6 +1191,55 @@ Private Sub CreateWordResultSheet(ByRef differences() As WordDifferenceInfo, ByV
         .Range("A7").Value = "比較方式:"
         .Range("B7").Value = "LCS（最長共通部分列）アルゴリズム"
 
+        ' 検索ボタンの説明
+        .Range("F3").Value = "差分箇所を検索:"
+        .Range("F3").Font.Bold = True
+        .Range("F4").Value = "※データ行を選択してからボタンをクリック"
+        .Range("F4").Font.Size = 9
+        .Range("F4").Font.Color = RGB(128, 128, 128)
+
+        ' 検索ボタンの配置
+        btnWidth = 100
+        btnHeight = 28
+        btnLeft = .Range("G3").Left + 5
+        btnTop = .Range("G3").Top + 2
+
+        ' 旧ファイル検索ボタン
+        Set shp = .Shapes.AddShape(msoShapeRoundedRectangle, btnLeft, btnTop, btnWidth, btnHeight)
+        With shp
+            .Name = "btnSearchOld"
+            .Placement = xlFreeFloating
+            .Fill.ForeColor.RGB = RGB(255, 152, 0)  ' オレンジ
+            .Line.ForeColor.RGB = RGB(230, 126, 0)
+            .Line.Weight = 1.5
+            .TextFrame2.TextRange.Characters.Text = "旧ファイル検索"
+            .TextFrame2.TextRange.Font.Fill.ForeColor.RGB = RGB(255, 255, 255)
+            .TextFrame2.TextRange.Font.Size = 10
+            .TextFrame2.TextRange.Font.Bold = msoTrue
+            .TextFrame2.TextRange.Font.Name = "Meiryo UI"
+            .TextFrame2.TextRange.ParagraphFormat.Alignment = msoAlignCenter
+            .TextFrame2.VerticalAnchor = msoAnchorMiddle
+            .OnAction = "SearchInOldWordFile"
+        End With
+
+        ' 新ファイル検索ボタン
+        Set shp = .Shapes.AddShape(msoShapeRoundedRectangle, btnLeft + btnWidth + 10, btnTop, btnWidth, btnHeight)
+        With shp
+            .Name = "btnSearchNew"
+            .Placement = xlFreeFloating
+            .Fill.ForeColor.RGB = RGB(33, 150, 243)  ' 青
+            .Line.ForeColor.RGB = RGB(25, 118, 210)
+            .Line.Weight = 1.5
+            .TextFrame2.TextRange.Characters.Text = "新ファイル検索"
+            .TextFrame2.TextRange.Font.Fill.ForeColor.RGB = RGB(255, 255, 255)
+            .TextFrame2.TextRange.Font.Size = 10
+            .TextFrame2.TextRange.Font.Bold = msoTrue
+            .TextFrame2.TextRange.Font.Name = "Meiryo UI"
+            .TextFrame2.TextRange.ParagraphFormat.Alignment = msoAlignCenter
+            .TextFrame2.VerticalAnchor = msoAnchorMiddle
+            .OnAction = "SearchInNewWordFile"
+        End With
+
         ' 凡例
         .Range("A9").Value = "凡例："
         .Range("B9").Value = "変更"
@@ -1206,11 +1260,9 @@ Private Sub CreateWordResultSheet(ByRef differences() As WordDifferenceInfo, ByV
         .Range("F11").Value = "新ファイルのテキスト"
         .Range("G11").Value = "旧スタイル"
         .Range("H11").Value = "新スタイル"
-        .Range("I11").Value = "旧ファイル"
-        .Range("J11").Value = "新ファイル"
 
         ' ヘッダー書式
-        With .Range("A11:J11")
+        With .Range("A11:H11")
             .Font.Bold = True
             .Interior.Color = RGB(68, 114, 196)
             .Font.Color = RGB(255, 255, 255)
@@ -1251,42 +1303,16 @@ Private Sub CreateWordResultSheet(ByRef differences() As WordDifferenceInfo, ByV
             .Cells(row, 5).WrapText = True
             .Cells(row, 6).WrapText = True
 
-            ' 旧ファイルへのハイパーリンク
-            If differences(i).OldParagraphNo > 0 Then
-                .Hyperlinks.Add Anchor:=.Cells(row, 9), Address:=file1Path, TextToDisplay:="開く"
-                With .Cells(row, 9)
-                    .Font.Color = RGB(0, 102, 204)
-                    .Font.Underline = xlUnderlineStyleSingle
-                    .HorizontalAlignment = xlCenter
-                End With
-            Else
-                .Cells(row, 9).Value = "-"
-                .Cells(row, 9).HorizontalAlignment = xlCenter
-            End If
-
-            ' 新ファイルへのハイパーリンク
-            If differences(i).NewParagraphNo > 0 Then
-                .Hyperlinks.Add Anchor:=.Cells(row, 10), Address:=file2Path, TextToDisplay:="開く"
-                With .Cells(row, 10)
-                    .Font.Color = RGB(0, 102, 204)
-                    .Font.Underline = xlUnderlineStyleSingle
-                    .HorizontalAlignment = xlCenter
-                End With
-            Else
-                .Cells(row, 10).Value = "-"
-                .Cells(row, 10).HorizontalAlignment = xlCenter
-            End If
-
             ' 差異タイプによって行に色を付ける
             Select Case differences(i).DiffType
                 Case "変更"
-                    .Range(.Cells(row, 1), .Cells(row, 10)).Interior.Color = COLOR_CHANGED
+                    .Range(.Cells(row, 1), .Cells(row, 8)).Interior.Color = COLOR_CHANGED
                 Case "追加"
-                    .Range(.Cells(row, 1), .Cells(row, 10)).Interior.Color = COLOR_ADDED
+                    .Range(.Cells(row, 1), .Cells(row, 8)).Interior.Color = COLOR_ADDED
                 Case "削除"
-                    .Range(.Cells(row, 1), .Cells(row, 10)).Interior.Color = COLOR_DELETED
+                    .Range(.Cells(row, 1), .Cells(row, 8)).Interior.Color = COLOR_DELETED
                 Case "スタイル変更"
-                    .Range(.Cells(row, 1), .Cells(row, 10)).Interior.Color = RGB(204, 153, 255)  ' 薄紫
+                    .Range(.Cells(row, 1), .Cells(row, 8)).Interior.Color = RGB(204, 153, 255)  ' 薄紫
             End Select
         Next i
 
@@ -1299,19 +1325,143 @@ Private Sub CreateWordResultSheet(ByRef differences() As WordDifferenceInfo, ByV
         .Columns("F").ColumnWidth = 40
         .Columns("G").ColumnWidth = 25
         .Columns("H").ColumnWidth = 25
-        .Columns("I").ColumnWidth = 10
-        .Columns("J").ColumnWidth = 10
 
         ' フィルターを設定
-        .Range("A11:J11").AutoFilter
+        .Range("A11:H11").AutoFilter
 
-        ' ウィンドウ枠の固定
+        ' シートをアクティブにしてからウィンドウ枠を固定
+        .Activate
         .Rows(12).Select
         ActiveWindow.FreezePanes = True
 
         ' セルA1を選択
         .Range("A1").Select
     End With
+End Sub
+
+'==============================================================================
+' 選択行のWord差分を旧ファイルで検索して開く
+'==============================================================================
+Public Sub SearchInOldWordFile()
+    SearchWordDifference True
+End Sub
+
+'==============================================================================
+' 選択行のWord差分を新ファイルで検索して開く
+'==============================================================================
+Public Sub SearchInNewWordFile()
+    SearchWordDifference False
+End Sub
+
+'==============================================================================
+' Word差分を検索して開く（内部処理）
+'==============================================================================
+Private Sub SearchWordDifference(ByVal isOldFile As Boolean)
+    Dim ws As Worksheet
+    Dim selectedRow As Long
+    Dim filePath As String
+    Dim searchText As String
+    Dim wordApp As Object
+    Dim doc As Object
+
+    On Error GoTo ErrorHandler
+
+    ' 比較結果シートを取得
+    On Error Resume Next
+    Set ws = ThisWorkbook.Worksheets("比較結果")
+    On Error GoTo ErrorHandler
+
+    If ws Is Nothing Then
+        MsgBox "比較結果シートが見つかりません。" & vbCrLf & _
+               "先にWord比較を実行してください。", vbExclamation, "エラー"
+        Exit Sub
+    End If
+
+    ' 選択されている行を取得
+    selectedRow = Selection.row
+
+    ' ヘッダー行以下かチェック（Word比較結果は12行目からデータ）
+    If selectedRow < 12 Then
+        MsgBox "差異データの行を選択してください。" & vbCrLf & _
+               "（12行目以降のデータ行を選択）", vbExclamation, "行選択エラー"
+        Exit Sub
+    End If
+
+    ' ファイルパスを取得（B3=旧ファイル、B4=新ファイル）
+    If isOldFile Then
+        filePath = ws.Range("B3").Value
+        searchText = ws.Cells(selectedRow, 5).Value  ' E列：旧ファイルのテキスト
+    Else
+        filePath = ws.Range("B4").Value
+        searchText = ws.Cells(selectedRow, 6).Value  ' F列：新ファイルのテキスト
+    End If
+
+    ' 検索テキストが空の場合
+    If Len(Trim(searchText)) = 0 Then
+        MsgBox "検索するテキストがありません。" & vbCrLf & _
+               IIf(isOldFile, "旧ファイル側", "新ファイル側") & "にテキストがない差異です。", _
+               vbExclamation, "検索エラー"
+        Exit Sub
+    End If
+
+    ' ファイルの存在確認
+    If Dir(filePath) = "" Then
+        MsgBox "ファイルが見つかりません: " & vbCrLf & filePath, vbCritical, "ファイルエラー"
+        Exit Sub
+    End If
+
+    ' 検索テキストを最初の100文字に制限（長すぎると検索に失敗する可能性）
+    If Len(searchText) > 100 Then
+        searchText = Left(searchText, 100)
+    End If
+
+    ' Wordアプリケーションを取得または起動
+    On Error Resume Next
+    Set wordApp = GetObject(, "Word.Application")
+    If wordApp Is Nothing Then
+        Set wordApp = CreateObject("Word.Application")
+    End If
+    On Error GoTo ErrorHandler
+
+    wordApp.Visible = True
+
+    ' ファイルを開く
+    Set doc = wordApp.Documents.Open(filePath, ReadOnly:=True)
+
+    ' 検索を実行
+    With doc.Content.Find
+        .ClearFormatting
+        .Text = searchText
+        .Forward = True
+        .Wrap = 1  ' wdFindContinue
+        .Format = False
+        .MatchCase = False
+        .MatchWholeWord = False
+        .MatchWildcards = False
+        .MatchSoundsLike = False
+        .MatchAllWordForms = False
+
+        If .Execute Then
+            ' 見つかった場合、その位置を選択
+            doc.ActiveWindow.ScrollIntoView doc.Content.Find.Parent
+            doc.Content.Find.Parent.Select
+            MsgBox "テキストが見つかりました。", vbInformation, "検索完了"
+        Else
+            MsgBox "テキストが見つかりませんでした。" & vbCrLf & vbCrLf & _
+                   "検索テキスト: " & Left(searchText, 50) & IIf(Len(searchText) > 50, "...", ""), _
+                   vbExclamation, "検索結果"
+        End If
+    End With
+
+    ' Wordをアクティブにする
+    wordApp.Activate
+
+    Exit Sub
+
+ErrorHandler:
+    MsgBox "エラーが発生しました: " & vbCrLf & vbCrLf & _
+           "エラー番号: " & Err.Number & vbCrLf & _
+           "エラー内容: " & Err.Description, vbCritical, "エラー"
 End Sub
 
 '==============================================================================

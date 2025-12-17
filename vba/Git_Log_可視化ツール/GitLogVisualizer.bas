@@ -566,15 +566,20 @@ Private Function GetGitLog(ByVal repoPath As String, ByVal maxCount As Long) As 
     Dim parts() As String
     Dim tempFile As String
     Dim stream As Object
+    Dim commitBlocks() As String
+    Dim block As String
+    Dim headerLine As String
+    Dim bodyLines As String
 
     Set wsh = CreateObject("WScript.Shell")
     Set fso = CreateObject("Scripting.FileSystemObject")
 
     tempFile = fso.GetSpecialFolder(2) & "\gitlog_" & fso.GetTempName & ".txt"
 
+    ' コミット区切りマーカーを使用し、メッセージ全文（%B）を取得
     command = "cmd /c chcp 65001 >nul && cd /d """ & repoPath & """ && " & _
               GIT_COMMAND & " log --all -n " & maxCount & _
-              " --pretty=format:""%h|%H|%P|%an|%ae|%ai|%s|%d"" --numstat > """ & tempFile & """ 2>&1"
+              " --pretty=format:""<<<COMMIT>>>%h|%H|%P|%an|%ae|%ai|%d<<<MSG>>>%B<<<END>>>"" --numstat > """ & tempFile & """ 2>&1"
 
     wsh.Run command, 0, True
 
@@ -611,20 +616,30 @@ Private Function GetGitLog(ByVal repoPath As String, ByVal maxCount As Long) As 
 
     output = Replace(output, vbCrLf, vbLf)
     output = Replace(output, vbCr, vbLf)
-    lines = Split(output, vbLf)
+
+    ' <<<COMMIT>>> でコミットブロックを分割
+    commitBlocks = Split(output, "<<<COMMIT>>>")
 
     commitIndex = 0
     ReDim commits(0 To maxCount - 1)
 
-    i = 0
-    Do While i <= UBound(lines)
-        Dim line As String
-        line = Trim(lines(i))
+    For i = 1 To UBound(commitBlocks)  ' 最初の空要素をスキップ
+        block = commitBlocks(i)
 
-        If InStr(line, "|") > 0 Then
-            parts = Split(line, "|")
+        ' <<<MSG>>> でヘッダーとメッセージを分離
+        Dim msgPos As Long
+        Dim endPos As Long
+        msgPos = InStr(block, "<<<MSG>>>")
+        endPos = InStr(block, "<<<END>>>")
 
-            If UBound(parts) >= 6 Then
+        If msgPos > 0 And endPos > msgPos Then
+            headerLine = Left(block, msgPos - 1)
+            bodyLines = Mid(block, msgPos + 9, endPos - msgPos - 9)
+
+            ' ヘッダーをパース
+            parts = Split(headerLine, "|")
+
+            If UBound(parts) >= 5 Then
                 With commits(commitIndex)
                     .Hash = parts(0)
                     .FullHash = parts(1)
@@ -637,51 +652,52 @@ Private Function GetGitLog(ByVal repoPath As String, ByVal maxCount As Long) As 
                     .Author = parts(3)
                     .AuthorEmail = parts(4)
                     .CommitDate = ParseGitDate(parts(5))
-                    .Subject = parts(6)
-                    If UBound(parts) >= 7 Then
-                        .RefNames = Trim(Replace(Replace(parts(7), "(", ""), ")", ""))
+                    If UBound(parts) >= 6 Then
+                        .RefNames = Trim(Replace(Replace(parts(6), "(", ""), ")", ""))
                     Else
                         .RefNames = ""
                     End If
+
+                    ' メッセージ全文（改行を保持）
+                    .Subject = Trim(bodyLines)
+
+                    ' numstat を解析（<<<END>>>以降）
                     .FilesChanged = 0
                     .Insertions = 0
                     .Deletions = 0
+
+                    Dim afterEnd As String
+                    afterEnd = Mid(block, endPos + 9)
+                    Dim statLines() As String
+                    statLines = Split(afterEnd, vbLf)
+
+                    Dim j As Long
+                    For j = 0 To UBound(statLines)
+                        Dim statLine As String
+                        statLine = Trim(statLines(j))
+
+                        If Len(statLine) > 0 And InStr(statLine, vbTab) > 0 Then
+                            Dim statParts() As String
+                            statParts = Split(statLine, vbTab)
+
+                            If UBound(statParts) >= 2 Then
+                                .FilesChanged = .FilesChanged + 1
+                                If IsNumeric(statParts(0)) Then
+                                    .Insertions = .Insertions + CLng(statParts(0))
+                                End If
+                                If IsNumeric(statParts(1)) Then
+                                    .Deletions = .Deletions + CLng(statParts(1))
+                                End If
+                            End If
+                        End If
+                    Next j
                 End With
 
-                i = i + 1
-                Do While i <= UBound(lines)
-                    line = Trim(lines(i))
-
-                    If Len(line) = 0 Or InStr(line, "|") > 0 Then
-                        Exit Do
-                    End If
-
-                    Dim statParts() As String
-                    statParts = Split(line, vbTab)
-
-                    If UBound(statParts) >= 2 Then
-                        commits(commitIndex).FilesChanged = commits(commitIndex).FilesChanged + 1
-                        If IsNumeric(statParts(0)) Then
-                            commits(commitIndex).Insertions = commits(commitIndex).Insertions + CLng(statParts(0))
-                        End If
-                        If IsNumeric(statParts(1)) Then
-                            commits(commitIndex).Deletions = commits(commitIndex).Deletions + CLng(statParts(1))
-                        End If
-                    End If
-
-                    i = i + 1
-                Loop
-
                 commitIndex = commitIndex + 1
-
-                If InStr(line, "|") > 0 Then
-                    i = i - 1
-                End If
+                If commitIndex >= maxCount Then Exit For
             End If
         End If
-
-        i = i + 1
-    Loop
+    Next i
 
     If commitIndex > 0 Then
         ReDim Preserve commits(0 To commitIndex - 1)
@@ -821,11 +837,16 @@ Private Sub CreateHistorySheet(ByRef commits() As CommitInfo, ByVal commitCount 
         .Columns("B").ColumnWidth = 10
         .Columns("C").ColumnWidth = 15
         .Columns("D").ColumnWidth = 16
-        .Columns("E").ColumnWidth = 50
+        .Columns("E").ColumnWidth = 60
         .Columns("F").ColumnWidth = 20
         .Columns("G").ColumnWidth = 12
         .Columns("H").ColumnWidth = 10
         .Columns("I").ColumnWidth = 10
+
+        ' コミットメッセージ列の折り返し表示と上揃え
+        .Columns("E").WrapText = True
+        .Columns("E").VerticalAlignment = xlTop
+        .Range(.Cells(5, 1), .Cells(commitCount + 4, 9)).VerticalAlignment = xlTop
 
         ' フィルターを設定
         .Range("A4:I4").AutoFilter
