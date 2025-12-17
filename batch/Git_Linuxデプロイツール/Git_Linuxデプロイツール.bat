@@ -170,6 +170,94 @@ if ($workDirNormalized.StartsWith($gitRootNormalized + "\")) {
 }
 Write-Host ""
 
+#region ブランチ確認・切り替え
+Write-Color "================================================================" "Cyan"
+Write-Color "ブランチの確認" "Cyan"
+Write-Color "================================================================" "Cyan"
+Write-Host ""
+
+$currentBranch = git branch --show-current 2>&1
+if ($LASTEXITCODE -ne 0) {
+    Write-Color "[エラー] ブランチ情報の取得に失敗しました" "Red"
+    exit 1
+}
+
+Write-Host "  現在のブランチ: " -NoNewline
+Write-Color $currentBranch "Yellow"
+Write-Host ""
+Write-Host " 1. このブランチで続行"
+Write-Host " 2. ブランチを切り替える"
+Write-Host ""
+Write-Host " 0. キャンセル"
+Write-Host ""
+
+do {
+    $branchChoice = Read-Host "番号を入力 (0-2)"
+    if ($branchChoice -eq "0") {
+        Write-Color "[キャンセル] 処理を中止しました" "Yellow"
+        exit 0
+    }
+} while ($branchChoice -notin @("1", "2"))
+
+if ($branchChoice -eq "2") {
+    # ブランチ一覧を取得
+    Write-Host ""
+    Write-Color "================================================================" "Cyan"
+    Write-Color "ブランチを選択してください" "Cyan"
+    Write-Color "================================================================" "Cyan"
+    Write-Host ""
+
+    $branches = git branch --list 2>&1 | ForEach-Object {
+        $_.Trim().TrimStart("* ")
+    }
+
+    $branchIndex = 1
+    foreach ($branch in $branches) {
+        if ($branch -eq $currentBranch) {
+            Write-Host ("{0,3}. {1} (現在)" -f $branchIndex, $branch) -ForegroundColor Yellow
+        } else {
+            Write-Host ("{0,3}. {1}" -f $branchIndex, $branch)
+        }
+        $branchIndex++
+    }
+    Write-Host ""
+    Write-Host " 0. キャンセル"
+    Write-Host ""
+
+    do {
+        $selectedBranchNum = Read-Host "番号を入力 (0-$($branches.Count))"
+        if ($selectedBranchNum -eq "0") {
+            Write-Color "[キャンセル] 処理を中止しました" "Yellow"
+            exit 0
+        }
+        $selectedBranchIndex = [int]$selectedBranchNum - 1
+    } while ($selectedBranchIndex -lt 0 -or $selectedBranchIndex -ge $branches.Count)
+
+    $targetBranch = $branches[$selectedBranchIndex]
+
+    if ($targetBranch -ne $currentBranch) {
+        Write-Host ""
+        Write-Color "[実行] ブランチを切り替え中: $targetBranch" "Yellow"
+
+        $checkoutResult = git checkout $targetBranch 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            Write-Color "[エラー] ブランチの切り替えに失敗しました" "Red"
+            Write-Host $checkoutResult
+            exit 1
+        }
+
+        Write-Color "[OK] ブランチを切り替えました: $targetBranch" "Green"
+        $currentBranch = $targetBranch
+    } else {
+        Write-Color "[情報] 同じブランチが選択されました" "Yellow"
+    }
+}
+
+Write-Host ""
+Write-Color "[選択] ブランチ: $currentBranch" "Green"
+Write-Host ""
+#endregion
+
 #region 環境選択
 Write-Color "================================================================" "Cyan"
 Write-Color "転送先環境を選択してください" "Cyan"
