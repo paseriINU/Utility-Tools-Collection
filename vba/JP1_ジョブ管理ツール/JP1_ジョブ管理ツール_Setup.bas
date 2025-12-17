@@ -12,15 +12,16 @@ Public Const SHEET_JOBLIST As String = "ジョブ一覧"
 Public Const SHEET_LOG As String = "実行ログ"
 
 ' 設定セル位置（メインシート）- Publicで共有
-Public Const ROW_JP1_SERVER As Long = 5
-Public Const ROW_REMOTE_USER As Long = 6
-Public Const ROW_REMOTE_PASSWORD As Long = 7
-Public Const ROW_JP1_USER As Long = 8
-Public Const ROW_JP1_PASSWORD As Long = 9
-Public Const ROW_ROOT_PATH As Long = 10
-Public Const ROW_WAIT_COMPLETION As Long = 11
-Public Const ROW_TIMEOUT As Long = 12
-Public Const ROW_POLLING_INTERVAL As Long = 13
+Public Const ROW_EXEC_MODE As Long = 5
+Public Const ROW_JP1_SERVER As Long = 7
+Public Const ROW_REMOTE_USER As Long = 8
+Public Const ROW_REMOTE_PASSWORD As Long = 9
+Public Const ROW_JP1_USER As Long = 10
+Public Const ROW_JP1_PASSWORD As Long = 11
+Public Const ROW_ROOT_PATH As Long = 12
+Public Const ROW_WAIT_COMPLETION As Long = 13
+Public Const ROW_TIMEOUT As Long = 14
+Public Const ROW_POLLING_INTERVAL As Long = 15
 Public Const COL_SETTING_VALUE As Long = 3
 
 ' ジョブ一覧シートの列位置 - Publicで共有
@@ -112,6 +113,15 @@ Private Sub FormatMainSheet()
     ws.Range("A4").Value = "■ 接続設定"
     ws.Range("A4").Font.Bold = True
 
+    ws.Cells(ROW_EXEC_MODE, 1).Value = "実行モード"
+    ws.Cells(ROW_EXEC_MODE, COL_SETTING_VALUE).Value = "リモート"
+    AddDropdown ws, ws.Cells(ROW_EXEC_MODE, COL_SETTING_VALUE), "ローカル,リモート"
+    ws.Cells(ROW_EXEC_MODE, 4).Value = "※ローカル: このPCのJP1を使用、リモート: WinRM経由で接続"
+    ws.Cells(ROW_EXEC_MODE, 4).Font.Color = RGB(128, 128, 128)
+
+    ws.Range("A6").Value = "【リモート接続設定】（ローカルモード時は不要）"
+    ws.Range("A6").Font.Color = RGB(128, 128, 128)
+
     ws.Cells(ROW_JP1_SERVER, 1).Value = "JP1サーバ"
     ws.Cells(ROW_JP1_SERVER, COL_SETTING_VALUE).Value = "192.168.1.100"
 
@@ -137,8 +147,8 @@ Private Sub FormatMainSheet()
     ws.Cells(ROW_ROOT_PATH, 4).Font.Color = RGB(128, 128, 128)
 
     ' 実行設定セクション
-    ws.Range("A14").Value = "■ 実行設定"
-    ws.Range("A14").Font.Bold = True
+    ws.Range("A16").Value = "■ 実行設定"
+    ws.Range("A16").Font.Bold = True
 
     ws.Cells(ROW_WAIT_COMPLETION + 4, 1).Value = "完了待ち"
     ws.Cells(ROW_WAIT_COMPLETION + 4, COL_SETTING_VALUE).Value = "はい"
@@ -162,7 +172,7 @@ Private Sub FormatMainSheet()
     ws.Columns("D").ColumnWidth = 40
 
     ' 入力セルの書式
-    With ws.Range(ws.Cells(ROW_JP1_SERVER, COL_SETTING_VALUE), ws.Cells(ROW_POLLING_INTERVAL + 4, COL_SETTING_VALUE))
+    With ws.Range(ws.Cells(ROW_EXEC_MODE, COL_SETTING_VALUE), ws.Cells(ROW_POLLING_INTERVAL + 4, COL_SETTING_VALUE))
         .Interior.Color = RGB(255, 255, 204)
         .Borders.LineStyle = xlContinuous
     End With

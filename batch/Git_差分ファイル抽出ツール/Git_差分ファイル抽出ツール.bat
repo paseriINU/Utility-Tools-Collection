@@ -66,6 +66,10 @@ $WINMERGE_PATH = ""
 
 # コミット履歴の表示件数
 $COMMIT_HISTORY_COUNT = 20
+
+# ネットワーク出力先のベースパス（空文字列の場合はデスクトップに出力）
+# 例: "\\server\share\projects" または "Z:\projects"
+$NETWORK_OUTPUT_BASE = ""
 #endregion
 
 #region Gitリポジトリ確認
@@ -317,6 +321,7 @@ if ($compareMode -eq "1") {
 
     $BASE_LABEL = $BASE_REF
     $TARGET_LABEL = $TARGET_REF
+    $targetBranchName = $TARGET_REF  # ネットワーク出力用にブランチ名を保持
     #endregion
 
 } else {
@@ -509,6 +514,7 @@ if ($compareMode -eq "1") {
         Write-Host ""
         Write-Host "[選択] 比較先コミット: [$($targetCommit.Hash)] $($targetCommit.Message)" -ForegroundColor Green
     }
+    $targetBranchName = $workingBranch  # ネットワーク出力用にブランチ名を保持
     #endregion
 }
 #endregion
@@ -517,9 +523,87 @@ if ($compareMode -eq "1") {
 Write-Host ""
 
 $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
-$OUTPUT_DIR = "$env:USERPROFILE\Desktop\git_diff_$timestamp"
-$OUTPUT_DIR_BEFORE = "$OUTPUT_DIR\01_修正前"
-$OUTPUT_DIR_AFTER = "$OUTPUT_DIR\02_修正後"
+$OUTPUT_DIR = ""
+$OUTPUT_DIR_BEFORE = ""
+$OUTPUT_DIR_AFTER = ""
+
+# ネットワーク出力モードの判定
+if ($NETWORK_OUTPUT_BASE -ne "" -and (Test-Path $NETWORK_OUTPUT_BASE)) {
+    Write-Host "========================================================================" -ForegroundColor Cyan
+    Write-Host "  出力先フォルダの選択（ネットワーク出力モード）" -ForegroundColor Cyan
+    Write-Host "========================================================================" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "対象ブランチ名: $targetBranchName" -ForegroundColor White
+    Write-Host "ネットワークパス: $NETWORK_OUTPUT_BASE" -ForegroundColor White
+    Write-Host ""
+
+    # ネットワークフォルダ配下のサブフォルダを取得
+    $subFolders = @(Get-ChildItem -Path $NETWORK_OUTPUT_BASE -Directory -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Name)
+
+    # ブランチ名と完全一致するフォルダを検索
+    $matchedFolder = $null
+    foreach ($folder in $subFolders) {
+        if ($folder -eq $targetBranchName) {
+            $matchedFolder = $folder
+            break
+        }
+    }
+
+    if ($matchedFolder) {
+        # 一致するフォルダが見つかった場合
+        Write-Host "[自動検出] ブランチ名と一致するフォルダを発見: $matchedFolder" -ForegroundColor Green
+        $OUTPUT_DIR = Join-Path $NETWORK_OUTPUT_BASE "$matchedFolder\30_M"
+    } else {
+        # 一致しない場合はフォルダ選択ダイアログを表示
+        Write-Host "[情報] ブランチ名と一致するフォルダが見つかりません" -ForegroundColor Yellow
+        Write-Host "フォルダ選択ダイアログを開きます..." -ForegroundColor Cyan
+        Write-Host ""
+
+        Add-Type -AssemblyName System.Windows.Forms
+
+        $folderBrowser = New-Object System.Windows.Forms.FolderBrowserDialog
+        $folderBrowser.Description = "出力先フォルダを選択してください（選択したフォルダ内の30_Mに出力されます）"
+        $folderBrowser.RootFolder = [System.Environment+SpecialFolder]::Desktop
+        $folderBrowser.SelectedPath = $NETWORK_OUTPUT_BASE
+        $folderBrowser.ShowNewFolderButton = $true
+
+        $dialogResult = $folderBrowser.ShowDialog()
+
+        if ($dialogResult -eq [System.Windows.Forms.DialogResult]::OK) {
+            $selectedPath = $folderBrowser.SelectedPath
+            Write-Host "[選択] フォルダ: $selectedPath" -ForegroundColor Green
+            $OUTPUT_DIR = Join-Path $selectedPath "30_M"
+        } else {
+            Write-Host "[キャンセル] フォルダ選択がキャンセルされました" -ForegroundColor Yellow
+            exit 0
+        }
+    }
+
+    # 30_Mフォルダの存在確認と作成
+    if (-not (Test-Path $OUTPUT_DIR)) {
+        Write-Host "[作成] 30_Mフォルダを作成します: $OUTPUT_DIR" -ForegroundColor Yellow
+        New-Item -ItemType Directory -Path $OUTPUT_DIR -Force | Out-Null
+    }
+
+    $OUTPUT_DIR_BEFORE = "$OUTPUT_DIR\01_修正前"
+    $OUTPUT_DIR_AFTER = "$OUTPUT_DIR\02_修正後"
+
+} elseif ($NETWORK_OUTPUT_BASE -ne "" -and -not (Test-Path $NETWORK_OUTPUT_BASE)) {
+    # ネットワークパスが設定されているがアクセスできない場合
+    Write-Host "[警告] ネットワークパスにアクセスできません: $NETWORK_OUTPUT_BASE" -ForegroundColor Yellow
+    Write-Host "デスクトップに出力します" -ForegroundColor Yellow
+    Write-Host ""
+
+    $OUTPUT_DIR = "$env:USERPROFILE\Desktop\git_diff_$timestamp"
+    $OUTPUT_DIR_BEFORE = "$OUTPUT_DIR\01_修正前"
+    $OUTPUT_DIR_AFTER = "$OUTPUT_DIR\02_修正後"
+
+} else {
+    # 従来通りデスクトップに出力
+    $OUTPUT_DIR = "$env:USERPROFILE\Desktop\git_diff_$timestamp"
+    $OUTPUT_DIR_BEFORE = "$OUTPUT_DIR\01_修正前"
+    $OUTPUT_DIR_AFTER = "$OUTPUT_DIR\02_修正後"
+}
 
 Write-Host "------------------------------------------------------------------------" -ForegroundColor White
 Write-Host "比較元          : $BASE_LABEL" -ForegroundColor White
