@@ -1411,6 +1411,7 @@ Private Sub FormatMainSheet(ByRef ws As Worksheet)
             btnLeft, btnTop, btnWidth, btnHeight)
         With shp
             .Name = "btnCompareExcel"
+            .Placement = xlFreeFloating  ' セルサイズに連動しない
             .Fill.ForeColor.RGB = RGB(76, 175, 80)  ' 緑
             .Line.ForeColor.RGB = RGB(56, 142, 60)
             .Line.Weight = 2
@@ -1429,6 +1430,7 @@ Private Sub FormatMainSheet(ByRef ws As Worksheet)
             btnLeft + btnWidth + btnGap, btnTop, btnWidth, btnHeight)
         With shp
             .Name = "btnCompareWord"
+            .Placement = xlFreeFloating  ' セルサイズに連動しない
             .Fill.ForeColor.RGB = RGB(33, 150, 243)  ' 青
             .Line.ForeColor.RGB = RGB(25, 118, 210)
             .Line.Weight = 2
