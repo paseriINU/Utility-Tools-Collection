@@ -496,6 +496,33 @@ if ($choice -eq "1") {
     $filesToTransfer = $fileList
     Write-Color "[選択] すべてのファイルを転送します" "Green"
 
+    # 転送速度オプションを選択
+    Write-Host ""
+    Write-Color "================================================================" "Cyan"
+    Write-Color "転送速度を選択してください" "Cyan"
+    Write-Color "================================================================" "Cyan"
+    Write-Host ""
+    Write-Host " 1. 個別転送（進捗表示あり・低速）"
+    Write-Host " 2. 一括転送（tar圧縮・高速）"
+    Write-Host ""
+    Write-Host " 0. キャンセル"
+    Write-Host ""
+
+    do {
+        $speedChoice = Read-Host "番号を入力 (0-2)"
+        if ($speedChoice -eq "0") {
+            Write-Color "[キャンセル] 処理を中止しました" "Yellow"
+            exit 0
+        }
+    } while ($speedChoice -notin @("1", "2"))
+
+    $useBulkTransfer = ($speedChoice -eq "2")
+    if ($useBulkTransfer) {
+        Write-Color "[選択] 一括転送モード（高速）" "Green"
+    } else {
+        Write-Color "[選択] 個別転送モード（進捗表示）" "Green"
+    }
+
     # 「すべてのファイル」モードの場合、転送方法を選択
     if ($transferMode -eq "all") {
         # 転送ファイルの親ディレクトリを収集（重複排除）
@@ -569,6 +596,7 @@ if ($choice -eq "1") {
     }
 } else {
     # 個別選択
+    $useBulkTransfer = $false
     Write-Host ""
     Write-Color "================================================================" "Cyan"
     Write-Color "個別ファイル選択" "Cyan"
@@ -646,7 +674,125 @@ $successCount = 0
 $failCount = 0
 $failedFiles = @()
 
-foreach ($file in $filesToTransfer) {
+if ($useBulkTransfer -eq $true) {
+    # 一括転送モード（tar圧縮）
+    Write-Color "[実行] 一括転送モードで転送します..." "Yellow"
+    Write-Host ""
+
+    # 一時ディレクトリを作成
+    $tempDir = Join-Path $env:TEMP "git_deploy_$(Get-Date -Format 'yyyyMMddHHmmss')"
+    $tarFileName = "deploy_$(Get-Date -Format 'yyyyMMddHHmmss').tar"
+    $tarFilePath = Join-Path $env:TEMP $tarFileName
+
+    try {
+        # 一時ディレクトリにファイルをコピー（ディレクトリ構造を維持）
+        Write-Color "[準備] ファイルを収集中..." "Yellow"
+        foreach ($file in $filesToTransfer) {
+            $localPath = Join-Path $GIT_ROOT $file.Path
+            $destPath = Join-Path $tempDir $file.Path
+            $destDir = Split-Path $destPath -Parent
+
+            if (-not (Test-Path $destDir)) {
+                New-Item -ItemType Directory -Path $destDir -Force | Out-Null
+            }
+            Copy-Item -Path $localPath -Destination $destPath -Force
+        }
+
+        # tarアーカイブを作成
+        Write-Color "[圧縮] tarアーカイブを作成中..." "Yellow"
+        Push-Location $tempDir
+        $tarResult = & tar -cvf $tarFilePath * 2>&1
+        Pop-Location
+
+        if ($LASTEXITCODE -ne 0) {
+            Write-Color "[エラー] tarアーカイブの作成に失敗しました" "Red"
+            throw "tar creation failed"
+        }
+
+        $tarSize = (Get-Item $tarFilePath).Length / 1KB
+        Write-Color "[情報] アーカイブサイズ: $([math]::Round($tarSize, 2)) KB" "Cyan"
+
+        # tarファイルをリモートに転送
+        Write-Color "[転送] アーカイブを転送中..." "Yellow"
+        $scpArgs = @()
+        if ($SSH_KEY -ne "" -and (Test-Path $SSH_KEY)) {
+            $scpArgs += "-i"
+            $scpArgs += $SSH_KEY
+        }
+        if ($SSH_PORT -ne 22) {
+            $scpArgs += "-P"
+            $scpArgs += $SSH_PORT
+        }
+        $scpArgs += $tarFilePath
+        $scpArgs += "${SSH_USER}@${SSH_HOST}:/tmp/${tarFileName}"
+
+        & $scpCommand $scpArgs 2>&1 | Out-Null
+
+        if ($LASTEXITCODE -ne 0) {
+            Write-Color "[エラー] アーカイブの転送に失敗しました" "Red"
+            throw "scp failed"
+        }
+
+        # リモートで展開
+        Write-Color "[展開] リモートでアーカイブを展開中..." "Yellow"
+        $sshArgs = @()
+        if ($SSH_KEY -ne "" -and (Test-Path $SSH_KEY)) {
+            $sshArgs += "-i"
+            $sshArgs += $SSH_KEY
+        }
+        if ($SSH_PORT -ne 22) {
+            $sshArgs += "-p"
+            $sshArgs += $SSH_PORT
+        }
+        $sshArgs += "${SSH_USER}@${SSH_HOST}"
+
+        # 展開先ディレクトリを作成してtar展開
+        $extractCmd = "cd '${REMOTE_DIR}' && tar -xvf /tmp/${tarFileName} && rm -f /tmp/${tarFileName}"
+        $sshArgs += $extractCmd
+
+        & $sshCommand $sshArgs 2>&1 | Out-Null
+
+        if ($LASTEXITCODE -ne 0) {
+            Write-Color "[エラー] アーカイブの展開に失敗しました" "Red"
+            throw "tar extract failed"
+        }
+
+        # パーミッションと所有者を一括設定
+        Write-Color "[設定] パーミッションと所有者を設定中..." "Yellow"
+        $sshArgs = @()
+        if ($SSH_KEY -ne "" -and (Test-Path $SSH_KEY)) {
+            $sshArgs += "-i"
+            $sshArgs += $SSH_KEY
+        }
+        if ($SSH_PORT -ne 22) {
+            $sshArgs += "-p"
+            $sshArgs += $SSH_PORT
+        }
+        $sshArgs += "${SSH_USER}@${SSH_HOST}"
+        $sshArgs += "find '${REMOTE_DIR}' -type f -exec chmod $LINUX_CHMOD_FILE {} \; -exec chown ${OWNER}:${COMMON_GROUP} {} \; && find '${REMOTE_DIR}' -type d -exec chmod $LINUX_CHMOD_DIR {} \; -exec chown ${OWNER}:${COMMON_GROUP} {} \;"
+
+        & $sshCommand $sshArgs 2>&1 | Out-Null
+
+        $successCount = $filesToTransfer.Count
+        Write-Host ""
+        Write-Color "[OK] $successCount 個のファイルを一括転送しました" "Green"
+
+    } catch {
+        Write-Color "[エラー] 一括転送に失敗しました: $($_.Exception.Message)" "Red"
+        $failCount = $filesToTransfer.Count
+    } finally {
+        # 一時ファイルをクリーンアップ
+        if (Test-Path $tempDir) {
+            Remove-Item -Path $tempDir -Recurse -Force -ErrorAction SilentlyContinue
+        }
+        if (Test-Path $tarFilePath) {
+            Remove-Item -Path $tarFilePath -Force -ErrorAction SilentlyContinue
+        }
+    }
+
+} else {
+    # 個別転送モード（従来方式）
+    foreach ($file in $filesToTransfer) {
     # ローカルパスは配下フォルダ（$GIT_ROOT）からの相対パスで計算
     $localPath = Join-Path $GIT_ROOT $file.Path
 
@@ -736,6 +882,7 @@ foreach ($file in $filesToTransfer) {
         $failCount++
         $failedFiles += $file.Path
     }
+}
 }
 
 Write-Host ""
