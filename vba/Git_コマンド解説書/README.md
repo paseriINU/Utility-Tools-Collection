@@ -32,27 +32,17 @@ Git初心者向けのコマンド解説書をExcelで生成するVBAツールで
 
 - Microsoft Excel 2010以降
 
-## セットアップ
+## 使い方
 
-### 1. VBAモジュールのインポート
+### インストール
 
-1. 新規Excelブックを作成
+1. Excelを開く
 2. `Alt + F11` でVBAエディタを開く
-3. 「ファイル」→「ファイルのインポート」
-4. 以下の2つのファイルを順番にインポート：
-   - `GitCommandGuide_Setup.bas` （初期化・シート作成モジュール）
-   - `GitCommandGuide.bas` （互換性用モジュール）
-5. ブックを `.xlsm` 形式で保存
+3. 「挿入」→「標準モジュール」
+4. `GitCommandGuide.bas` の内容をコピー&ペースト
+5. VBAエディタを閉じる
 
-**ファイル構成**:
-```
-Git_コマンド解説書/
-├── GitCommandGuide_Setup.bas  # 初期化（シート作成・フォーマット）
-├── GitCommandGuide.bas        # 互換性用ラッパー
-└── README.md
-```
-
-### 2. 実行
+### 実行
 
 1. `Alt + F8` でマクロダイアログを開く
 2. `CreateGitCommandGuide` を選択して「実行」
@@ -98,14 +88,8 @@ git merge 名前          # ブランチを統合
 
 | ファイル | 説明 |
 |---------|------|
-| GitCommandGuide_Setup.bas | 初期化モジュール（シート作成・フォーマット） |
-| GitCommandGuide.bas | メインモジュール（互換性用ラッパー） |
+| GitCommandGuide.bas | VBAモジュール |
 | README.md | このファイル |
-
-## 注意事項
-
-- このツールは解説書を生成するだけのツールです
-- 実行するたびにシートが再作成されます（既存の内容は上書きされます）
 
 ## ライセンス
 
