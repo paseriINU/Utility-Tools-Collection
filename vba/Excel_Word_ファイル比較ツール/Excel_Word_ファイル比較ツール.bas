@@ -79,6 +79,36 @@ Private Sub ClearProgress()
 End Sub
 
 '==============================================================================
+' メインシートのチェックボックス状態を取得
+' True: LCSモード、False: 簡易モード
+'==============================================================================
+Private Function GetUseLCSMode() As Boolean
+    Dim ws As Worksheet
+    Dim chkBox As CheckBox
+
+    On Error Resume Next
+
+    ' メインシートを取得
+    Set ws = ThisWorkbook.Worksheets("メイン")
+    If ws Is Nothing Then
+        GetUseLCSMode = False  ' メインシートがない場合は簡易モード
+        Exit Function
+    End If
+
+    ' チェックボックスを取得
+    Set chkBox = ws.CheckBoxes("chkUseLCS")
+    If chkBox Is Nothing Then
+        GetUseLCSMode = False  ' チェックボックスがない場合は簡易モード
+        Exit Function
+    End If
+
+    ' チェック状態を返す
+    GetUseLCSMode = (chkBox.Value = xlOn)
+
+    On Error GoTo 0
+End Function
+
+'==============================================================================
 ' データ構造: Excel比較用
 '==============================================================================
 Private Type ExcelDifferenceInfo
@@ -668,6 +698,10 @@ End Sub
 '==============================================================================
 ' LCSベースの差分検出（最適化版：スタイル情報なし、ハッシュ事前マッチング付き）
 ' WinMergeのような行単位の差分を検出します
+'
+' 比較モード:
+'   - デフォルト（チェックなし）: 簡易比較モード（高速）
+'   - チェックあり: LCSアルゴリズム（厳密、大規模な構造変更に対応）
 '==============================================================================
 Private Sub ComputeLCSDiffOptimized(ByRef texts1() As String, ByRef texts2() As String, _
                                      ByVal n1 As Long, ByVal n2 As Long, _
@@ -679,6 +713,10 @@ Private Sub ComputeLCSDiffOptimized(ByRef texts1() As String, ByRef texts2() As 
     Dim textHash2 As Object
     Dim uniqueTexts1 As Long, uniqueTexts2 As Long
     Dim commonTexts As Long
+    Dim useLCS As Boolean
+
+    ' チェックボックスの状態を取得
+    useLCS = GetUseLCSMode()
 
     ' ハッシュマップを作成して同一テキストを事前に特定
     Set textHash1 = CreateObject("Scripting.Dictionary")
@@ -710,18 +748,40 @@ Private Sub ComputeLCSDiffOptimized(ByRef texts1() As String, ByRef texts2() As 
 
     Debug.Print "  ユニークテキスト数: 旧=" & uniqueTexts1 & ", 新=" & uniqueTexts2 & ", 共通=" & commonTexts
 
-    ' LCS行列を計算（メモリ効率のため、大きなファイルでは制限）
+    Set textHash1 = Nothing
+    Set textHash2 = Nothing
+
+    ' 比較モードの決定
     maxLen = Application.WorksheetFunction.Max(n1, n2)
-    If maxLen > 5000 Then
-        Debug.Print "警告: 段落数が多いため、簡易比較モードを使用します"
+
+    If Not useLCS Then
+        ' 簡易比較モード（デフォルト）
+        Debug.Print "比較モード: 簡易比較（高速）"
         ComputeSimpleDiffOptimized texts1, texts2, n1, n2, differences, diffCount
         Exit Sub
+    End If
+
+    ' LCSモード
+    Debug.Print "比較モード: LCSアルゴリズム（厳密）"
+
+    ' メモリ制限チェック（10000段落を超える場合は警告）
+    If maxLen > 10000 Then
+        Dim result As VbMsgBoxResult
+        result = MsgBox("段落数が " & maxLen & " あります。" & vbCrLf & vbCrLf & _
+                        "LCSアルゴリズムは大量のメモリと時間を使用します。" & vbCrLf & _
+                        "処理に数分～数十分かかる可能性があります。" & vbCrLf & vbCrLf & _
+                        "続行しますか？", vbYesNo + vbExclamation, "警告")
+        If result = vbNo Then
+            Debug.Print "ユーザーがキャンセル。簡易比較モードにフォールバック"
+            ComputeSimpleDiffOptimized texts1, texts2, n1, n2, differences, diffCount
+            Exit Sub
+        End If
     End If
 
     ' LCS行列を初期化 (0-indexed: 0 to n)
     ReDim lcsMatrix(0 To n1, 0 To n2)
 
-    ' LCS行列を構築（ハッシュを活用した高速比較）
+    ' LCS行列を構築
     For i = 1 To n1
         For j = 1 To n2
             If texts1(i) = texts2(j) Then
@@ -743,9 +803,6 @@ Private Sub ComputeLCSDiffOptimized(ByRef texts1() As String, ByRef texts2() As 
 
     ' バックトラックして差分を抽出（スタイル情報なし）
     BacktrackLCSOptimized lcsMatrix, texts1, texts2, n1, n2, differences, diffCount
-
-    Set textHash1 = Nothing
-    Set textHash2 = Nothing
 End Sub
 
 '==============================================================================
