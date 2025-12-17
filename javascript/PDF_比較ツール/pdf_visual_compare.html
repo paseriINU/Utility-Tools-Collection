@@ -359,11 +359,47 @@
 
         .no-file-message {
             display: flex;
+            flex-direction: column;
             justify-content: center;
             align-items: center;
             height: 100%;
             color: #666;
             font-size: 16px;
+            border: 3px dashed #444;
+            border-radius: 10px;
+            margin: 20px;
+            padding: 40px;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+
+        .no-file-message .drop-icon {
+            font-size: 48px;
+            margin-bottom: 15px;
+        }
+
+        .no-file-message .sub-text {
+            font-size: 12px;
+            color: #555;
+            margin-top: 10px;
+        }
+
+        .pdf-panel.drag-over .no-file-message {
+            border-color: #2f5496;
+            background: rgba(47, 84, 150, 0.1);
+            color: #2f5496;
+        }
+
+        .pdf-panel:first-child.drag-over .no-file-message {
+            border-color: #e91e63;
+            background: rgba(233, 30, 99, 0.1);
+            color: #e91e63;
+        }
+
+        .pdf-panel:last-child.drag-over .no-file-message {
+            border-color: #4caf50;
+            background: rgba(76, 175, 80, 0.1);
+            color: #4caf50;
         }
 
         .sync-scroll-toggle {
@@ -435,14 +471,22 @@
 
     <div class="main-content">
         <div class="pdf-panel" id="panel1">
-            <div class="no-file-message" id="noFile1">旧PDFを選択してください</div>
+            <div class="no-file-message" id="noFile1">
+                <div class="drop-icon">📄</div>
+                <div>旧PDFをここにドラッグ&ドロップ</div>
+                <div class="sub-text">またはツールバーから選択</div>
+            </div>
             <div class="canvas-container" id="container1" style="display: none;">
                 <canvas id="canvas1" class="pdf-canvas"></canvas>
                 <canvas id="diffOverlay1" class="diff-overlay"></canvas>
             </div>
         </div>
         <div class="pdf-panel" id="panel2">
-            <div class="no-file-message" id="noFile2">新PDFを選択してください</div>
+            <div class="no-file-message" id="noFile2">
+                <div class="drop-icon">📄</div>
+                <div>新PDFをここにドラッグ&ドロップ</div>
+                <div class="sub-text">またはツールバーから選択</div>
+            </div>
             <div class="canvas-container" id="container2" style="display: none;">
                 <canvas id="canvas2" class="pdf-canvas"></canvas>
                 <canvas id="diffOverlay2" class="diff-overlay"></canvas>
@@ -522,11 +566,42 @@
             }
         });
 
-        // PDFを読み込み
-        async function loadPDF(num, input) {
-            const file = input.files[0];
-            if (!file) return;
+        // ドラッグ&ドロップ処理
+        function setupDragDrop(panel, pdfNum) {
+            panel.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                panel.classList.add('drag-over');
+            });
 
+            panel.addEventListener('dragleave', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                panel.classList.remove('drag-over');
+            });
+
+            panel.addEventListener('drop', async (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                panel.classList.remove('drag-over');
+
+                const files = e.dataTransfer.files;
+                if (files.length > 0) {
+                    const file = files[0];
+                    if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
+                        await loadPDFFromFile(pdfNum, file);
+                    } else {
+                        alert('PDFファイルをドロップしてください。');
+                    }
+                }
+            });
+        }
+
+        setupDragDrop(panel1, 1);
+        setupDragDrop(panel2, 2);
+
+        // ファイルからPDFを読み込み（共通処理）
+        async function loadPDFFromFile(num, file) {
             showLoading(`PDF${num}を読み込み中...`);
 
             try {
@@ -537,19 +612,35 @@
                     pdf1 = pdf;
                     document.getElementById('file1Btn').classList.add('loaded');
                     document.getElementById('file1Btn').textContent = file.name.substring(0, 20) + (file.name.length > 20 ? '...' : '');
+                    document.getElementById('noFile1').style.display = 'none';
                 } else {
                     pdf2 = pdf;
                     document.getElementById('file2Btn').classList.add('loaded');
                     document.getElementById('file2Btn').textContent = file.name.substring(0, 20) + (file.name.length > 20 ? '...' : '');
+                    document.getElementById('noFile2').style.display = 'none';
                 }
 
                 updateCompareButton();
-                hideLoading();
+
+                // 両方のPDFが読み込まれたら自動で比較開始
+                if (pdf1 && pdf2) {
+                    hideLoading();
+                    await compare();
+                } else {
+                    hideLoading();
+                }
 
             } catch (error) {
                 hideLoading();
                 alert('PDFの読み込みに失敗しました: ' + error.message);
             }
+        }
+
+        // PDFを読み込み（inputから）
+        async function loadPDF(num, input) {
+            const file = input.files[0];
+            if (!file) return;
+            await loadPDFFromFile(num, file);
         }
 
         function updateCompareButton() {
