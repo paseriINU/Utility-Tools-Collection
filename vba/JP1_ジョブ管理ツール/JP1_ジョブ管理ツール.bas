@@ -26,15 +26,14 @@ Private Const ROW_POLLING_INTERVAL As Long = 13
 Private Const COL_SETTING_VALUE As Long = 3
 
 ' ジョブ一覧シートの列位置
-Private Const COL_CHECK As Long = 1
-Private Const COL_ORDER As Long = 2
-Private Const COL_JOBNET_PATH As Long = 3
-Private Const COL_JOBNET_NAME As Long = 4
-Private Const COL_COMMENT As Long = 5
-Private Const COL_LAST_STATUS As Long = 6
-Private Const COL_LAST_EXEC_TIME As Long = 7
-Private Const COL_LAST_END_TIME As Long = 8
-Private Const COL_LAST_RETURN_CODE As Long = 9
+Private Const COL_ORDER As Long = 1
+Private Const COL_JOBNET_PATH As Long = 2
+Private Const COL_JOBNET_NAME As Long = 3
+Private Const COL_COMMENT As Long = 4
+Private Const COL_LAST_STATUS As Long = 5
+Private Const COL_LAST_EXEC_TIME As Long = 6
+Private Const COL_LAST_END_TIME As Long = 7
+Private Const COL_LAST_RETURN_CODE As Long = 8
 Private Const ROW_JOBLIST_HEADER As Long = 3
 Private Const ROW_JOBLIST_DATA_START As Long = 4
 
@@ -194,7 +193,7 @@ Private Sub FormatJobListSheet()
     ws.Cells.Clear
 
     ' タイトル
-    With ws.Range("A1:I1")
+    With ws.Range("A1:H1")
         .Merge
         .Value = "ジョブネット一覧"
         .Font.Size = 14
@@ -206,10 +205,9 @@ Private Sub FormatJobListSheet()
     End With
 
     ' 説明
-    ws.Range("A2").Value = "実行するジョブにチェックを入れ、実行順を数字で指定してください。"
+    ws.Range("A2").Value = "実行するジョブの「順序」列に数字（1, 2, 3...）を入力してください。順序が入っているジョブを1番から順に実行します。"
 
     ' ヘッダー
-    ws.Cells(ROW_JOBLIST_HEADER, COL_CHECK).Value = "実行"
     ws.Cells(ROW_JOBLIST_HEADER, COL_ORDER).Value = "順序"
     ws.Cells(ROW_JOBLIST_HEADER, COL_JOBNET_PATH).Value = "ジョブネットパス"
     ws.Cells(ROW_JOBLIST_HEADER, COL_JOBNET_NAME).Value = "ジョブネット名"
@@ -219,7 +217,7 @@ Private Sub FormatJobListSheet()
     ws.Cells(ROW_JOBLIST_HEADER, COL_LAST_END_TIME).Value = "終了時刻"
     ws.Cells(ROW_JOBLIST_HEADER, COL_LAST_RETURN_CODE).Value = "戻り値"
 
-    With ws.Range(ws.Cells(ROW_JOBLIST_HEADER, COL_CHECK), ws.Cells(ROW_JOBLIST_HEADER, COL_LAST_RETURN_CODE))
+    With ws.Range(ws.Cells(ROW_JOBLIST_HEADER, COL_ORDER), ws.Cells(ROW_JOBLIST_HEADER, COL_LAST_RETURN_CODE))
         .Font.Bold = True
         .Interior.Color = RGB(79, 129, 189)
         .Font.Color = RGB(255, 255, 255)
@@ -228,7 +226,6 @@ Private Sub FormatJobListSheet()
     End With
 
     ' 列幅調整
-    ws.Columns(COL_CHECK).ColumnWidth = 6
     ws.Columns(COL_ORDER).ColumnWidth = 6
     ws.Columns(COL_JOBNET_PATH).ColumnWidth = 50
     ws.Columns(COL_JOBNET_NAME).ColumnWidth = 25
@@ -239,7 +236,7 @@ Private Sub FormatJobListSheet()
     ws.Columns(COL_LAST_RETURN_CODE).ColumnWidth = 8
 
     ' フィルター設定
-    ws.Range(ws.Cells(ROW_JOBLIST_HEADER, COL_CHECK), ws.Cells(ROW_JOBLIST_HEADER, COL_LAST_RETURN_CODE)).AutoFilter
+    ws.Range(ws.Cells(ROW_JOBLIST_HEADER, COL_ORDER), ws.Cells(ROW_JOBLIST_HEADER, COL_LAST_RETURN_CODE)).AutoFilter
 End Sub
 
 '==============================================================================
@@ -390,7 +387,7 @@ Private Sub ParseJobListResult(result As String)
     Dim lastRow As Long
     lastRow = ws.Cells(ws.Rows.Count, COL_JOBNET_PATH).End(xlUp).Row
     If lastRow >= ROW_JOBLIST_DATA_START Then
-        ws.Range(ws.Cells(ROW_JOBLIST_DATA_START, COL_CHECK), ws.Cells(lastRow, COL_LAST_RETURN_CODE)).ClearContents
+        ws.Range(ws.Cells(ROW_JOBLIST_DATA_START, COL_ORDER), ws.Cells(lastRow, COL_LAST_RETURN_CODE)).ClearContents
     End If
 
     ' 結果をパース
@@ -423,22 +420,18 @@ Private Sub ParseJobListResult(result As String)
 
             If unitMatch <> "" And InStr(line, ",ty=n") > 0 Then
                 ' ジョブネット（ty=n）のみ追加
-                ws.Cells(row, COL_CHECK).Value = ""
                 ws.Cells(row, COL_ORDER).Value = ""
                 ws.Cells(row, COL_JOBNET_PATH).Value = unitMatch
                 ws.Cells(row, COL_JOBNET_NAME).Value = ExtractJobName(line)
                 ws.Cells(row, COL_COMMENT).Value = ExtractComment(line)
 
-                ' チェックボックス用の書式
-                With ws.Cells(row, COL_CHECK)
-                    .HorizontalAlignment = xlCenter
-                End With
+                ' 順序列の書式
                 With ws.Cells(row, COL_ORDER)
                     .HorizontalAlignment = xlCenter
                 End With
 
                 ' 罫線
-                ws.Range(ws.Cells(row, COL_CHECK), ws.Cells(row, COL_LAST_RETURN_CODE)).Borders.LineStyle = xlContinuous
+                ws.Range(ws.Cells(row, COL_ORDER), ws.Cells(row, COL_LAST_RETURN_CODE)).Borders.LineStyle = xlContinuous
 
                 row = row + 1
             End If
@@ -552,13 +545,13 @@ Public Sub ExecuteCheckedJobs()
         End If
     End If
 
-    ' チェックされたジョブを取得
+    ' 順序が指定されたジョブを取得
     Dim jobs As Collection
-    Set jobs = GetCheckedJobs()
+    Set jobs = GetOrderedJobs()
 
     If jobs.Count = 0 Then
         MsgBox "実行するジョブが選択されていません。" & vbCrLf & _
-               "ジョブ一覧シートで「実行」列にチェック（任意の文字）を入れてください。", vbExclamation
+               "ジョブ一覧シートの「順序」列に数字（1, 2, 3...）を入力してください。", vbExclamation
         Exit Sub
     End If
 
@@ -640,7 +633,7 @@ Public Sub ExecuteCheckedJobs()
     Worksheets(SHEET_LOG).Activate
 End Sub
 
-Private Function GetCheckedJobs() As Collection
+Private Function GetOrderedJobs() As Collection
     Dim jobs As New Collection
     Dim ws As Worksheet
     Set ws = Worksheets(SHEET_JOBLIST)
@@ -648,35 +641,42 @@ Private Function GetCheckedJobs() As Collection
     Dim lastRow As Long
     lastRow = ws.Cells(ws.Rows.Count, COL_JOBNET_PATH).End(xlUp).Row
 
-    ' チェックされた行を収集
-    Dim checkedRows As New Collection
+    ' 順序が入力されている行を収集
+    Dim orderedRows As New Collection
     Dim row As Long
     For row = ROW_JOBLIST_DATA_START To lastRow
-        If ws.Cells(row, COL_CHECK).Value <> "" Then
+        Dim orderValue As Variant
+        orderValue = ws.Cells(row, COL_ORDER).Value
+
+        ' 順序列に数字が入っている場合のみ対象
+        If IsNumeric(orderValue) And orderValue <> "" Then
             Dim job As Object
             Set job = CreateObject("Scripting.Dictionary")
             job("Row") = row
             job("Path") = ws.Cells(row, COL_JOBNET_PATH).Value
-            job("Order") = ws.Cells(row, COL_ORDER).Value
+            job("Order") = CLng(orderValue)
 
-            If job("Order") = "" Then job("Order") = 9999
-
-            checkedRows.Add job
+            orderedRows.Add job
         End If
     Next row
 
     ' 実行順でソート（単純なバブルソート）
+    If orderedRows.Count = 0 Then
+        Set GetOrderedJobs = jobs
+        Exit Function
+    End If
+
     Dim arr() As Variant
-    ReDim arr(1 To checkedRows.Count)
+    ReDim arr(1 To orderedRows.Count)
     Dim i As Long
-    For i = 1 To checkedRows.Count
-        Set arr(i) = checkedRows(i)
+    For i = 1 To orderedRows.Count
+        Set arr(i) = orderedRows(i)
     Next i
 
     Dim temp As Object
     For i = 1 To UBound(arr) - 1
         For j = i + 1 To UBound(arr)
-            If CLng(arr(i)("Order")) > CLng(arr(j)("Order")) Then
+            If arr(i)("Order") > arr(j)("Order") Then
                 Set temp = arr(i)
                 Set arr(i) = arr(j)
                 Set arr(j) = temp
@@ -688,7 +688,7 @@ Private Function GetCheckedJobs() As Collection
         jobs.Add arr(i)
     Next i
 
-    Set GetCheckedJobs = jobs
+    Set GetOrderedJobs = jobs
 End Function
 
 Private Function ExecuteSingleJob(config As Object, jobnetPath As String) As Object
@@ -860,7 +860,7 @@ End Sub
 ' 一覧クリア
 '==============================================================================
 Public Sub ClearJobList()
-    If MsgBox("ジョブ一覧をクリアしますか？", vbYesNo + vbQuestion) = vbNo Then Exit Sub
+    If MsgBox("ジョブ一覧をクリアしますか？ (y/n)", vbYesNo + vbQuestion) = vbNo Then Exit Sub
 
     Dim ws As Worksheet
     Set ws = Worksheets(SHEET_JOBLIST)
@@ -869,7 +869,7 @@ Public Sub ClearJobList()
     lastRow = ws.Cells(ws.Rows.Count, COL_JOBNET_PATH).End(xlUp).Row
 
     If lastRow >= ROW_JOBLIST_DATA_START Then
-        ws.Range(ws.Cells(ROW_JOBLIST_DATA_START, COL_CHECK), ws.Cells(lastRow, COL_LAST_RETURN_CODE)).Clear
+        ws.Range(ws.Cells(ROW_JOBLIST_DATA_START, COL_ORDER), ws.Cells(lastRow, COL_LAST_RETURN_CODE)).Clear
     End If
 
     MsgBox "クリアしました。", vbInformation
