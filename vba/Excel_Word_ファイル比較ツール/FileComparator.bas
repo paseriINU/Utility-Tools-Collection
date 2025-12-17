@@ -1124,7 +1124,7 @@ Private Sub CreateExcelResultSheet(ByRef differences() As ExcelDifferenceInfo, B
         Next i
 
         ' 列幅調整
-        .Columns("A").ColumnWidth = 6
+        .Columns("A").ColumnWidth = 8
         .Columns("B").ColumnWidth = 20
         .Columns("C").ColumnWidth = 10
         .Columns("D").ColumnWidth = 12
@@ -1317,7 +1317,7 @@ Private Sub CreateWordResultSheet(ByRef differences() As WordDifferenceInfo, ByV
         Next i
 
         ' 列幅調整
-        .Columns("A").ColumnWidth = 6
+        .Columns("A").ColumnWidth = 8
         .Columns("B").ColumnWidth = 10
         .Columns("C").ColumnWidth = 10
         .Columns("D").ColumnWidth = 14
