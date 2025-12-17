@@ -33,6 +33,7 @@ exit /b %EXITCODE%
 $SSH_HOST = "linux-server"      # ホスト名またはIPアドレス
 $SSH_USER = "youruser"          # SSHユーザー名
 $SSH_PORT = 22                  # SSHポート番号
+$SSH_PASSWORD = ""              # SSHパスワード（空欄の場合は実行時に入力を求めます）
 
 # 鍵ファイル設定
 $KEY_NAME = "id_ed25519"        # 鍵ファイル名（id_ed25519, id_rsa など）
@@ -99,6 +100,7 @@ Write-Color "設定内容" "Cyan"
 Write-Color "================================================================" "Cyan"
 Write-Host ""
 Write-Host "  接続先: ${SSH_USER}@${SSH_HOST}:${SSH_PORT}"
+Write-Host "  SSHパスワード: $(if ($SSH_PASSWORD) { '設定済み' } else { '実行時に入力' })"
 Write-Host "  鍵の種類: $KEY_TYPE $(if ($KEY_TYPE -eq 'rsa') { "($KEY_BITS bit)" })"
 Write-Host "  鍵ファイル名: $KEY_NAME"
 Write-Host "  鍵のコメント: $KEY_COMMENT"
@@ -186,8 +188,12 @@ if (-not (Test-Path $keyPath)) {
 #region 公開鍵の配置
 Write-Header "公開鍵のLinuxサーバーへの配置"
 
-Write-Color "パスワード認証でLinuxサーバーに接続し、公開鍵を配置します。" "Yellow"
-Write-Color "パスワードの入力を求められたら、Linuxサーバーのパスワードを入力してください。" "Yellow"
+if ($SSH_PASSWORD) {
+    Write-Color "設定されたパスワードを使用してLinuxサーバーに接続します。" "Yellow"
+} else {
+    Write-Color "パスワード認証でLinuxサーバーに接続し、公開鍵を配置します。" "Yellow"
+    Write-Color "パスワードの入力を求められたら、Linuxサーバーのパスワードを入力してください。" "Yellow"
+}
 Write-Host ""
 Write-Color "※ 既存の authorized_keys に追記します（重複する場合はスキップ）" "Gray"
 Write-Host ""
@@ -212,7 +218,30 @@ if ($SSH_PORT -ne 22) {
 $sshArgs += "${SSH_USER}@${SSH_HOST}"
 $sshArgs += $sshScript
 
-& ssh.exe $sshArgs
+# パスワードが設定されている場合はSSH_ASKPASSを使用
+if ($SSH_PASSWORD) {
+    # 一時的なパスワード応答スクリプトを作成
+    $askpassScript = "$env:TEMP\ssh_askpass_$([System.Guid]::NewGuid().ToString('N')).bat"
+    "@echo off`necho $SSH_PASSWORD" | Set-Content -Path $askpassScript -Encoding ASCII
+
+    # 環境変数を設定
+    $env:SSH_ASKPASS = $askpassScript
+    $env:SSH_ASKPASS_REQUIRE = "force"
+    $env:DISPLAY = "dummy:0"
+
+    try {
+        & ssh.exe $sshArgs
+    } finally {
+        # 一時ファイルを削除
+        Remove-Item -Path $askpassScript -Force -ErrorAction SilentlyContinue
+        # 環境変数をクリア
+        Remove-Item Env:\SSH_ASKPASS -ErrorAction SilentlyContinue
+        Remove-Item Env:\SSH_ASKPASS_REQUIRE -ErrorAction SilentlyContinue
+        Remove-Item Env:\DISPLAY -ErrorAction SilentlyContinue
+    }
+} else {
+    & ssh.exe $sshArgs
+}
 
 if ($LASTEXITCODE -eq 0) {
     Write-Host ""
