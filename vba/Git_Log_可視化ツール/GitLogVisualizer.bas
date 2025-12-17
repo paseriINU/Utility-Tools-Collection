@@ -747,7 +747,7 @@ Private Sub PrepareSheets()
 End Sub
 
 '==============================================================================
-' 履歴シートを作成（詳細情報付き）
+' 履歴シートを作成
 '==============================================================================
 Private Sub CreateHistorySheet(ByRef commits() As CommitInfo, ByVal commitCount As Long, ByVal repoPath As String)
     Dim ws As Worksheet
@@ -776,22 +776,16 @@ Private Sub CreateHistorySheet(ByRef commits() As CommitInfo, ByVal commitCount 
         ' ヘッダー行
         .Range("A4").Value = "No"
         .Range("B4").Value = "ハッシュ"
-        .Range("C4").Value = "フルハッシュ"
-        .Range("D4").Value = "作者"
-        .Range("E4").Value = "メール"
-        .Range("F4").Value = "日時"
-        .Range("G4").Value = "曜日"
-        .Range("H4").Value = "種別"
-        .Range("I4").Value = "コミットメッセージ"
-        .Range("J4").Value = "ブランチ/タグ"
-        .Range("K4").Value = "変更ファイル数"
-        .Range("L4").Value = "追加行"
-        .Range("M4").Value = "削除行"
-        .Range("N4").Value = "変更量"
-        .Range("O4").Value = "親コミット数"
+        .Range("C4").Value = "作者"
+        .Range("D4").Value = "日時"
+        .Range("E4").Value = "コミットメッセージ"
+        .Range("F4").Value = "ブランチ/タグ"
+        .Range("G4").Value = "変更ファイル数"
+        .Range("H4").Value = "追加行数"
+        .Range("I4").Value = "削除行数"
 
         ' ヘッダー書式
-        With .Range("A4:O4")
+        With .Range("A4:I4")
             .Font.Bold = True
             .Interior.Color = RGB(68, 114, 196)
             .Font.Color = RGB(255, 255, 255)
@@ -801,73 +795,40 @@ Private Sub CreateHistorySheet(ByRef commits() As CommitInfo, ByVal commitCount 
         ' データ行
         Dim i As Long
         Dim row As Long
-        Dim commitType As String
-        Dim dayName As String
 
         For i = 0 To commitCount - 1
             row = i + 5
 
-            ' コミット種別を判定
-            If commits(i).ParentCount = 0 Then
-                commitType = "初期"
-            ElseIf commits(i).ParentCount >= 2 Then
-                commitType = "マージ"
-            Else
-                commitType = "通常"
-            End If
-
-            ' 曜日を取得
-            dayName = WeekdayName(Weekday(commits(i).CommitDate), True)
-
             .Cells(row, 1).Value = i + 1
             .Cells(row, 2).Value = commits(i).Hash
-            .Cells(row, 3).Value = commits(i).FullHash
-            .Cells(row, 4).Value = commits(i).Author
-            .Cells(row, 5).Value = commits(i).AuthorEmail
-            .Cells(row, 6).Value = commits(i).CommitDate
-            .Cells(row, 6).NumberFormat = "yyyy/mm/dd hh:mm"
-            .Cells(row, 7).Value = dayName
-            .Cells(row, 8).Value = commitType
-            .Cells(row, 9).Value = commits(i).Subject
-            .Cells(row, 10).Value = commits(i).RefNames
-            .Cells(row, 11).Value = commits(i).FilesChanged
-            .Cells(row, 12).Value = commits(i).Insertions
-            .Cells(row, 13).Value = commits(i).Deletions
-            .Cells(row, 14).Value = commits(i).Insertions + commits(i).Deletions
-            .Cells(row, 15).Value = commits(i).ParentCount
+            .Cells(row, 3).Value = commits(i).Author
+            .Cells(row, 4).Value = commits(i).CommitDate
+            .Cells(row, 4).NumberFormat = "yyyy/mm/dd hh:mm"
+            .Cells(row, 5).Value = commits(i).Subject
+            .Cells(row, 6).Value = commits(i).RefNames
+            .Cells(row, 7).Value = commits(i).FilesChanged
+            .Cells(row, 8).Value = commits(i).Insertions
+            .Cells(row, 9).Value = commits(i).Deletions
 
-            ' コミット種別による色分け
-            Select Case commitType
-                Case "初期"
-                    .Range(.Cells(row, 1), .Cells(row, 15)).Interior.Color = RGB(255, 230, 230)
-                Case "マージ"
-                    .Range(.Cells(row, 1), .Cells(row, 15)).Interior.Color = RGB(230, 255, 230)
-                Case Else
-                    If i Mod 2 = 0 Then
-                        .Range(.Cells(row, 1), .Cells(row, 15)).Interior.Color = RGB(245, 245, 245)
-                    End If
-            End Select
+            ' 交互に色分け
+            If i Mod 2 = 0 Then
+                .Range(.Cells(row, 1), .Cells(row, 9)).Interior.Color = RGB(245, 245, 245)
+            End If
         Next i
 
         ' 列幅調整
         .Columns("A").ColumnWidth = 5
         .Columns("B").ColumnWidth = 10
-        .Columns("C").ColumnWidth = 42
-        .Columns("D").ColumnWidth = 15
-        .Columns("E").ColumnWidth = 25
-        .Columns("F").ColumnWidth = 16
-        .Columns("G").ColumnWidth = 6
-        .Columns("H").ColumnWidth = 8
-        .Columns("I").ColumnWidth = 50
-        .Columns("J").ColumnWidth = 20
-        .Columns("K").ColumnWidth = 12
-        .Columns("L").ColumnWidth = 8
-        .Columns("M").ColumnWidth = 8
-        .Columns("N").ColumnWidth = 8
-        .Columns("O").ColumnWidth = 10
+        .Columns("C").ColumnWidth = 15
+        .Columns("D").ColumnWidth = 16
+        .Columns("E").ColumnWidth = 50
+        .Columns("F").ColumnWidth = 20
+        .Columns("G").ColumnWidth = 12
+        .Columns("H").ColumnWidth = 10
+        .Columns("I").ColumnWidth = 10
 
         ' フィルターを設定
-        .Range("A4:O4").AutoFilter
+        .Range("A4:I4").AutoFilter
     End With
 
     ' ウィンドウ枠の固定（シートをアクティブにする必要がある）
