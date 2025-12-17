@@ -267,6 +267,8 @@ mkdir -p ~/.ssh && chmod 700 ~/.ssh && touch ~/.ssh/authorized_keys && chmod 600
 "@
 
 $sshArgs = @()
+$sshArgs += "-o"
+$sshArgs += "StrictHostKeyChecking=accept-new"
 if ($SSH_PORT -ne 22) {
     $sshArgs += "-p"
     $sshArgs += $SSH_PORT
