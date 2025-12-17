@@ -29,7 +29,7 @@ Private Const GIT_COMMAND As String = "git"
 
 ' シート名
 Private Const SHEET_MAIN As String = "メイン"
-Private Const SHEET_HISTORY As String = "履歴"
+Private Const SHEET_HISTORY As String = "コミット履歴"
 Private Const SHEET_BRANCH_GRAPH As String = "ブランチグラフ"
 
 ' メインシートのセル位置
@@ -248,7 +248,7 @@ Private Sub FormatMainSheet(ByRef ws As Worksheet)
             .Weight = xlMedium
         End With
 
-        .Range("B18").Value = "履歴"
+        .Range("B18").Value = "コミット履歴"
         With .Range("B18")
             .Font.Name = "Meiryo UI"
             .Font.Size = 11
