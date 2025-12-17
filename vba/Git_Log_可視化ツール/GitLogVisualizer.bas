@@ -4,38 +4,41 @@
 '==============================================================================
 ' 概要:
 '   Excelから実行し、Gitリポジトリのコミット履歴を取得して、
-'   表形式・統計情報・グラフで視覚化するツールです。
+'   表形式で視覚化するツールです。
 '
 ' 機能:
-'   - コミット履歴の一覧表示
-'   - 作者別・日別・ブランチ別の統計
-'   - グラフによる可視化
-'   - ダッシュボードで概要表示
+'   - コミット履歴の一覧表示（詳細情報付き）
+'   - ブランチグラフによる可視化
+'   - メインシートで設定を入力可能
 '
 ' 必要な環境:
 '   - Microsoft Excel 2010以降
 '   - Git がインストールされており、パスが通っていること
 '
 ' 作成日: 2025-12-07
+' 更新日: 2025-12-17 - メインシート追加、シート名日本語化、履歴シート改善
 '==============================================================================
 
 Option Explicit
 
 '==============================================================================
-' 設定: ここを編集してください
+' 定数
 '==============================================================================
-' 取得するコミット数（最近のN件）
-Private Const COMMIT_COUNT As Long = 100
-
 ' Gitコマンドのパス（通常は "git" でOK。パスが通っていない場合はフルパス指定）
 Private Const GIT_COMMAND As String = "git"
 
-' デフォルトのGitリポジトリパス
-' C:\Users\%USERNAME%\source\Git\project 形式で設定
-Private Const DEFAULT_REPO_PATH_TEMPLATE As String = "C:\Users\{USER}\source\Git\project"
+' シート名
+Private Const SHEET_MAIN As String = "メイン"
+Private Const SHEET_DASHBOARD As String = "ダッシュボード"
+Private Const SHEET_HISTORY As String = "コミット履歴"
+Private Const SHEET_BRANCH_GRAPH As String = "ブランチグラフ"
+
+' メインシートのセル位置
+Private Const CELL_REPO_PATH As String = "D8"
+Private Const CELL_COMMIT_COUNT As String = "D10"
 
 '==============================================================================
-' データ構造（※Type定義はFunction/Subより前に記述する必要があります）
+' データ構造
 '==============================================================================
 Private Type CommitInfo
     Hash As String          ' コミットハッシュ（短縮）
@@ -53,10 +56,375 @@ Private Type CommitInfo
 End Type
 
 '==============================================================================
-' デフォルトのGitリポジトリパスを取得
+' メインシート初期化
 '==============================================================================
-Private Function GetDefaultRepoPath() As String
-    GetDefaultRepoPath = Replace(DEFAULT_REPO_PATH_TEMPLATE, "{USER}", Environ("USERNAME"))
+Public Sub InitializeGitLogVisualizer()
+    Dim ws As Worksheet
+
+    On Error Resume Next
+    Application.DisplayAlerts = False
+
+    ' 既存のメインシートがあれば削除
+    For Each ws In ThisWorkbook.Worksheets
+        If ws.Name = SHEET_MAIN Then
+            ws.Delete
+            Exit For
+        End If
+    Next ws
+
+    Application.DisplayAlerts = True
+    On Error GoTo 0
+
+    ' 新しいシートを作成
+    Set ws = ThisWorkbook.Worksheets.Add(Before:=ThisWorkbook.Worksheets(1))
+    ws.Name = SHEET_MAIN
+
+    ' シートを初期化
+    FormatMainSheet ws
+
+    MsgBox "メインシートを初期化しました。" & vbCrLf & vbCrLf & _
+           "リポジトリパスと取得件数を設定して、" & vbCrLf & _
+           "「実行」ボタンをクリックしてください。", vbInformation, "初期化完了"
+End Sub
+
+'==============================================================================
+' メインシートのフォーマット
+'==============================================================================
+Private Sub FormatMainSheet(ByRef ws As Worksheet)
+    Dim shp As Shape
+
+    Application.ScreenUpdating = False
+
+    With ws
+        ' 全体の背景色を白に
+        .Cells.Interior.Color = RGB(255, 255, 255)
+
+        ' =================================================================
+        ' タイトルエリア (行1-3)
+        ' =================================================================
+        .Range("B2:G2").Merge
+        .Range("B2").Value = "Git Log 可視化ツール"
+        With .Range("B2")
+            .Font.Name = "Meiryo UI"
+            .Font.Size = 20
+            .Font.Bold = True
+            .Font.Color = RGB(255, 255, 255)
+            .HorizontalAlignment = xlCenter
+            .VerticalAlignment = xlCenter
+        End With
+        .Range("B2:G3").Interior.Color = RGB(68, 114, 196)
+        .Rows(2).RowHeight = 40
+        .Rows(3).RowHeight = 5
+
+        ' =================================================================
+        ' 説明エリア (行5)
+        ' =================================================================
+        .Range("B5:G5").Merge
+        .Range("B5").Value = "Gitリポジトリのコミット履歴を取得して視覚化します。"
+        With .Range("B5")
+            .Font.Name = "Meiryo UI"
+            .Font.Size = 11
+            .Font.Color = RGB(64, 64, 64)
+        End With
+
+        ' =================================================================
+        ' 設定セクション (行7-12)
+        ' =================================================================
+        .Range("B7:G7").Merge
+        .Range("B7").Value = "設定"
+        With .Range("B7")
+            .Font.Name = "Meiryo UI"
+            .Font.Size = 14
+            .Font.Bold = True
+            .Font.Color = RGB(68, 114, 196)
+        End With
+        With .Range("B7:G7").Borders(xlEdgeBottom)
+            .LineStyle = xlContinuous
+            .Color = RGB(68, 114, 196)
+            .Weight = xlMedium
+        End With
+
+        ' リポジトリパス
+        .Range("B8").Value = "リポジトリパス:"
+        With .Range("B8")
+            .Font.Name = "Meiryo UI"
+            .Font.Size = 11
+            .Font.Bold = True
+        End With
+
+        .Range("D8:G8").Merge
+        .Range("D8").Value = "C:\Users\%USERNAME%\source\Git\project"
+        With .Range("D8:G8")
+            .Interior.Color = RGB(255, 255, 230)
+            .Font.Name = "Meiryo UI"
+            .Font.Size = 10
+        End With
+        With .Range("D8:G8").Borders
+            .LineStyle = xlContinuous
+            .Color = RGB(200, 200, 200)
+        End With
+
+        ' 環境変数の説明
+        .Range("D9:G9").Merge
+        .Range("D9").Value = "※ %USERNAME% などの環境変数が使用可能"
+        With .Range("D9")
+            .Font.Name = "Meiryo UI"
+            .Font.Size = 9
+            .Font.Color = RGB(100, 100, 100)
+            .Font.Italic = True
+        End With
+
+        ' 取得コミット数
+        .Range("B10").Value = "取得件数:"
+        With .Range("B10")
+            .Font.Name = "Meiryo UI"
+            .Font.Size = 11
+            .Font.Bold = True
+        End With
+
+        .Range("D10").Value = 100
+        With .Range("D10")
+            .Interior.Color = RGB(255, 255, 230)
+            .Font.Name = "Meiryo UI"
+            .Font.Size = 10
+            .NumberFormat = "#,##0"
+            .HorizontalAlignment = xlCenter
+        End With
+        With .Range("D10").Borders
+            .LineStyle = xlContinuous
+            .Color = RGB(200, 200, 200)
+        End With
+
+        .Range("E10:G10").Merge
+        .Range("E10").Value = "件（最新から取得）"
+        With .Range("E10")
+            .Font.Name = "Meiryo UI"
+            .Font.Size = 10
+            .Font.Color = RGB(100, 100, 100)
+        End With
+
+        ' =================================================================
+        ' ボタンエリア (行13-14)
+        ' =================================================================
+        .Rows(12).RowHeight = 15
+        .Rows(13).RowHeight = 50
+
+        ' 実行ボタン - 角丸四角形
+        Dim btnLeft As Double
+        Dim btnTop As Double
+        btnLeft = .Range("D13").Left
+        btnTop = .Range("D13").Top + 5
+
+        Set shp = .Shapes.AddShape(msoShapeRoundedRectangle, btnLeft, btnTop, 120, 40)
+        With shp
+            .Name = "btnExecute"
+            .Placement = xlFreeFloating
+            .Fill.ForeColor.RGB = RGB(76, 175, 80)
+            .Line.ForeColor.RGB = RGB(56, 142, 60)
+            .Line.Weight = 2
+            .TextFrame2.TextRange.Characters.Text = "実行"
+            .TextFrame2.TextRange.Font.Fill.ForeColor.RGB = RGB(255, 255, 255)
+            .TextFrame2.TextRange.Font.Size = 14
+            .TextFrame2.TextRange.Font.Bold = msoTrue
+            .TextFrame2.TextRange.Font.Name = "Meiryo UI"
+            .TextFrame2.TextRange.ParagraphFormat.Alignment = msoAlignCenter
+            .TextFrame2.VerticalAnchor = msoAnchorMiddle
+            .OnAction = "VisualizeGitLog"
+        End With
+
+        ' =================================================================
+        ' 出力シートセクション (行16-20)
+        ' =================================================================
+        .Range("B16:G16").Merge
+        .Range("B16").Value = "出力シート"
+        With .Range("B16")
+            .Font.Name = "Meiryo UI"
+            .Font.Size = 14
+            .Font.Bold = True
+            .Font.Color = RGB(68, 114, 196)
+        End With
+        With .Range("B16:G16").Borders(xlEdgeBottom)
+            .LineStyle = xlContinuous
+            .Color = RGB(68, 114, 196)
+            .Weight = xlMedium
+        End With
+
+        .Range("B18").Value = "ダッシュボード"
+        With .Range("B18")
+            .Font.Name = "Meiryo UI"
+            .Font.Size = 11
+            .Font.Bold = True
+            .Font.Color = RGB(68, 114, 196)
+        End With
+        .Range("C18:G18").Merge
+        .Range("C18").Value = "サマリー情報（総コミット数、作者数、変更量、作者別統計）"
+        With .Range("C18")
+            .Font.Name = "Meiryo UI"
+            .Font.Size = 10
+        End With
+
+        .Range("B19").Value = "コミット履歴"
+        With .Range("B19")
+            .Font.Name = "Meiryo UI"
+            .Font.Size = 11
+            .Font.Bold = True
+            .Font.Color = RGB(68, 114, 196)
+        End With
+        .Range("C19:G19").Merge
+        .Range("C19").Value = "コミット履歴の詳細一覧（ハッシュ、作者、日時、メッセージ、変更量等）"
+        With .Range("C19")
+            .Font.Name = "Meiryo UI"
+            .Font.Size = 10
+        End With
+
+        .Range("B20").Value = "ブランチグラフ"
+        With .Range("B20")
+            .Font.Name = "Meiryo UI"
+            .Font.Size = 11
+            .Font.Bold = True
+            .Font.Color = RGB(68, 114, 196)
+        End With
+        .Range("C20:G20").Merge
+        .Range("C20").Value = "ブランチ構造を視覚化（コミットノードと接続線）"
+        With .Range("C20")
+            .Font.Name = "Meiryo UI"
+            .Font.Size = 10
+        End With
+
+        ' =================================================================
+        ' 色凡例セクション (行23-29)
+        ' =================================================================
+        .Range("B23:G23").Merge
+        .Range("B23").Value = "ブランチグラフの色凡例"
+        With .Range("B23")
+            .Font.Name = "Meiryo UI"
+            .Font.Size = 14
+            .Font.Bold = True
+            .Font.Color = RGB(68, 114, 196)
+        End With
+        With .Range("B23:G23").Borders(xlEdgeBottom)
+            .LineStyle = xlContinuous
+            .Color = RGB(68, 114, 196)
+            .Weight = xlMedium
+        End With
+
+        ' 初期コミット
+        .Range("B25").Interior.Color = RGB(255, 0, 0)
+        With .Range("B25").Borders
+            .LineStyle = xlContinuous
+            .Color = RGB(200, 200, 200)
+        End With
+        .Range("C25:E25").Merge
+        .Range("C25").Value = "初期コミット（親コミットなし）"
+        With .Range("C25")
+            .Font.Name = "Meiryo UI"
+            .Font.Size = 10
+        End With
+
+        ' 通常コミット
+        .Range("B26").Interior.Color = RGB(0, 128, 255)
+        With .Range("B26").Borders
+            .LineStyle = xlContinuous
+            .Color = RGB(200, 200, 200)
+        End With
+        .Range("C26:E26").Merge
+        .Range("C26").Value = "通常コミット（親コミット1つ）"
+        With .Range("C26")
+            .Font.Name = "Meiryo UI"
+            .Font.Size = 10
+        End With
+
+        ' マージコミット
+        .Range("B27").Interior.Color = RGB(0, 255, 0)
+        With .Range("B27").Borders
+            .LineStyle = xlContinuous
+            .Color = RGB(200, 200, 200)
+        End With
+        .Range("C27:E27").Merge
+        .Range("C27").Value = "マージコミット（親コミット2つ以上）"
+        With .Range("C27")
+            .Font.Name = "Meiryo UI"
+            .Font.Size = 10
+        End With
+
+        ' =================================================================
+        ' 列幅調整
+        ' =================================================================
+        .Columns("A").ColumnWidth = 3
+        .Columns("B").ColumnWidth = 18
+        .Columns("C").ColumnWidth = 12
+        .Columns("D").ColumnWidth = 15
+        .Columns("E").ColumnWidth = 15
+        .Columns("F").ColumnWidth = 15
+        .Columns("G").ColumnWidth = 15
+        .Columns("H").ColumnWidth = 3
+
+        .Range("A1").Select
+    End With
+
+    Application.ScreenUpdating = True
+End Sub
+
+'==============================================================================
+' 環境変数を展開する (%USERNAME% など)
+'==============================================================================
+Private Function ExpandEnvironmentVariables(ByVal path As String) As String
+    Dim result As String
+    Dim startPos As Long
+    Dim endPos As Long
+    Dim varName As String
+    Dim varValue As String
+
+    result = path
+
+    ' %VAR% 形式の環境変数をすべて展開
+    startPos = InStr(result, "%")
+    Do While startPos > 0
+        endPos = InStr(startPos + 1, result, "%")
+        If endPos > startPos + 1 Then
+            varName = Mid(result, startPos + 1, endPos - startPos - 1)
+            varValue = Environ(varName)
+            If Len(varValue) > 0 Then
+                result = Left(result, startPos - 1) & varValue & Mid(result, endPos + 1)
+            Else
+                ' 環境変数が見つからない場合はスキップして次を探す
+                startPos = endPos
+            End If
+            startPos = InStr(startPos + Len(varValue), result, "%")
+        Else
+            ' 閉じる % がない場合は終了
+            Exit Do
+        End If
+    Loop
+
+    ExpandEnvironmentVariables = result
+End Function
+
+'==============================================================================
+' メインシートから設定値を取得
+'==============================================================================
+Private Function GetRepoPathFromMainSheet() As String
+    Dim rawPath As String
+
+    On Error Resume Next
+    rawPath = ThisWorkbook.Sheets(SHEET_MAIN).Range(CELL_REPO_PATH).Value
+    If Err.Number <> 0 Then
+        GetRepoPathFromMainSheet = ""
+        Exit Function
+    End If
+    On Error GoTo 0
+
+    ' 環境変数を展開
+    GetRepoPathFromMainSheet = ExpandEnvironmentVariables(rawPath)
+End Function
+
+Private Function GetCommitCountFromMainSheet() As Long
+    On Error Resume Next
+    GetCommitCountFromMainSheet = CLng(ThisWorkbook.Sheets(SHEET_MAIN).Range(CELL_COMMIT_COUNT).Value)
+    If Err.Number <> 0 Or GetCommitCountFromMainSheet <= 0 Then
+        GetCommitCountFromMainSheet = 100
+    End If
+    On Error GoTo 0
 End Function
 
 '==============================================================================
@@ -65,75 +433,73 @@ End Function
 Public Sub VisualizeGitLog()
     Dim commits() As CommitInfo
     Dim commitCount As Long
-    Dim i As Long
     Dim gitRepoPath As String
+    Dim maxCommits As Long
 
-    ' デフォルトのリポジトリパスを取得
-    gitRepoPath = GetDefaultRepoPath()
+    ' メインシートから設定を取得
+    gitRepoPath = GetRepoPathFromMainSheet()
+    maxCommits = GetCommitCountFromMainSheet()
+
+    ' パスが空の場合
+    If Len(Trim(gitRepoPath)) = 0 Then
+        MsgBox "リポジトリパスが設定されていません。" & vbCrLf & _
+               "メインシートのリポジトリパスを入力してください。", vbExclamation, "エラー"
+        Exit Sub
+    End If
 
     ' パスの存在確認
     If Dir(gitRepoPath, vbDirectory) = "" Then
         MsgBox "指定されたパスが存在しません: " & vbCrLf & vbCrLf & _
-               gitRepoPath & vbCrLf & vbCrLf & _
-               "パスを変更する場合は、GetDefaultRepoPath() 関数を編集してください。", vbCritical, "エラー"
+               gitRepoPath, vbCritical, "エラー"
         Exit Sub
     End If
 
-    ' Gitリポジトリの確認（git rev-parse コマンドを使用）
+    ' Gitリポジトリの確認
     If Not IsGitRepository(gitRepoPath) Then
-        MsgBox "指定されたパスがGitリポジトリ管理下にありません: " & vbCrLf & vbCrLf & _
-               gitRepoPath & vbCrLf & vbCrLf & _
-               "パスを変更する場合は、GetDefaultRepoPath() 関数を編集してください。", vbCritical, "エラー"
+        MsgBox "指定されたパスがGitリポジトリではありません: " & vbCrLf & vbCrLf & _
+               gitRepoPath, vbCritical, "エラー"
         Exit Sub
     End If
 
     On Error GoTo ErrorHandler
 
-    ' 処理開始メッセージ
     Application.ScreenUpdating = False
     Application.Calculation = xlCalculationManual
 
     Debug.Print "========================================="
     Debug.Print "Git Log 可視化処理を開始します"
     Debug.Print "リポジトリ: " & gitRepoPath
-    Debug.Print "取得件数: " & COMMIT_COUNT & " 件"
+    Debug.Print "取得件数: " & maxCommits & " 件"
     Debug.Print "========================================="
 
     ' Git Logを取得
     Debug.Print "コミット履歴を取得しています..."
-
-    ' コミット数を初期化
     commitCount = 0
 
-    ' GetGitLogを呼び出し（エラー時は空配列）
     On Error Resume Next
-    commits = GetGitLog(gitRepoPath, COMMIT_COUNT)
+    commits = GetGitLog(gitRepoPath, maxCommits)
     If Err.Number <> 0 Then
         Debug.Print "GetGitLogでエラー発生: " & Err.Description
         Err.Clear
         GoTo CheckCommitCount
     End If
 
-    ' 配列の要素数をチェック
     Dim lowerBound As Long
     Dim upperBound As Long
     lowerBound = LBound(commits)
     upperBound = UBound(commits)
 
     If Err.Number <> 0 Then
-        ' 配列が初期化されていない
         Err.Clear
         GoTo CheckCommitCount
     End If
 
-    ' 最初の要素が有効かチェック
     If Len(commits(lowerBound).Hash) > 0 Then
         commitCount = upperBound - lowerBound + 1
     End If
     On Error GoTo ErrorHandler
 
 CheckCommitCount:
-
     If commitCount = 0 Then
         MsgBox "コミットが取得できませんでした。" & vbCrLf & _
                "リポジトリパスとGitのインストールを確認してください。", vbExclamation
@@ -142,32 +508,24 @@ CheckCommitCount:
 
     Debug.Print "取得完了: " & commitCount & " 件"
 
-    ' 既存のシートをクリア
+    ' シートを準備
     Debug.Print "シートを準備しています..."
-    ClearAllSheets
+    PrepareSheets
 
     ' ダッシュボードシートを作成
     Debug.Print "ダッシュボードを作成しています..."
-    CreateDashboard commits, commitCount, gitRepoPath
+    CreateDashboardSheet commits, commitCount, gitRepoPath
 
-    ' コミット履歴シートを作成
-    Debug.Print "コミット履歴シートを作成しています..."
-    CreateCommitHistorySheet commits, commitCount
-
-    ' 統計シートを作成
-    Debug.Print "統計シートを作成しています..."
-    CreateStatisticsSheet commits, commitCount
-
-    ' グラフシートを作成
-    Debug.Print "グラフシートを作成しています..."
-    CreateChartsSheet commits, commitCount
+    ' 履歴シートを作成
+    Debug.Print "履歴シートを作成しています..."
+    CreateHistorySheet commits, commitCount, gitRepoPath
 
     ' ブランチグラフシートを作成
     Debug.Print "ブランチグラフを作成しています..."
     CreateBranchGraphSheet commits, commitCount, gitRepoPath
 
     ' ダッシュボードシートをアクティブに
-    Sheets("Dashboard").Select
+    ThisWorkbook.Sheets(SHEET_DASHBOARD).Select
 
     Debug.Print "========================================="
     Debug.Print "処理完了"
@@ -177,8 +535,10 @@ Cleanup:
     Application.ScreenUpdating = True
     Application.Calculation = xlCalculationAutomatic
 
-    MsgBox "Git Log の可視化が完了しました。" & vbCrLf & vbCrLf & _
-           "コミット数: " & commitCount & " 件", vbInformation, "処理完了"
+    If commitCount > 0 Then
+        MsgBox "Git Log の可視化が完了しました。" & vbCrLf & vbCrLf & _
+               "コミット数: " & commitCount & " 件", vbInformation, "処理完了"
+    End If
 
     Exit Sub
 
@@ -199,21 +559,14 @@ Private Function IsGitRepository(ByVal repoPath As String) As Boolean
     Dim exec As Object
     Dim command As String
 
-    ' WScript.Shell を作成
     Set wsh = CreateObject("WScript.Shell")
-
-    ' git rev-parse --git-dir コマンドを実行（リポジトリかどうかを確認）
     command = "cmd /c cd /d """ & repoPath & """ && " & GIT_COMMAND & " rev-parse --git-dir >nul 2>&1"
-
-    ' コマンド実行
     Set exec = wsh.exec(command)
 
-    ' 実行完了まで待機
     Do While exec.Status = 0
         DoEvents
     Loop
 
-    ' 終了コードが0ならGitリポジトリ
     IsGitRepository = (exec.ExitCode = 0)
 End Function
 
@@ -232,39 +585,35 @@ Private Function GetGitLog(ByVal repoPath As String, ByVal maxCount As Long) As 
     Dim parts() As String
     Dim tempFile As String
     Dim stream As Object
+    Dim commitBlocks() As String
+    Dim block As String
+    Dim headerLine As String
+    Dim bodyLines As String
 
-    ' WScript.Shell と FileSystemObject を作成
     Set wsh = CreateObject("WScript.Shell")
     Set fso = CreateObject("Scripting.FileSystemObject")
 
-    ' 一時ファイルパスを生成
     tempFile = fso.GetSpecialFolder(2) & "\gitlog_" & fso.GetTempName & ".txt"
 
-    ' Git Log コマンド（全ブランチ、カスタムフォーマット）
-    ' フォーマット: ハッシュ|フルハッシュ|親ハッシュ|作者|メール|日付|件名|ref名
-    ' UTF-8で一時ファイルに出力
+    ' コミット区切りマーカーを使用し、メッセージ全文（%B）を取得
     command = "cmd /c chcp 65001 >nul && cd /d """ & repoPath & """ && " & _
               GIT_COMMAND & " log --all -n " & maxCount & _
-              " --pretty=format:""%h|%H|%P|%an|%ae|%ai|%s|%d"" --numstat > """ & tempFile & """ 2>&1"
+              " --pretty=format:""<<<COMMIT>>>%h|%H|%P|%an|%ae|%ai|%d<<<MSG>>>%B<<<END>>>"" --numstat > """ & tempFile & """ 2>&1"
 
-    ' コマンド実行（同期実行）
     wsh.Run command, 0, True
 
-    ' 一時ファイルが存在するか確認
     If Not fso.FileExists(tempFile) Then
         ReDim commits(0 To 0)
         GetGitLog = commits
         Exit Function
     End If
 
-    ' ADODB.Streamを使用してUTF-8でファイルを読み込み
     On Error Resume Next
     Set stream = CreateObject("ADODB.Stream")
     If stream Is Nothing Then
-        ' ADODB.Streamが使えない場合は通常の方法で読み込み
         output = fso.OpenTextFile(tempFile, 1, False, -1).ReadAll
     Else
-        stream.Type = 2 ' adTypeText
+        stream.Type = 2
         stream.Charset = "UTF-8"
         stream.Open
         stream.LoadFromFile tempFile
@@ -274,7 +623,6 @@ Private Function GetGitLog(ByVal repoPath As String, ByVal maxCount As Long) As 
     End If
     On Error GoTo 0
 
-    ' 一時ファイルを削除
     On Error Resume Next
     fso.DeleteFile tempFile
     On Error GoTo 0
@@ -285,31 +633,36 @@ Private Function GetGitLog(ByVal repoPath As String, ByVal maxCount As Long) As 
         Exit Function
     End If
 
-    ' 行に分割
     output = Replace(output, vbCrLf, vbLf)
     output = Replace(output, vbCr, vbLf)
-    lines = Split(output, vbLf)
 
-    ' コミット数をカウント（"|" を6個含む行がコミット情報）
+    ' <<<COMMIT>>> でコミットブロックを分割
+    commitBlocks = Split(output, "<<<COMMIT>>>")
+
     commitIndex = 0
     ReDim commits(0 To maxCount - 1)
 
-    i = 0
-    Do While i <= UBound(lines)
-        Dim line As String
-        line = Trim(lines(i))
+    For i = 1 To UBound(commitBlocks)  ' 最初の空要素をスキップ
+        block = commitBlocks(i)
 
-        ' コミット情報行を判定（"|" を含む）
-        If InStr(line, "|") > 0 Then
-            parts = Split(line, "|")
+        ' <<<MSG>>> でヘッダーとメッセージを分離
+        Dim msgPos As Long
+        Dim endPos As Long
+        msgPos = InStr(block, "<<<MSG>>>")
+        endPos = InStr(block, "<<<END>>>")
 
-            If UBound(parts) >= 6 Then
-                ' コミット情報を格納
+        If msgPos > 0 And endPos > msgPos Then
+            headerLine = Left(block, msgPos - 1)
+            bodyLines = Mid(block, msgPos + 9, endPos - msgPos - 9)
+
+            ' ヘッダーをパース
+            parts = Split(headerLine, "|")
+
+            If UBound(parts) >= 5 Then
                 With commits(commitIndex)
                     .Hash = parts(0)
                     .FullHash = parts(1)
-                    .ParentHashes = parts(2) ' 親コミットハッシュ（スペース区切り）
-                    ' 親コミット数を計算
+                    .ParentHashes = parts(2)
                     If Len(Trim(parts(2))) = 0 Then
                         .ParentCount = 0
                     Else
@@ -318,58 +671,53 @@ Private Function GetGitLog(ByVal repoPath As String, ByVal maxCount As Long) As 
                     .Author = parts(3)
                     .AuthorEmail = parts(4)
                     .CommitDate = ParseGitDate(parts(5))
-                    .Subject = parts(6)
-                    ' RefNames（parts(7)）は存在する場合のみ取得
-                    If UBound(parts) >= 7 Then
-                        .RefNames = Trim(Replace(Replace(parts(7), "(", ""), ")", ""))
+                    If UBound(parts) >= 6 Then
+                        .RefNames = Trim(Replace(Replace(parts(6), "(", ""), ")", ""))
                     Else
                         .RefNames = ""
                     End If
+
+                    ' メッセージ全文（改行を保持）
+                    .Subject = Trim(bodyLines)
+
+                    ' numstat を解析（<<<END>>>以降）
                     .FilesChanged = 0
                     .Insertions = 0
                     .Deletions = 0
+
+                    Dim afterEnd As String
+                    afterEnd = Mid(block, endPos + 9)
+                    Dim statLines() As String
+                    statLines = Split(afterEnd, vbLf)
+
+                    Dim j As Long
+                    For j = 0 To UBound(statLines)
+                        Dim statLine As String
+                        statLine = Trim(statLines(j))
+
+                        If Len(statLine) > 0 And InStr(statLine, vbTab) > 0 Then
+                            Dim statParts() As String
+                            statParts = Split(statLine, vbTab)
+
+                            If UBound(statParts) >= 2 Then
+                                .FilesChanged = .FilesChanged + 1
+                                If IsNumeric(statParts(0)) Then
+                                    .Insertions = .Insertions + CLng(statParts(0))
+                                End If
+                                If IsNumeric(statParts(1)) Then
+                                    .Deletions = .Deletions + CLng(statParts(1))
+                                End If
+                            End If
+                        End If
+                    Next j
                 End With
 
-                ' 次の行から numstat を解析
-                i = i + 1
-                Do While i <= UBound(lines)
-                    line = Trim(lines(i))
-
-                    ' 空行または次のコミットに到達したら終了
-                    If Len(line) = 0 Or InStr(line, "|") > 0 Then
-                        Exit Do
-                    End If
-
-                    ' numstat 行を解析（追加\t削除\tファイル名）
-                    Dim statParts() As String
-                    statParts = Split(line, vbTab)
-
-                    If UBound(statParts) >= 2 Then
-                        commits(commitIndex).FilesChanged = commits(commitIndex).FilesChanged + 1
-                        If IsNumeric(statParts(0)) Then
-                            commits(commitIndex).Insertions = commits(commitIndex).Insertions + CLng(statParts(0))
-                        End If
-                        If IsNumeric(statParts(1)) Then
-                            commits(commitIndex).Deletions = commits(commitIndex).Deletions + CLng(statParts(1))
-                        End If
-                    End If
-
-                    i = i + 1
-                Loop
-
                 commitIndex = commitIndex + 1
-
-                ' 次のコミットがある場合は継続
-                If InStr(line, "|") > 0 Then
-                    i = i - 1
-                End If
+                If commitIndex >= maxCount Then Exit For
             End If
         End If
+    Next i
 
-        i = i + 1
-    Loop
-
-    ' 配列のサイズを調整
     If commitIndex > 0 Then
         ReDim Preserve commits(0 To commitIndex - 1)
     Else
@@ -383,7 +731,6 @@ End Function
 ' Git の日付文字列をDateに変換
 '==============================================================================
 Private Function ParseGitDate(ByVal dateStr As String) As Date
-    ' フォーマット例: 2025-12-07 12:34:56 +0900
     On Error Resume Next
     ParseGitDate = CDate(Left(dateStr, 19))
     If Err.Number <> 0 Then
@@ -394,22 +741,20 @@ Private Function ParseGitDate(ByVal dateStr As String) As Date
 End Function
 
 '==============================================================================
-' すべてのシートをクリア（または作成）
+' シートを準備
 '==============================================================================
-Private Sub ClearAllSheets()
+Private Sub PrepareSheets()
     Dim sheetNames As Variant
     Dim sheetName As Variant
     Dim ws As Worksheet
     Dim sheetExists As Boolean
 
-    sheetNames = Array("Dashboard", "CommitHistory", "Statistics", "Charts", "BranchGraph")
+    sheetNames = Array(SHEET_DASHBOARD, SHEET_HISTORY, SHEET_BRANCH_GRAPH)
 
-    ' シートが存在しない場合は作成、存在する場合はクリア
     For Each sheetName In sheetNames
         sheetExists = False
         Set ws = Nothing
 
-        ' シートの存在確認
         On Error Resume Next
         Set ws = ThisWorkbook.Sheets(CStr(sheetName))
         If Not ws Is Nothing Then
@@ -419,13 +764,11 @@ Private Sub ClearAllSheets()
         On Error GoTo 0
 
         If sheetExists Then
-            ' 既存シートをクリア
             ws.Cells.Clear
             On Error Resume Next
             ws.Cells.Interior.ColorIndex = xlNone
             On Error GoTo 0
         Else
-            ' シートを新規作成
             On Error Resume Next
             Set ws = ThisWorkbook.Sheets.Add(After:=ThisWorkbook.Sheets(ThisWorkbook.Sheets.Count))
             If Not ws Is Nothing Then
@@ -441,83 +784,359 @@ End Sub
 '==============================================================================
 ' ダッシュボードシートを作成
 '==============================================================================
-Private Sub CreateDashboard(ByRef commits() As CommitInfo, ByVal commitCount As Long, ByVal repoPath As String)
+Private Sub CreateDashboardSheet(ByRef commits() As CommitInfo, ByVal commitCount As Long, ByVal repoPath As String)
     Dim ws As Worksheet
-    Set ws = Sheets("Dashboard")
+    Dim i As Long
+    Dim row As Long
+
+    On Error Resume Next
+    Set ws = ThisWorkbook.Sheets(SHEET_DASHBOARD)
+    On Error GoTo 0
+
+    If ws Is Nothing Then
+        MsgBox "シート「" & SHEET_DASHBOARD & "」が見つかりません。" & vbCrLf & _
+               "初期化を実行してから再度お試しください。", vbCritical, "エラー"
+        Exit Sub
+    End If
+
+    ' 統計データの収集
+    Dim authorDict As Object
+    Set authorDict = CreateObject("Scripting.Dictionary")
+
+    Dim minDate As Date
+    Dim maxDate As Date
+    Dim totalFiles As Long
+    Dim totalInsertions As Long
+    Dim totalDeletions As Long
+
+    minDate = commits(0).CommitDate
+    maxDate = commits(0).CommitDate
+    totalFiles = 0
+    totalInsertions = 0
+    totalDeletions = 0
+
+    For i = 0 To commitCount - 1
+        ' 作者別カウント
+        If authorDict.exists(commits(i).Author) Then
+            authorDict(commits(i).Author) = authorDict(commits(i).Author) + 1
+        Else
+            authorDict.Add commits(i).Author, 1
+        End If
+
+        ' 日付範囲
+        If commits(i).CommitDate < minDate Then minDate = commits(i).CommitDate
+        If commits(i).CommitDate > maxDate Then maxDate = commits(i).CommitDate
+
+        ' 変更量の合計
+        totalFiles = totalFiles + commits(i).FilesChanged
+        totalInsertions = totalInsertions + commits(i).Insertions
+        totalDeletions = totalDeletions + commits(i).Deletions
+    Next i
 
     With ws
-        ' タイトル
-        .Range("A1").Value = "Git Log ダッシュボード"
-        .Range("A1").Font.Size = 18
-        .Range("A1").Font.Bold = True
+        ' 全体の背景色を白に
+        .Cells.Interior.Color = RGB(255, 255, 255)
+
+        ' =================================================================
+        ' タイトルエリア (行1-3)
+        ' =================================================================
+        .Range("B2:H2").Merge
+        .Range("B2").Value = "Git Log ダッシュボード"
+        With .Range("B2")
+            .Font.Name = "Meiryo UI"
+            .Font.Size = 20
+            .Font.Bold = True
+            .Font.Color = RGB(255, 255, 255)
+            .HorizontalAlignment = xlCenter
+            .VerticalAlignment = xlCenter
+        End With
+        .Range("B2:H3").Interior.Color = RGB(68, 114, 196)
+        .Rows(2).RowHeight = 40
+        .Rows(3).RowHeight = 5
 
         ' リポジトリ情報
-        .Range("A3").Value = "リポジトリパス:"
-        .Range("B3").Value = repoPath
-        .Range("A4").Value = "取得コミット数:"
-        .Range("B4").Value = commitCount
-        .Range("A5").Value = "最新コミット:"
-        If commitCount > 0 Then
-            .Range("B5").Value = commits(0).CommitDate
+        .Range("B4:H4").Merge
+        .Range("B4").Value = "リポジトリ: " & repoPath
+        With .Range("B4")
+            .Font.Name = "Meiryo UI"
+            .Font.Size = 10
+            .Font.Color = RGB(100, 100, 100)
+        End With
+
+        ' =================================================================
+        ' サマリーセクション (行6-11)
+        ' =================================================================
+        .Range("B6:D6").Merge
+        .Range("B6").Value = "サマリー"
+        With .Range("B6")
+            .Font.Name = "Meiryo UI"
+            .Font.Size = 14
+            .Font.Bold = True
+            .Font.Color = RGB(68, 114, 196)
+        End With
+        With .Range("B6:D6").Borders(xlEdgeBottom)
+            .LineStyle = xlContinuous
+            .Color = RGB(68, 114, 196)
+            .Weight = xlMedium
+        End With
+
+        ' サマリー項目
+        .Range("B8").Value = "総コミット数:"
+        .Range("C8").Value = commitCount
+        .Range("C8").Font.Bold = True
+        .Range("C8").HorizontalAlignment = xlRight
+        .Range("D8").Value = "件"
+
+        .Range("B9").Value = "作者数:"
+        .Range("C9").Value = authorDict.Count
+        .Range("C9").Font.Bold = True
+        .Range("C9").HorizontalAlignment = xlRight
+        .Range("D9").Value = "人"
+
+        .Range("B10").Value = "期間:"
+        .Range("C10:D10").Merge
+        .Range("C10").Value = Format(minDate, "yyyy/mm/dd") & " 〜 " & Format(maxDate, "yyyy/mm/dd")
+        .Range("C10").Font.Bold = True
+        .Range("C10").HorizontalAlignment = xlCenter
+
+        .Range("B11").Value = "日数:"
+        .Range("C11").Value = DateDiff("d", minDate, maxDate) + 1
+        .Range("C11").Font.Bold = True
+        .Range("C11").HorizontalAlignment = xlRight
+        .Range("D11").Value = "日"
+
+        ' サマリーエリアのスタイル
+        .Range("B8:D11").Font.Name = "Meiryo UI"
+        .Range("B8:D11").Font.Size = 11
+
+        ' =================================================================
+        ' 変更量セクション (行6-11, 右側)
+        ' =================================================================
+        .Range("F6:H6").Merge
+        .Range("F6").Value = "変更量"
+        With .Range("F6")
+            .Font.Name = "Meiryo UI"
+            .Font.Size = 14
+            .Font.Bold = True
+            .Font.Color = RGB(68, 114, 196)
+        End With
+        With .Range("F6:H6").Borders(xlEdgeBottom)
+            .LineStyle = xlContinuous
+            .Color = RGB(68, 114, 196)
+            .Weight = xlMedium
+        End With
+
+        .Range("F8").Value = "変更ファイル数:"
+        .Range("G8").Value = totalFiles
+        .Range("G8").Font.Bold = True
+        .Range("G8").HorizontalAlignment = xlRight
+        .Range("G8").NumberFormat = "#,##0"
+        .Range("H8").Value = "ファイル"
+
+        .Range("F9").Value = "追加行数:"
+        .Range("G9").Value = totalInsertions
+        .Range("G9").Font.Bold = True
+        .Range("G9").Font.Color = RGB(0, 128, 0)
+        .Range("G9").HorizontalAlignment = xlRight
+        .Range("G9").NumberFormat = "#,##0"
+        .Range("H9").Value = "行"
+
+        .Range("F10").Value = "削除行数:"
+        .Range("G10").Value = totalDeletions
+        .Range("G10").Font.Bold = True
+        .Range("G10").Font.Color = RGB(192, 0, 0)
+        .Range("G10").HorizontalAlignment = xlRight
+        .Range("G10").NumberFormat = "#,##0"
+        .Range("H10").Value = "行"
+
+        .Range("F11").Value = "純増行数:"
+        .Range("G11").Value = totalInsertions - totalDeletions
+        .Range("G11").Font.Bold = True
+        If totalInsertions - totalDeletions >= 0 Then
+            .Range("G11").Font.Color = RGB(0, 128, 0)
+        Else
+            .Range("G11").Font.Color = RGB(192, 0, 0)
         End If
-        .Range("A6").Value = "最古コミット:"
-        If commitCount > 0 Then
-            .Range("B6").Value = commits(commitCount - 1).CommitDate
-        End If
+        .Range("G11").HorizontalAlignment = xlRight
+        .Range("G11").NumberFormat = "#,##0"
+        .Range("H11").Value = "行"
 
-        ' 統計サマリー
-        .Range("A8").Value = "統計サマリー"
-        .Range("A8").Font.Size = 14
-        .Range("A8").Font.Bold = True
+        .Range("F8:H11").Font.Name = "Meiryo UI"
+        .Range("F8:H11").Font.Size = 11
 
-        Dim authors As Object
-        Set authors = CreateObject("Scripting.Dictionary")
-        Dim totalInsertions As Long
-        Dim totalDeletions As Long
-        Dim i As Long
+        ' =================================================================
+        ' 作者別コミット数セクション (行13-)
+        ' =================================================================
+        .Range("B13:H13").Merge
+        .Range("B13").Value = "作者別コミット数"
+        With .Range("B13")
+            .Font.Name = "Meiryo UI"
+            .Font.Size = 14
+            .Font.Bold = True
+            .Font.Color = RGB(68, 114, 196)
+        End With
+        With .Range("B13:H13").Borders(xlEdgeBottom)
+            .LineStyle = xlContinuous
+            .Color = RGB(68, 114, 196)
+            .Weight = xlMedium
+        End With
 
-        For i = 0 To commitCount - 1
-            If Not authors.exists(commits(i).Author) Then
-                authors.Add commits(i).Author, 0
-            End If
-            authors(commits(i).Author) = authors(commits(i).Author) + 1
-            totalInsertions = totalInsertions + commits(i).Insertions
-            totalDeletions = totalDeletions + commits(i).Deletions
+        ' ヘッダー
+        .Range("B15").Value = "順位"
+        .Range("C15").Value = "作者"
+        .Range("D15").Value = "コミット数"
+        .Range("E15").Value = "割合"
+        .Range("F15:H15").Merge
+        .Range("F15").Value = "グラフ"
+
+        With .Range("B15:H15")
+            .Font.Name = "Meiryo UI"
+            .Font.Bold = True
+            .Interior.Color = RGB(68, 114, 196)
+            .Font.Color = RGB(255, 255, 255)
+            .HorizontalAlignment = xlCenter
+        End With
+
+        ' 作者データをソート（コミット数降順）
+        Dim authors() As Variant
+        Dim authorCounts() As Variant
+        Dim authorCount As Long
+        Dim keys As Variant
+        Dim items As Variant
+
+        authorCount = authorDict.Count
+        ReDim authors(0 To authorCount - 1)
+        ReDim authorCounts(0 To authorCount - 1)
+
+        keys = authorDict.keys
+        items = authorDict.items
+
+        For i = 0 To authorCount - 1
+            authors(i) = keys(i)
+            authorCounts(i) = items(i)
         Next i
 
-        .Range("A10").Value = "作者数:"
-        .Range("B10").Value = authors.Count
-        .Range("A11").Value = "総追加行数:"
-        .Range("B11").Value = totalInsertions
-        .Range("A12").Value = "総削除行数:"
-        .Range("B12").Value = totalDeletions
+        ' バブルソート（降順）
+        Dim j As Long
+        Dim tempAuthor As Variant
+        Dim tempCount As Variant
 
+        For i = 0 To authorCount - 2
+            For j = i + 1 To authorCount - 1
+                If authorCounts(j) > authorCounts(i) Then
+                    tempAuthor = authors(i)
+                    tempCount = authorCounts(i)
+                    authors(i) = authors(j)
+                    authorCounts(i) = authorCounts(j)
+                    authors(j) = tempAuthor
+                    authorCounts(j) = tempCount
+                End If
+            Next j
+        Next i
+
+        ' データ行を出力（最大20人まで）
+        Dim maxAuthors As Long
+        maxAuthors = authorCount
+        If maxAuthors > 20 Then maxAuthors = 20
+
+        Dim maxCount As Long
+        maxCount = authorCounts(0)
+
+        For i = 0 To maxAuthors - 1
+            row = 16 + i
+
+            .Cells(row, 2).Value = i + 1
+            .Cells(row, 2).HorizontalAlignment = xlCenter
+            .Cells(row, 3).Value = authors(i)
+            .Cells(row, 4).Value = authorCounts(i)
+            .Cells(row, 4).HorizontalAlignment = xlRight
+            .Cells(row, 5).Value = authorCounts(i) / commitCount
+            .Cells(row, 5).NumberFormat = "0.0%"
+            .Cells(row, 5).HorizontalAlignment = xlRight
+
+            ' 簡易バーグラフ（セルの塗りつぶし）
+            .Range(.Cells(row, 6), .Cells(row, 8)).Merge
+
+            ' データバー的な表現
+            Dim barWidth As Double
+            barWidth = (authorCounts(i) / maxCount) * 100
+            .Cells(row, 6).Value = String(Int(barWidth / 5), "█") & " " & authorCounts(i)
+            .Cells(row, 6).Font.Color = RGB(68, 114, 196)
+            .Cells(row, 6).Font.Name = "Consolas"
+            .Cells(row, 6).Font.Size = 10
+
+            ' 交互に色分け
+            If i Mod 2 = 0 Then
+                .Range(.Cells(row, 2), .Cells(row, 8)).Interior.Color = RGB(245, 245, 245)
+            End If
+        Next i
+
+        ' 残りの作者がある場合
+        If authorCount > 20 Then
+            row = 16 + maxAuthors
+            .Cells(row, 2).Value = "..."
+            .Cells(row, 3).Value = "他 " & (authorCount - 20) & " 人"
+            .Range(.Cells(row, 2), .Cells(row, 8)).Font.Color = RGB(128, 128, 128)
+            .Range(.Cells(row, 2), .Cells(row, 8)).Font.Italic = True
+        End If
+
+        ' =================================================================
         ' 列幅調整
-        .Columns("A:B").AutoFit
+        ' =================================================================
+        .Columns("A").ColumnWidth = 3
+        .Columns("B").ColumnWidth = 16
+        .Columns("C").ColumnWidth = 20
+        .Columns("D").ColumnWidth = 12
+        .Columns("E").ColumnWidth = 10
+        .Columns("F").ColumnWidth = 10
+        .Columns("G").ColumnWidth = 10
+        .Columns("H").ColumnWidth = 10
+        .Columns("I").ColumnWidth = 3
+
+        .Range("A1").Select
     End With
 End Sub
 
 '==============================================================================
-' コミット履歴シートを作成
+' 履歴シートを作成
 '==============================================================================
-Private Sub CreateCommitHistorySheet(ByRef commits() As CommitInfo, ByVal commitCount As Long)
+Private Sub CreateHistorySheet(ByRef commits() As CommitInfo, ByVal commitCount As Long, ByVal repoPath As String)
     Dim ws As Worksheet
-    Set ws = Sheets("CommitHistory")
+
+    On Error Resume Next
+    Set ws = ThisWorkbook.Sheets(SHEET_HISTORY)
+    On Error GoTo 0
+
+    If ws Is Nothing Then
+        MsgBox "シート「" & SHEET_HISTORY & "」が見つかりません。" & vbCrLf & _
+               "初期化を実行してから再度お試しください。", vbCritical, "エラー"
+        Exit Sub
+    End If
 
     With ws
-        ' ヘッダー
-        .Range("A1").Value = "No"
-        .Range("B1").Value = "ハッシュ"
-        .Range("C1").Value = "作者"
-        .Range("D1").Value = "日時"
-        .Range("E1").Value = "コミットメッセージ"
-        .Range("F1").Value = "ブランチ/タグ"
-        .Range("G1").Value = "変更ファイル数"
-        .Range("H1").Value = "追加行数"
-        .Range("I1").Value = "削除行数"
+        ' タイトル
+        .Range("A1").Value = "Git コミット履歴"
+        .Range("A1").Font.Size = 16
+        .Range("A1").Font.Bold = True
+
+        ' リポジトリ情報
+        .Range("A2").Value = "リポジトリ: " & repoPath & "  |  取得件数: " & commitCount & " 件"
+        .Range("A2").Font.Size = 10
+        .Range("A2").Font.Color = RGB(100, 100, 100)
+
+        ' ヘッダー行
+        .Range("A4").Value = "No"
+        .Range("B4").Value = "ハッシュ"
+        .Range("C4").Value = "作者"
+        .Range("D4").Value = "日時"
+        .Range("E4").Value = "コミットメッセージ"
+        .Range("F4").Value = "ブランチ/タグ"
+        .Range("G4").Value = "変更ファイル数"
+        .Range("H4").Value = "追加行数"
+        .Range("I4").Value = "削除行数"
 
         ' ヘッダー書式
-        With .Range("A1:I1")
+        With .Range("A4:I4")
             .Font.Bold = True
             .Interior.Color = RGB(68, 114, 196)
             .Font.Color = RGB(255, 255, 255)
@@ -526,9 +1145,10 @@ Private Sub CreateCommitHistorySheet(ByRef commits() As CommitInfo, ByVal commit
 
         ' データ行
         Dim i As Long
+        Dim row As Long
+
         For i = 0 To commitCount - 1
-            Dim row As Long
-            row = i + 2
+            row = i + 5
 
             .Cells(row, 1).Value = i + 1
             .Cells(row, 2).Value = commits(i).Hash
@@ -541,9 +1161,9 @@ Private Sub CreateCommitHistorySheet(ByRef commits() As CommitInfo, ByVal commit
             .Cells(row, 8).Value = commits(i).Insertions
             .Cells(row, 9).Value = commits(i).Deletions
 
-            ' 交互に色を付ける
+            ' 交互に色分け
             If i Mod 2 = 0 Then
-                .Range(.Cells(row, 1), .Cells(row, 9)).Interior.Color = RGB(242, 242, 242)
+                .Range(.Cells(row, 1), .Cells(row, 9)).Interior.Color = RGB(245, 245, 245)
             End If
         Next i
 
@@ -552,165 +1172,26 @@ Private Sub CreateCommitHistorySheet(ByRef commits() As CommitInfo, ByVal commit
         .Columns("B").ColumnWidth = 10
         .Columns("C").ColumnWidth = 15
         .Columns("D").ColumnWidth = 16
-        .Columns("E").ColumnWidth = 50
+        .Columns("E").ColumnWidth = 60
         .Columns("F").ColumnWidth = 20
-        .Columns("G:I").ColumnWidth = 12
+        .Columns("G").ColumnWidth = 12
+        .Columns("H").ColumnWidth = 10
+        .Columns("I").ColumnWidth = 10
+
+        ' コミットメッセージ列の折り返し表示と上揃え
+        .Columns("E").WrapText = True
+        .Columns("E").VerticalAlignment = xlTop
+        .Range(.Cells(5, 1), .Cells(commitCount + 4, 9)).VerticalAlignment = xlTop
 
         ' フィルターを設定
-        .Range("A1:I1").AutoFilter
+        .Range("A4:I4").AutoFilter
     End With
-End Sub
 
-'==============================================================================
-' 統計シートを作成
-'==============================================================================
-Private Sub CreateStatisticsSheet(ByRef commits() As CommitInfo, ByVal commitCount As Long)
-    Dim ws As Worksheet
-    Set ws = Sheets("Statistics")
-
-    Dim authors As Object
-    Dim dates As Object
-    Set authors = CreateObject("Scripting.Dictionary")
-    Set dates = CreateObject("Scripting.Dictionary")
-
-    Dim i As Long
-    Dim author As Variant
-    Dim dateKey As Variant
-
-    ' 作者別・日別に集計
-    For i = 0 To commitCount - 1
-        ' 作者別
-        author = commits(i).Author
-        If Not authors.exists(author) Then
-            authors.Add author, 0
-        End If
-        authors(author) = authors(author) + 1
-
-        ' 日別
-        dateKey = Format(commits(i).CommitDate, "yyyy-mm-dd")
-        If Not dates.exists(dateKey) Then
-            dates.Add dateKey, 0
-        End If
-        dates(dateKey) = dates(dateKey) + 1
-    Next i
-
-    With ws
-        ' 作者別統計
-        .Range("A1").Value = "作者別コミット数"
-        .Range("A1").Font.Size = 14
-        .Range("A1").Font.Bold = True
-
-        .Range("A3").Value = "作者"
-        .Range("B3").Value = "コミット数"
-        With .Range("A3:B3")
-            .Font.Bold = True
-            .Interior.Color = RGB(68, 114, 196)
-            .Font.Color = RGB(255, 255, 255)
-        End With
-
-        Dim row As Long
-        row = 4
-        For Each author In authors.Keys
-            .Cells(row, 1).Value = author
-            .Cells(row, 2).Value = authors(author)
-            row = row + 1
-        Next author
-
-        ' 日別統計
-        .Range("D1").Value = "日別コミット数"
-        .Range("D1").Font.Size = 14
-        .Range("D1").Font.Bold = True
-
-        .Range("D3").Value = "日付"
-        .Range("E3").Value = "コミット数"
-        With .Range("D3:E3")
-            .Font.Bold = True
-            .Interior.Color = RGB(68, 114, 196)
-            .Font.Color = RGB(255, 255, 255)
-        End With
-
-        ' 日付でソート（キーを配列に変換してソート）
-        If dates.Count > 0 Then
-            Dim dateKeys() As String
-            ReDim dateKeys(0 To dates.Count - 1)
-            i = 0
-            For Each dateKey In dates.Keys
-                dateKeys(i) = dateKey
-                i = i + 1
-            Next dateKey
-
-            ' 簡易ソート（バブルソート）
-            Dim j As Long
-            Dim temp As String
-            For i = 0 To UBound(dateKeys) - 1
-                For j = i + 1 To UBound(dateKeys)
-                    If dateKeys(i) > dateKeys(j) Then
-                        temp = dateKeys(i)
-                        dateKeys(i) = dateKeys(j)
-                        dateKeys(j) = temp
-                    End If
-                Next j
-            Next i
-
-            row = 4
-            For i = 0 To UBound(dateKeys)
-                .Cells(row, 4).Value = dateKeys(i)
-                .Cells(row, 5).Value = dates(dateKeys(i))
-                row = row + 1
-            Next i
-        End If
-
-        ' 列幅調整
-        .Columns("A:B").AutoFit
-        .Columns("D:E").AutoFit
-    End With
-End Sub
-
-'==============================================================================
-' グラフシートを作成
-'==============================================================================
-Private Sub CreateChartsSheet(ByRef commits() As CommitInfo, ByVal commitCount As Long)
-    Dim ws As Worksheet
-    Dim statsWs As Worksheet
-    Dim chartObj As Object  ' ChartObject - 遅延バインディングで参照エラー回避
-
-    Set ws = Sheets("Charts")
-    Set statsWs = Sheets("Statistics")
-
-    ' 作者別コミット数の棒グラフ
-    Dim lastRow As Long
-    lastRow = statsWs.Cells(statsWs.Rows.Count, 1).End(xlUp).row
-
-    If lastRow >= 4 Then
-        Set chartObj = ws.ChartObjects.Add(Left:=10, Top:=10, Width:=400, Height:=300)
-        With chartObj.Chart
-            .ChartType = xlColumnClustered
-            .SetSourceData statsWs.Range("A3:B" & lastRow)
-            .HasTitle = True
-            .ChartTitle.Text = "作者別コミット数"
-            .Axes(xlCategory).HasTitle = True
-            .Axes(xlCategory).AxisTitle.Text = "作者"
-            .Axes(xlValue).HasTitle = True
-            .Axes(xlValue).AxisTitle.Text = "コミット数"
-        End With
-    End If
-
-    ' 日別コミット数の折れ線グラフ
-    lastRow = statsWs.Cells(statsWs.Rows.Count, 4).End(xlUp).row
-
-    If lastRow >= 4 Then
-        Set chartObj = ws.ChartObjects.Add(Left:=450, Top:=10, Width:=400, Height:=300)
-        With chartObj.Chart
-            .ChartType = xlLine
-            .SetSourceData statsWs.Range("D3:E" & lastRow)
-            .HasTitle = True
-            .ChartTitle.Text = "日別コミット数"
-            .Axes(xlCategory).HasTitle = True
-            .Axes(xlCategory).AxisTitle.Text = "日付"
-            .Axes(xlValue).HasTitle = True
-            .Axes(xlValue).AxisTitle.Text = "コミット数"
-        End With
-    End If
+    ' ウィンドウ枠の固定（シートをアクティブにする必要がある）
+    ws.Activate
+    ws.Rows(5).Select
+    ActiveWindow.FreezePanes = True
+    ws.Range("A1").Select
 End Sub
 
 '==============================================================================
@@ -718,10 +1199,19 @@ End Sub
 '==============================================================================
 Private Sub CreateBranchGraphSheet(ByRef commits() As CommitInfo, ByVal commitCount As Long, ByVal repoPath As String)
     Dim ws As Worksheet
-    Set ws = Sheets("BranchGraph")
+
+    On Error Resume Next
+    Set ws = ThisWorkbook.Sheets(SHEET_BRANCH_GRAPH)
+    On Error GoTo 0
+
+    If ws Is Nothing Then
+        MsgBox "シート「" & SHEET_BRANCH_GRAPH & "」が見つかりません。" & vbCrLf & _
+               "初期化を実行してから再度お試しください。", vbCritical, "エラー"
+        Exit Sub
+    End If
 
     ' シートの図形をすべて削除
-    Dim shp As Object  ' Shape - 遅延バインディングで参照エラー回避
+    Dim shp As Object
     For Each shp In ws.Shapes
         shp.Delete
     Next shp
@@ -732,7 +1222,6 @@ Private Sub CreateBranchGraphSheet(ByRef commits() As CommitInfo, ByVal commitCo
         .Range("A1").Font.Size = 18
         .Range("A1").Font.Bold = True
 
-        ' 説明
         .Range("A2").Value = "リポジトリ: " & repoPath
         .Range("A3").Value = "コミット数: " & commitCount
 
@@ -743,11 +1232,11 @@ Private Sub CreateBranchGraphSheet(ByRef commits() As CommitInfo, ByVal commitCo
         Dim vSpacing As Double
         Dim hSpacing As Double
 
-        startRow = 5 ' 開始行
-        startCol = 2 ' 開始列（B列）
-        nodeSize = 12 ' ノードの直径（ポイント）
-        vSpacing = 25 ' 垂直方向の間隔
-        hSpacing = 60 ' 水平方向の間隔
+        startRow = 5
+        startCol = 2
+        nodeSize = 12
+        vSpacing = 25
+        hSpacing = 60
 
         ' コミットハッシュとインデックスのマッピング
         Dim commitIndexMap As Object
@@ -758,21 +1247,19 @@ Private Sub CreateBranchGraphSheet(ByRef commits() As CommitInfo, ByVal commitCo
             commitIndexMap.Add commits(i).Hash, i
         Next i
 
-        ' ブランチレーン（水平位置）の割り当て
+        ' ブランチレーンの割り当て
         Dim lanes() As String
-        ReDim lanes(0 To 9) ' 最大10ブランチまで対応
+        ReDim lanes(0 To 9)
         Dim laneCount As Long
         laneCount = 0
 
         Dim commitLanes() As Long
         ReDim commitLanes(0 To commitCount - 1)
 
-        ' 各コミットのレーンを決定
         For i = 0 To commitCount - 1
             Dim lane As Long
             lane = -1
 
-            ' 親コミットのレーンを探す
             If commits(i).ParentCount > 0 Then
                 Dim parentHashes() As String
                 parentHashes = Split(Trim(commits(i).ParentHashes), " ")
@@ -783,7 +1270,6 @@ Private Sub CreateBranchGraphSheet(ByRef commits() As CommitInfo, ByVal commitCo
                     parentHash = Trim(parentHashes(p))
 
                     If Len(parentHash) > 0 Then
-                        ' 親コミットのレーンを探す
                         Dim j As Long
                         For j = i + 1 To commitCount - 1
                             If commits(j).Hash = parentHash Then
@@ -797,7 +1283,6 @@ Private Sub CreateBranchGraphSheet(ByRef commits() As CommitInfo, ByVal commitCo
                 Next p
             End If
 
-            ' レーンが見つからない場合は新しいレーンを割り当て
             If lane < 0 Then
                 lane = laneCount
                 If laneCount < 10 Then laneCount = laneCount + 1
@@ -814,32 +1299,29 @@ Private Sub CreateBranchGraphSheet(ByRef commits() As CommitInfo, ByVal commitCo
             y = .Cells(startRow + i, 1).Top
             x = .Cells(startRow, startCol + commitLanes(i)).Left
 
-            ' コミットノード（円）を描画
             Dim nodeColor As Long
             If commits(i).ParentCount = 0 Then
-                nodeColor = RGB(255, 0, 0) ' 初期コミット=赤
+                nodeColor = RGB(255, 0, 0)
             ElseIf commits(i).ParentCount >= 2 Then
-                nodeColor = RGB(0, 255, 0) ' マージコミット=緑
+                nodeColor = RGB(0, 255, 0)
             Else
-                nodeColor = RGB(0, 128, 255) ' 通常コミット=青
+                nodeColor = RGB(0, 128, 255)
             End If
 
-            Dim node As Object  ' Shape
+            Dim node As Object
             Set node = .Shapes.AddShape(msoShapeOval, x, y, nodeSize, nodeSize)
             node.Fill.ForeColor.RGB = nodeColor
             node.Line.ForeColor.RGB = RGB(0, 0, 0)
             node.Line.Weight = 1
             node.Name = "Node_" & commits(i).Hash
 
-            ' ツールチップ用にテキストボックスを追加
-            Dim tooltip As Object  ' Shape
+            Dim tooltip As Object
             Set tooltip = .Shapes.AddTextbox(msoTextOrientationHorizontal, x + nodeSize + 5, y - 3, 300, 15)
             tooltip.TextFrame.Characters.Text = commits(i).Hash & " " & commits(i).Subject
             tooltip.TextFrame.Characters.Font.Size = 8
             tooltip.Line.Visible = msoFalse
             tooltip.Fill.Visible = msoFalse
 
-            ' 親コミットへの線を描画
             If commits(i).ParentCount > 0 Then
                 Dim parentHashes2() As String
                 parentHashes2 = Split(Trim(commits(i).ParentHashes), " ")
@@ -859,438 +1341,18 @@ Private Sub CreateBranchGraphSheet(ByRef commits() As CommitInfo, ByVal commitCo
                         y2 = .Cells(startRow + parentIndex, 1).Top
                         x2 = .Cells(startRow, startCol + commitLanes(parentIndex)).Left
 
-                        ' 線を描画
-                        Dim lineShape As Object  ' Shape（lineは予約語のため変数名変更）
+                        Dim lineShape As Object
                         Set lineShape = .Shapes.AddLine(x + nodeSize / 2, y + nodeSize / 2, x2 + nodeSize / 2, y2 + nodeSize / 2)
                         lineShape.Line.ForeColor.RGB = RGB(128, 128, 128)
                         lineShape.Line.Weight = 1.5
-                        lineShape.ZOrder msoSendToBack ' 線を背面に
+                        lineShape.ZOrder msoSendToBack
                     End If
                 Next k
             End If
         Next i
 
-        ' 列幅調整
         .Columns("A").ColumnWidth = 3
         .Columns("B:K").ColumnWidth = 10
-
-        ' 行の高さ調整
         .Rows(startRow & ":" & (startRow + commitCount)).RowHeight = 20
     End With
-End Sub
-
-'==============================================================================
-' メインシート初期化
-'==============================================================================
-Public Sub InitializeGitLogVisualizer()
-    Dim ws As Worksheet
-    Dim mainSheetName As String
-
-    mainSheetName = "GitLogVisualizer"
-
-    On Error Resume Next
-    Application.DisplayAlerts = False
-
-    ' 既存のメインシートがあれば削除
-    For Each ws In ThisWorkbook.Worksheets
-        If ws.Name = mainSheetName Then
-            ws.Delete
-            Exit For
-        End If
-    Next ws
-
-    Application.DisplayAlerts = True
-    On Error GoTo 0
-
-    ' 新しいシートを作成
-    Set ws = ThisWorkbook.Worksheets.Add(Before:=ThisWorkbook.Worksheets(1))
-    ws.Name = mainSheetName
-
-    ' シートを初期化
-    FormatGitLogMainSheet ws
-
-    MsgBox "GitLogVisualizerシートを初期化しました。", vbInformation, "初期化完了"
-End Sub
-
-'==============================================================================
-' メインシートのフォーマット
-'==============================================================================
-Private Sub FormatGitLogMainSheet(ByRef ws As Worksheet)
-    Dim btn As Button
-
-    Application.ScreenUpdating = False
-
-    With ws
-        ' 全体の背景色を白に
-        .Cells.Interior.Color = RGB(255, 255, 255)
-
-        ' =================================================================
-        ' タイトルエリア (行1-3)
-        ' =================================================================
-        .Range("B2:H2").Merge
-        .Range("B2").Value = "Git Log 可視化ツール"
-        With .Range("B2")
-            .Font.Name = "Meiryo UI"
-            .Font.Size = 20
-            .Font.Bold = True
-            .Font.Color = RGB(255, 255, 255)
-            .HorizontalAlignment = xlCenter
-            .VerticalAlignment = xlCenter
-        End With
-        .Range("B2:H3").Interior.Color = RGB(68, 114, 196)
-        .Rows(2).RowHeight = 40
-        .Rows(3).RowHeight = 5
-
-        ' =================================================================
-        ' 説明エリア (行5-7)
-        ' =================================================================
-        .Range("B5:H5").Merge
-        .Range("B5").Value = "Gitリポジトリのコミット履歴を取得して、表形式・統計・グラフで視覚化します。"
-        With .Range("B5")
-            .Font.Name = "Meiryo UI"
-            .Font.Size = 11
-            .Font.Color = RGB(64, 64, 64)
-        End With
-
-        .Range("B6:H6").Merge
-        .Range("B6").Value = "全ブランチのコミット履歴を取得し、作者別・日別の統計やブランチグラフを生成します。"
-        With .Range("B6")
-            .Font.Name = "Meiryo UI"
-            .Font.Size = 10
-            .Font.Color = RGB(100, 100, 100)
-        End With
-
-        ' =================================================================
-        ' リポジトリ設定セクション (行9-15)
-        ' =================================================================
-        .Range("B9:H9").Merge
-        .Range("B9").Value = "リポジトリ設定"
-        With .Range("B9")
-            .Font.Name = "Meiryo UI"
-            .Font.Size = 14
-            .Font.Bold = True
-            .Font.Color = RGB(68, 114, 196)
-        End With
-
-        ' セクション下線
-        With .Range("B9:H9").Borders(xlEdgeBottom)
-            .LineStyle = xlContinuous
-            .Color = RGB(68, 114, 196)
-            .Weight = xlMedium
-        End With
-
-        ' リポジトリパス
-        .Range("B11").Value = "リポジトリパス:"
-        With .Range("B11")
-            .Font.Name = "Meiryo UI"
-            .Font.Size = 11
-            .Font.Bold = True
-        End With
-
-        .Range("C11:G11").Merge
-        .Range("C11").Value = GetDefaultRepoPath()
-        With .Range("C11:G11")
-            .Interior.Color = RGB(242, 242, 242)
-            .Font.Name = "Meiryo UI"
-            .Font.Size = 10
-            .HorizontalAlignment = xlLeft
-        End With
-        With .Range("C11:G11").Borders
-            .LineStyle = xlContinuous
-            .Color = RGB(200, 200, 200)
-        End With
-
-        ' 取得コミット数
-        .Range("B13").Value = "取得コミット数:"
-        With .Range("B13")
-            .Font.Name = "Meiryo UI"
-            .Font.Size = 11
-            .Font.Bold = True
-        End With
-
-        .Range("C13").Value = COMMIT_COUNT
-        With .Range("C13")
-            .Interior.Color = RGB(242, 242, 242)
-            .Font.Name = "Meiryo UI"
-            .Font.Size = 10
-            .Font.Bold = True
-            .NumberFormat = "#,##0"
-        End With
-        With .Range("C13").Borders
-            .LineStyle = xlContinuous
-            .Color = RGB(200, 200, 200)
-        End With
-
-        .Range("D13:G13").Merge
-        .Range("D13").Value = "※設定変更はVBAコード内で行います"
-        With .Range("D13")
-            .Font.Name = "Meiryo UI"
-            .Font.Size = 9
-            .Font.Color = RGB(128, 128, 128)
-        End With
-
-        ' =================================================================
-        ' ボタンエリア (行16-18)
-        ' =================================================================
-        .Rows(16).RowHeight = 10
-
-        ' 可視化実行ボタン
-        Set btn = .Buttons.Add(.Range("C17").Left, .Range("C17").Top, 160, 35)
-        With btn
-            .Name = "btnVisualizeGitLog"
-            .Caption = "Git Log を可視化"
-            .OnAction = "VisualizeGitLog"
-            .Font.Name = "Meiryo UI"
-            .Font.Size = 11
-            .Font.Bold = True
-        End With
-
-        ' =================================================================
-        ' 出力シートセクション (行21-30)
-        ' =================================================================
-        .Range("B21:H21").Merge
-        .Range("B21").Value = "出力シート一覧"
-        With .Range("B21")
-            .Font.Name = "Meiryo UI"
-            .Font.Size = 14
-            .Font.Bold = True
-            .Font.Color = RGB(68, 114, 196)
-        End With
-
-        ' セクション下線
-        With .Range("B21:H21").Borders(xlEdgeBottom)
-            .LineStyle = xlContinuous
-            .Color = RGB(68, 114, 196)
-            .Weight = xlMedium
-        End With
-
-        ' Dashboard
-        .Range("B23").Value = "Dashboard"
-        With .Range("B23")
-            .Font.Name = "Meiryo UI"
-            .Font.Size = 11
-            .Font.Bold = True
-            .Font.Color = RGB(68, 114, 196)
-        End With
-        .Range("C23:G23").Merge
-        .Range("C23").Value = "リポジトリ情報と統計サマリーを表示"
-        With .Range("C23")
-            .Font.Name = "Meiryo UI"
-            .Font.Size = 10
-        End With
-
-        ' CommitHistory
-        .Range("B24").Value = "CommitHistory"
-        With .Range("B24")
-            .Font.Name = "Meiryo UI"
-            .Font.Size = 11
-            .Font.Bold = True
-            .Font.Color = RGB(68, 114, 196)
-        End With
-        .Range("C24:G24").Merge
-        .Range("C24").Value = "コミット履歴の一覧表（ハッシュ、作者、日時、メッセージ等）"
-        With .Range("C24")
-            .Font.Name = "Meiryo UI"
-            .Font.Size = 10
-        End With
-
-        ' Statistics
-        .Range("B25").Value = "Statistics"
-        With .Range("B25")
-            .Font.Name = "Meiryo UI"
-            .Font.Size = 11
-            .Font.Bold = True
-            .Font.Color = RGB(68, 114, 196)
-        End With
-        .Range("C25:G25").Merge
-        .Range("C25").Value = "作者別・日別のコミット数統計"
-        With .Range("C25")
-            .Font.Name = "Meiryo UI"
-            .Font.Size = 10
-        End With
-
-        ' Charts
-        .Range("B26").Value = "Charts"
-        With .Range("B26")
-            .Font.Name = "Meiryo UI"
-            .Font.Size = 11
-            .Font.Bold = True
-            .Font.Color = RGB(68, 114, 196)
-        End With
-        .Range("C26:G26").Merge
-        .Range("C26").Value = "作者別コミット数（棒グラフ）、日別コミット数（折れ線グラフ）"
-        With .Range("C26")
-            .Font.Name = "Meiryo UI"
-            .Font.Size = 10
-        End With
-
-        ' BranchGraph
-        .Range("B27").Value = "BranchGraph"
-        With .Range("B27")
-            .Font.Name = "Meiryo UI"
-            .Font.Size = 11
-            .Font.Bold = True
-            .Font.Color = RGB(68, 114, 196)
-        End With
-        .Range("C27:G27").Merge
-        .Range("C27").Value = "ブランチ構造を視覚化（コミットノードと接続線）"
-        With .Range("C27")
-            .Font.Name = "Meiryo UI"
-            .Font.Size = 10
-        End With
-
-        ' =================================================================
-        ' ノード色凡例セクション (行30-37)
-        ' =================================================================
-        .Range("B30:H30").Merge
-        .Range("B30").Value = "ブランチグラフの色凡例"
-        With .Range("B30")
-            .Font.Name = "Meiryo UI"
-            .Font.Size = 14
-            .Font.Bold = True
-            .Font.Color = RGB(68, 114, 196)
-        End With
-
-        ' セクション下線
-        With .Range("B30:H30").Borders(xlEdgeBottom)
-            .LineStyle = xlContinuous
-            .Color = RGB(68, 114, 196)
-            .Weight = xlMedium
-        End With
-
-        ' 初期コミット
-        .Range("B32").Value = "●"
-        With .Range("B32")
-            .Font.Name = "Meiryo UI"
-            .Font.Size = 14
-            .Font.Color = RGB(255, 0, 0)
-            .HorizontalAlignment = xlCenter
-        End With
-        .Range("C32:E32").Merge
-        .Range("C32").Value = "初期コミット（親コミットなし）"
-        With .Range("C32")
-            .Font.Name = "Meiryo UI"
-            .Font.Size = 10
-        End With
-
-        ' 通常コミット
-        .Range("B33").Value = "●"
-        With .Range("B33")
-            .Font.Name = "Meiryo UI"
-            .Font.Size = 14
-            .Font.Color = RGB(0, 128, 255)
-            .HorizontalAlignment = xlCenter
-        End With
-        .Range("C33:E33").Merge
-        .Range("C33").Value = "通常コミット（親コミット1つ）"
-        With .Range("C33")
-            .Font.Name = "Meiryo UI"
-            .Font.Size = 10
-        End With
-
-        ' マージコミット
-        .Range("B34").Value = "●"
-        With .Range("B34")
-            .Font.Name = "Meiryo UI"
-            .Font.Size = 14
-            .Font.Color = RGB(0, 255, 0)
-            .HorizontalAlignment = xlCenter
-        End With
-        .Range("C34:E34").Merge
-        .Range("C34").Value = "マージコミット（親コミット2つ以上）"
-        With .Range("C34")
-            .Font.Name = "Meiryo UI"
-            .Font.Size = 10
-        End With
-
-        ' =================================================================
-        ' 使い方セクション (行38-46)
-        ' =================================================================
-        .Range("B38:H38").Merge
-        .Range("B38").Value = "使い方"
-        With .Range("B38")
-            .Font.Name = "Meiryo UI"
-            .Font.Size = 14
-            .Font.Bold = True
-            .Font.Color = RGB(68, 114, 196)
-        End With
-
-        ' セクション下線
-        With .Range("B38:H38").Borders(xlEdgeBottom)
-            .LineStyle = xlContinuous
-            .Color = RGB(68, 114, 196)
-            .Weight = xlMedium
-        End With
-
-        .Range("B40").Value = "1."
-        .Range("C40").Value = "VBAコード内でリポジトリパスを設定（DEFAULT_REPO_PATH_TEMPLATE）"
-        .Range("B41").Value = "2."
-        .Range("C41").Value = "「Git Log を可視化」ボタンをクリック"
-        .Range("B42").Value = "3."
-        .Range("C42").Value = "処理完了後、各シートに結果が出力されます"
-        .Range("B43").Value = "4."
-        .Range("C43").Value = "Dashboardシートから各統計情報を確認できます"
-
-        .Range("B40:B43").Font.Name = "Meiryo UI"
-        .Range("B40:B43").Font.Size = 10
-        .Range("B40:B43").Font.Bold = True
-        .Range("B40:B43").Font.Color = RGB(68, 114, 196)
-        .Range("C40:C43").Font.Name = "Meiryo UI"
-        .Range("C40:C43").Font.Size = 10
-
-        ' =================================================================
-        ' 必要環境セクション (行46-50)
-        ' =================================================================
-        .Range("B46:H46").Merge
-        .Range("B46").Value = "必要な環境"
-        With .Range("B46")
-            .Font.Name = "Meiryo UI"
-            .Font.Size = 14
-            .Font.Bold = True
-            .Font.Color = RGB(68, 114, 196)
-        End With
-
-        ' セクション下線
-        With .Range("B46:H46").Borders(xlEdgeBottom)
-            .LineStyle = xlContinuous
-            .Color = RGB(68, 114, 196)
-            .Weight = xlMedium
-        End With
-
-        .Range("B48").Value = "・"
-        .Range("C48").Value = "Microsoft Excel 2010以降"
-        .Range("B49").Value = "・"
-        .Range("C49").Value = "Gitがインストールされており、パスが通っていること"
-
-        .Range("B48:B49").Font.Name = "Meiryo UI"
-        .Range("B48:B49").Font.Size = 10
-        .Range("B48:B49").Font.Bold = True
-        .Range("C48:C49").Font.Name = "Meiryo UI"
-        .Range("C48:C49").Font.Size = 10
-
-        ' =================================================================
-        ' 列幅・行高の調整
-        ' =================================================================
-        .Columns("A").ColumnWidth = 3
-        .Columns("B").ColumnWidth = 18
-        .Columns("C").ColumnWidth = 15
-        .Columns("D").ColumnWidth = 12
-        .Columns("E").ColumnWidth = 15
-        .Columns("F").ColumnWidth = 12
-        .Columns("G").ColumnWidth = 15
-        .Columns("H").ColumnWidth = 12
-        .Columns("I").ColumnWidth = 3
-
-        ' セルA1を選択
-        .Range("A1").Select
-    End With
-
-    Application.ScreenUpdating = True
-End Sub
-
-'==============================================================================
-' テスト用プロシージャ
-'==============================================================================
-Public Sub TestVisualizeGitLog()
-    VisualizeGitLog
 End Sub

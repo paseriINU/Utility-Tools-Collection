@@ -249,7 +249,7 @@ Private Sub CompareExcelFilesInternal(ByVal file1Path As String, ByVal file2Path
 
         MsgBox "比較が完了しました。" & vbCrLf & vbCrLf & _
                "検出された差異: " & diffCount & " 件" & vbCrLf & vbCrLf & _
-               "結果は「CompareResult」シートに出力されました。", _
+               "結果は「比較結果」シートに出力されました。", _
                vbInformation, "処理完了"
     Else
         Debug.Print "========================================="
@@ -352,7 +352,7 @@ Private Sub CompareWordFilesInternal(ByVal file1Path As String, ByVal file2Path 
 
         MsgBox "比較が完了しました。" & vbCrLf & vbCrLf & _
                "検出された差異: " & diffCount & " 件" & vbCrLf & vbCrLf & _
-               "結果は「CompareResult」シートに出力されました。", _
+               "結果は「比較結果」シートに出力されました。", _
                vbInformation, "処理完了"
     Else
         Debug.Print "========================================="
@@ -1023,13 +1023,13 @@ Private Sub CreateExcelResultSheet(ByRef differences() As ExcelDifferenceInfo, B
     ' 既存の結果シートがあれば削除
     On Error Resume Next
     Application.DisplayAlerts = False
-    ThisWorkbook.Worksheets("CompareResult").Delete
+    ThisWorkbook.Worksheets("比較結果").Delete
     Application.DisplayAlerts = True
     On Error GoTo 0
 
     ' 新しいシートを作成
     Set ws = ThisWorkbook.Worksheets.Add(After:=ThisWorkbook.Worksheets(ThisWorkbook.Worksheets.Count))
-    ws.Name = "CompareResult"
+    ws.Name = "比較結果"
 
     With ws
         ' タイトル
@@ -1124,7 +1124,7 @@ Private Sub CreateExcelResultSheet(ByRef differences() As ExcelDifferenceInfo, B
         Next i
 
         ' 列幅調整
-        .Columns("A").ColumnWidth = 6
+        .Columns("A").ColumnWidth = 8
         .Columns("B").ColumnWidth = 20
         .Columns("C").ColumnWidth = 10
         .Columns("D").ColumnWidth = 12
@@ -1155,17 +1155,22 @@ Private Sub CreateWordResultSheet(ByRef differences() As WordDifferenceInfo, ByV
     Dim row As Long
     Dim oldParaStr As String
     Dim newParaStr As String
+    Dim shp As Shape
+    Dim btnLeft As Double
+    Dim btnTop As Double
+    Dim btnWidth As Double
+    Dim btnHeight As Double
 
     ' 既存の結果シートがあれば削除
     On Error Resume Next
     Application.DisplayAlerts = False
-    ThisWorkbook.Worksheets("CompareResult").Delete
+    ThisWorkbook.Worksheets("比較結果").Delete
     Application.DisplayAlerts = True
     On Error GoTo 0
 
     ' 新しいシートを作成
     Set ws = ThisWorkbook.Worksheets.Add(After:=ThisWorkbook.Worksheets(ThisWorkbook.Worksheets.Count))
-    ws.Name = "CompareResult"
+    ws.Name = "比較結果"
 
     With ws
         ' タイトル
@@ -1185,6 +1190,55 @@ Private Sub CreateWordResultSheet(ByRef differences() As WordDifferenceInfo, ByV
         .Range("B6").Value = diffCount
         .Range("A7").Value = "比較方式:"
         .Range("B7").Value = "LCS（最長共通部分列）アルゴリズム"
+
+        ' 検索ボタンの説明
+        .Range("F3").Value = "差分箇所を検索:"
+        .Range("F3").Font.Bold = True
+        .Range("F4").Value = "※データ行を選択してからボタンをクリック"
+        .Range("F4").Font.Size = 9
+        .Range("F4").Font.Color = RGB(128, 128, 128)
+
+        ' 検索ボタンの配置
+        btnWidth = 100
+        btnHeight = 28
+        btnLeft = .Range("G3").Left + 5
+        btnTop = .Range("G3").Top + 2
+
+        ' 旧ファイル検索ボタン
+        Set shp = .Shapes.AddShape(msoShapeRoundedRectangle, btnLeft, btnTop, btnWidth, btnHeight)
+        With shp
+            .Name = "btnSearchOld"
+            .Placement = xlFreeFloating
+            .Fill.ForeColor.RGB = RGB(255, 152, 0)  ' オレンジ
+            .Line.ForeColor.RGB = RGB(230, 126, 0)
+            .Line.Weight = 1.5
+            .TextFrame2.TextRange.Characters.Text = "旧ファイル検索"
+            .TextFrame2.TextRange.Font.Fill.ForeColor.RGB = RGB(255, 255, 255)
+            .TextFrame2.TextRange.Font.Size = 10
+            .TextFrame2.TextRange.Font.Bold = msoTrue
+            .TextFrame2.TextRange.Font.Name = "Meiryo UI"
+            .TextFrame2.TextRange.ParagraphFormat.Alignment = msoAlignCenter
+            .TextFrame2.VerticalAnchor = msoAnchorMiddle
+            .OnAction = "SearchInOldWordFile"
+        End With
+
+        ' 新ファイル検索ボタン
+        Set shp = .Shapes.AddShape(msoShapeRoundedRectangle, btnLeft + btnWidth + 10, btnTop, btnWidth, btnHeight)
+        With shp
+            .Name = "btnSearchNew"
+            .Placement = xlFreeFloating
+            .Fill.ForeColor.RGB = RGB(33, 150, 243)  ' 青
+            .Line.ForeColor.RGB = RGB(25, 118, 210)
+            .Line.Weight = 1.5
+            .TextFrame2.TextRange.Characters.Text = "新ファイル検索"
+            .TextFrame2.TextRange.Font.Fill.ForeColor.RGB = RGB(255, 255, 255)
+            .TextFrame2.TextRange.Font.Size = 10
+            .TextFrame2.TextRange.Font.Bold = msoTrue
+            .TextFrame2.TextRange.Font.Name = "Meiryo UI"
+            .TextFrame2.TextRange.ParagraphFormat.Alignment = msoAlignCenter
+            .TextFrame2.VerticalAnchor = msoAnchorMiddle
+            .OnAction = "SearchInNewWordFile"
+        End With
 
         ' 凡例
         .Range("A9").Value = "凡例："
@@ -1263,7 +1317,7 @@ Private Sub CreateWordResultSheet(ByRef differences() As WordDifferenceInfo, ByV
         Next i
 
         ' 列幅調整
-        .Columns("A").ColumnWidth = 6
+        .Columns("A").ColumnWidth = 8
         .Columns("B").ColumnWidth = 10
         .Columns("C").ColumnWidth = 10
         .Columns("D").ColumnWidth = 14
@@ -1275,13 +1329,139 @@ Private Sub CreateWordResultSheet(ByRef differences() As WordDifferenceInfo, ByV
         ' フィルターを設定
         .Range("A11:H11").AutoFilter
 
-        ' ウィンドウ枠の固定
+        ' シートをアクティブにしてからウィンドウ枠を固定
+        .Activate
         .Rows(12).Select
         ActiveWindow.FreezePanes = True
 
         ' セルA1を選択
         .Range("A1").Select
     End With
+End Sub
+
+'==============================================================================
+' 選択行のWord差分を旧ファイルで検索して開く
+'==============================================================================
+Public Sub SearchInOldWordFile()
+    SearchWordDifference True
+End Sub
+
+'==============================================================================
+' 選択行のWord差分を新ファイルで検索して開く
+'==============================================================================
+Public Sub SearchInNewWordFile()
+    SearchWordDifference False
+End Sub
+
+'==============================================================================
+' Word差分を検索して開く（内部処理）
+'==============================================================================
+Private Sub SearchWordDifference(ByVal isOldFile As Boolean)
+    Dim ws As Worksheet
+    Dim selectedRow As Long
+    Dim filePath As String
+    Dim searchText As String
+    Dim wordApp As Object
+    Dim doc As Object
+
+    On Error GoTo ErrorHandler
+
+    ' 比較結果シートを取得
+    On Error Resume Next
+    Set ws = ThisWorkbook.Worksheets("比較結果")
+    On Error GoTo ErrorHandler
+
+    If ws Is Nothing Then
+        MsgBox "比較結果シートが見つかりません。" & vbCrLf & _
+               "先にWord比較を実行してください。", vbExclamation, "エラー"
+        Exit Sub
+    End If
+
+    ' 選択されている行を取得
+    selectedRow = Selection.row
+
+    ' ヘッダー行以下かチェック（Word比較結果は12行目からデータ）
+    If selectedRow < 12 Then
+        MsgBox "差異データの行を選択してください。" & vbCrLf & _
+               "（12行目以降のデータ行を選択）", vbExclamation, "行選択エラー"
+        Exit Sub
+    End If
+
+    ' ファイルパスを取得（B3=旧ファイル、B4=新ファイル）
+    If isOldFile Then
+        filePath = ws.Range("B3").Value
+        searchText = ws.Cells(selectedRow, 5).Value  ' E列：旧ファイルのテキスト
+    Else
+        filePath = ws.Range("B4").Value
+        searchText = ws.Cells(selectedRow, 6).Value  ' F列：新ファイルのテキスト
+    End If
+
+    ' 検索テキストが空の場合
+    If Len(Trim(searchText)) = 0 Then
+        MsgBox "検索するテキストがありません。" & vbCrLf & _
+               IIf(isOldFile, "旧ファイル側", "新ファイル側") & "にテキストがない差異です。", _
+               vbExclamation, "検索エラー"
+        Exit Sub
+    End If
+
+    ' ファイルの存在確認
+    If Dir(filePath) = "" Then
+        MsgBox "ファイルが見つかりません: " & vbCrLf & filePath, vbCritical, "ファイルエラー"
+        Exit Sub
+    End If
+
+    ' 検索テキストを最初の100文字に制限（長すぎると検索に失敗する可能性）
+    If Len(searchText) > 100 Then
+        searchText = Left(searchText, 100)
+    End If
+
+    ' Wordアプリケーションを取得または起動
+    On Error Resume Next
+    Set wordApp = GetObject(, "Word.Application")
+    If wordApp Is Nothing Then
+        Set wordApp = CreateObject("Word.Application")
+    End If
+    On Error GoTo ErrorHandler
+
+    wordApp.Visible = True
+
+    ' ファイルを開く
+    Set doc = wordApp.Documents.Open(filePath, ReadOnly:=True)
+
+    ' 検索を実行
+    With doc.Content.Find
+        .ClearFormatting
+        .Text = searchText
+        .Forward = True
+        .Wrap = 1  ' wdFindContinue
+        .Format = False
+        .MatchCase = False
+        .MatchWholeWord = False
+        .MatchWildcards = False
+        .MatchSoundsLike = False
+        .MatchAllWordForms = False
+
+        If .Execute Then
+            ' 見つかった場合、その位置を選択
+            doc.ActiveWindow.ScrollIntoView doc.Content.Find.Parent
+            doc.Content.Find.Parent.Select
+            MsgBox "テキストが見つかりました。", vbInformation, "検索完了"
+        Else
+            MsgBox "テキストが見つかりませんでした。" & vbCrLf & vbCrLf & _
+                   "検索テキスト: " & Left(searchText, 50) & IIf(Len(searchText) > 50, "...", ""), _
+                   vbExclamation, "検索結果"
+        End If
+    End With
+
+    ' Wordをアクティブにする
+    wordApp.Activate
+
+    Exit Sub
+
+ErrorHandler:
+    MsgBox "エラーが発生しました: " & vbCrLf & vbCrLf & _
+           "エラー番号: " & Err.Number & vbCrLf & _
+           "エラー内容: " & Err.Description, vbCritical, "エラー"
 End Sub
 
 '==============================================================================
@@ -1381,6 +1561,7 @@ Private Sub FormatMainSheet(ByRef ws As Worksheet)
             btnLeft, btnTop, btnWidth, btnHeight)
         With shp
             .Name = "btnCompareExcel"
+            .Placement = xlFreeFloating  ' セルサイズに連動しない
             .Fill.ForeColor.RGB = RGB(76, 175, 80)  ' 緑
             .Line.ForeColor.RGB = RGB(56, 142, 60)
             .Line.Weight = 2
@@ -1399,6 +1580,7 @@ Private Sub FormatMainSheet(ByRef ws As Worksheet)
             btnLeft + btnWidth + btnGap, btnTop, btnWidth, btnHeight)
         With shp
             .Name = "btnCompareWord"
+            .Placement = xlFreeFloating  ' セルサイズに連動しない
             .Fill.ForeColor.RGB = RGB(33, 150, 243)  ' 青
             .Line.ForeColor.RGB = RGB(25, 118, 210)
             .Line.Weight = 2
@@ -1578,7 +1760,7 @@ Private Sub FormatMainSheet(ByRef ws As Worksheet)
         .Range("B34").Value = "3."
         .Range("C34").Value = "2つ目のファイルを選択"
         .Range("B35").Value = "4."
-        .Range("C35").Value = "比較結果が「CompareResult」シートに出力されます"
+        .Range("C35").Value = "比較結果が「比較結果」シートに出力されます"
 
         .Range("B32:B35").Font.Name = "Meiryo UI"
         .Range("B32:B35").Font.Size = 10

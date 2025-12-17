@@ -6,7 +6,7 @@ setlocal
 
 pushd "%~dp0"
 
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$scriptDir=('%~dp0' -replace '\\$',''); try { iex ((gc '%~f0') -join \"`n\") } finally { Set-Location C:\ }"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$scriptDir=('%~dp0' -replace '\\$',''); try { iex ((gc '%~f0' -Encoding UTF8) -join \"`n\") } finally { Set-Location C:\ }"
 set EXITCODE=%ERRORLEVEL%
 
 popd
@@ -28,6 +28,17 @@ exit /b %EXITCODE%
 # 注意:
 #   - 上書き後は元に戻せません（バックアップブランチ作成を推奨）
 #   - リモートへのプッシュには --force-with-lease が必要です
+#==============================================================================
+
+#==============================================================================
+# 設定（必要に応じて編集してください）
+#==============================================================================
+
+# Gitリポジトリのパス（空欄の場合は実行時に入力を求めます）
+$GitRepoPath = ""
+# 例: $GitRepoPath = "C:\Projects\MyRepository"
+# 例: $GitRepoPath = "D:\work\git\project"
+
 #==============================================================================
 
 # タイトル表示
@@ -146,6 +157,35 @@ function Select-Branch {
 # メイン処理
 #==============================================================================
 function Main {
+    #--------------------------------------------------------------------------
+    # Gitプロジェクトパスの設定
+    #--------------------------------------------------------------------------
+    $targetPath = $GitRepoPath
+
+    # 設定が空の場合は入力を求める
+    if (-not $targetPath) {
+        Write-Host "----------------------------------------------------------------" -ForegroundColor DarkGray
+        Write-Host "  Gitプロジェクトパスの指定" -ForegroundColor Yellow
+        Write-Host "----------------------------------------------------------------" -ForegroundColor DarkGray
+        Write-Host ""
+        Write-Host "  Gitリポジトリのパスを入力してください。" -ForegroundColor White
+        Write-Host "  （空欄でEnterを押すと現在のディレクトリを使用します）" -ForegroundColor Gray
+        Write-Host ""
+
+        $targetPath = Read-Host "パス"
+        Write-Host ""
+    }
+
+    if ($targetPath) {
+        # パスに移動
+        $targetPath = $targetPath.Trim('"').Trim("'")  # 引用符を除去
+        if (-not (Test-Path $targetPath -PathType Container)) {
+            Write-Host "[エラー] 指定されたパスが存在しません: $targetPath" -ForegroundColor Red
+            return 1
+        }
+        Set-Location $targetPath
+    }
+
     # Gitリポジトリの確認
     if (-not (Test-GitRepository)) {
         Write-Host "[エラー] 現在のディレクトリはGitリポジトリではありません。" -ForegroundColor Red

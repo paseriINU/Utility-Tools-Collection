@@ -130,8 +130,8 @@ Write-Host ""
             Write-Host " 利用可能なブランチ:" -ForegroundColor Yellow
             Write-Host "------------------------------------------------------------------------" -ForegroundColor Yellow
 
-            # ローカルブランチ一覧を取得
-            $branches = git branch --format="%(refname:short)" | ForEach-Object { $_.Trim() }
+            # ローカルブランチ一覧を取得（@()で配列を強制）
+            $branches = @(git branch --format="%(refname:short)" | ForEach-Object { $_.Trim() })
 
             if ($branches.Count -eq 0) {
                 Write-Host "[エラー] ブランチが見つかりません" -ForegroundColor Red

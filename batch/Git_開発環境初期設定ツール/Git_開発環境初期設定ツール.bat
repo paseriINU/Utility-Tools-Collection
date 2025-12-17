@@ -1,7 +1,7 @@
 <# :
 @echo off
 chcp 65001 >nul
-title SSH公開鍵配置ツール
+title Git 開発環境初期設定ツール
 setlocal
 
 powershell -NoProfile -ExecutionPolicy Bypass -Command "iex ((gc '%~f0' -Encoding UTF8) -join \"`n\")"
@@ -12,17 +12,20 @@ exit /b %EXITCODE%
 : #>
 
 #==============================================================================
-# SSH公開鍵配置ツール
+# Git 開発環境初期設定ツール
 #==============================================================================
 #
 # 機能:
-#   1. SSH鍵ペア（公開鍵・秘密鍵）の生成
-#   2. Linuxサーバーへの公開鍵の自動配置（authorized_keysに追記）
-#   3. 接続テストの実行
+#   1. Git globalの user.name / user.email 自動設定（未設定の場合）
+#   2. SSH鍵ペア（公開鍵・秘密鍵）の生成
+#   3. Linuxサーバーへの公開鍵の自動配置（authorized_keysに追記）
+#   4. 接続テストの実行
+#   5. Gitリポジトリのクローン（設定されている場合）
 #
 # 必要な環境:
 #   - Windows OpenSSH Client（Windows 10 1809以降は標準搭載）
 #   - Linuxサーバーへのパスワード認証が有効であること
+#   - Git for Windows（クローン機能を使用する場合）
 #
 #==============================================================================
 
@@ -33,12 +36,20 @@ exit /b %EXITCODE%
 $SSH_HOST = "linux-server"      # ホスト名またはIPアドレス
 $SSH_USER = "youruser"          # SSHユーザー名
 $SSH_PORT = 22                  # SSHポート番号
+$SSH_PASSWORD = ""              # SSHパスワード（空欄の場合は実行時に入力を求めます）
 
 # 鍵ファイル設定
 $KEY_NAME = "id_ed25519"        # 鍵ファイル名（id_ed25519, id_rsa など）
 $KEY_TYPE = "ed25519"           # 鍵の種類: "ed25519"（推奨） または "rsa"
 $KEY_BITS = 4096                # RSAの場合のビット数（ed25519では無視）
 $USE_PASSPHRASE = $false        # パスフレーズを使用するか（$true / $false）
+
+# Gitリポジトリクローン設定（空欄の場合はクローンをスキップ）
+$GIT_CLONE_URL = ""             # クローンするリポジトリのURL（SSH形式）
+                                # 例: $GIT_CLONE_URL = "git@github.com:user/repo.git"
+                                # 例: $GIT_CLONE_URL = "ssh://git@linux-server/path/to/repo.git"
+$GIT_LOCAL_PATH = ""            # クローン先のローカルパス
+                                # 例: $GIT_LOCAL_PATH = "C:\Projects\MyRepo"
 
 #==============================================================================
 #endregion
@@ -71,7 +82,7 @@ function Write-Header {
 # タイトル表示
 Write-Host ""
 Write-Color "================================================================" "Cyan"
-Write-Color "  SSH公開鍵配置ツール" "Cyan"
+Write-Color "  Git 開発環境初期設定ツール" "Cyan"
 Write-Color "================================================================" "Cyan"
 Write-Host ""
 
@@ -93,17 +104,67 @@ Write-Color "[OK] OpenSSH Client が利用可能です" "Green"
 Write-Host ""
 #endregion
 
+#region Git設定確認・自動設定
+Write-Header "Git設定の確認"
+
+# Gitがインストールされているか確認
+$gitCommand = Get-Command git.exe -ErrorAction SilentlyContinue
+if (-not $gitCommand) {
+    Write-Color "[警告] Gitがインストールされていません" "Yellow"
+    Write-Host "  Gitリポジトリのクローン機能は使用できません"
+    Write-Host ""
+    $GIT_AVAILABLE = $false
+} else {
+    $GIT_AVAILABLE = $true
+    Write-Color "[OK] Git が利用可能です" "Green"
+    Write-Host ""
+
+    # user.name の確認・設定
+    $currentUserName = git config --global user.name 2>$null
+    if ($currentUserName) {
+        Write-Host "  user.name: $currentUserName (設定済み)"
+    } else {
+        $newUserName = $env:USERNAME
+        git config --global user.name $newUserName
+        Write-Color "  user.name: $newUserName (自動設定しました)" "Green"
+    }
+
+    # user.email の確認・設定
+    $currentUserEmail = git config --global user.email 2>$null
+    if ($currentUserEmail) {
+        Write-Host "  user.email: $currentUserEmail (設定済み)"
+    } else {
+        $newUserEmail = "$env:USERNAME@$env:COMPUTERNAME"
+        git config --global user.email $newUserEmail
+        Write-Color "  user.email: $newUserEmail (自動設定しました)" "Green"
+    }
+    Write-Host ""
+}
+
+Write-Host ""
+Read-Host "続行するには Enter を押してください"
+#endregion
+
 #region 設定表示
 Write-Color "================================================================" "Cyan"
 Write-Color "設定内容" "Cyan"
 Write-Color "================================================================" "Cyan"
 Write-Host ""
 Write-Host "  接続先: ${SSH_USER}@${SSH_HOST}:${SSH_PORT}"
+Write-Host "  SSHパスワード: $(if ($SSH_PASSWORD) { '設定済み' } else { '実行時に入力' })"
 Write-Host "  鍵の種類: $KEY_TYPE $(if ($KEY_TYPE -eq 'rsa') { "($KEY_BITS bit)" })"
 Write-Host "  鍵ファイル名: $KEY_NAME"
 Write-Host "  鍵のコメント: $KEY_COMMENT"
 Write-Host "  パスフレーズ: $(if ($USE_PASSPHRASE) { 'あり' } else { 'なし' })"
 Write-Host "  配置方法: authorized_keys に追記（重複チェックあり）"
+Write-Host ""
+if ($GIT_CLONE_URL -and $GIT_LOCAL_PATH) {
+    Write-Host "  Gitクローン: 有効"
+    Write-Host "    URL: $GIT_CLONE_URL"
+    Write-Host "    ローカルパス: $GIT_LOCAL_PATH"
+} else {
+    Write-Host "  Gitクローン: スキップ（設定なし）"
+}
 Write-Host ""
 
 do {
@@ -181,13 +242,20 @@ if (-not (Test-Path $keyPath)) {
         exit 1
     }
 }
+
+Write-Host ""
+Read-Host "続行するには Enter を押してください"
 #endregion
 
 #region 公開鍵の配置
 Write-Header "公開鍵のLinuxサーバーへの配置"
 
-Write-Color "パスワード認証でLinuxサーバーに接続し、公開鍵を配置します。" "Yellow"
-Write-Color "パスワードの入力を求められたら、Linuxサーバーのパスワードを入力してください。" "Yellow"
+if ($SSH_PASSWORD) {
+    Write-Color "設定されたパスワードを使用してLinuxサーバーに接続します。" "Yellow"
+} else {
+    Write-Color "パスワード認証でLinuxサーバーに接続し、公開鍵を配置します。" "Yellow"
+    Write-Color "パスワードの入力を求められたら、Linuxサーバーのパスワードを入力してください。" "Yellow"
+}
 Write-Host ""
 Write-Color "※ 既存の authorized_keys に追記します（重複する場合はスキップ）" "Gray"
 Write-Host ""
@@ -205,6 +273,8 @@ mkdir -p ~/.ssh && chmod 700 ~/.ssh && touch ~/.ssh/authorized_keys && chmod 600
 "@
 
 $sshArgs = @()
+$sshArgs += "-o"
+$sshArgs += "StrictHostKeyChecking=accept-new"
 if ($SSH_PORT -ne 22) {
     $sshArgs += "-p"
     $sshArgs += $SSH_PORT
@@ -212,7 +282,30 @@ if ($SSH_PORT -ne 22) {
 $sshArgs += "${SSH_USER}@${SSH_HOST}"
 $sshArgs += $sshScript
 
-& ssh.exe $sshArgs
+# パスワードが設定されている場合はSSH_ASKPASSを使用
+if ($SSH_PASSWORD) {
+    # 一時的なパスワード応答スクリプトを作成
+    $askpassScript = "$env:TEMP\ssh_askpass_$([System.Guid]::NewGuid().ToString('N')).bat"
+    "@echo off`necho $SSH_PASSWORD" | Set-Content -Path $askpassScript -Encoding ASCII
+
+    # 環境変数を設定
+    $env:SSH_ASKPASS = $askpassScript
+    $env:SSH_ASKPASS_REQUIRE = "force"
+    $env:DISPLAY = "dummy:0"
+
+    try {
+        & ssh.exe $sshArgs
+    } finally {
+        # 一時ファイルを削除
+        Remove-Item -Path $askpassScript -Force -ErrorAction SilentlyContinue
+        # 環境変数をクリア
+        Remove-Item Env:\SSH_ASKPASS -ErrorAction SilentlyContinue
+        Remove-Item Env:\SSH_ASKPASS_REQUIRE -ErrorAction SilentlyContinue
+        Remove-Item Env:\DISPLAY -ErrorAction SilentlyContinue
+    }
+} else {
+    & ssh.exe $sshArgs
+}
 
 if ($LASTEXITCODE -eq 0) {
     Write-Host ""
@@ -224,6 +317,9 @@ if ($LASTEXITCODE -eq 0) {
     Write-Host "  - Linuxサーバーでパスワード認証が有効か確認してください"
     exit 1
 }
+
+Write-Host ""
+Read-Host "続行するには Enter を押してください"
 #endregion
 
 #region 接続テスト
@@ -279,6 +375,64 @@ if ($LASTEXITCODE -eq 0) {
     Write-Host "    - ~/.ssh/authorized_keys は 600"
     Write-Host ""
     exit 1
+}
+
+Write-Host ""
+Read-Host "続行するには Enter を押してください"
+#endregion
+
+#region Gitリポジトリのクローン
+if ($GIT_AVAILABLE -and $GIT_CLONE_URL -and $GIT_LOCAL_PATH) {
+    Write-Header "Gitリポジトリのクローン"
+
+    # 既にクローン済みか確認
+    if (Test-Path "$GIT_LOCAL_PATH\.git") {
+        Write-Color "[スキップ] リポジトリは既にクローン済みです: $GIT_LOCAL_PATH" "Yellow"
+        Write-Host ""
+
+        # リモート情報を表示
+        Push-Location $GIT_LOCAL_PATH
+        $remoteUrl = git remote get-url origin 2>$null
+        Pop-Location
+
+        if ($remoteUrl) {
+            Write-Host "  リモートURL: $remoteUrl"
+        }
+    } else {
+        # 親ディレクトリが存在するか確認
+        $parentDir = Split-Path $GIT_LOCAL_PATH -Parent
+        if ($parentDir -and -not (Test-Path $parentDir)) {
+            New-Item -ItemType Directory -Path $parentDir -Force | Out-Null
+            Write-Color "[作成] ディレクトリを作成しました: $parentDir" "Green"
+        }
+
+        Write-Color "[実行] リポジトリをクローン中..." "Yellow"
+        Write-Host "  URL: $GIT_CLONE_URL"
+        Write-Host "  ローカルパス: $GIT_LOCAL_PATH"
+        Write-Host ""
+
+        # SSH鍵を指定してクローン
+        $env:GIT_SSH_COMMAND = "ssh -i `"$keyPath`" -o StrictHostKeyChecking=accept-new"
+
+        try {
+            & git clone $GIT_CLONE_URL $GIT_LOCAL_PATH
+
+            if ($LASTEXITCODE -eq 0) {
+                Write-Host ""
+                Write-Color "[成功] リポジトリをクローンしました" "Green"
+                Write-Host "  パス: $GIT_LOCAL_PATH"
+            } else {
+                Write-Host ""
+                Write-Color "[エラー] クローンに失敗しました" "Red"
+                Write-Host "  - URLが正しいか確認してください"
+                Write-Host "  - リポジトリへのアクセス権限があるか確認してください"
+            }
+        } finally {
+            # 環境変数をクリア
+            Remove-Item Env:\GIT_SSH_COMMAND -ErrorAction SilentlyContinue
+        }
+    }
+    Write-Host ""
 }
 #endregion
 

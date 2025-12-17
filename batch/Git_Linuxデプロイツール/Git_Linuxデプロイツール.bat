@@ -170,6 +170,98 @@ if ($workDirNormalized.StartsWith($gitRootNormalized + "\")) {
 }
 Write-Host ""
 
+#region ブランチ確認・切り替え
+Write-Color "================================================================" "Cyan"
+Write-Color "ブランチの確認" "Cyan"
+Write-Color "================================================================" "Cyan"
+Write-Host ""
+
+$currentBranch = git branch --show-current 2>&1
+if ($LASTEXITCODE -ne 0) {
+    Write-Color "[エラー] ブランチ情報の取得に失敗しました" "Red"
+    exit 1
+}
+
+Write-Host "  現在のブランチ: " -NoNewline
+Write-Color $currentBranch "Yellow"
+Write-Host ""
+Write-Host " 1. このブランチで続行"
+Write-Host " 2. ブランチを切り替える"
+Write-Host ""
+Write-Host " 0. キャンセル"
+Write-Host ""
+
+do {
+    $branchChoice = Read-Host "番号を入力 (0-2)"
+    if ($branchChoice -eq "0") {
+        Write-Color "[キャンセル] 処理を中止しました" "Yellow"
+        exit 0
+    }
+} while ($branchChoice -notin @("1", "2"))
+
+if ($branchChoice -eq "2") {
+    # ブランチ一覧を取得
+    Write-Host ""
+    Write-Color "================================================================" "Cyan"
+    Write-Color "ブランチを選択してください" "Cyan"
+    Write-Color "================================================================" "Cyan"
+    Write-Host ""
+
+    $branches = @(git branch --list 2>&1 | ForEach-Object {
+        $_ -replace '^\*?\s*', ''
+    })
+
+    $currentBranchTrimmed = $currentBranch -replace '\s', ''
+
+    $branchIndex = 1
+    foreach ($branch in $branches) {
+        $branchTrimmed = $branch -replace '\s', ''
+        if ($branchTrimmed -eq $currentBranchTrimmed) {
+            Write-Host ("{0,3}. {1} (現在)" -f $branchIndex, $branch) -ForegroundColor Yellow
+        } else {
+            Write-Host ("{0,3}. {1}" -f $branchIndex, $branch)
+        }
+        $branchIndex++
+    }
+    Write-Host ""
+    Write-Host " 0. キャンセル"
+    Write-Host ""
+
+    do {
+        $selectedBranchNum = Read-Host "番号を入力 (0-$($branches.Count))"
+        if ($selectedBranchNum -eq "0") {
+            Write-Color "[キャンセル] 処理を中止しました" "Yellow"
+            exit 0
+        }
+        $selectedBranchIndex = [int]$selectedBranchNum - 1
+    } while ($selectedBranchIndex -lt 0 -or $selectedBranchIndex -ge $branches.Count)
+
+    $targetBranch = $branches[$selectedBranchIndex]
+    $targetBranchTrimmed = $targetBranch -replace '\s', ''
+
+    if ($targetBranchTrimmed -ne $currentBranchTrimmed) {
+        Write-Host ""
+        Write-Color "[実行] ブランチを切り替え中: $targetBranch" "Yellow"
+
+        $checkoutResult = git checkout $targetBranch 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            Write-Color "[エラー] ブランチの切り替えに失敗しました" "Red"
+            Write-Host $checkoutResult
+            exit 1
+        }
+
+        Write-Color "[OK] ブランチを切り替えました: $targetBranch" "Green"
+        $currentBranch = $targetBranch
+    } else {
+        Write-Color "[情報] 同じブランチが選択されました" "Yellow"
+    }
+}
+
+Write-Host ""
+Write-Color "[選択] ブランチ: $currentBranch" "Green"
+Write-Host ""
+#endregion
+
 #region 環境選択
 Write-Color "================================================================" "Cyan"
 Write-Color "転送先環境を選択してください" "Cyan"
@@ -404,7 +496,34 @@ if ($choice -eq "1") {
     $filesToTransfer = $fileList
     Write-Color "[選択] すべてのファイルを転送します" "Green"
 
-    # 「すべてのファイル」モードの場合、転送先を事前にクリーンアップ
+    # 転送速度オプションを選択
+    Write-Host ""
+    Write-Color "================================================================" "Cyan"
+    Write-Color "転送速度を選択してください" "Cyan"
+    Write-Color "================================================================" "Cyan"
+    Write-Host ""
+    Write-Host " 1. 個別転送（進捗表示あり・低速）"
+    Write-Host " 2. 一括転送（tar圧縮・高速）"
+    Write-Host ""
+    Write-Host " 0. キャンセル"
+    Write-Host ""
+
+    do {
+        $speedChoice = Read-Host "番号を入力 (0-2)"
+        if ($speedChoice -eq "0") {
+            Write-Color "[キャンセル] 処理を中止しました" "Yellow"
+            exit 0
+        }
+    } while ($speedChoice -notin @("1", "2"))
+
+    $useBulkTransfer = ($speedChoice -eq "2")
+    if ($useBulkTransfer) {
+        Write-Color "[選択] 一括転送モード（高速）" "Green"
+    } else {
+        Write-Color "[選択] 個別転送モード（進捗表示）" "Green"
+    }
+
+    # 「すべてのファイル」モードの場合、転送方法を選択
     if ($transferMode -eq "all") {
         # 転送ファイルの親ディレクトリを収集（重複排除）
         $parentDirs = @{}
@@ -423,37 +542,61 @@ if ($choice -eq "1") {
         }
 
         Write-Host ""
-        Write-Color "================================================================" "Yellow"
-        Write-Color "  警告: 転送先フォルダのクリーンアップ" "Yellow"
-        Write-Color "================================================================" "Yellow"
+        Write-Color "================================================================" "Cyan"
+        Write-Color "転送方法を選択してください" "Cyan"
+        Write-Color "================================================================" "Cyan"
         Write-Host ""
-        Write-Color "「すべてのファイル」モードが選択されました。" "Yellow"
-        Write-Color "転送先の各フォルダ内を削除してからコピーします。" "Yellow"
+        Write-Host " 1. 上書き転送（既存ファイルを残す）"
+        Write-Host " 2. クリーンアップしてから転送（対象フォルダの中身を削除）"
         Write-Host ""
-        Write-Color "削除対象フォルダ:" "Red"
-        foreach ($dir in $parentDirs.Keys | Sort-Object) {
-            Write-Host "  - ${dir}/*"
-        }
-        Write-Host ""
-        Write-Color "※ フォルダ自体は削除されません（中身のみ削除）" "Gray"
+        Write-Host " 0. キャンセル"
         Write-Host ""
 
         do {
-            $cleanupConfirm = Read-Host "転送先フォルダをクリーンアップしますか？ (y/n)"
-            $cleanupConfirm = $cleanupConfirm.ToLower()
-        } while ($cleanupConfirm -notin @("y", "n"))
+            $transferMethod = Read-Host "番号を入力 (0-2)"
+            if ($transferMethod -eq "0") {
+                Write-Color "[キャンセル] 処理を中止しました" "Yellow"
+                exit 0
+            }
+        } while ($transferMethod -notin @("1", "2"))
 
-        if ($cleanupConfirm -eq "y") {
-            $doCleanup = $true
-            $cleanupDirs = $parentDirs.Keys
-            Write-Color "[選択] 転送前にクリーンアップを実行します" "Green"
+        if ($transferMethod -eq "2") {
+            Write-Host ""
+            Write-Color "================================================================" "Yellow"
+            Write-Color "  警告: 転送先フォルダのクリーンアップ" "Yellow"
+            Write-Color "================================================================" "Yellow"
+            Write-Host ""
+            Write-Color "以下のフォルダ内のファイルが削除されます:" "Yellow"
+            Write-Host ""
+            Write-Color "削除対象フォルダ:" "Red"
+            foreach ($dir in $parentDirs.Keys | Sort-Object) {
+                Write-Host "  - ${dir}/*"
+            }
+            Write-Host ""
+            Write-Color "※ ファイルのみ再帰的に削除（ディレクトリ構造は残ります）" "Gray"
+            Write-Host ""
+
+            do {
+                $cleanupConfirm = Read-Host "本当にクリーンアップしますか？ (y/n)"
+                $cleanupConfirm = $cleanupConfirm.ToLower()
+            } while ($cleanupConfirm -notin @("y", "n"))
+
+            if ($cleanupConfirm -eq "y") {
+                $doCleanup = $true
+                $cleanupDirs = $parentDirs.Keys
+                Write-Color "[選択] 転送前にクリーンアップを実行します" "Green"
+            } else {
+                $doCleanup = $false
+                Write-Color "[選択] クリーンアップをキャンセルしました（上書きモード）" "Yellow"
+            }
         } else {
             $doCleanup = $false
-            Write-Color "[選択] クリーンアップをスキップします（上書きモード）" "Yellow"
+            Write-Color "[選択] 上書きモードで転送します" "Green"
         }
     }
 } else {
     # 個別選択
+    $useBulkTransfer = $false
     Write-Host ""
     Write-Color "================================================================" "Cyan"
     Write-Color "個別ファイル選択" "Cyan"
@@ -507,8 +650,8 @@ if ($doCleanup -eq $true) {
         }
 
         $sshArgs += "${SSH_USER}@${SSH_HOST}"
-        # フォルダ内のファイルとサブディレクトリを削除（フォルダ自体は残す）
-        $sshArgs += "rm -rf '${dir}'/* 2>/dev/null; echo 'done'"
+        # フォルダ内のファイルを再帰的に削除（ディレクトリ構造は残す）
+        $sshArgs += "find '${dir}' -type f -delete 2>/dev/null; echo 'done'"
 
         try {
             $result = & $sshCommand $sshArgs 2>&1
@@ -531,67 +674,144 @@ $successCount = 0
 $failCount = 0
 $failedFiles = @()
 
-foreach ($file in $filesToTransfer) {
-    # ローカルパスは配下フォルダ（$GIT_ROOT）からの相対パスで計算
-    $localPath = Join-Path $GIT_ROOT $file.Path
+if ($useBulkTransfer -eq $true) {
+    # 一括転送モード（tar圧縮）
+    Write-Color "[実行] 一括転送モードで転送します..." "Yellow"
+    Write-Host ""
 
-    # Windowsのパス区切り(\)をLinux形式(/)に変換
-    $linuxPath = $file.Path.Replace("\", "/")
+    # 一時ディレクトリを作成
+    $tempDir = Join-Path $env:TEMP "git_deploy_$(Get-Date -Format 'yyyyMMddHHmmss')"
+    $tarFileName = "deploy_$(Get-Date -Format 'yyyyMMddHHmmss').tar"
+    $tarFilePath = Join-Path $env:TEMP $tarFileName
 
-    # リモートパスを計算（$file.Pathは既に配下フォルダからの相対パス）
-    $remotePath = "${REMOTE_DIR}${linuxPath}"
+    try {
+        # 一時ディレクトリにファイルをコピー（ディレクトリ構造を維持）
+        Write-Color "[準備] ファイルを収集中..." "Yellow"
+        foreach ($file in $filesToTransfer) {
+            $localPath = Join-Path $GIT_ROOT $file.Path
+            $destPath = Join-Path $tempDir $file.Path
+            $destDir = Split-Path $destPath -Parent
 
-    Write-Color "[転送] $($file.Path)" "Cyan"
-    Write-Host "  ローカル: $localPath"
-    Write-Host "  リモート: ${SSH_USER}@${SSH_HOST}:${remotePath}"
+            if (-not (Test-Path $destDir)) {
+                New-Item -ItemType Directory -Path $destDir -Force | Out-Null
+            }
+            Copy-Item -Path $localPath -Destination $destPath -Force
+        }
 
-    # Linux側で親ディレクトリを作成
-    $parentDir = Split-Path $linuxPath -Parent
-    if ($parentDir) {
-        $parentDir = $parentDir.Replace("\", "/")
-        $remoteParentDir = "${REMOTE_DIR}${parentDir}"
+        # tarアーカイブを作成
+        Write-Color "[圧縮] tarアーカイブを作成中..." "Yellow"
+        Push-Location $tempDir
+        $tarResult = & tar -cvf $tarFilePath * 2>&1
+        Pop-Location
 
+        if ($LASTEXITCODE -ne 0) {
+            Write-Color "[エラー] tarアーカイブの作成に失敗しました" "Red"
+            throw "tar creation failed"
+        }
+
+        $tarSize = (Get-Item $tarFilePath).Length / 1KB
+        Write-Color "[情報] アーカイブサイズ: $([math]::Round($tarSize, 2)) KB" "Cyan"
+
+        # tarファイルをリモートに転送
+        Write-Color "[転送] アーカイブを転送中..." "Yellow"
+        $scpArgs = @()
+        if ($SSH_KEY -ne "" -and (Test-Path $SSH_KEY)) {
+            $scpArgs += "-i"
+            $scpArgs += $SSH_KEY
+        }
+        if ($SSH_PORT -ne 22) {
+            $scpArgs += "-P"
+            $scpArgs += $SSH_PORT
+        }
+        $scpArgs += $tarFilePath
+        $scpArgs += "${SSH_USER}@${SSH_HOST}:/tmp/${tarFileName}"
+
+        & $scpCommand $scpArgs 2>&1 | Out-Null
+
+        if ($LASTEXITCODE -ne 0) {
+            Write-Color "[エラー] アーカイブの転送に失敗しました" "Red"
+            throw "scp failed"
+        }
+
+        # リモートで展開
+        Write-Color "[展開] リモートでアーカイブを展開中..." "Yellow"
         $sshArgs = @()
-
         if ($SSH_KEY -ne "" -and (Test-Path $SSH_KEY)) {
             $sshArgs += "-i"
             $sshArgs += $SSH_KEY
         }
-
         if ($SSH_PORT -ne 22) {
             $sshArgs += "-p"
             $sshArgs += $SSH_PORT
         }
-
         $sshArgs += "${SSH_USER}@${SSH_HOST}"
-        $sshArgs += "mkdir -p '$remoteParentDir' && chmod $LINUX_CHMOD_DIR '$remoteParentDir' && chown ${OWNER}:${COMMON_GROUP} '$remoteParentDir'"
+
+        # 展開先ディレクトリを作成してtar展開
+        $extractCmd = "cd '${REMOTE_DIR}' && tar -xvf /tmp/${tarFileName} && rm -f /tmp/${tarFileName}"
+        $sshArgs += $extractCmd
 
         & $sshCommand $sshArgs 2>&1 | Out-Null
+
+        if ($LASTEXITCODE -ne 0) {
+            Write-Color "[エラー] アーカイブの展開に失敗しました" "Red"
+            throw "tar extract failed"
+        }
+
+        # パーミッションと所有者を一括設定
+        Write-Color "[設定] パーミッションと所有者を設定中..." "Yellow"
+        $sshArgs = @()
+        if ($SSH_KEY -ne "" -and (Test-Path $SSH_KEY)) {
+            $sshArgs += "-i"
+            $sshArgs += $SSH_KEY
+        }
+        if ($SSH_PORT -ne 22) {
+            $sshArgs += "-p"
+            $sshArgs += $SSH_PORT
+        }
+        $sshArgs += "${SSH_USER}@${SSH_HOST}"
+        $sshArgs += "find '${REMOTE_DIR}' -type f -exec chmod $LINUX_CHMOD_FILE {} \; -exec chown ${OWNER}:${COMMON_GROUP} {} \; && find '${REMOTE_DIR}' -type d -exec chmod $LINUX_CHMOD_DIR {} \; -exec chown ${OWNER}:${COMMON_GROUP} {} \;"
+
+        & $sshCommand $sshArgs 2>&1 | Out-Null
+
+        $successCount = $filesToTransfer.Count
+        Write-Host ""
+        Write-Color "[OK] $successCount 個のファイルを一括転送しました" "Green"
+
+    } catch {
+        Write-Color "[エラー] 一括転送に失敗しました: $($_.Exception.Message)" "Red"
+        $failCount = $filesToTransfer.Count
+    } finally {
+        # 一時ファイルをクリーンアップ
+        if (Test-Path $tempDir) {
+            Remove-Item -Path $tempDir -Recurse -Force -ErrorAction SilentlyContinue
+        }
+        if (Test-Path $tarFilePath) {
+            Remove-Item -Path $tarFilePath -Force -ErrorAction SilentlyContinue
+        }
     }
 
-    # SCPコマンド構築
-    $scpArgs = @()
+} else {
+    # 個別転送モード（従来方式）
+    foreach ($file in $filesToTransfer) {
+        # ローカルパスは配下フォルダ（$GIT_ROOT）からの相対パスで計算
+        $localPath = Join-Path $GIT_ROOT $file.Path
 
-    if ($SSH_KEY -ne "" -and (Test-Path $SSH_KEY)) {
-        $scpArgs += "-i"
-        $scpArgs += $SSH_KEY
-    }
+        # Windowsのパス区切り(\)をLinux形式(/)に変換
+        $linuxPath = $file.Path.Replace("\", "/")
 
-    if ($SSH_PORT -ne 22) {
-        $scpArgs += "-P"
-        $scpArgs += $SSH_PORT
-    }
+        # リモートパスを計算（$file.Pathは既に配下フォルダからの相対パス）
+        $remotePath = "${REMOTE_DIR}${linuxPath}"
 
-    # ソースと宛先
-    $scpArgs += $localPath
-    $scpArgs += "${SSH_USER}@${SSH_HOST}:${remotePath}"
+        Write-Color "[転送] $($file.Path)" "Cyan"
+        Write-Host "  ローカル: $localPath"
+        Write-Host "  リモート: ${SSH_USER}@${SSH_HOST}:${remotePath}"
 
-    # 実行
-    try {
-        & $scpCommand $scpArgs 2>&1 | Out-Null
+        # Linux側で親ディレクトリを作成
+        $parentDir = Split-Path $linuxPath -Parent
+        if ($parentDir) {
+            $parentDir = $parentDir.Replace("\", "/")
+            $remoteParentDir = "${REMOTE_DIR}${parentDir}"
 
-        if ($LASTEXITCODE -eq 0) {
-            # パーミッションと所有者を設定
             $sshArgs = @()
 
             if ($SSH_KEY -ne "" -and (Test-Path $SSH_KEY)) {
@@ -605,21 +825,63 @@ foreach ($file in $filesToTransfer) {
             }
 
             $sshArgs += "${SSH_USER}@${SSH_HOST}"
-            $sshArgs += "chmod $LINUX_CHMOD_FILE '$remotePath' && chown ${OWNER}:${COMMON_GROUP} '$remotePath'"
+            $sshArgs += "mkdir -p '$remoteParentDir' && chmod $LINUX_CHMOD_DIR '$remoteParentDir' && chown ${OWNER}:${COMMON_GROUP} '$remoteParentDir'"
 
             & $sshCommand $sshArgs 2>&1 | Out-Null
+        }
 
-            Write-Color "  [OK] 成功" "Green"
-            $successCount++
-        } else {
-            Write-Color "  [NG] 失敗 (終了コード: $LASTEXITCODE)" "Red"
+        # SCPコマンド構築
+        $scpArgs = @()
+
+        if ($SSH_KEY -ne "" -and (Test-Path $SSH_KEY)) {
+            $scpArgs += "-i"
+            $scpArgs += $SSH_KEY
+        }
+
+        if ($SSH_PORT -ne 22) {
+            $scpArgs += "-P"
+            $scpArgs += $SSH_PORT
+        }
+
+        # ソースと宛先
+        $scpArgs += $localPath
+        $scpArgs += "${SSH_USER}@${SSH_HOST}:${remotePath}"
+
+        # 実行
+        try {
+            & $scpCommand $scpArgs 2>&1 | Out-Null
+
+            if ($LASTEXITCODE -eq 0) {
+                # パーミッションと所有者を設定
+                $sshArgs = @()
+
+                if ($SSH_KEY -ne "" -and (Test-Path $SSH_KEY)) {
+                    $sshArgs += "-i"
+                    $sshArgs += $SSH_KEY
+                }
+
+                if ($SSH_PORT -ne 22) {
+                    $sshArgs += "-p"
+                    $sshArgs += $SSH_PORT
+                }
+
+                $sshArgs += "${SSH_USER}@${SSH_HOST}"
+                $sshArgs += "chmod $LINUX_CHMOD_FILE '$remotePath' && chown ${OWNER}:${COMMON_GROUP} '$remotePath'"
+
+                & $sshCommand $sshArgs 2>&1 | Out-Null
+
+                Write-Color "  [OK] 成功" "Green"
+                $successCount++
+            } else {
+                Write-Color "  [NG] 失敗 (終了コード: $LASTEXITCODE)" "Red"
+                $failCount++
+                $failedFiles += $file.Path
+            }
+        } catch {
+            Write-Color "  [NG] 失敗: $($_.Exception.Message)" "Red"
             $failCount++
             $failedFiles += $file.Path
         }
-    } catch {
-        Write-Color "  [NG] 失敗: $($_.Exception.Message)" "Red"
-        $failCount++
-        $failedFiles += $file.Path
     }
 }
 
