@@ -116,8 +116,10 @@ Excelの図形を使用してブランチ構造を視覚化します（`git log 
 
 1. Excel上で `Alt + F11` を押してVBAエディタを開く
 2. メニューから「ファイル」→「ファイルのインポート」を選択
-3. `GitLogVisualizer.bas` を選択してインポート
-4. 標準モジュール「GitLogVisualizer」が追加されたことを確認
+3. 以下の2つのモジュールを順番にインポート：
+   - `GitLogVisualizer_Setup.bas`（初期化・シートフォーマット用）
+   - `GitLogVisualizer.bas`（メイン処理用）
+4. 標準モジュール「GitLogVisualizer_Setup」と「GitLogVisualizer」が追加されたことを確認
 
 ### 3. 初期化を実行
 

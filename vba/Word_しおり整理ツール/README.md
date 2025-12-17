@@ -43,8 +43,10 @@ Excelから実行し、Word文書のスタイル「表題1」「表題2」「表
 
 1. Excel上で `Alt + F11` を押してVBAエディタを開く
 2. メニューから「ファイル」→「ファイルのインポート」を選択
-3. `WordBookmarkOrganizer.bas` を選択してインポート
-4. 標準モジュール「WordBookmarkOrganizer」が追加されたことを確認
+3. 以下の2つのモジュールを順番にインポート：
+   - `WordBookmarkOrganizer_Setup.bas`（初期化・シートフォーマット用）
+   - `WordBookmarkOrganizer.bas`（メイン処理用）
+4. 標準モジュール「WordBookmarkOrganizer_Setup」と「WordBookmarkOrganizer」が追加されたことを確認
 
 ### 3. Word参照設定を追加
 
