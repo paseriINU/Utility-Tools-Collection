@@ -29,11 +29,12 @@ Public Const COL_ORDER As Long = 1
 Public Const COL_JOBNET_PATH As Long = 2
 Public Const COL_JOBNET_NAME As Long = 3
 Public Const COL_COMMENT As Long = 4
-Public Const COL_LAST_STATUS As Long = 5
-Public Const COL_LAST_EXEC_TIME As Long = 6
-Public Const COL_LAST_END_TIME As Long = 7
-Public Const COL_LAST_RETURN_CODE As Long = 8
-Public Const COL_LAST_MESSAGE As Long = 9
+Public Const COL_HOLD As Long = 5
+Public Const COL_LAST_STATUS As Long = 6
+Public Const COL_LAST_EXEC_TIME As Long = 7
+Public Const COL_LAST_END_TIME As Long = 8
+Public Const COL_LAST_RETURN_CODE As Long = 9
+Public Const COL_LAST_MESSAGE As Long = 10
 Public Const ROW_JOBLIST_HEADER As Long = 3
 Public Const ROW_JOBLIST_DATA_START As Long = 4
 
@@ -190,7 +191,7 @@ Private Sub FormatJobListSheet()
     ws.Cells.Clear
 
     ' タイトル
-    With ws.Range("A1:I1")
+    With ws.Range("A1:J1")
         .Merge
         .Value = "ジョブネット一覧"
         .Font.Size = 14
@@ -202,13 +203,14 @@ Private Sub FormatJobListSheet()
     End With
 
     ' 説明
-    ws.Range("A2").Value = "実行するジョブの「順序」列に数字（1, 2, 3...）を入力してください。順序が入っているジョブを1番から順に実行します。"
+    ws.Range("A2").Value = "実行するジョブの「順序」列に数字（1, 2, 3...）を入力してください。順序が入っているジョブを1番から順に実行します。保留中のジョブは実行時に自動で保留解除されます。"
 
     ' ヘッダー
     ws.Cells(ROW_JOBLIST_HEADER, COL_ORDER).Value = "順序"
     ws.Cells(ROW_JOBLIST_HEADER, COL_JOBNET_PATH).Value = "ジョブネットパス"
     ws.Cells(ROW_JOBLIST_HEADER, COL_JOBNET_NAME).Value = "ジョブネット名"
     ws.Cells(ROW_JOBLIST_HEADER, COL_COMMENT).Value = "コメント"
+    ws.Cells(ROW_JOBLIST_HEADER, COL_HOLD).Value = "保留"
     ws.Cells(ROW_JOBLIST_HEADER, COL_LAST_STATUS).Value = "最終実行結果"
     ws.Cells(ROW_JOBLIST_HEADER, COL_LAST_EXEC_TIME).Value = "開始時刻"
     ws.Cells(ROW_JOBLIST_HEADER, COL_LAST_END_TIME).Value = "終了時刻"
@@ -228,6 +230,7 @@ Private Sub FormatJobListSheet()
     ws.Columns(COL_JOBNET_PATH).ColumnWidth = 50
     ws.Columns(COL_JOBNET_NAME).ColumnWidth = 25
     ws.Columns(COL_COMMENT).ColumnWidth = 30
+    ws.Columns(COL_HOLD).ColumnWidth = 8
     ws.Columns(COL_LAST_STATUS).ColumnWidth = 15
     ws.Columns(COL_LAST_EXEC_TIME).ColumnWidth = 18
     ws.Columns(COL_LAST_END_TIME).ColumnWidth = 18

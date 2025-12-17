@@ -171,7 +171,7 @@ Private Sub ParseJobListResult(result As String)
     Dim lastRow As Long
     lastRow = ws.Cells(ws.Rows.Count, COL_JOBNET_PATH).End(xlUp).Row
     If lastRow >= ROW_JOBLIST_DATA_START Then
-        ws.Range(ws.Cells(ROW_JOBLIST_DATA_START, COL_ORDER), ws.Cells(lastRow, COL_LAST_MESSAGE)).ClearContents
+        ws.Range(ws.Cells(ROW_JOBLIST_DATA_START, COL_ORDER), ws.Cells(lastRow, COL_LAST_MESSAGE)).Clear
     End If
 
     ' 結果をパース
@@ -208,6 +208,22 @@ Private Sub ParseJobListResult(result As String)
                 ws.Cells(row, COL_JOBNET_PATH).Value = unitMatch
                 ws.Cells(row, COL_JOBNET_NAME).Value = ExtractJobName(line)
                 ws.Cells(row, COL_COMMENT).Value = ExtractComment(line)
+
+                ' 保留状態を解析
+                Dim isHold As Boolean
+                isHold = ExtractHoldStatus(line)
+
+                If isHold Then
+                    ws.Cells(row, COL_HOLD).Value = "保留中"
+                    ws.Cells(row, COL_HOLD).HorizontalAlignment = xlCenter
+
+                    ' 保留中のジョブは行全体をハイライト（オレンジ系）
+                    ws.Range(ws.Cells(row, COL_ORDER), ws.Cells(row, COL_LAST_MESSAGE)).Interior.Color = RGB(255, 235, 156)
+                    ws.Cells(row, COL_HOLD).Font.Bold = True
+                    ws.Cells(row, COL_HOLD).Font.Color = RGB(156, 87, 0)
+                Else
+                    ws.Cells(row, COL_HOLD).Value = ""
+                End If
 
                 ' 順序列の書式
                 With ws.Cells(row, COL_ORDER)
@@ -295,6 +311,12 @@ Private Function ExtractComment(line As String) As String
     End If
 End Function
 
+Private Function ExtractHoldStatus(line As String) As Boolean
+    ' hd=y（保留）を検出
+    ' JP1のajsprint出力で hd=y はホールド(保留)を示す
+    ExtractHoldStatus = (InStr(line, ",hd=y") > 0 Or InStr(line, " hd=y") > 0)
+End Function
+
 Private Function GetLastPathComponent(path As String) As String
     Dim parts() As String
     parts = Split(path, "/")
@@ -344,20 +366,37 @@ Public Sub ExecuteCheckedJobs()
         Exit Sub
     End If
 
+    ' 保留中のジョブ数をカウント
+    Dim holdCount As Long
+    holdCount = 0
+    Dim j As Variant
+    For Each j In jobs
+        If j("IsHold") Then holdCount = holdCount + 1
+    Next j
+
     ' 確認
     Dim msg As String
     msg = "以下の " & jobs.Count & " 件のジョブを実行します：" & vbCrLf & vbCrLf
-    Dim j As Variant
     Dim cnt As Long
     cnt = 0
     For Each j In jobs
         cnt = cnt + 1
         If cnt <= 5 Then
-            msg = msg & cnt & ". " & j("Path") & vbCrLf
+            Dim holdMark As String
+            If j("IsHold") Then
+                holdMark = " [保留中]"
+            Else
+                holdMark = ""
+            End If
+            msg = msg & cnt & ". " & j("Path") & holdMark & vbCrLf
         ElseIf cnt = 6 Then
             msg = msg & "..." & vbCrLf
         End If
     Next j
+
+    If holdCount > 0 Then
+        msg = msg & vbCrLf & "※ 保留中のジョブが " & holdCount & " 件あります。自動で保留解除してから実行します。" & vbCrLf
+    End If
     msg = msg & vbCrLf & "実行しますか？"
 
     If MsgBox(msg, vbYesNo + vbQuestion, "実行確認") = vbNo Then Exit Sub
@@ -378,7 +417,7 @@ Public Sub ExecuteCheckedJobs()
         Application.StatusBar = "実行中: " & j("Path")
 
         Dim execResult As Object
-        Set execResult = ExecuteSingleJob(config, j("Path"))
+        Set execResult = ExecuteSingleJob(config, j("Path"), j("IsHold"))
 
         ' 結果をログに記録
         wsLog.Cells(logRow, 1).Value = Now
@@ -444,6 +483,8 @@ Private Function GetOrderedJobs() As Collection
             job("Row") = row
             job("Path") = ws.Cells(row, COL_JOBNET_PATH).Value
             job("Order") = CLng(orderValue)
+            ' 保留状態を取得
+            job("IsHold") = (ws.Cells(row, COL_HOLD).Value = "保留中")
 
             orderedRows.Add job
         End If
@@ -480,7 +521,7 @@ Private Function GetOrderedJobs() As Collection
     Set GetOrderedJobs = jobs
 End Function
 
-Private Function ExecuteSingleJob(config As Object, jobnetPath As String) As Object
+Private Function ExecuteSingleJob(config As Object, jobnetPath As String, isHold As Boolean) As Object
     Dim result As Object
     Set result = CreateObject("Scripting.Dictionary")
     result("Status") = ""
@@ -492,7 +533,7 @@ Private Function ExecuteSingleJob(config As Object, jobnetPath As String) As Obj
     waitCompletion = (config("WaitCompletion") = "はい")
 
     Dim psScript As String
-    psScript = BuildExecuteJobScript(config, jobnetPath, waitCompletion)
+    psScript = BuildExecuteJobScript(config, jobnetPath, waitCompletion, isHold)
 
     Dim output As String
     output = ExecutePowerShell(psScript)
@@ -526,7 +567,7 @@ Private Function ExecuteSingleJob(config As Object, jobnetPath As String) As Obj
     Set ExecuteSingleJob = result
 End Function
 
-Private Function BuildExecuteJobScript(config As Object, jobnetPath As String, waitCompletion As Boolean) As String
+Private Function BuildExecuteJobScript(config As Object, jobnetPath As String, waitCompletion As Boolean, isHold As Boolean) As String
     Dim script As String
 
     script = "$ErrorActionPreference = 'Stop'" & vbCrLf
@@ -547,6 +588,19 @@ Private Function BuildExecuteJobScript(config As Object, jobnetPath As String, w
         script = script & "    exit 1" & vbCrLf
         script = script & "  }" & vbCrLf
         script = script & vbCrLf
+
+        ' 保留解除処理（ローカル）
+        If isHold Then
+            script = script & "  # 保留解除" & vbCrLf
+            script = script & "  $releaseOutput = & ""$jp1BinPath\ajsrelease.exe"" -h localhost -u '" & config("JP1User") & "' -p '" & EscapePSString(config("JP1Password")) & "' -F '" & jobnetPath & "' 2>&1" & vbCrLf
+            script = script & "  if ($LASTEXITCODE -ne 0) {" & vbCrLf
+            script = script & "    Write-Output ""RESULT_STATUS:保留解除失敗""" & vbCrLf
+            script = script & "    Write-Output ""RESULT_MESSAGE:$($releaseOutput -join ' ')""" & vbCrLf
+            script = script & "    exit" & vbCrLf
+            script = script & "  }" & vbCrLf
+            script = script & vbCrLf
+        End If
+
         script = script & "  # ajsentry実行" & vbCrLf
         script = script & "  $output = & ""$jp1BinPath\ajsentry.exe"" -h localhost -u '" & config("JP1User") & "' -p '" & EscapePSString(config("JP1Password")) & "' -F '" & jobnetPath & "' 2>&1" & vbCrLf
         script = script & "  $exitCode = $LASTEXITCODE" & vbCrLf
@@ -638,6 +692,26 @@ Private Function BuildExecuteJobScript(config As Object, jobnetPath As String, w
         ' リモート実行
         script = script & "  $session = New-PSSession -ComputerName '" & config("JP1Server") & "' -Credential $cred -ErrorAction Stop" & vbCrLf
         script = script & vbCrLf
+
+        ' 保留解除処理（リモート）
+        If isHold Then
+            script = script & "  # 保留解除" & vbCrLf
+            script = script & "  $releaseResult = Invoke-Command -Session $session -ScriptBlock {" & vbCrLf
+            script = script & "    param($jp1User, $jp1Pass, $jobnetPath)" & vbCrLf
+            script = script & "    $ajsreleasePath = 'C:\Program Files\HITACHI\JP1AJS3\bin\ajsrelease.exe'" & vbCrLf
+            script = script & "    if (-not (Test-Path $ajsreleasePath)) { $ajsreleasePath = 'C:\Program Files\Hitachi\JP1AJS2\bin\ajsrelease.exe' }" & vbCrLf
+            script = script & "    $output = & $ajsreleasePath -h localhost -u $jp1User -p $jp1Pass -F $jobnetPath 2>&1" & vbCrLf
+            script = script & "    @{ ExitCode = $LASTEXITCODE; Output = ($output -join ' ') }" & vbCrLf
+            script = script & "  } -ArgumentList '" & config("JP1User") & "', '" & EscapePSString(config("JP1Password")) & "', '" & jobnetPath & "'" & vbCrLf
+            script = script & vbCrLf
+            script = script & "  if ($releaseResult.ExitCode -ne 0) {" & vbCrLf
+            script = script & "    Write-Output ""RESULT_STATUS:保留解除失敗""" & vbCrLf
+            script = script & "    Write-Output ""RESULT_MESSAGE:$($releaseResult.Output)""" & vbCrLf
+            script = script & "    Remove-PSSession $session" & vbCrLf
+            script = script & "    exit" & vbCrLf
+            script = script & "  }" & vbCrLf
+            script = script & vbCrLf
+        End If
 
         ' ajsentry実行
         script = script & "  $entryResult = Invoke-Command -Session $session -ScriptBlock {" & vbCrLf
@@ -735,6 +809,17 @@ Private Sub UpdateJobListStatus(row As Long, result As Object)
     ' 詳細メッセージを記録
     If result("Message") <> "" Then
         ws.Cells(row, COL_LAST_MESSAGE).Value = result("Message")
+    End If
+
+    ' 保留解除された場合（成功時）、保留列をクリアしてハイライトを解除
+    If result("Status") = "正常終了" Or result("Status") = "起動成功" Then
+        If ws.Cells(row, COL_HOLD).Value = "保留中" Then
+            ws.Cells(row, COL_HOLD).Value = ""
+            ws.Cells(row, COL_HOLD).Font.Bold = False
+            ws.Cells(row, COL_HOLD).Font.Color = RGB(0, 0, 0)
+            ' 行のハイライトを解除
+            ws.Range(ws.Cells(row, COL_ORDER), ws.Cells(row, COL_LAST_MESSAGE)).Interior.ColorIndex = xlNone
+        End If
     End If
 
     ' 色付け
