@@ -9,6 +9,13 @@ PowerShell Remotingを使用して、リモートのJP1サーバ上で`ajsentry`
 このツールは、ローカルPCにJP1をインストールせずに、PowerShell Remotingを使って
 リモートサーバ上の`ajsentry`コマンドを実行し、ジョブネットを起動します。
 
+### 主な機能
+
+- **ジョブネット起動**: `ajsentry`でジョブネットを起動
+- **完了待ち機能**: `ajsstatus`でジョブの完了を監視（正常終了/異常終了を判定）
+- **詳細メッセージ取得**: `ajsshow`でジョブの実行詳細を取得
+- **WinRM自動設定**: TrustedHostsを自動で設定・復元
+
 ---
 
 ## ✅ 必要な環境
@@ -102,8 +109,23 @@ $Config = @{
     # ajsentryコマンドのパス（リモートサーバ上）
     AjsentryPath = "C:\Program Files\HITACHI\JP1AJS3\bin\ajsentry.exe"
 
+    # ajsstatusコマンドのパス（リモートサーバ上）
+    AjsstatusPath = "C:\Program Files\HITACHI\JP1AJS3\bin\ajsstatus.exe"
+
+    # ajsshowコマンドのパス（リモートサーバ上）
+    AjsshowPath = "C:\Program Files\HITACHI\JP1AJS3\bin\ajsshow.exe"
+
     # HTTPS接続を使用する場合は $true
     UseSSL = $false
+
+    # ジョブ完了を待つ場合は $true（起動のみの場合は $false）
+    WaitForCompletion = $true
+
+    # 完了待ちの最大時間（秒）。0の場合は無制限
+    WaitTimeoutSeconds = 3600
+
+    # 状態確認の間隔（秒）
+    PollingIntervalSeconds = 10
 }
 ```
 
@@ -126,7 +148,7 @@ JP1_リモートジョブ起動ツール.bat
 
 ## 📖 実行例
 
-### 成功時の出力
+### 成功時の出力（完了待ち有効）
 
 ```
 ========================================
@@ -138,32 +160,92 @@ JP1サーバ      : 192.168.1.100
 リモートユーザー: Administrator
 JP1ユーザー    : jp1admin
 ジョブネットパス: /main_unit/jobgroup1/daily_batch
+完了待ち       : 有効
+タイムアウト   : 3600秒
 
-ジョブネットを起動しますか？
-実行する場合はYを押してください [Y,N]?Y
+ジョブネットを起動しますか？ (y/n)
+y
 
 ========================================
 リモート接続してジョブネット起動中...
 ========================================
 
-リモートサーバの認証情報を入力してください。
-
-[Windows認証ダイアログが表示される]
-
 リモートサーバに接続中...
+[OK] 接続成功
+
 ajsentryコマンドを実行中...
 
 ========================================
 ジョブネットの起動に成功しました
 ========================================
 
-実行結果:
-KAVS1820-I ajsentryコマンドが正常終了しました。
+ajsentry出力:
+  KAVS1820-I ajsentryコマンドが正常終了しました。
 
-ジョブネット: /main_unit/jobgroup1/daily_batch
-サーバ      : 192.168.1.100
+========================================
+ジョブ完了を待機中...
+========================================
+
+  状態: 実行中... (経過時間: 02:35)
+
+========================================
+ジョブネット実行結果: 正常終了
+========================================
+
+========================================
+ジョブ詳細情報を取得中...
+========================================
+
+詳細情報 (ajsshow -E):
+----------------------------------------
+  UNIT-NAME       : /main_unit/jobgroup1/daily_batch
+  STATUS          : ENDED NORMALLY
+  START-TIME      : 2025/12/17 10:30:00
+  END-TIME        : 2025/12/17 10:32:35
+  RETURN-CODE     : 0
+----------------------------------------
+
+========================================
+処理サマリー
+========================================
+
+  ジョブネット: /main_unit/jobgroup1/daily_batch
+  サーバ      : 192.168.1.100
+  起動結果    : 成功
+  実行結果    : 正常終了
 
 続行するには何かキーを押してください . . .
+```
+
+### 異常終了時の出力
+
+```
+========================================
+ジョブネット実行結果: 異常終了
+========================================
+
+========================================
+ジョブ詳細情報を取得中...
+========================================
+
+詳細情報 (ajsshow -E):
+----------------------------------------
+  UNIT-NAME       : /main_unit/jobgroup1/daily_batch
+  STATUS          : ENDED ABNORMALLY
+  START-TIME      : 2025/12/17 10:30:00
+  END-TIME        : 2025/12/17 10:31:15
+  RETURN-CODE     : 1
+  MESSAGE         : KAVS0221-E ジョブが異常終了しました
+----------------------------------------
+
+========================================
+処理サマリー
+========================================
+
+  ジョブネット: /main_unit/jobgroup1/daily_batch
+  サーバ      : 192.168.1.100
+  起動結果    : 成功
+  実行結果    : 異常終了
 ```
 
 ---
@@ -179,7 +261,12 @@ KAVS1820-I ajsentryコマンドが正常終了しました。
 | JP1Password | JP1パスワード（空の場合は実行時入力） | ` `（空推奨） |
 | JobnetPath | ジョブネットのフルパス | `/main_unit/jobgroup1/daily_batch` |
 | AjsentryPath | リモートサーバ上のajsentryパス | `C:\Program Files\HITACHI\JP1AJS3\bin\ajsentry.exe` |
+| AjsstatusPath | リモートサーバ上のajsstatusパス | `C:\Program Files\HITACHI\JP1AJS3\bin\ajsstatus.exe` |
+| AjsshowPath | リモートサーバ上のajsshowパス | `C:\Program Files\HITACHI\JP1AJS3\bin\ajsshow.exe` |
 | UseSSL | HTTPS接続を使用するか | `$false` |
+| WaitForCompletion | ジョブ完了を待つか | `$true` |
+| WaitTimeoutSeconds | 完了待ちのタイムアウト（秒）。0で無制限 | `3600` |
+| PollingIntervalSeconds | 状態確認の間隔（秒） | `10` |
 
 ---
 
