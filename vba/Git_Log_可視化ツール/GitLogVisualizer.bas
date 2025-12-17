@@ -868,13 +868,13 @@ Private Sub CreateHistorySheet(ByRef commits() As CommitInfo, ByVal commitCount 
 
         ' フィルターを設定
         .Range("A4:O4").AutoFilter
-
-        ' ウィンドウ枠の固定
-        .Rows(5).Select
-        ActiveWindow.FreezePanes = True
-
-        .Range("A1").Select
     End With
+
+    ' ウィンドウ枠の固定（シートをアクティブにする必要がある）
+    ws.Activate
+    ws.Rows(5).Select
+    ActiveWindow.FreezePanes = True
+    ws.Range("A1").Select
 End Sub
 
 '==============================================================================
