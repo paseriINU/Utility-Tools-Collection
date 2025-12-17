@@ -546,7 +546,7 @@ if ($choice -eq "1") {
                 Write-Host "  - ${dir}/*"
             }
             Write-Host ""
-            Write-Color "※ ファイルのみ削除（フォルダ・サブディレクトリは残ります）" "Gray"
+            Write-Color "※ ファイルのみ再帰的に削除（ディレクトリ構造は残ります）" "Gray"
             Write-Host ""
 
             do {
@@ -622,8 +622,8 @@ if ($doCleanup -eq $true) {
         }
 
         $sshArgs += "${SSH_USER}@${SSH_HOST}"
-        # フォルダ内のファイルのみ削除（サブディレクトリは残す）
-        $sshArgs += "find '${dir}' -maxdepth 1 -type f -delete 2>/dev/null; echo 'done'"
+        # フォルダ内のファイルを再帰的に削除（ディレクトリ構造は残す）
+        $sshArgs += "find '${dir}' -type f -delete 2>/dev/null; echo 'done'"
 
         try {
             $result = & $sshCommand $sshArgs 2>&1
