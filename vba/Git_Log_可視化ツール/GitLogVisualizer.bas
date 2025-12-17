@@ -751,7 +751,16 @@ End Sub
 '==============================================================================
 Private Sub CreateHistorySheet(ByRef commits() As CommitInfo, ByVal commitCount As Long, ByVal repoPath As String)
     Dim ws As Worksheet
+
+    On Error Resume Next
     Set ws = ThisWorkbook.Sheets(SHEET_HISTORY)
+    On Error GoTo 0
+
+    If ws Is Nothing Then
+        MsgBox "シート「" & SHEET_HISTORY & "」が見つかりません。" & vbCrLf & _
+               "初期化を実行してから再度お試しください。", vbCritical, "エラー"
+        Exit Sub
+    End If
 
     With ws
         ' タイトル
@@ -873,7 +882,16 @@ End Sub
 '==============================================================================
 Private Sub CreateBranchGraphSheet(ByRef commits() As CommitInfo, ByVal commitCount As Long, ByVal repoPath As String)
     Dim ws As Worksheet
+
+    On Error Resume Next
     Set ws = ThisWorkbook.Sheets(SHEET_BRANCH_GRAPH)
+    On Error GoTo 0
+
+    If ws Is Nothing Then
+        MsgBox "シート「" & SHEET_BRANCH_GRAPH & "」が見つかりません。" & vbCrLf & _
+               "初期化を実行してから再度お試しください。", vbCritical, "エラー"
+        Exit Sub
+    End If
 
     ' シートの図形をすべて削除
     Dim shp As Object
