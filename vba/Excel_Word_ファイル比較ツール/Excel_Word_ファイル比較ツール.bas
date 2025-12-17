@@ -44,6 +44,41 @@ Private g_MatchedNew() As Long    ' 新ファイルの段落番号
 Private g_MatchedCount As Long    ' ペア数
 
 '==============================================================================
+' 進捗表示用ヘルパー関数
+'==============================================================================
+Private Sub ShowProgress(ByVal phase As String, ByVal current As Long, ByVal total As Long)
+    Dim pct As Long
+    Dim progressBar As String
+    Dim barLength As Long
+    Dim filledLength As Long
+    Dim i As Long
+
+    If total > 0 Then
+        pct = CLng((current / total) * 100)
+    Else
+        pct = 0
+    End If
+
+    ' プログレスバー（20文字幅）
+    barLength = 20
+    filledLength = CLng(barLength * current / IIf(total > 0, total, 1))
+    progressBar = ""
+    For i = 1 To filledLength
+        progressBar = progressBar & ChrW(&H2588)  ' █
+    Next i
+    For i = filledLength + 1 To barLength
+        progressBar = progressBar & ChrW(&H2591)  ' ░
+    Next i
+
+    Application.StatusBar = phase & " " & progressBar & " " & pct & "% (" & current & "/" & total & ")"
+    DoEvents
+End Sub
+
+Private Sub ClearProgress()
+    Application.StatusBar = False
+End Sub
+
+'==============================================================================
 ' データ構造: Excel比較用
 '==============================================================================
 Private Type ExcelDifferenceInfo
@@ -372,10 +407,12 @@ Private Sub CompareWordFilesInternal(ByVal file1Path As String, ByVal file2Path 
 
 Cleanup:
     Application.ScreenUpdating = True
+    ClearProgress
     Exit Sub
 
 ErrorHandler:
     Application.ScreenUpdating = True
+    ClearProgress
 
     ' 開いたドキュメントを閉じる
     On Error Resume Next
@@ -517,18 +554,16 @@ Private Sub CompareWordDocuments(ByRef doc1 As Object, ByRef doc2 As Object, _
     ReDim texts1(1 To paraCount1)
     For i = 1 To paraCount1
         texts1(i) = CleanText(doc1.Paragraphs(i).Range.Text)
-        If i Mod 500 = 0 Then
-            Debug.Print "  旧ファイル: " & i & " / " & paraCount1 & " 段落読み込み中..."
-            DoEvents
+        If i Mod 50 = 0 Or i = paraCount1 Then
+            ShowProgress "[1/4] 旧ファイル読込", i, paraCount1
         End If
     Next i
 
     ReDim texts2(1 To paraCount2)
     For i = 1 To paraCount2
         texts2(i) = CleanText(doc2.Paragraphs(i).Range.Text)
-        If i Mod 500 = 0 Then
-            Debug.Print "  新ファイル: " & i & " / " & paraCount2 & " 段落読み込み中..."
-            DoEvents
+        If i Mod 50 = 0 Or i = paraCount2 Then
+            ShowProgress "[2/4] 新ファイル読込", i, paraCount2
         End If
     Next i
 
@@ -557,6 +592,11 @@ Private Sub FetchStylesForDifferences(ByRef doc1 As Object, ByRef doc2 As Object
     Dim newStyle As String
     Dim oldText As String
 
+    Dim totalStyleWork As Long
+    totalStyleWork = diffCount + g_MatchedCount
+    Dim styleProgress As Long
+    styleProgress = 0
+
     ' 1. 既存の差分にスタイル情報を追加
     If diffCount > 0 Then
         fetchedCount = 0
@@ -575,9 +615,9 @@ Private Sub FetchStylesForDifferences(ByRef doc1 As Object, ByRef doc2 As Object
             End If
 
             fetchedCount = fetchedCount + 1
-            If fetchedCount Mod 50 = 0 Then
-                Debug.Print "  スタイル取得: " & fetchedCount & " / " & diffCount
-                DoEvents
+            styleProgress = styleProgress + 1
+            If fetchedCount Mod 20 = 0 Or fetchedCount = diffCount Then
+                ShowProgress "[4/4] スタイル取得", styleProgress, totalStyleWork
             End If
         Next i
     End If
@@ -609,9 +649,9 @@ Private Sub FetchStylesForDifferences(ByRef doc1 As Object, ByRef doc2 As Object
             End If
 
             styleCheckCount = styleCheckCount + 1
-            If styleCheckCount Mod 100 = 0 Then
-                Debug.Print "    スタイル比較: " & styleCheckCount & " / " & g_MatchedCount
-                DoEvents
+            styleProgress = styleProgress + 1
+            If styleCheckCount Mod 50 = 0 Or styleCheckCount = g_MatchedCount Then
+                ShowProgress "[4/4] スタイル比較", styleProgress, totalStyleWork
             End If
         Next i
 
@@ -620,6 +660,9 @@ Private Sub FetchStylesForDifferences(ByRef doc1 As Object, ByRef doc2 As Object
         Erase g_MatchedOld
         Erase g_MatchedNew
     End If
+
+    ' 進捗表示をクリア
+    ClearProgress
 End Sub
 
 '==============================================================================
@@ -692,10 +735,9 @@ Private Sub ComputeLCSDiffOptimized(ByRef texts1() As String, ByRef texts2() As 
             End If
         Next j
 
-        ' 進捗表示（頻度を減らして高速化）
-        If i Mod 500 = 0 Then
-            Debug.Print "  LCS計算中: " & i & " / " & n1
-            DoEvents
+        ' 進捗表示
+        If i Mod 100 = 0 Or i = n1 Then
+            ShowProgress "[3/4] 差分計算(LCS)", i, n1
         End If
     Next i
 
@@ -1208,12 +1250,12 @@ Private Sub ComputeSimpleDiffOptimized(ByRef texts1() As String, ByRef texts2() 
             i2 = i2 + 1
         End If
 
-        ' 進捗表示（頻度を減らして高速化）
-        If (i1 + i2) Mod 500 = 0 Then
-            Debug.Print "  簡易比較中: 旧=" & i1 & "/" & n1 & ", 新=" & i2 & "/" & n2
-            DoEvents
+        ' 進捗表示
+        If (i1 + i2) Mod 100 = 0 Then
+            ShowProgress "[3/4] 差分計算(簡易)", i1 + i2, n1 + n2
         End If
     Loop
+    ShowProgress "[3/4] 差分計算(簡易)", n1 + n2, n1 + n2
 
     ' テキスト一致段落のスタイル比較用ペアをモジュールレベル変数に保存
     g_MatchedCount = matchedCount
