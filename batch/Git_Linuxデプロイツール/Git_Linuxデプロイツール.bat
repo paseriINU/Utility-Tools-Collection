@@ -793,66 +793,25 @@ if ($useBulkTransfer -eq $true) {
 } else {
     # 個別転送モード（従来方式）
     foreach ($file in $filesToTransfer) {
-    # ローカルパスは配下フォルダ（$GIT_ROOT）からの相対パスで計算
-    $localPath = Join-Path $GIT_ROOT $file.Path
+        # ローカルパスは配下フォルダ（$GIT_ROOT）からの相対パスで計算
+        $localPath = Join-Path $GIT_ROOT $file.Path
 
-    # Windowsのパス区切り(\)をLinux形式(/)に変換
-    $linuxPath = $file.Path.Replace("\", "/")
+        # Windowsのパス区切り(\)をLinux形式(/)に変換
+        $linuxPath = $file.Path.Replace("\", "/")
 
-    # リモートパスを計算（$file.Pathは既に配下フォルダからの相対パス）
-    $remotePath = "${REMOTE_DIR}${linuxPath}"
+        # リモートパスを計算（$file.Pathは既に配下フォルダからの相対パス）
+        $remotePath = "${REMOTE_DIR}${linuxPath}"
 
-    Write-Color "[転送] $($file.Path)" "Cyan"
-    Write-Host "  ローカル: $localPath"
-    Write-Host "  リモート: ${SSH_USER}@${SSH_HOST}:${remotePath}"
+        Write-Color "[転送] $($file.Path)" "Cyan"
+        Write-Host "  ローカル: $localPath"
+        Write-Host "  リモート: ${SSH_USER}@${SSH_HOST}:${remotePath}"
 
-    # Linux側で親ディレクトリを作成
-    $parentDir = Split-Path $linuxPath -Parent
-    if ($parentDir) {
-        $parentDir = $parentDir.Replace("\", "/")
-        $remoteParentDir = "${REMOTE_DIR}${parentDir}"
+        # Linux側で親ディレクトリを作成
+        $parentDir = Split-Path $linuxPath -Parent
+        if ($parentDir) {
+            $parentDir = $parentDir.Replace("\", "/")
+            $remoteParentDir = "${REMOTE_DIR}${parentDir}"
 
-        $sshArgs = @()
-
-        if ($SSH_KEY -ne "" -and (Test-Path $SSH_KEY)) {
-            $sshArgs += "-i"
-            $sshArgs += $SSH_KEY
-        }
-
-        if ($SSH_PORT -ne 22) {
-            $sshArgs += "-p"
-            $sshArgs += $SSH_PORT
-        }
-
-        $sshArgs += "${SSH_USER}@${SSH_HOST}"
-        $sshArgs += "mkdir -p '$remoteParentDir' && chmod $LINUX_CHMOD_DIR '$remoteParentDir' && chown ${OWNER}:${COMMON_GROUP} '$remoteParentDir'"
-
-        & $sshCommand $sshArgs 2>&1 | Out-Null
-    }
-
-    # SCPコマンド構築
-    $scpArgs = @()
-
-    if ($SSH_KEY -ne "" -and (Test-Path $SSH_KEY)) {
-        $scpArgs += "-i"
-        $scpArgs += $SSH_KEY
-    }
-
-    if ($SSH_PORT -ne 22) {
-        $scpArgs += "-P"
-        $scpArgs += $SSH_PORT
-    }
-
-    # ソースと宛先
-    $scpArgs += $localPath
-    $scpArgs += "${SSH_USER}@${SSH_HOST}:${remotePath}"
-
-    # 実行
-    try {
-        & $scpCommand $scpArgs 2>&1 | Out-Null
-
-        if ($LASTEXITCODE -eq 0) {
-            # パーミッションと所有者を設定
             $sshArgs = @()
 
             if ($SSH_KEY -ne "" -and (Test-Path $SSH_KEY)) {
@@ -866,23 +825,64 @@ if ($useBulkTransfer -eq $true) {
             }
 
             $sshArgs += "${SSH_USER}@${SSH_HOST}"
-            $sshArgs += "chmod $LINUX_CHMOD_FILE '$remotePath' && chown ${OWNER}:${COMMON_GROUP} '$remotePath'"
+            $sshArgs += "mkdir -p '$remoteParentDir' && chmod $LINUX_CHMOD_DIR '$remoteParentDir' && chown ${OWNER}:${COMMON_GROUP} '$remoteParentDir'"
 
             & $sshCommand $sshArgs 2>&1 | Out-Null
+        }
 
-            Write-Color "  [OK] 成功" "Green"
-            $successCount++
-        } else {
-            Write-Color "  [NG] 失敗 (終了コード: $LASTEXITCODE)" "Red"
+        # SCPコマンド構築
+        $scpArgs = @()
+
+        if ($SSH_KEY -ne "" -and (Test-Path $SSH_KEY)) {
+            $scpArgs += "-i"
+            $scpArgs += $SSH_KEY
+        }
+
+        if ($SSH_PORT -ne 22) {
+            $scpArgs += "-P"
+            $scpArgs += $SSH_PORT
+        }
+
+        # ソースと宛先
+        $scpArgs += $localPath
+        $scpArgs += "${SSH_USER}@${SSH_HOST}:${remotePath}"
+
+        # 実行
+        try {
+            & $scpCommand $scpArgs 2>&1 | Out-Null
+
+            if ($LASTEXITCODE -eq 0) {
+                # パーミッションと所有者を設定
+                $sshArgs = @()
+
+                if ($SSH_KEY -ne "" -and (Test-Path $SSH_KEY)) {
+                    $sshArgs += "-i"
+                    $sshArgs += $SSH_KEY
+                }
+
+                if ($SSH_PORT -ne 22) {
+                    $sshArgs += "-p"
+                    $sshArgs += $SSH_PORT
+                }
+
+                $sshArgs += "${SSH_USER}@${SSH_HOST}"
+                $sshArgs += "chmod $LINUX_CHMOD_FILE '$remotePath' && chown ${OWNER}:${COMMON_GROUP} '$remotePath'"
+
+                & $sshCommand $sshArgs 2>&1 | Out-Null
+
+                Write-Color "  [OK] 成功" "Green"
+                $successCount++
+            } else {
+                Write-Color "  [NG] 失敗 (終了コード: $LASTEXITCODE)" "Red"
+                $failCount++
+                $failedFiles += $file.Path
+            }
+        } catch {
+            Write-Color "  [NG] 失敗: $($_.Exception.Message)" "Red"
             $failCount++
             $failedFiles += $file.Path
         }
-    } catch {
-        Write-Color "  [NG] 失敗: $($_.Exception.Message)" "Red"
-        $failCount++
-        $failedFiles += $file.Path
     }
-}
 }
 
 Write-Host ""
