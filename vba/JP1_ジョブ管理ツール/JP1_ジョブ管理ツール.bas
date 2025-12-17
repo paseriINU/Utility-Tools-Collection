@@ -426,7 +426,7 @@ Private Sub ParseJobListResult(result As String)
                 ws.Cells(row, COL_CHECK).Value = ""
                 ws.Cells(row, COL_ORDER).Value = ""
                 ws.Cells(row, COL_JOBNET_PATH).Value = unitMatch
-                ws.Cells(row, COL_JOBNET_NAME).Value = GetLastPathComponent(unitMatch)
+                ws.Cells(row, COL_JOBNET_NAME).Value = ExtractJobName(line)
                 ws.Cells(row, COL_COMMENT).Value = ExtractComment(line)
 
                 ' チェックボックス用の書式
@@ -463,6 +463,42 @@ Private Function ExtractUnitPath(line As String) As String
         endPos = InStr(startPos, line, ",")
         If endPos > startPos Then
             ExtractUnitPath = Mid(line, startPos, endPos - startPos)
+        End If
+    End If
+End Function
+
+Private Function ExtractJobName(line As String) As String
+    ' unit=/path/to/jobnet,ジョブ名,ty=n から ジョブ名 を抽出
+    ' ajsprintの出力形式: unit=/path,name,ty=type,cm="comment";
+    Dim startPos As Long
+    Dim endPos As Long
+    Dim fields() As String
+    Dim unitPart As String
+
+    ' unit= の後ろを取得
+    startPos = InStr(line, "unit=")
+    If startPos > 0 Then
+        unitPart = Mid(line, startPos + 5)
+        ' セミコロンまでを取得
+        endPos = InStr(unitPart, ";")
+        If endPos > 0 Then
+            unitPart = Left(unitPart, endPos - 1)
+        End If
+
+        ' カンマで分割
+        fields = Split(unitPart, ",")
+
+        ' 2番目のフィールドがジョブ名（ty=で始まらない場合）
+        If UBound(fields) >= 1 Then
+            If InStr(fields(1), "ty=") = 0 And InStr(fields(1), "cm=") = 0 Then
+                ExtractJobName = Trim(fields(1))
+                Exit Function
+            End If
+        End If
+
+        ' 2番目がty=の場合はパスの最後の部分を使用
+        If UBound(fields) >= 0 Then
+            ExtractJobName = GetLastPathComponent(fields(0))
         End If
     End If
 End Function
