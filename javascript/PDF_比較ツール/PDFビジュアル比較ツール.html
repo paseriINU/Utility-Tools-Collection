@@ -242,12 +242,30 @@
             background: rgba(76, 175, 80, 0.8);
         }
 
+        .pages-container {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            padding-bottom: 20px;
+        }
+
         .canvas-container {
             position: relative;
         }
 
         .pdf-canvas {
             box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+        }
+
+        .page-label {
+            position: absolute;
+            top: -25px;
+            left: 0;
+            background: rgba(0,0,0,0.7);
+            color: #fff;
+            padding: 3px 10px;
+            border-radius: 3px;
+            font-size: 12px;
         }
 
         .diff-overlay {
@@ -463,9 +481,7 @@
         </div>
 
         <div class="page-nav">
-            <button onclick="prevPage()" id="prevBtn" disabled>◀ 前へ</button>
-            <span class="page-info" id="pageInfo">- / -</span>
-            <button onclick="nextPage()" id="nextBtn" disabled>次へ ▶</button>
+            <span class="page-info" id="pageInfo">全 - ページ</span>
         </div>
     </div>
 
@@ -476,10 +492,7 @@
                 <div>旧PDFをここにドラッグ&ドロップ</div>
                 <div class="sub-text">またはツールバーから選択</div>
             </div>
-            <div class="canvas-container" id="container1" style="display: none;">
-                <canvas id="canvas1" class="pdf-canvas"></canvas>
-                <canvas id="diffOverlay1" class="diff-overlay"></canvas>
-            </div>
+            <div class="pages-container" id="pagesContainer1" style="display: none;"></div>
         </div>
         <div class="pdf-panel" id="panel2">
             <div class="no-file-message" id="noFile2">
@@ -487,10 +500,7 @@
                 <div>新PDFをここにドラッグ&ドロップ</div>
                 <div class="sub-text">またはツールバーから選択</div>
             </div>
-            <div class="canvas-container" id="container2" style="display: none;">
-                <canvas id="canvas2" class="pdf-canvas"></canvas>
-                <canvas id="diffOverlay2" class="diff-overlay"></canvas>
-            </div>
+            <div class="pages-container" id="pagesContainer2" style="display: none;"></div>
         </div>
     </div>
 
@@ -508,7 +518,7 @@
             <span>削除: <strong id="statDeleted">0</strong> 箇所</span>
         </div>
         <div class="stat-item" style="margin-left: auto;">
-            <span>このページの差分率: <strong id="diffPercent">0</strong>%</span>
+            <span>全体の差分率: <strong id="diffPercent">0</strong>%</span>
         </div>
     </div>
 
@@ -538,10 +548,9 @@
     <script>
         let pdf1 = null;
         let pdf2 = null;
-        let currentPage = 1;
         let totalPages = 1;
         let currentZoom = 1;
-        let diffData = {};
+        let totalStats = { changed: 0, added: 0, deleted: 0, diffPixels: 0, totalPixels: 0 };
 
         // スクロール同期
         const panel1 = document.getElementById('panel1');
@@ -654,36 +663,84 @@
             showLoading('比較を実行中...');
 
             totalPages = Math.max(pdf1.numPages, pdf2.numPages);
-            currentPage = 1;
-            diffData = {};
+            totalStats = { changed: 0, added: 0, deleted: 0, diffPixels: 0, totalPixels: 0 };
 
-            // 最初のページを表示
-            await renderPage(currentPage);
+            // コンテナをクリアして準備
+            const container1 = document.getElementById('pagesContainer1');
+            const container2 = document.getElementById('pagesContainer2');
+            container1.innerHTML = '';
+            container2.innerHTML = '';
+
+            document.getElementById('noFile1').style.display = 'none';
+            document.getElementById('noFile2').style.display = 'none';
+            container1.style.display = 'flex';
+            container2.style.display = 'flex';
+
+            // 全ページをレンダリング
+            for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
+                showLoading(`ページ ${pageNum} / ${totalPages} を処理中...`);
+                await renderPage(pageNum, container1, container2);
+            }
 
             document.getElementById('statsBar').style.display = 'flex';
             document.getElementById('diffLegend').style.display = 'block';
-            updatePageNav();
+            updatePageInfo();
 
             hideLoading();
         }
 
-        // ページをレンダリング
-        async function renderPage(pageNum) {
-            showLoading(`ページ ${pageNum} を処理中...`);
+        // ページをレンダリング（全ページ表示用）
+        async function renderPage(pageNum, container1, container2) {
+            const scale = currentZoom * 1.5; // 高解像度でレンダリング
 
-            const canvas1 = document.getElementById('canvas1');
-            const canvas2 = document.getElementById('canvas2');
+            // キャンバスコンテナを作成
+            const canvasContainer1 = document.createElement('div');
+            canvasContainer1.className = 'canvas-container';
+            canvasContainer1.id = `container1_page${pageNum}`;
+
+            const canvasContainer2 = document.createElement('div');
+            canvasContainer2.className = 'canvas-container';
+            canvasContainer2.id = `container2_page${pageNum}`;
+
+            // ページラベルを追加
+            const label1 = document.createElement('div');
+            label1.className = 'page-label';
+            label1.textContent = `ページ ${pageNum}`;
+            canvasContainer1.appendChild(label1);
+
+            const label2 = document.createElement('div');
+            label2.className = 'page-label';
+            label2.textContent = `ページ ${pageNum}`;
+            canvasContainer2.appendChild(label2);
+
+            // キャンバスを作成
+            const canvas1 = document.createElement('canvas');
+            canvas1.className = 'pdf-canvas';
+            canvas1.id = `canvas1_page${pageNum}`;
+
+            const canvas2 = document.createElement('canvas');
+            canvas2.className = 'pdf-canvas';
+            canvas2.id = `canvas2_page${pageNum}`;
+
+            // オーバーレイキャンバスを作成
+            const overlay1 = document.createElement('canvas');
+            overlay1.className = 'diff-overlay';
+            overlay1.id = `overlay1_page${pageNum}`;
+
+            const overlay2 = document.createElement('canvas');
+            overlay2.className = 'diff-overlay';
+            overlay2.id = `overlay2_page${pageNum}`;
+
+            canvasContainer1.appendChild(canvas1);
+            canvasContainer1.appendChild(overlay1);
+            canvasContainer2.appendChild(canvas2);
+            canvasContainer2.appendChild(overlay2);
+
+            container1.appendChild(canvasContainer1);
+            container2.appendChild(canvasContainer2);
+
             const ctx1 = canvas1.getContext('2d');
             const ctx2 = canvas2.getContext('2d');
-            const overlay1 = document.getElementById('diffOverlay1');
-            const overlay2 = document.getElementById('diffOverlay2');
-
-            document.getElementById('noFile1').style.display = 'none';
-            document.getElementById('noFile2').style.display = 'none';
-            document.getElementById('container1').style.display = 'block';
-            document.getElementById('container2').style.display = 'block';
-
-            const scale = currentZoom * 1.5; // 高解像度でレンダリング
 
             // PDF1をレンダリング
             if (pageNum <= pdf1.numPages) {
@@ -723,8 +780,6 @@
 
             // 差分を検出してハイライト
             await detectAndHighlightDiff(canvas1, canvas2, overlay1, overlay2);
-
-            hideLoading();
         }
 
         // 差分検出とハイライト
@@ -817,40 +872,31 @@
                 }
             }
 
+            // 統計を累積
+            totalStats.changed += changedBlocks;
+            totalStats.added += addedBlocks;
+            totalStats.deleted += deletedBlocks;
+            totalStats.diffPixels += diffPixels;
+            totalStats.totalPixels += totalPixels;
+
             // 統計を更新
-            document.getElementById('statChanged').textContent = changedBlocks;
-            document.getElementById('statAdded').textContent = addedBlocks;
-            document.getElementById('statDeleted').textContent = deletedBlocks;
-            document.getElementById('diffPercent').textContent = ((diffPixels / totalPixels) * 100).toFixed(1);
+            document.getElementById('statChanged').textContent = totalStats.changed;
+            document.getElementById('statAdded').textContent = totalStats.added;
+            document.getElementById('statDeleted').textContent = totalStats.deleted;
+            const diffPercent = totalStats.totalPixels > 0 ? (totalStats.diffPixels / totalStats.totalPixels) * 100 : 0;
+            document.getElementById('diffPercent').textContent = diffPercent.toFixed(1);
         }
 
-        // ページナビゲーション
-        function updatePageNav() {
-            document.getElementById('pageInfo').textContent = `${currentPage} / ${totalPages}`;
-            document.getElementById('prevBtn').disabled = currentPage <= 1;
-            document.getElementById('nextBtn').disabled = currentPage >= totalPages;
+        // ページ情報を更新
+        function updatePageInfo() {
+            document.getElementById('pageInfo').textContent = `全 ${totalPages} ページ`;
         }
 
-        async function prevPage() {
-            if (currentPage > 1) {
-                currentPage--;
-                await renderPage(currentPage);
-                updatePageNav();
-            }
-        }
-
-        async function nextPage() {
-            if (currentPage < totalPages) {
-                currentPage++;
-                await renderPage(currentPage);
-                updatePageNav();
-            }
-        }
-
+        // ズーム変更時に全ページを再レンダリング
         async function changeZoom() {
             currentZoom = parseFloat(document.getElementById('zoomLevel').value);
             if (pdf1 && pdf2) {
-                await renderPage(currentPage);
+                await compare();
             }
         }
 
@@ -863,11 +909,6 @@
             document.getElementById('loadingOverlay').style.display = 'none';
         }
 
-        // キーボードショートカット
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'ArrowLeft') prevPage();
-            if (e.key === 'ArrowRight') nextPage();
-        });
     </script>
 </body>
 </html>
