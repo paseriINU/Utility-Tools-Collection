@@ -18,12 +18,14 @@ Public Sub GetJobList()
 
     If config Is Nothing Then Exit Sub
 
-    ' パスワード入力
-    If config("RemotePassword") = "" Then
-        config("RemotePassword") = InputBox("リモートサーバのパスワードを入力してください:", "パスワード入力")
+    ' パスワード入力（リモートモードの場合のみリモートパスワードが必要）
+    If config("ExecMode") <> "ローカル" Then
         If config("RemotePassword") = "" Then
-            MsgBox "パスワードが入力されませんでした。", vbExclamation
-            Exit Sub
+            config("RemotePassword") = InputBox("リモートサーバのパスワードを入力してください:", "パスワード入力")
+            If config("RemotePassword") = "" Then
+                MsgBox "パスワードが入力されませんでした。", vbExclamation
+                Exit Sub
+            End If
         End If
     End If
 
@@ -64,69 +66,92 @@ Private Function BuildGetJobListScript(config As Object) As String
     script = script & "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8" & vbCrLf
     script = script & vbCrLf
 
-    ' 認証情報
-    script = script & "$securePass = ConvertTo-SecureString '" & EscapePSString(config("RemotePassword")) & "' -AsPlainText -Force" & vbCrLf
-    script = script & "$cred = New-Object System.Management.Automation.PSCredential('" & config("RemoteUser") & "', $securePass)" & vbCrLf
-    script = script & vbCrLf
+    ' ローカルモードとリモートモードで処理を分岐
+    If config("ExecMode") = "ローカル" Then
+        ' ローカル実行モード（WinRM不使用）
+        script = script & "try {" & vbCrLf
+        script = script & "  # JP1コマンドパスの検出" & vbCrLf
+        script = script & "  $ajsprintPath = 'C:\Program Files\HITACHI\JP1AJS3\bin\ajsprint.exe'" & vbCrLf
+        script = script & "  if (-not (Test-Path $ajsprintPath)) {" & vbCrLf
+        script = script & "    $ajsprintPath = 'C:\Program Files\Hitachi\JP1AJS2\bin\ajsprint.exe'" & vbCrLf
+        script = script & "  }" & vbCrLf
+        script = script & "  if (-not (Test-Path $ajsprintPath)) {" & vbCrLf
+        script = script & "    Write-Output ""ERROR: JP1コマンドが見つかりません。このPCにJP1/AJS3がインストールされているか確認してください。""" & vbCrLf
+        script = script & "    exit 1" & vbCrLf
+        script = script & "  }" & vbCrLf
+        script = script & vbCrLf
+        script = script & "  # ローカルでajsprintを実行" & vbCrLf
+        script = script & "  $result = & $ajsprintPath -h localhost -u '" & config("JP1User") & "' -p '" & EscapePSString(config("JP1Password")) & "' -F '" & config("RootPath") & "' -R 2>&1" & vbCrLf
+        script = script & "  $result | ForEach-Object { Write-Output $_ }" & vbCrLf
+        script = script & "} catch {" & vbCrLf
+        script = script & "  Write-Output ""ERROR: $($_.Exception.Message)""" & vbCrLf
+        script = script & "}" & vbCrLf
+    Else
+        ' リモート実行モード（WinRM使用）
+        ' 認証情報
+        script = script & "$securePass = ConvertTo-SecureString '" & EscapePSString(config("RemotePassword")) & "' -AsPlainText -Force" & vbCrLf
+        script = script & "$cred = New-Object System.Management.Automation.PSCredential('" & config("RemoteUser") & "', $securePass)" & vbCrLf
+        script = script & vbCrLf
 
-    ' WinRM設定の保存と自動設定
-    script = script & "$originalTrustedHosts = $null" & vbCrLf
-    script = script & "$winrmConfigChanged = $false" & vbCrLf
-    script = script & "$winrmServiceWasStarted = $false" & vbCrLf
-    script = script & vbCrLf
+        ' WinRM設定の保存と自動設定
+        script = script & "$originalTrustedHosts = $null" & vbCrLf
+        script = script & "$winrmConfigChanged = $false" & vbCrLf
+        script = script & "$winrmServiceWasStarted = $false" & vbCrLf
+        script = script & vbCrLf
 
-    script = script & "try {" & vbCrLf
-    script = script & "  # 現在のTrustedHostsを取得" & vbCrLf
-    script = script & "  $originalTrustedHosts = (Get-Item WSMan:\localhost\Client\TrustedHosts -ErrorAction SilentlyContinue).Value" & vbCrLf
-    script = script & vbCrLf
-    script = script & "  # WinRMサービスの起動確認" & vbCrLf
-    script = script & "  $winrmService = Get-Service -Name WinRM -ErrorAction SilentlyContinue" & vbCrLf
-    script = script & "  if ($winrmService.Status -ne 'Running') {" & vbCrLf
-    script = script & "    Start-Service -Name WinRM -ErrorAction Stop" & vbCrLf
-    script = script & "    $winrmServiceWasStarted = $true" & vbCrLf
-    script = script & "  }" & vbCrLf
-    script = script & vbCrLf
-    script = script & "  # TrustedHostsに接続先を追加（必要な場合のみ）" & vbCrLf
-    script = script & "  if ($originalTrustedHosts -notmatch '" & config("JP1Server") & "') {" & vbCrLf
-    script = script & "    if ($originalTrustedHosts) {" & vbCrLf
-    script = script & "      Set-Item WSMan:\localhost\Client\TrustedHosts -Value ""$originalTrustedHosts," & config("JP1Server") & """ -Force -Confirm:`$false" & vbCrLf
-    script = script & "    } else {" & vbCrLf
-    script = script & "      Set-Item WSMan:\localhost\Client\TrustedHosts -Value '" & config("JP1Server") & "' -Force -Confirm:`$false" & vbCrLf
-    script = script & "    }" & vbCrLf
-    script = script & "    $winrmConfigChanged = $true" & vbCrLf
-    script = script & "  }" & vbCrLf
-    script = script & vbCrLf
+        script = script & "try {" & vbCrLf
+        script = script & "  # 現在のTrustedHostsを取得" & vbCrLf
+        script = script & "  $originalTrustedHosts = (Get-Item WSMan:\localhost\Client\TrustedHosts -ErrorAction SilentlyContinue).Value" & vbCrLf
+        script = script & vbCrLf
+        script = script & "  # WinRMサービスの起動確認" & vbCrLf
+        script = script & "  $winrmService = Get-Service -Name WinRM -ErrorAction SilentlyContinue" & vbCrLf
+        script = script & "  if ($winrmService.Status -ne 'Running') {" & vbCrLf
+        script = script & "    Start-Service -Name WinRM -ErrorAction Stop" & vbCrLf
+        script = script & "    $winrmServiceWasStarted = $true" & vbCrLf
+        script = script & "  }" & vbCrLf
+        script = script & vbCrLf
+        script = script & "  # TrustedHostsに接続先を追加（必要な場合のみ）" & vbCrLf
+        script = script & "  if ($originalTrustedHosts -notmatch '" & config("JP1Server") & "') {" & vbCrLf
+        script = script & "    if ($originalTrustedHosts) {" & vbCrLf
+        script = script & "      Set-Item WSMan:\localhost\Client\TrustedHosts -Value ""$originalTrustedHosts," & config("JP1Server") & """ -Force -Confirm:`$false" & vbCrLf
+        script = script & "    } else {" & vbCrLf
+        script = script & "      Set-Item WSMan:\localhost\Client\TrustedHosts -Value '" & config("JP1Server") & "' -Force -Confirm:`$false" & vbCrLf
+        script = script & "    }" & vbCrLf
+        script = script & "    $winrmConfigChanged = $true" & vbCrLf
+        script = script & "  }" & vbCrLf
+        script = script & vbCrLf
 
-    ' リモート実行
-    script = script & "  $session = New-PSSession -ComputerName '" & config("JP1Server") & "' -Credential $cred -ErrorAction Stop" & vbCrLf
-    script = script & vbCrLf
-    script = script & "  $result = Invoke-Command -Session $session -ScriptBlock {" & vbCrLf
-    script = script & "    param($jp1User, $jp1Pass, $rootPath)" & vbCrLf
-    script = script & "    $ajsprintPath = 'C:\Program Files\HITACHI\JP1AJS3\bin\ajsprint.exe'" & vbCrLf
-    script = script & "    if (-not (Test-Path $ajsprintPath)) {" & vbCrLf
-    script = script & "      $ajsprintPath = 'C:\Program Files\Hitachi\JP1AJS2\bin\ajsprint.exe'" & vbCrLf
-    script = script & "    }" & vbCrLf
-    script = script & "    & $ajsprintPath -h localhost -u $jp1User -p $jp1Pass -F $rootPath -R 2>&1" & vbCrLf
-    script = script & "  } -ArgumentList '" & config("JP1User") & "', '" & EscapePSString(config("JP1Password")) & "', '" & config("RootPath") & "'" & vbCrLf
-    script = script & vbCrLf
-    script = script & "  Remove-PSSession $session" & vbCrLf
-    script = script & vbCrLf
-    script = script & "  $result | ForEach-Object { Write-Output $_ }" & vbCrLf
-    script = script & "} catch {" & vbCrLf
-    script = script & "  Write-Output ""ERROR: $($_.Exception.Message)""" & vbCrLf
-    script = script & "} finally {" & vbCrLf
-    script = script & "  # WinRM設定の復元" & vbCrLf
-    script = script & "  if ($winrmConfigChanged) {" & vbCrLf
-    script = script & "    if ($originalTrustedHosts) {" & vbCrLf
-    script = script & "      Set-Item WSMan:\localhost\Client\TrustedHosts -Value $originalTrustedHosts -Force -Confirm:`$false -ErrorAction SilentlyContinue" & vbCrLf
-    script = script & "    } else {" & vbCrLf
-    script = script & "      Clear-Item WSMan:\localhost\Client\TrustedHosts -Force -Confirm:`$false -ErrorAction SilentlyContinue" & vbCrLf
-    script = script & "    }" & vbCrLf
-    script = script & "  }" & vbCrLf
-    script = script & "  if ($winrmServiceWasStarted) {" & vbCrLf
-    script = script & "    Stop-Service -Name WinRM -Force -ErrorAction SilentlyContinue" & vbCrLf
-    script = script & "  }" & vbCrLf
-    script = script & "}" & vbCrLf
+        ' リモート実行
+        script = script & "  $session = New-PSSession -ComputerName '" & config("JP1Server") & "' -Credential $cred -ErrorAction Stop" & vbCrLf
+        script = script & vbCrLf
+        script = script & "  $result = Invoke-Command -Session $session -ScriptBlock {" & vbCrLf
+        script = script & "    param($jp1User, $jp1Pass, $rootPath)" & vbCrLf
+        script = script & "    $ajsprintPath = 'C:\Program Files\HITACHI\JP1AJS3\bin\ajsprint.exe'" & vbCrLf
+        script = script & "    if (-not (Test-Path $ajsprintPath)) {" & vbCrLf
+        script = script & "      $ajsprintPath = 'C:\Program Files\Hitachi\JP1AJS2\bin\ajsprint.exe'" & vbCrLf
+        script = script & "    }" & vbCrLf
+        script = script & "    & $ajsprintPath -h localhost -u $jp1User -p $jp1Pass -F $rootPath -R 2>&1" & vbCrLf
+        script = script & "  } -ArgumentList '" & config("JP1User") & "', '" & EscapePSString(config("JP1Password")) & "', '" & config("RootPath") & "'" & vbCrLf
+        script = script & vbCrLf
+        script = script & "  Remove-PSSession $session" & vbCrLf
+        script = script & vbCrLf
+        script = script & "  $result | ForEach-Object { Write-Output $_ }" & vbCrLf
+        script = script & "} catch {" & vbCrLf
+        script = script & "  Write-Output ""ERROR: $($_.Exception.Message)""" & vbCrLf
+        script = script & "} finally {" & vbCrLf
+        script = script & "  # WinRM設定の復元" & vbCrLf
+        script = script & "  if ($winrmConfigChanged) {" & vbCrLf
+        script = script & "    if ($originalTrustedHosts) {" & vbCrLf
+        script = script & "      Set-Item WSMan:\localhost\Client\TrustedHosts -Value $originalTrustedHosts -Force -Confirm:`$false -ErrorAction SilentlyContinue" & vbCrLf
+        script = script & "    } else {" & vbCrLf
+        script = script & "      Clear-Item WSMan:\localhost\Client\TrustedHosts -Force -Confirm:`$false -ErrorAction SilentlyContinue" & vbCrLf
+        script = script & "    }" & vbCrLf
+        script = script & "  }" & vbCrLf
+        script = script & "  if ($winrmServiceWasStarted) {" & vbCrLf
+        script = script & "    Stop-Service -Name WinRM -Force -ErrorAction SilentlyContinue" & vbCrLf
+        script = script & "  }" & vbCrLf
+        script = script & "}" & vbCrLf
+    End If
 
     BuildGetJobListScript = script
 End Function
@@ -280,12 +305,14 @@ Public Sub ExecuteCheckedJobs()
 
     If config Is Nothing Then Exit Sub
 
-    ' パスワード入力
-    If config("RemotePassword") = "" Then
-        config("RemotePassword") = InputBox("リモートサーバのパスワードを入力してください:", "パスワード入力")
+    ' パスワード入力（リモートモードの場合のみリモートパスワードが必要）
+    If config("ExecMode") <> "ローカル" Then
         If config("RemotePassword") = "" Then
-            MsgBox "パスワードが入力されませんでした。", vbExclamation
-            Exit Sub
+            config("RemotePassword") = InputBox("リモートサーバのパスワードを入力してください:", "パスワード入力")
+            If config("RemotePassword") = "" Then
+                MsgBox "パスワードが入力されませんでした。", vbExclamation
+                Exit Sub
+            End If
         End If
     End If
 
@@ -496,123 +523,193 @@ Private Function BuildExecuteJobScript(config As Object, jobnetPath As String, w
     script = script & "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8" & vbCrLf
     script = script & vbCrLf
 
-    ' 認証情報
-    script = script & "$securePass = ConvertTo-SecureString '" & EscapePSString(config("RemotePassword")) & "' -AsPlainText -Force" & vbCrLf
-    script = script & "$cred = New-Object System.Management.Automation.PSCredential('" & config("RemoteUser") & "', $securePass)" & vbCrLf
-    script = script & vbCrLf
-
-    ' WinRM設定の保存と自動設定
-    script = script & "$originalTrustedHosts = $null" & vbCrLf
-    script = script & "$winrmConfigChanged = $false" & vbCrLf
-    script = script & "$winrmServiceWasStarted = $false" & vbCrLf
-    script = script & vbCrLf
-
-    script = script & "try {" & vbCrLf
-    script = script & "  # 現在のTrustedHostsを取得" & vbCrLf
-    script = script & "  $originalTrustedHosts = (Get-Item WSMan:\localhost\Client\TrustedHosts -ErrorAction SilentlyContinue).Value" & vbCrLf
-    script = script & vbCrLf
-    script = script & "  # WinRMサービスの起動確認" & vbCrLf
-    script = script & "  $winrmService = Get-Service -Name WinRM -ErrorAction SilentlyContinue" & vbCrLf
-    script = script & "  if ($winrmService.Status -ne 'Running') {" & vbCrLf
-    script = script & "    Start-Service -Name WinRM -ErrorAction Stop" & vbCrLf
-    script = script & "    $winrmServiceWasStarted = $true" & vbCrLf
-    script = script & "  }" & vbCrLf
-    script = script & vbCrLf
-    script = script & "  # TrustedHostsに接続先を追加（必要な場合のみ）" & vbCrLf
-    script = script & "  if ($originalTrustedHosts -notmatch '" & config("JP1Server") & "') {" & vbCrLf
-    script = script & "    if ($originalTrustedHosts) {" & vbCrLf
-    script = script & "      Set-Item WSMan:\localhost\Client\TrustedHosts -Value ""$originalTrustedHosts," & config("JP1Server") & """ -Force -Confirm:`$false" & vbCrLf
-    script = script & "    } else {" & vbCrLf
-    script = script & "      Set-Item WSMan:\localhost\Client\TrustedHosts -Value '" & config("JP1Server") & "' -Force -Confirm:`$false" & vbCrLf
-    script = script & "    }" & vbCrLf
-    script = script & "    $winrmConfigChanged = $true" & vbCrLf
-    script = script & "  }" & vbCrLf
-    script = script & vbCrLf
-
-    ' リモート実行
-    script = script & "  $session = New-PSSession -ComputerName '" & config("JP1Server") & "' -Credential $cred -ErrorAction Stop" & vbCrLf
-    script = script & vbCrLf
-
-    ' ajsentry実行
-    script = script & "  $entryResult = Invoke-Command -Session $session -ScriptBlock {" & vbCrLf
-    script = script & "    param($jp1User, $jp1Pass, $jobnetPath)" & vbCrLf
-    script = script & "    $ajsentryPath = 'C:\Program Files\HITACHI\JP1AJS3\bin\ajsentry.exe'" & vbCrLf
-    script = script & "    if (-not (Test-Path $ajsentryPath)) { $ajsentryPath = 'C:\Program Files\Hitachi\JP1AJS2\bin\ajsentry.exe' }" & vbCrLf
-    script = script & "    $output = & $ajsentryPath -h localhost -u $jp1User -p $jp1Pass -F $jobnetPath 2>&1" & vbCrLf
-    script = script & "    @{ ExitCode = $LASTEXITCODE; Output = ($output -join ' ') }" & vbCrLf
-    script = script & "  } -ArgumentList '" & config("JP1User") & "', '" & EscapePSString(config("JP1Password")) & "', '" & jobnetPath & "'" & vbCrLf
-    script = script & vbCrLf
-
-    script = script & "  if ($entryResult.ExitCode -ne 0) {" & vbCrLf
-    script = script & "    Write-Output ""RESULT_STATUS:起動失敗""" & vbCrLf
-    script = script & "    Write-Output ""RESULT_MESSAGE:$($entryResult.Output)""" & vbCrLf
-    script = script & "    Remove-PSSession $session" & vbCrLf
-    script = script & "    exit" & vbCrLf
-    script = script & "  }" & vbCrLf
-    script = script & vbCrLf
-
-    If waitCompletion Then
-        ' 完了待ち
-        script = script & "  $timeout = " & config("Timeout") & vbCrLf
-        script = script & "  $interval = " & config("PollingInterval") & vbCrLf
-        script = script & "  $startTime = Get-Date" & vbCrLf
-        script = script & "  $isRunning = $true" & vbCrLf
+    ' ローカルモードとリモートモードで処理を分岐
+    If config("ExecMode") = "ローカル" Then
+        ' ローカル実行モード（WinRM不使用）
+        script = script & "try {" & vbCrLf
+        script = script & "  # JP1コマンドパスの検出" & vbCrLf
+        script = script & "  $jp1BinPath = 'C:\Program Files\HITACHI\JP1AJS3\bin'" & vbCrLf
+        script = script & "  if (-not (Test-Path ""$jp1BinPath\ajsentry.exe"")) {" & vbCrLf
+        script = script & "    $jp1BinPath = 'C:\Program Files\Hitachi\JP1AJS2\bin'" & vbCrLf
+        script = script & "  }" & vbCrLf
+        script = script & "  if (-not (Test-Path ""$jp1BinPath\ajsentry.exe"")) {" & vbCrLf
+        script = script & "    Write-Output ""ERROR: JP1コマンドが見つかりません。このPCにJP1/AJS3がインストールされているか確認してください。""" & vbCrLf
+        script = script & "    exit 1" & vbCrLf
+        script = script & "  }" & vbCrLf
         script = script & vbCrLf
-        script = script & "  while ($isRunning) {" & vbCrLf
-        script = script & "    if ($timeout -gt 0 -and ((Get-Date) - $startTime).TotalSeconds -ge $timeout) {" & vbCrLf
-        script = script & "      Write-Output ""RESULT_STATUS:タイムアウト""" & vbCrLf
-        script = script & "      break" & vbCrLf
-        script = script & "    }" & vbCrLf
+        script = script & "  # ajsentry実行" & vbCrLf
+        script = script & "  $output = & ""$jp1BinPath\ajsentry.exe"" -h localhost -u '" & config("JP1User") & "' -p '" & EscapePSString(config("JP1Password")) & "' -F '" & jobnetPath & "' 2>&1" & vbCrLf
+        script = script & "  $exitCode = $LASTEXITCODE" & vbCrLf
         script = script & vbCrLf
-        script = script & "    $statusResult = Invoke-Command -Session $session -ScriptBlock {" & vbCrLf
-        script = script & "      param($jp1User, $jp1Pass, $jobnetPath)" & vbCrLf
-        script = script & "      $ajsstatusPath = 'C:\Program Files\HITACHI\JP1AJS3\bin\ajsstatus.exe'" & vbCrLf
-        script = script & "      if (-not (Test-Path $ajsstatusPath)) { $ajsstatusPath = 'C:\Program Files\Hitachi\JP1AJS2\bin\ajsstatus.exe' }" & vbCrLf
-        script = script & "      & $ajsstatusPath -h localhost -u $jp1User -p $jp1Pass -F $jobnetPath 2>&1" & vbCrLf
-        script = script & "    } -ArgumentList '" & config("JP1User") & "', '" & EscapePSString(config("JP1Password")) & "', '" & jobnetPath & "'" & vbCrLf
-        script = script & vbCrLf
-        script = script & "    $statusStr = ($statusResult -join ' ').ToLower()" & vbCrLf
-        script = script & "    if ($statusStr -match 'ended abnormally|abnormal end|abend|killed|failed') {" & vbCrLf
-        script = script & "      Write-Output ""RESULT_STATUS:異常終了""" & vbCrLf
-        script = script & "      $isRunning = $false" & vbCrLf
-        script = script & "    } elseif ($statusStr -match 'end normally|ended normally|normal end|completed') {" & vbCrLf
-        script = script & "      Write-Output ""RESULT_STATUS:正常終了""" & vbCrLf
-        script = script & "      $isRunning = $false" & vbCrLf
-        script = script & "    } else {" & vbCrLf
-        script = script & "      Start-Sleep -Seconds $interval" & vbCrLf
-        script = script & "    }" & vbCrLf
+        script = script & "  if ($exitCode -ne 0) {" & vbCrLf
+        script = script & "    Write-Output ""RESULT_STATUS:起動失敗""" & vbCrLf
+        script = script & "    Write-Output ""RESULT_MESSAGE:$($output -join ' ')""" & vbCrLf
+        script = script & "    exit" & vbCrLf
         script = script & "  }" & vbCrLf
         script = script & vbCrLf
 
-        ' 詳細取得
-        script = script & "  $showResult = Invoke-Command -Session $session -ScriptBlock {" & vbCrLf
-        script = script & "    param($jp1User, $jp1Pass, $jobnetPath)" & vbCrLf
-        script = script & "    $ajsshowPath = 'C:\Program Files\HITACHI\JP1AJS3\bin\ajsshow.exe'" & vbCrLf
-        script = script & "    if (-not (Test-Path $ajsshowPath)) { $ajsshowPath = 'C:\Program Files\Hitachi\JP1AJS2\bin\ajsshow.exe' }" & vbCrLf
-        script = script & "    if (Test-Path $ajsshowPath) { & $ajsshowPath -h localhost -u $jp1User -p $jp1Pass -F $jobnetPath -E 2>&1 }" & vbCrLf
-        script = script & "  } -ArgumentList '" & config("JP1User") & "', '" & EscapePSString(config("JP1Password")) & "', '" & jobnetPath & "'" & vbCrLf
-        script = script & "  Write-Output ""RESULT_MESSAGE:$($showResult -join ' ')""" & vbCrLf
-    Else
-        script = script & "  Write-Output ""RESULT_STATUS:起動成功""" & vbCrLf
-        script = script & "  Write-Output ""RESULT_MESSAGE:$($entryResult.Output)""" & vbCrLf
-    End If
+        If waitCompletion Then
+            ' 完了待ち
+            script = script & "  $timeout = " & config("Timeout") & vbCrLf
+            script = script & "  $interval = " & config("PollingInterval") & vbCrLf
+            script = script & "  $startTime = Get-Date" & vbCrLf
+            script = script & "  $isRunning = $true" & vbCrLf
+            script = script & vbCrLf
+            script = script & "  while ($isRunning) {" & vbCrLf
+            script = script & "    if ($timeout -gt 0 -and ((Get-Date) - $startTime).TotalSeconds -ge $timeout) {" & vbCrLf
+            script = script & "      Write-Output ""RESULT_STATUS:タイムアウト""" & vbCrLf
+            script = script & "      break" & vbCrLf
+            script = script & "    }" & vbCrLf
+            script = script & vbCrLf
+            script = script & "    $statusResult = & ""$jp1BinPath\ajsstatus.exe"" -h localhost -u '" & config("JP1User") & "' -p '" & EscapePSString(config("JP1Password")) & "' -F '" & jobnetPath & "' 2>&1" & vbCrLf
+            script = script & "    $statusStr = ($statusResult -join ' ').ToLower()" & vbCrLf
+            script = script & vbCrLf
+            script = script & "    if ($statusStr -match 'ended abnormally|abnormal end|abend|killed|failed') {" & vbCrLf
+            script = script & "      Write-Output ""RESULT_STATUS:異常終了""" & vbCrLf
+            script = script & "      $isRunning = $false" & vbCrLf
+            script = script & "    } elseif ($statusStr -match 'end normally|ended normally|normal end|completed') {" & vbCrLf
+            script = script & "      Write-Output ""RESULT_STATUS:正常終了""" & vbCrLf
+            script = script & "      $isRunning = $false" & vbCrLf
+            script = script & "    } else {" & vbCrLf
+            script = script & "      Start-Sleep -Seconds $interval" & vbCrLf
+            script = script & "    }" & vbCrLf
+            script = script & "  }" & vbCrLf
+            script = script & vbCrLf
 
-    script = script & "  Remove-PSSession $session" & vbCrLf
-    script = script & "} catch {" & vbCrLf
-    script = script & "  Write-Output ""ERROR: $($_.Exception.Message)""" & vbCrLf
-    script = script & "} finally {" & vbCrLf
-    script = script & "  # WinRM設定の復元" & vbCrLf
-    script = script & "  if ($winrmConfigChanged) {" & vbCrLf
-    script = script & "    if ($originalTrustedHosts) {" & vbCrLf
-    script = script & "      Set-Item WSMan:\localhost\Client\TrustedHosts -Value $originalTrustedHosts -Force -Confirm:`$false -ErrorAction SilentlyContinue" & vbCrLf
-    script = script & "    } else {" & vbCrLf
-    script = script & "      Clear-Item WSMan:\localhost\Client\TrustedHosts -Force -Confirm:`$false -ErrorAction SilentlyContinue" & vbCrLf
-    script = script & "    }" & vbCrLf
-    script = script & "  }" & vbCrLf
-    script = script & "  if ($winrmServiceWasStarted) {" & vbCrLf
-    script = script & "    Stop-Service -Name WinRM -Force -ErrorAction SilentlyContinue" & vbCrLf
-    script = script & "  }" & vbCrLf
-    script = script & "}" & vbCrLf
+            ' 詳細取得
+            script = script & "  $ajsshowPath = ""$jp1BinPath\ajsshow.exe""" & vbCrLf
+            script = script & "  if (Test-Path $ajsshowPath) {" & vbCrLf
+            script = script & "    $showResult = & $ajsshowPath -h localhost -u '" & config("JP1User") & "' -p '" & EscapePSString(config("JP1Password")) & "' -F '" & jobnetPath & "' -E 2>&1" & vbCrLf
+            script = script & "    Write-Output ""RESULT_MESSAGE:$($showResult -join ' ')""" & vbCrLf
+            script = script & "  }" & vbCrLf
+        Else
+            script = script & "  Write-Output ""RESULT_STATUS:起動成功""" & vbCrLf
+            script = script & "  Write-Output ""RESULT_MESSAGE:$($output -join ' ')""" & vbCrLf
+        End If
+
+        script = script & "} catch {" & vbCrLf
+        script = script & "  Write-Output ""ERROR: $($_.Exception.Message)""" & vbCrLf
+        script = script & "}" & vbCrLf
+    Else
+        ' リモート実行モード（WinRM使用）
+        ' 認証情報
+        script = script & "$securePass = ConvertTo-SecureString '" & EscapePSString(config("RemotePassword")) & "' -AsPlainText -Force" & vbCrLf
+        script = script & "$cred = New-Object System.Management.Automation.PSCredential('" & config("RemoteUser") & "', $securePass)" & vbCrLf
+        script = script & vbCrLf
+
+        ' WinRM設定の保存と自動設定
+        script = script & "$originalTrustedHosts = $null" & vbCrLf
+        script = script & "$winrmConfigChanged = $false" & vbCrLf
+        script = script & "$winrmServiceWasStarted = $false" & vbCrLf
+        script = script & vbCrLf
+
+        script = script & "try {" & vbCrLf
+        script = script & "  # 現在のTrustedHostsを取得" & vbCrLf
+        script = script & "  $originalTrustedHosts = (Get-Item WSMan:\localhost\Client\TrustedHosts -ErrorAction SilentlyContinue).Value" & vbCrLf
+        script = script & vbCrLf
+        script = script & "  # WinRMサービスの起動確認" & vbCrLf
+        script = script & "  $winrmService = Get-Service -Name WinRM -ErrorAction SilentlyContinue" & vbCrLf
+        script = script & "  if ($winrmService.Status -ne 'Running') {" & vbCrLf
+        script = script & "    Start-Service -Name WinRM -ErrorAction Stop" & vbCrLf
+        script = script & "    $winrmServiceWasStarted = $true" & vbCrLf
+        script = script & "  }" & vbCrLf
+        script = script & vbCrLf
+        script = script & "  # TrustedHostsに接続先を追加（必要な場合のみ）" & vbCrLf
+        script = script & "  if ($originalTrustedHosts -notmatch '" & config("JP1Server") & "') {" & vbCrLf
+        script = script & "    if ($originalTrustedHosts) {" & vbCrLf
+        script = script & "      Set-Item WSMan:\localhost\Client\TrustedHosts -Value ""$originalTrustedHosts," & config("JP1Server") & """ -Force -Confirm:`$false" & vbCrLf
+        script = script & "    } else {" & vbCrLf
+        script = script & "      Set-Item WSMan:\localhost\Client\TrustedHosts -Value '" & config("JP1Server") & "' -Force -Confirm:`$false" & vbCrLf
+        script = script & "    }" & vbCrLf
+        script = script & "    $winrmConfigChanged = $true" & vbCrLf
+        script = script & "  }" & vbCrLf
+        script = script & vbCrLf
+
+        ' リモート実行
+        script = script & "  $session = New-PSSession -ComputerName '" & config("JP1Server") & "' -Credential $cred -ErrorAction Stop" & vbCrLf
+        script = script & vbCrLf
+
+        ' ajsentry実行
+        script = script & "  $entryResult = Invoke-Command -Session $session -ScriptBlock {" & vbCrLf
+        script = script & "    param($jp1User, $jp1Pass, $jobnetPath)" & vbCrLf
+        script = script & "    $ajsentryPath = 'C:\Program Files\HITACHI\JP1AJS3\bin\ajsentry.exe'" & vbCrLf
+        script = script & "    if (-not (Test-Path $ajsentryPath)) { $ajsentryPath = 'C:\Program Files\Hitachi\JP1AJS2\bin\ajsentry.exe' }" & vbCrLf
+        script = script & "    $output = & $ajsentryPath -h localhost -u $jp1User -p $jp1Pass -F $jobnetPath 2>&1" & vbCrLf
+        script = script & "    @{ ExitCode = $LASTEXITCODE; Output = ($output -join ' ') }" & vbCrLf
+        script = script & "  } -ArgumentList '" & config("JP1User") & "', '" & EscapePSString(config("JP1Password")) & "', '" & jobnetPath & "'" & vbCrLf
+        script = script & vbCrLf
+
+        script = script & "  if ($entryResult.ExitCode -ne 0) {" & vbCrLf
+        script = script & "    Write-Output ""RESULT_STATUS:起動失敗""" & vbCrLf
+        script = script & "    Write-Output ""RESULT_MESSAGE:$($entryResult.Output)""" & vbCrLf
+        script = script & "    Remove-PSSession $session" & vbCrLf
+        script = script & "    exit" & vbCrLf
+        script = script & "  }" & vbCrLf
+        script = script & vbCrLf
+
+        If waitCompletion Then
+            ' 完了待ち
+            script = script & "  $timeout = " & config("Timeout") & vbCrLf
+            script = script & "  $interval = " & config("PollingInterval") & vbCrLf
+            script = script & "  $startTime = Get-Date" & vbCrLf
+            script = script & "  $isRunning = $true" & vbCrLf
+            script = script & vbCrLf
+            script = script & "  while ($isRunning) {" & vbCrLf
+            script = script & "    if ($timeout -gt 0 -and ((Get-Date) - $startTime).TotalSeconds -ge $timeout) {" & vbCrLf
+            script = script & "      Write-Output ""RESULT_STATUS:タイムアウト""" & vbCrLf
+            script = script & "      break" & vbCrLf
+            script = script & "    }" & vbCrLf
+            script = script & vbCrLf
+            script = script & "    $statusResult = Invoke-Command -Session $session -ScriptBlock {" & vbCrLf
+            script = script & "      param($jp1User, $jp1Pass, $jobnetPath)" & vbCrLf
+            script = script & "      $ajsstatusPath = 'C:\Program Files\HITACHI\JP1AJS3\bin\ajsstatus.exe'" & vbCrLf
+            script = script & "      if (-not (Test-Path $ajsstatusPath)) { $ajsstatusPath = 'C:\Program Files\Hitachi\JP1AJS2\bin\ajsstatus.exe' }" & vbCrLf
+            script = script & "      & $ajsstatusPath -h localhost -u $jp1User -p $jp1Pass -F $jobnetPath 2>&1" & vbCrLf
+            script = script & "    } -ArgumentList '" & config("JP1User") & "', '" & EscapePSString(config("JP1Password")) & "', '" & jobnetPath & "'" & vbCrLf
+            script = script & vbCrLf
+            script = script & "    $statusStr = ($statusResult -join ' ').ToLower()" & vbCrLf
+            script = script & "    if ($statusStr -match 'ended abnormally|abnormal end|abend|killed|failed') {" & vbCrLf
+            script = script & "      Write-Output ""RESULT_STATUS:異常終了""" & vbCrLf
+            script = script & "      $isRunning = $false" & vbCrLf
+            script = script & "    } elseif ($statusStr -match 'end normally|ended normally|normal end|completed') {" & vbCrLf
+            script = script & "      Write-Output ""RESULT_STATUS:正常終了""" & vbCrLf
+            script = script & "      $isRunning = $false" & vbCrLf
+            script = script & "    } else {" & vbCrLf
+            script = script & "      Start-Sleep -Seconds $interval" & vbCrLf
+            script = script & "    }" & vbCrLf
+            script = script & "  }" & vbCrLf
+            script = script & vbCrLf
+
+            ' 詳細取得
+            script = script & "  $showResult = Invoke-Command -Session $session -ScriptBlock {" & vbCrLf
+            script = script & "    param($jp1User, $jp1Pass, $jobnetPath)" & vbCrLf
+            script = script & "    $ajsshowPath = 'C:\Program Files\HITACHI\JP1AJS3\bin\ajsshow.exe'" & vbCrLf
+            script = script & "    if (-not (Test-Path $ajsshowPath)) { $ajsshowPath = 'C:\Program Files\Hitachi\JP1AJS2\bin\ajsshow.exe' }" & vbCrLf
+            script = script & "    if (Test-Path $ajsshowPath) { & $ajsshowPath -h localhost -u $jp1User -p $jp1Pass -F $jobnetPath -E 2>&1 }" & vbCrLf
+            script = script & "  } -ArgumentList '" & config("JP1User") & "', '" & EscapePSString(config("JP1Password")) & "', '" & jobnetPath & "'" & vbCrLf
+            script = script & "  Write-Output ""RESULT_MESSAGE:$($showResult -join ' ')""" & vbCrLf
+        Else
+            script = script & "  Write-Output ""RESULT_STATUS:起動成功""" & vbCrLf
+            script = script & "  Write-Output ""RESULT_MESSAGE:$($entryResult.Output)""" & vbCrLf
+        End If
+
+        script = script & "  Remove-PSSession $session" & vbCrLf
+        script = script & "} catch {" & vbCrLf
+        script = script & "  Write-Output ""ERROR: $($_.Exception.Message)""" & vbCrLf
+        script = script & "} finally {" & vbCrLf
+        script = script & "  # WinRM設定の復元" & vbCrLf
+        script = script & "  if ($winrmConfigChanged) {" & vbCrLf
+        script = script & "    if ($originalTrustedHosts) {" & vbCrLf
+        script = script & "      Set-Item WSMan:\localhost\Client\TrustedHosts -Value $originalTrustedHosts -Force -Confirm:`$false -ErrorAction SilentlyContinue" & vbCrLf
+        script = script & "    } else {" & vbCrLf
+        script = script & "      Clear-Item WSMan:\localhost\Client\TrustedHosts -Force -Confirm:`$false -ErrorAction SilentlyContinue" & vbCrLf
+        script = script & "    }" & vbCrLf
+        script = script & "  }" & vbCrLf
+        script = script & "  if ($winrmServiceWasStarted) {" & vbCrLf
+        script = script & "    Stop-Service -Name WinRM -Force -ErrorAction SilentlyContinue" & vbCrLf
+        script = script & "  }" & vbCrLf
+        script = script & "}" & vbCrLf
+    End If
 
     BuildExecuteJobScript = script
 End Function
@@ -669,6 +766,9 @@ Private Function GetConfig() As Object
     Dim config As Object
     Set config = CreateObject("Scripting.Dictionary")
 
+    ' 実行モード（ローカル/リモート）
+    config("ExecMode") = CStr(ws.Cells(ROW_EXEC_MODE, COL_SETTING_VALUE).Value)
+
     config("JP1Server") = CStr(ws.Cells(ROW_JP1_SERVER, COL_SETTING_VALUE).Value)
     config("RemoteUser") = CStr(ws.Cells(ROW_REMOTE_USER, COL_SETTING_VALUE).Value)
     config("RemotePassword") = CStr(ws.Cells(ROW_REMOTE_PASSWORD, COL_SETTING_VALUE).Value)
@@ -679,11 +779,21 @@ Private Function GetConfig() As Object
     config("Timeout") = CLng(ws.Cells(ROW_TIMEOUT + 4, COL_SETTING_VALUE).Value)
     config("PollingInterval") = CLng(ws.Cells(ROW_POLLING_INTERVAL + 4, COL_SETTING_VALUE).Value)
 
-    ' 必須項目チェック
-    If config("JP1Server") = "" Or config("RemoteUser") = "" Or config("JP1User") = "" Then
-        MsgBox "接続設定が不完全です。メインシートで設定を入力してください。", vbExclamation
-        Set GetConfig = Nothing
-        Exit Function
+    ' 必須項目チェック（ローカルモードとリモートモードで異なる）
+    If config("ExecMode") = "ローカル" Then
+        ' ローカルモード: JP1ユーザーのみ必須
+        If config("JP1User") = "" Then
+            MsgBox "JP1ユーザーを入力してください。", vbExclamation
+            Set GetConfig = Nothing
+            Exit Function
+        End If
+    Else
+        ' リモートモード: 接続情報が必須
+        If config("JP1Server") = "" Or config("RemoteUser") = "" Or config("JP1User") = "" Then
+            MsgBox "接続設定が不完全です。メインシートで設定を入力してください。", vbExclamation
+            Set GetConfig = Nothing
+            Exit Function
+        End If
     End If
 
     Set GetConfig = config
