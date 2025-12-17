@@ -29,6 +29,7 @@ Private Const GIT_COMMAND As String = "git"
 
 ' シート名
 Private Const SHEET_MAIN As String = "メイン"
+Private Const SHEET_DASHBOARD As String = "ダッシュボード"
 Private Const SHEET_HISTORY As String = "コミット履歴"
 Private Const SHEET_BRANCH_GRAPH As String = "ブランチグラフ"
 
@@ -248,7 +249,7 @@ Private Sub FormatMainSheet(ByRef ws As Worksheet)
             .Weight = xlMedium
         End With
 
-        .Range("B18").Value = "コミット履歴"
+        .Range("B18").Value = "ダッシュボード"
         With .Range("B18")
             .Font.Name = "Meiryo UI"
             .Font.Size = 11
@@ -256,13 +257,13 @@ Private Sub FormatMainSheet(ByRef ws As Worksheet)
             .Font.Color = RGB(68, 114, 196)
         End With
         .Range("C18:G18").Merge
-        .Range("C18").Value = "コミット履歴の詳細一覧（ハッシュ、作者、日時、メッセージ、変更量等）"
+        .Range("C18").Value = "サマリー情報（総コミット数、作者数、変更量、作者別統計）"
         With .Range("C18")
             .Font.Name = "Meiryo UI"
             .Font.Size = 10
         End With
 
-        .Range("B19").Value = "ブランチグラフ"
+        .Range("B19").Value = "コミット履歴"
         With .Range("B19")
             .Font.Name = "Meiryo UI"
             .Font.Size = 11
@@ -270,64 +271,78 @@ Private Sub FormatMainSheet(ByRef ws As Worksheet)
             .Font.Color = RGB(68, 114, 196)
         End With
         .Range("C19:G19").Merge
-        .Range("C19").Value = "ブランチ構造を視覚化（コミットノードと接続線）"
+        .Range("C19").Value = "コミット履歴の詳細一覧（ハッシュ、作者、日時、メッセージ、変更量等）"
         With .Range("C19")
             .Font.Name = "Meiryo UI"
             .Font.Size = 10
         End With
 
+        .Range("B20").Value = "ブランチグラフ"
+        With .Range("B20")
+            .Font.Name = "Meiryo UI"
+            .Font.Size = 11
+            .Font.Bold = True
+            .Font.Color = RGB(68, 114, 196)
+        End With
+        .Range("C20:G20").Merge
+        .Range("C20").Value = "ブランチ構造を視覚化（コミットノードと接続線）"
+        With .Range("C20")
+            .Font.Name = "Meiryo UI"
+            .Font.Size = 10
+        End With
+
         ' =================================================================
-        ' 色凡例セクション (行22-28)
+        ' 色凡例セクション (行23-29)
         ' =================================================================
-        .Range("B22:G22").Merge
-        .Range("B22").Value = "ブランチグラフの色凡例"
-        With .Range("B22")
+        .Range("B23:G23").Merge
+        .Range("B23").Value = "ブランチグラフの色凡例"
+        With .Range("B23")
             .Font.Name = "Meiryo UI"
             .Font.Size = 14
             .Font.Bold = True
             .Font.Color = RGB(68, 114, 196)
         End With
-        With .Range("B22:G22").Borders(xlEdgeBottom)
+        With .Range("B23:G23").Borders(xlEdgeBottom)
             .LineStyle = xlContinuous
             .Color = RGB(68, 114, 196)
             .Weight = xlMedium
         End With
 
         ' 初期コミット
-        .Range("B24").Interior.Color = RGB(255, 0, 0)
-        With .Range("B24").Borders
-            .LineStyle = xlContinuous
-            .Color = RGB(200, 200, 200)
-        End With
-        .Range("C24:E24").Merge
-        .Range("C24").Value = "初期コミット（親コミットなし）"
-        With .Range("C24")
-            .Font.Name = "Meiryo UI"
-            .Font.Size = 10
-        End With
-
-        ' 通常コミット
-        .Range("B25").Interior.Color = RGB(0, 128, 255)
+        .Range("B25").Interior.Color = RGB(255, 0, 0)
         With .Range("B25").Borders
             .LineStyle = xlContinuous
             .Color = RGB(200, 200, 200)
         End With
         .Range("C25:E25").Merge
-        .Range("C25").Value = "通常コミット（親コミット1つ）"
+        .Range("C25").Value = "初期コミット（親コミットなし）"
         With .Range("C25")
             .Font.Name = "Meiryo UI"
             .Font.Size = 10
         End With
 
-        ' マージコミット
-        .Range("B26").Interior.Color = RGB(0, 255, 0)
+        ' 通常コミット
+        .Range("B26").Interior.Color = RGB(0, 128, 255)
         With .Range("B26").Borders
             .LineStyle = xlContinuous
             .Color = RGB(200, 200, 200)
         End With
         .Range("C26:E26").Merge
-        .Range("C26").Value = "マージコミット（親コミット2つ以上）"
+        .Range("C26").Value = "通常コミット（親コミット1つ）"
         With .Range("C26")
+            .Font.Name = "Meiryo UI"
+            .Font.Size = 10
+        End With
+
+        ' マージコミット
+        .Range("B27").Interior.Color = RGB(0, 255, 0)
+        With .Range("B27").Borders
+            .LineStyle = xlContinuous
+            .Color = RGB(200, 200, 200)
+        End With
+        .Range("C27:E27").Merge
+        .Range("C27").Value = "マージコミット（親コミット2つ以上）"
+        With .Range("C27")
             .Font.Name = "Meiryo UI"
             .Font.Size = 10
         End With
@@ -497,6 +512,10 @@ CheckCommitCount:
     Debug.Print "シートを準備しています..."
     PrepareSheets
 
+    ' ダッシュボードシートを作成
+    Debug.Print "ダッシュボードを作成しています..."
+    CreateDashboardSheet commits, commitCount, gitRepoPath
+
     ' 履歴シートを作成
     Debug.Print "履歴シートを作成しています..."
     CreateHistorySheet commits, commitCount, gitRepoPath
@@ -505,8 +524,8 @@ CheckCommitCount:
     Debug.Print "ブランチグラフを作成しています..."
     CreateBranchGraphSheet commits, commitCount, gitRepoPath
 
-    ' 履歴シートをアクティブに
-    ThisWorkbook.Sheets(SHEET_HISTORY).Select
+    ' ダッシュボードシートをアクティブに
+    ThisWorkbook.Sheets(SHEET_DASHBOARD).Select
 
     Debug.Print "========================================="
     Debug.Print "処理完了"
@@ -730,7 +749,7 @@ Private Sub PrepareSheets()
     Dim ws As Worksheet
     Dim sheetExists As Boolean
 
-    sheetNames = Array(SHEET_HISTORY, SHEET_BRANCH_GRAPH)
+    sheetNames = Array(SHEET_DASHBOARD, SHEET_HISTORY, SHEET_BRANCH_GRAPH)
 
     For Each sheetName In sheetNames
         sheetExists = False
@@ -760,6 +779,322 @@ Private Sub PrepareSheets()
 
         Set ws = Nothing
     Next sheetName
+End Sub
+
+'==============================================================================
+' ダッシュボードシートを作成
+'==============================================================================
+Private Sub CreateDashboardSheet(ByRef commits() As CommitInfo, ByVal commitCount As Long, ByVal repoPath As String)
+    Dim ws As Worksheet
+    Dim i As Long
+    Dim row As Long
+
+    On Error Resume Next
+    Set ws = ThisWorkbook.Sheets(SHEET_DASHBOARD)
+    On Error GoTo 0
+
+    If ws Is Nothing Then
+        MsgBox "シート「" & SHEET_DASHBOARD & "」が見つかりません。" & vbCrLf & _
+               "初期化を実行してから再度お試しください。", vbCritical, "エラー"
+        Exit Sub
+    End If
+
+    ' 統計データの収集
+    Dim authorDict As Object
+    Set authorDict = CreateObject("Scripting.Dictionary")
+
+    Dim minDate As Date
+    Dim maxDate As Date
+    Dim totalFiles As Long
+    Dim totalInsertions As Long
+    Dim totalDeletions As Long
+
+    minDate = commits(0).CommitDate
+    maxDate = commits(0).CommitDate
+    totalFiles = 0
+    totalInsertions = 0
+    totalDeletions = 0
+
+    For i = 0 To commitCount - 1
+        ' 作者別カウント
+        If authorDict.exists(commits(i).Author) Then
+            authorDict(commits(i).Author) = authorDict(commits(i).Author) + 1
+        Else
+            authorDict.Add commits(i).Author, 1
+        End If
+
+        ' 日付範囲
+        If commits(i).CommitDate < minDate Then minDate = commits(i).CommitDate
+        If commits(i).CommitDate > maxDate Then maxDate = commits(i).CommitDate
+
+        ' 変更量の合計
+        totalFiles = totalFiles + commits(i).FilesChanged
+        totalInsertions = totalInsertions + commits(i).Insertions
+        totalDeletions = totalDeletions + commits(i).Deletions
+    Next i
+
+    With ws
+        ' 全体の背景色を白に
+        .Cells.Interior.Color = RGB(255, 255, 255)
+
+        ' =================================================================
+        ' タイトルエリア (行1-3)
+        ' =================================================================
+        .Range("B2:H2").Merge
+        .Range("B2").Value = "Git Log ダッシュボード"
+        With .Range("B2")
+            .Font.Name = "Meiryo UI"
+            .Font.Size = 20
+            .Font.Bold = True
+            .Font.Color = RGB(255, 255, 255)
+            .HorizontalAlignment = xlCenter
+            .VerticalAlignment = xlCenter
+        End With
+        .Range("B2:H3").Interior.Color = RGB(68, 114, 196)
+        .Rows(2).RowHeight = 40
+        .Rows(3).RowHeight = 5
+
+        ' リポジトリ情報
+        .Range("B4:H4").Merge
+        .Range("B4").Value = "リポジトリ: " & repoPath
+        With .Range("B4")
+            .Font.Name = "Meiryo UI"
+            .Font.Size = 10
+            .Font.Color = RGB(100, 100, 100)
+        End With
+
+        ' =================================================================
+        ' サマリーセクション (行6-11)
+        ' =================================================================
+        .Range("B6:D6").Merge
+        .Range("B6").Value = "サマリー"
+        With .Range("B6")
+            .Font.Name = "Meiryo UI"
+            .Font.Size = 14
+            .Font.Bold = True
+            .Font.Color = RGB(68, 114, 196)
+        End With
+        With .Range("B6:D6").Borders(xlEdgeBottom)
+            .LineStyle = xlContinuous
+            .Color = RGB(68, 114, 196)
+            .Weight = xlMedium
+        End With
+
+        ' サマリー項目
+        .Range("B8").Value = "総コミット数:"
+        .Range("C8").Value = commitCount
+        .Range("C8").Font.Bold = True
+        .Range("C8").HorizontalAlignment = xlRight
+        .Range("D8").Value = "件"
+
+        .Range("B9").Value = "作者数:"
+        .Range("C9").Value = authorDict.Count
+        .Range("C9").Font.Bold = True
+        .Range("C9").HorizontalAlignment = xlRight
+        .Range("D9").Value = "人"
+
+        .Range("B10").Value = "期間:"
+        .Range("C10:D10").Merge
+        .Range("C10").Value = Format(minDate, "yyyy/mm/dd") & " 〜 " & Format(maxDate, "yyyy/mm/dd")
+        .Range("C10").Font.Bold = True
+        .Range("C10").HorizontalAlignment = xlCenter
+
+        .Range("B11").Value = "日数:"
+        .Range("C11").Value = DateDiff("d", minDate, maxDate) + 1
+        .Range("C11").Font.Bold = True
+        .Range("C11").HorizontalAlignment = xlRight
+        .Range("D11").Value = "日"
+
+        ' サマリーエリアのスタイル
+        .Range("B8:D11").Font.Name = "Meiryo UI"
+        .Range("B8:D11").Font.Size = 11
+
+        ' =================================================================
+        ' 変更量セクション (行6-11, 右側)
+        ' =================================================================
+        .Range("F6:H6").Merge
+        .Range("F6").Value = "変更量"
+        With .Range("F6")
+            .Font.Name = "Meiryo UI"
+            .Font.Size = 14
+            .Font.Bold = True
+            .Font.Color = RGB(68, 114, 196)
+        End With
+        With .Range("F6:H6").Borders(xlEdgeBottom)
+            .LineStyle = xlContinuous
+            .Color = RGB(68, 114, 196)
+            .Weight = xlMedium
+        End With
+
+        .Range("F8").Value = "変更ファイル数:"
+        .Range("G8").Value = totalFiles
+        .Range("G8").Font.Bold = True
+        .Range("G8").HorizontalAlignment = xlRight
+        .Range("G8").NumberFormat = "#,##0"
+        .Range("H8").Value = "ファイル"
+
+        .Range("F9").Value = "追加行数:"
+        .Range("G9").Value = totalInsertions
+        .Range("G9").Font.Bold = True
+        .Range("G9").Font.Color = RGB(0, 128, 0)
+        .Range("G9").HorizontalAlignment = xlRight
+        .Range("G9").NumberFormat = "#,##0"
+        .Range("H9").Value = "行"
+
+        .Range("F10").Value = "削除行数:"
+        .Range("G10").Value = totalDeletions
+        .Range("G10").Font.Bold = True
+        .Range("G10").Font.Color = RGB(192, 0, 0)
+        .Range("G10").HorizontalAlignment = xlRight
+        .Range("G10").NumberFormat = "#,##0"
+        .Range("H10").Value = "行"
+
+        .Range("F11").Value = "純増行数:"
+        .Range("G11").Value = totalInsertions - totalDeletions
+        .Range("G11").Font.Bold = True
+        If totalInsertions - totalDeletions >= 0 Then
+            .Range("G11").Font.Color = RGB(0, 128, 0)
+        Else
+            .Range("G11").Font.Color = RGB(192, 0, 0)
+        End If
+        .Range("G11").HorizontalAlignment = xlRight
+        .Range("G11").NumberFormat = "#,##0"
+        .Range("H11").Value = "行"
+
+        .Range("F8:H11").Font.Name = "Meiryo UI"
+        .Range("F8:H11").Font.Size = 11
+
+        ' =================================================================
+        ' 作者別コミット数セクション (行13-)
+        ' =================================================================
+        .Range("B13:H13").Merge
+        .Range("B13").Value = "作者別コミット数"
+        With .Range("B13")
+            .Font.Name = "Meiryo UI"
+            .Font.Size = 14
+            .Font.Bold = True
+            .Font.Color = RGB(68, 114, 196)
+        End With
+        With .Range("B13:H13").Borders(xlEdgeBottom)
+            .LineStyle = xlContinuous
+            .Color = RGB(68, 114, 196)
+            .Weight = xlMedium
+        End With
+
+        ' ヘッダー
+        .Range("B15").Value = "順位"
+        .Range("C15").Value = "作者"
+        .Range("D15").Value = "コミット数"
+        .Range("E15").Value = "割合"
+        .Range("F15:H15").Merge
+        .Range("F15").Value = "グラフ"
+
+        With .Range("B15:H15")
+            .Font.Name = "Meiryo UI"
+            .Font.Bold = True
+            .Interior.Color = RGB(68, 114, 196)
+            .Font.Color = RGB(255, 255, 255)
+            .HorizontalAlignment = xlCenter
+        End With
+
+        ' 作者データをソート（コミット数降順）
+        Dim authors() As Variant
+        Dim authorCounts() As Variant
+        Dim authorCount As Long
+        Dim keys As Variant
+        Dim items As Variant
+
+        authorCount = authorDict.Count
+        ReDim authors(0 To authorCount - 1)
+        ReDim authorCounts(0 To authorCount - 1)
+
+        keys = authorDict.keys
+        items = authorDict.items
+
+        For i = 0 To authorCount - 1
+            authors(i) = keys(i)
+            authorCounts(i) = items(i)
+        Next i
+
+        ' バブルソート（降順）
+        Dim j As Long
+        Dim tempAuthor As Variant
+        Dim tempCount As Variant
+
+        For i = 0 To authorCount - 2
+            For j = i + 1 To authorCount - 1
+                If authorCounts(j) > authorCounts(i) Then
+                    tempAuthor = authors(i)
+                    tempCount = authorCounts(i)
+                    authors(i) = authors(j)
+                    authorCounts(i) = authorCounts(j)
+                    authors(j) = tempAuthor
+                    authorCounts(j) = tempCount
+                End If
+            Next j
+        Next i
+
+        ' データ行を出力（最大20人まで）
+        Dim maxAuthors As Long
+        maxAuthors = authorCount
+        If maxAuthors > 20 Then maxAuthors = 20
+
+        Dim maxCount As Long
+        maxCount = authorCounts(0)
+
+        For i = 0 To maxAuthors - 1
+            row = 16 + i
+
+            .Cells(row, 2).Value = i + 1
+            .Cells(row, 2).HorizontalAlignment = xlCenter
+            .Cells(row, 3).Value = authors(i)
+            .Cells(row, 4).Value = authorCounts(i)
+            .Cells(row, 4).HorizontalAlignment = xlRight
+            .Cells(row, 5).Value = authorCounts(i) / commitCount
+            .Cells(row, 5).NumberFormat = "0.0%"
+            .Cells(row, 5).HorizontalAlignment = xlRight
+
+            ' 簡易バーグラフ（セルの塗りつぶし）
+            .Range(.Cells(row, 6), .Cells(row, 8)).Merge
+
+            ' データバー的な表現
+            Dim barWidth As Double
+            barWidth = (authorCounts(i) / maxCount) * 100
+            .Cells(row, 6).Value = String(Int(barWidth / 5), "█") & " " & authorCounts(i)
+            .Cells(row, 6).Font.Color = RGB(68, 114, 196)
+            .Cells(row, 6).Font.Name = "Consolas"
+            .Cells(row, 6).Font.Size = 10
+
+            ' 交互に色分け
+            If i Mod 2 = 0 Then
+                .Range(.Cells(row, 2), .Cells(row, 8)).Interior.Color = RGB(245, 245, 245)
+            End If
+        Next i
+
+        ' 残りの作者がある場合
+        If authorCount > 20 Then
+            row = 16 + maxAuthors
+            .Cells(row, 2).Value = "..."
+            .Cells(row, 3).Value = "他 " & (authorCount - 20) & " 人"
+            .Range(.Cells(row, 2), .Cells(row, 8)).Font.Color = RGB(128, 128, 128)
+            .Range(.Cells(row, 2), .Cells(row, 8)).Font.Italic = True
+        End If
+
+        ' =================================================================
+        ' 列幅調整
+        ' =================================================================
+        .Columns("A").ColumnWidth = 3
+        .Columns("B").ColumnWidth = 16
+        .Columns("C").ColumnWidth = 20
+        .Columns("D").ColumnWidth = 12
+        .Columns("E").ColumnWidth = 10
+        .Columns("F").ColumnWidth = 10
+        .Columns("G").ColumnWidth = 10
+        .Columns("H").ColumnWidth = 10
+        .Columns("I").ColumnWidth = 3
+
+        .Range("A1").Select
+    End With
 End Sub
 
 '==============================================================================
