@@ -12,7 +12,8 @@ set EXITCODE=%ERRORLEVEL%
 
 popd
 
-pause
+rem WinMerge起動時（終了コード3）はpauseをスキップ
+if %EXITCODE% neq 3 pause
 exit /b %EXITCODE%
 : #>
 
@@ -706,7 +707,7 @@ if ($winmergePath -ne "" -and (Test-Path $winmergePath)) {
         Write-Host "WinMergeを起動中..." -ForegroundColor Cyan
         Write-Host "（このウィンドウは自動的に閉じます）" -ForegroundColor Gray
         Start-Process -FilePath $winmergePath -ArgumentList "/r", "/e", "-cfg", "Settings/DirViewExpandSubdirs=1", $OUTPUT_DIR_BEFORE, $OUTPUT_DIR_AFTER
-        [Environment]::Exit(0)
+        exit 3  # WinMerge起動時は特別な終了コードを返す（pauseスキップ用）
     }
 } else {
     Write-Host "[情報] WinMergeが見つかりません。手動で比較してください。" -ForegroundColor Yellow
