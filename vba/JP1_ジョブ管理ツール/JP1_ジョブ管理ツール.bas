@@ -9,6 +9,10 @@ Option Explicit
 '       定数はSetupモジュールで Public として定義されています
 '==============================================================================
 
+' 管理者権限状態を保持
+Private g_AdminChecked As Boolean
+Private g_IsAdmin As Boolean
+
 '==============================================================================
 ' ジョブ一覧取得
 '==============================================================================
@@ -17,6 +21,9 @@ Public Sub GetJobList()
     Set config = GetConfig()
 
     If config Is Nothing Then Exit Sub
+
+    ' リモートモードの場合、管理者権限をチェック
+    If Not EnsureAdminForRemoteMode(config) Then Exit Sub
 
     ' パスワード入力（リモートモードの場合のみリモートパスワードが必要）
     If config("ExecMode") <> "ローカル" Then
@@ -304,6 +311,9 @@ Public Sub ExecuteCheckedJobs()
     Set config = GetConfig()
 
     If config Is Nothing Then Exit Sub
+
+    ' リモートモードの場合、管理者権限をチェック
+    If Not EnsureAdminForRemoteMode(config) Then Exit Sub
 
     ' パスワード入力（リモートモードの場合のみリモートパスワードが必要）
     If config("ExecMode") <> "ローカル" Then
@@ -847,3 +857,100 @@ Private Function EscapePSString(str As String) As String
     ' PowerShell文字列内のシングルクォートをエスケープ
     EscapePSString = Replace(str, "'", "''")
 End Function
+
+'==============================================================================
+' 管理者権限チェック
+'==============================================================================
+Private Function IsRunningAsAdmin() As Boolean
+    ' キャッシュを利用
+    If g_AdminChecked Then
+        IsRunningAsAdmin = g_IsAdmin
+        Exit Function
+    End If
+
+    ' PowerShellで管理者権限をチェック
+    Dim shell As Object
+    Set shell = CreateObject("WScript.Shell")
+
+    Dim cmd As String
+    cmd = "powershell -NoProfile -Command ""$principal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent()); if ($principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) { exit 0 } else { exit 1 }"""
+
+    Dim exitCode As Long
+    exitCode = shell.Run(cmd, 0, True)
+
+    g_IsAdmin = (exitCode = 0)
+    g_AdminChecked = True
+
+    IsRunningAsAdmin = g_IsAdmin
+End Function
+
+Private Function EnsureAdminForRemoteMode(config As Object) As Boolean
+    ' ローカルモードなら管理者不要
+    If config("ExecMode") = "ローカル" Then
+        EnsureAdminForRemoteMode = True
+        Exit Function
+    End If
+
+    ' 既に管理者なら問題なし
+    If IsRunningAsAdmin() Then
+        EnsureAdminForRemoteMode = True
+        Exit Function
+    End If
+
+    ' 管理者でない場合、ユーザーに選択させる
+    Dim response As VbMsgBoxResult
+    response = MsgBox( _
+        "リモート実行モードでは、WinRM設定の変更に管理者権限が必要です。" & vbCrLf & vbCrLf & _
+        "現在、管理者権限で実行されていません。" & vbCrLf & vbCrLf & _
+        "[はい] 管理者としてExcelを再起動して実行" & vbCrLf & _
+        "[いいえ] このまま続行（WinRMが既に設定済みの場合）" & vbCrLf & _
+        "[キャンセル] 処理を中止", _
+        vbYesNoCancel + vbExclamation, "管理者権限が必要")
+
+    Select Case response
+        Case vbYes
+            ' 管理者権限でExcelを再起動
+            RestartAsAdmin
+            EnsureAdminForRemoteMode = False
+
+        Case vbNo
+            ' そのまま続行
+            EnsureAdminForRemoteMode = True
+
+        Case vbCancel
+            ' 処理を中止
+            EnsureAdminForRemoteMode = False
+    End Select
+End Function
+
+Private Sub RestartAsAdmin()
+    ' 現在のブックを保存
+    If ThisWorkbook.Saved = False Then
+        Dim saveResponse As VbMsgBoxResult
+        saveResponse = MsgBox("ブックを保存しますか？", vbYesNoCancel + vbQuestion, "保存確認")
+        If saveResponse = vbYes Then
+            ThisWorkbook.Save
+        ElseIf saveResponse = vbCancel Then
+            Exit Sub
+        End If
+    End If
+
+    ' 管理者権限でExcelを再起動
+    Dim shell As Object
+    Set shell = CreateObject("WScript.Shell")
+
+    Dim excelPath As String
+    excelPath = Application.Path & "\EXCEL.EXE"
+
+    Dim workbookPath As String
+    workbookPath = ThisWorkbook.FullName
+
+    ' PowerShellでStart-Process -Verb RunAsを実行
+    Dim cmd As String
+    cmd = "powershell -NoProfile -Command ""Start-Process -FilePath '" & Replace(excelPath, "'", "''") & "' -ArgumentList '""" & Replace(workbookPath, "'", "''") & """' -Verb RunAs"""
+
+    shell.Run cmd, 0, False
+
+    ' 現在のExcelを終了
+    Application.Quit
+End Sub
