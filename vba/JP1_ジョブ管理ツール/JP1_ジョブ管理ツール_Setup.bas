@@ -1,4 +1,3 @@
-Attribute VB_Name = "JP1_JobManager_Setup"
 Option Explicit
 
 '==============================================================================
