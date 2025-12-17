@@ -140,6 +140,9 @@ if (-not $gitCommand) {
     }
     Write-Host ""
 }
+
+Write-Host ""
+Read-Host "続行するには Enter を押してください"
 #endregion
 
 #region 設定表示
@@ -239,6 +242,9 @@ if (-not (Test-Path $keyPath)) {
         exit 1
     }
 }
+
+Write-Host ""
+Read-Host "続行するには Enter を押してください"
 #endregion
 
 #region 公開鍵の配置
@@ -311,6 +317,9 @@ if ($LASTEXITCODE -eq 0) {
     Write-Host "  - Linuxサーバーでパスワード認証が有効か確認してください"
     exit 1
 }
+
+Write-Host ""
+Read-Host "続行するには Enter を押してください"
 #endregion
 
 #region 接続テスト
@@ -367,6 +376,9 @@ if ($LASTEXITCODE -eq 0) {
     Write-Host ""
     exit 1
 }
+
+Write-Host ""
+Read-Host "続行するには Enter を押してください"
 #endregion
 
 #region Gitリポジトリのクローン
