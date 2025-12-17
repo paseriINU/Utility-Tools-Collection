@@ -1,0 +1,782 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF ビジュアル比較ツール</title>
+    <script>
+        // PDF.js読み込み
+        window.pdfJsLoaded = false;
+
+        function loadScript(src) {
+            return new Promise((resolve, reject) => {
+                const script = document.createElement('script');
+                script.src = src;
+                script.onload = resolve;
+                script.onerror = reject;
+                document.head.appendChild(script);
+            });
+        }
+
+        async function initPdfJs() {
+            const localPath = 'lib/pdf.min.js';
+            const cdnPath = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+            const localWorker = 'lib/pdf.worker.min.js';
+            const cdnWorker = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+            try {
+                await loadScript(localPath);
+                pdfjsLib.GlobalWorkerOptions.workerSrc = localWorker;
+                window.pdfJsLoaded = true;
+                window.pdfJsSource = 'ローカル';
+            } catch (e) {
+                try {
+                    await loadScript(cdnPath);
+                    pdfjsLib.GlobalWorkerOptions.workerSrc = cdnWorker;
+                    window.pdfJsLoaded = true;
+                    window.pdfJsSource = 'CDN';
+                } catch (e2) {
+                    window.pdfJsLoadError = 'PDF.jsの読み込みに失敗しました。';
+                }
+            }
+
+            if (document.readyState === 'complete') {
+                updateStatus();
+            } else {
+                window.addEventListener('load', updateStatus);
+            }
+        }
+
+        function updateStatus() {
+            const el = document.getElementById('libraryStatus');
+            if (el && window.pdfJsLoaded) {
+                el.textContent = `ライブラリ: ${window.pdfJsSource}`;
+                el.style.color = '#4caf50';
+            }
+        }
+
+        initPdfJs();
+    </script>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Segoe UI', 'Meiryo UI', sans-serif;
+            background-color: #1e1e1e;
+            color: #fff;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #2f5496 0%, #1e3a5f 100%);
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .header h1 {
+            font-size: 20px;
+        }
+
+        .header-info {
+            font-size: 12px;
+            opacity: 0.8;
+        }
+
+        .toolbar {
+            background: #2d2d2d;
+            padding: 10px 20px;
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            flex-wrap: wrap;
+            border-bottom: 1px solid #444;
+        }
+
+        .file-input-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .file-input-group label {
+            font-size: 13px;
+            color: #aaa;
+        }
+
+        .file-input-group input[type="file"] {
+            display: none;
+        }
+
+        .file-btn {
+            padding: 6px 12px;
+            background: #3d3d3d;
+            border: 1px solid #555;
+            border-radius: 4px;
+            color: #fff;
+            cursor: pointer;
+            font-size: 12px;
+        }
+
+        .file-btn:hover {
+            background: #4d4d4d;
+        }
+
+        .file-btn.loaded {
+            background: #2e7d32;
+            border-color: #4caf50;
+        }
+
+        .btn {
+            padding: 8px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+        }
+
+        .btn-primary {
+            background: #2f5496;
+            color: #fff;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            background: #3d6ab8;
+        }
+
+        .btn-primary:disabled {
+            background: #555;
+            cursor: not-allowed;
+        }
+
+        .page-nav {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-left: auto;
+        }
+
+        .page-nav button {
+            padding: 5px 10px;
+            background: #3d3d3d;
+            border: 1px solid #555;
+            color: #fff;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .page-nav button:hover:not(:disabled) {
+            background: #4d4d4d;
+        }
+
+        .page-nav button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .page-info {
+            font-size: 14px;
+            min-width: 100px;
+            text-align: center;
+        }
+
+        .zoom-control {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .zoom-control select {
+            padding: 5px;
+            background: #3d3d3d;
+            border: 1px solid #555;
+            color: #fff;
+            border-radius: 4px;
+        }
+
+        .main-content {
+            display: flex;
+            height: calc(100vh - 130px);
+        }
+
+        .pdf-panel {
+            flex: 1;
+            overflow: auto;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            background: #252525;
+        }
+
+        .pdf-panel:first-child {
+            border-right: 2px solid #e91e63;
+        }
+
+        .pdf-panel:last-child {
+            border-left: 2px solid #4caf50;
+        }
+
+        .panel-header {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            padding: 5px 10px;
+            font-size: 12px;
+            font-weight: bold;
+            z-index: 10;
+        }
+
+        .pdf-panel:first-child .panel-header {
+            background: rgba(233, 30, 99, 0.8);
+        }
+
+        .pdf-panel:last-child .panel-header {
+            background: rgba(76, 175, 80, 0.8);
+        }
+
+        .canvas-container {
+            position: relative;
+        }
+
+        .pdf-canvas {
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+        }
+
+        .diff-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            pointer-events: none;
+        }
+
+        .diff-legend {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(0,0,0,0.8);
+            padding: 15px;
+            border-radius: 8px;
+            z-index: 100;
+        }
+
+        .diff-legend h4 {
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin: 5px 0;
+            font-size: 12px;
+        }
+
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            border-radius: 3px;
+        }
+
+        .legend-color.added {
+            background: rgba(76, 175, 80, 0.5);
+            border: 2px solid #4caf50;
+        }
+
+        .legend-color.deleted {
+            background: rgba(244, 67, 54, 0.5);
+            border: 2px solid #f44336;
+        }
+
+        .legend-color.changed {
+            background: rgba(255, 193, 7, 0.5);
+            border: 2px solid #ffc107;
+        }
+
+        .stats-bar {
+            background: #2d2d2d;
+            padding: 8px 20px;
+            display: flex;
+            gap: 20px;
+            font-size: 13px;
+            border-top: 1px solid #444;
+        }
+
+        .stat-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .stat-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+
+        .stat-dot.added { background: #4caf50; }
+        .stat-dot.deleted { background: #f44336; }
+        .stat-dot.changed { background: #ffc107; }
+
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.8);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .loading-content {
+            text-align: center;
+        }
+
+        .loading-spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid #333;
+            border-top-color: #2f5496;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .no-file-message {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100%;
+            color: #666;
+            font-size: 16px;
+        }
+
+        .sync-scroll-toggle {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 13px;
+        }
+
+        .sync-scroll-toggle input {
+            width: 18px;
+            height: 18px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div>
+            <h1>PDF ビジュアル比較ツール</h1>
+            <div class="header-info">2つのPDFをサイドバイサイドで比較し、差分を色でハイライト</div>
+        </div>
+        <div id="libraryStatus" style="font-size: 12px;">ライブラリ: 読み込み中...</div>
+    </div>
+
+    <div class="toolbar">
+        <div class="file-input-group">
+            <label>旧PDF:</label>
+            <button class="file-btn" id="file1Btn" onclick="document.getElementById('file1').click()">
+                ファイルを選択
+            </button>
+            <input type="file" id="file1" accept=".pdf" onchange="loadPDF(1, this)">
+        </div>
+
+        <div class="file-input-group">
+            <label>新PDF:</label>
+            <button class="file-btn" id="file2Btn" onclick="document.getElementById('file2').click()">
+                ファイルを選択
+            </button>
+            <input type="file" id="file2" accept=".pdf" onchange="loadPDF(2, this)">
+        </div>
+
+        <button class="btn btn-primary" id="compareBtn" onclick="compare()" disabled>
+            比較実行
+        </button>
+
+        <div class="sync-scroll-toggle">
+            <input type="checkbox" id="syncScroll" checked>
+            <label for="syncScroll">スクロール同期</label>
+        </div>
+
+        <div class="zoom-control">
+            <label>倍率:</label>
+            <select id="zoomLevel" onchange="changeZoom()">
+                <option value="0.5">50%</option>
+                <option value="0.75">75%</option>
+                <option value="1" selected>100%</option>
+                <option value="1.25">125%</option>
+                <option value="1.5">150%</option>
+                <option value="2">200%</option>
+            </select>
+        </div>
+
+        <div class="page-nav">
+            <button onclick="prevPage()" id="prevBtn" disabled>◀ 前へ</button>
+            <span class="page-info" id="pageInfo">- / -</span>
+            <button onclick="nextPage()" id="nextBtn" disabled>次へ ▶</button>
+        </div>
+    </div>
+
+    <div class="main-content">
+        <div class="pdf-panel" id="panel1">
+            <div class="no-file-message" id="noFile1">旧PDFを選択してください</div>
+            <div class="canvas-container" id="container1" style="display: none;">
+                <canvas id="canvas1" class="pdf-canvas"></canvas>
+                <canvas id="diffOverlay1" class="diff-overlay"></canvas>
+            </div>
+        </div>
+        <div class="pdf-panel" id="panel2">
+            <div class="no-file-message" id="noFile2">新PDFを選択してください</div>
+            <div class="canvas-container" id="container2" style="display: none;">
+                <canvas id="canvas2" class="pdf-canvas"></canvas>
+                <canvas id="diffOverlay2" class="diff-overlay"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <div class="stats-bar" id="statsBar" style="display: none;">
+        <div class="stat-item">
+            <span class="stat-dot changed"></span>
+            <span>変更: <strong id="statChanged">0</strong> 箇所</span>
+        </div>
+        <div class="stat-item">
+            <span class="stat-dot added"></span>
+            <span>追加: <strong id="statAdded">0</strong> 箇所</span>
+        </div>
+        <div class="stat-item">
+            <span class="stat-dot deleted"></span>
+            <span>削除: <strong id="statDeleted">0</strong> 箇所</span>
+        </div>
+        <div class="stat-item" style="margin-left: auto;">
+            <span>このページの差分率: <strong id="diffPercent">0</strong>%</span>
+        </div>
+    </div>
+
+    <div class="diff-legend" id="diffLegend" style="display: none;">
+        <h4>差分の凡例</h4>
+        <div class="legend-item">
+            <div class="legend-color changed"></div>
+            <span>変更された部分</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color added"></div>
+            <span>追加された部分（新PDF）</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color deleted"></div>
+            <span>削除された部分（旧PDF）</span>
+        </div>
+    </div>
+
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-content">
+            <div class="loading-spinner"></div>
+            <div id="loadingText">処理中...</div>
+        </div>
+    </div>
+
+    <script>
+        let pdf1 = null;
+        let pdf2 = null;
+        let currentPage = 1;
+        let totalPages = 1;
+        let currentZoom = 1;
+        let diffData = {};
+
+        // スクロール同期
+        const panel1 = document.getElementById('panel1');
+        const panel2 = document.getElementById('panel2');
+        let isSyncing = false;
+
+        panel1.addEventListener('scroll', () => {
+            if (document.getElementById('syncScroll').checked && !isSyncing) {
+                isSyncing = true;
+                panel2.scrollTop = panel1.scrollTop;
+                panel2.scrollLeft = panel1.scrollLeft;
+                setTimeout(() => isSyncing = false, 10);
+            }
+        });
+
+        panel2.addEventListener('scroll', () => {
+            if (document.getElementById('syncScroll').checked && !isSyncing) {
+                isSyncing = true;
+                panel1.scrollTop = panel2.scrollTop;
+                panel1.scrollLeft = panel2.scrollLeft;
+                setTimeout(() => isSyncing = false, 10);
+            }
+        });
+
+        // PDFを読み込み
+        async function loadPDF(num, input) {
+            const file = input.files[0];
+            if (!file) return;
+
+            showLoading(`PDF${num}を読み込み中...`);
+
+            try {
+                const arrayBuffer = await file.arrayBuffer();
+                const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+
+                if (num === 1) {
+                    pdf1 = pdf;
+                    document.getElementById('file1Btn').classList.add('loaded');
+                    document.getElementById('file1Btn').textContent = file.name.substring(0, 20) + (file.name.length > 20 ? '...' : '');
+                } else {
+                    pdf2 = pdf;
+                    document.getElementById('file2Btn').classList.add('loaded');
+                    document.getElementById('file2Btn').textContent = file.name.substring(0, 20) + (file.name.length > 20 ? '...' : '');
+                }
+
+                updateCompareButton();
+                hideLoading();
+
+            } catch (error) {
+                hideLoading();
+                alert('PDFの読み込みに失敗しました: ' + error.message);
+            }
+        }
+
+        function updateCompareButton() {
+            document.getElementById('compareBtn').disabled = !(pdf1 && pdf2);
+        }
+
+        // 比較実行
+        async function compare() {
+            if (!pdf1 || !pdf2) return;
+
+            showLoading('比較を実行中...');
+
+            totalPages = Math.max(pdf1.numPages, pdf2.numPages);
+            currentPage = 1;
+            diffData = {};
+
+            // 最初のページを表示
+            await renderPage(currentPage);
+
+            document.getElementById('statsBar').style.display = 'flex';
+            document.getElementById('diffLegend').style.display = 'block';
+            updatePageNav();
+
+            hideLoading();
+        }
+
+        // ページをレンダリング
+        async function renderPage(pageNum) {
+            showLoading(`ページ ${pageNum} を処理中...`);
+
+            const canvas1 = document.getElementById('canvas1');
+            const canvas2 = document.getElementById('canvas2');
+            const ctx1 = canvas1.getContext('2d');
+            const ctx2 = canvas2.getContext('2d');
+            const overlay1 = document.getElementById('diffOverlay1');
+            const overlay2 = document.getElementById('diffOverlay2');
+
+            document.getElementById('noFile1').style.display = 'none';
+            document.getElementById('noFile2').style.display = 'none';
+            document.getElementById('container1').style.display = 'block';
+            document.getElementById('container2').style.display = 'block';
+
+            const scale = currentZoom * 1.5; // 高解像度でレンダリング
+
+            // PDF1をレンダリング
+            if (pageNum <= pdf1.numPages) {
+                const page1 = await pdf1.getPage(pageNum);
+                const viewport1 = page1.getViewport({ scale });
+                canvas1.width = viewport1.width;
+                canvas1.height = viewport1.height;
+                await page1.render({ canvasContext: ctx1, viewport: viewport1 }).promise;
+            } else {
+                canvas1.width = 600 * currentZoom;
+                canvas1.height = 800 * currentZoom;
+                ctx1.fillStyle = '#f0f0f0';
+                ctx1.fillRect(0, 0, canvas1.width, canvas1.height);
+                ctx1.fillStyle = '#999';
+                ctx1.font = '20px sans-serif';
+                ctx1.textAlign = 'center';
+                ctx1.fillText('ページなし', canvas1.width / 2, canvas1.height / 2);
+            }
+
+            // PDF2をレンダリング
+            if (pageNum <= pdf2.numPages) {
+                const page2 = await pdf2.getPage(pageNum);
+                const viewport2 = page2.getViewport({ scale });
+                canvas2.width = viewport2.width;
+                canvas2.height = viewport2.height;
+                await page2.render({ canvasContext: ctx2, viewport: viewport2 }).promise;
+            } else {
+                canvas2.width = 600 * currentZoom;
+                canvas2.height = 800 * currentZoom;
+                ctx2.fillStyle = '#f0f0f0';
+                ctx2.fillRect(0, 0, canvas2.width, canvas2.height);
+                ctx2.fillStyle = '#999';
+                ctx2.font = '20px sans-serif';
+                ctx2.textAlign = 'center';
+                ctx2.fillText('ページなし', canvas2.width / 2, canvas2.height / 2);
+            }
+
+            // 差分を検出してハイライト
+            await detectAndHighlightDiff(canvas1, canvas2, overlay1, overlay2);
+
+            hideLoading();
+        }
+
+        // 差分検出とハイライト
+        async function detectAndHighlightDiff(canvas1, canvas2, overlay1, overlay2) {
+            const ctx1 = canvas1.getContext('2d');
+            const ctx2 = canvas2.getContext('2d');
+
+            // オーバーレイのサイズを設定
+            overlay1.width = canvas1.width;
+            overlay1.height = canvas1.height;
+            overlay2.width = canvas2.width;
+            overlay2.height = canvas2.height;
+
+            const octx1 = overlay1.getContext('2d');
+            const octx2 = overlay2.getContext('2d');
+
+            // 画像データを取得
+            const imgData1 = ctx1.getImageData(0, 0, canvas1.width, canvas1.height);
+            const imgData2 = ctx2.getImageData(0, 0, canvas2.width, canvas2.height);
+
+            const width = Math.min(canvas1.width, canvas2.width);
+            const height = Math.min(canvas1.height, canvas2.height);
+
+            // ブロック単位で差分を検出
+            const blockSize = 8;
+            let changedBlocks = 0;
+            let addedBlocks = 0;
+            let deletedBlocks = 0;
+            let totalBlocks = 0;
+            let diffPixels = 0;
+            let totalPixels = width * height;
+
+            octx1.clearRect(0, 0, overlay1.width, overlay1.height);
+            octx2.clearRect(0, 0, overlay2.width, overlay2.height);
+
+            for (let y = 0; y < height; y += blockSize) {
+                for (let x = 0; x < width; x += blockSize) {
+                    totalBlocks++;
+
+                    let diff = 0;
+                    let hasContent1 = false;
+                    let hasContent2 = false;
+
+                    // ブロック内のピクセルを比較
+                    for (let by = 0; by < blockSize && y + by < height; by++) {
+                        for (let bx = 0; bx < blockSize && x + bx < width; bx++) {
+                            const idx1 = ((y + by) * canvas1.width + (x + bx)) * 4;
+                            const idx2 = ((y + by) * canvas2.width + (x + bx)) * 4;
+
+                            // グレースケール値で比較
+                            const gray1 = (imgData1.data[idx1] + imgData1.data[idx1 + 1] + imgData1.data[idx1 + 2]) / 3;
+                            const gray2 = (imgData2.data[idx2] + imgData2.data[idx2 + 1] + imgData2.data[idx2 + 2]) / 3;
+
+                            if (gray1 < 240) hasContent1 = true;
+                            if (gray2 < 240) hasContent2 = true;
+
+                            if (Math.abs(gray1 - gray2) > 30) {
+                                diff++;
+                            }
+                        }
+                    }
+
+                    // 閾値以上の差分があればハイライト
+                    const threshold = (blockSize * blockSize) * 0.1;
+                    if (diff > threshold) {
+                        diffPixels += blockSize * blockSize;
+
+                        if (hasContent1 && hasContent2) {
+                            // 変更（黄色）
+                            changedBlocks++;
+                            octx1.fillStyle = 'rgba(255, 193, 7, 0.4)';
+                            octx2.fillStyle = 'rgba(255, 193, 7, 0.4)';
+                        } else if (hasContent1 && !hasContent2) {
+                            // 削除（赤）
+                            deletedBlocks++;
+                            octx1.fillStyle = 'rgba(244, 67, 54, 0.4)';
+                            octx2.fillStyle = 'rgba(244, 67, 54, 0.2)';
+                        } else if (!hasContent1 && hasContent2) {
+                            // 追加（緑）
+                            addedBlocks++;
+                            octx1.fillStyle = 'rgba(76, 175, 80, 0.2)';
+                            octx2.fillStyle = 'rgba(76, 175, 80, 0.4)';
+                        } else {
+                            continue;
+                        }
+
+                        octx1.fillRect(x, y, blockSize, blockSize);
+                        octx2.fillRect(x, y, blockSize, blockSize);
+                    }
+                }
+            }
+
+            // 統計を更新
+            document.getElementById('statChanged').textContent = changedBlocks;
+            document.getElementById('statAdded').textContent = addedBlocks;
+            document.getElementById('statDeleted').textContent = deletedBlocks;
+            document.getElementById('diffPercent').textContent = ((diffPixels / totalPixels) * 100).toFixed(1);
+        }
+
+        // ページナビゲーション
+        function updatePageNav() {
+            document.getElementById('pageInfo').textContent = `${currentPage} / ${totalPages}`;
+            document.getElementById('prevBtn').disabled = currentPage <= 1;
+            document.getElementById('nextBtn').disabled = currentPage >= totalPages;
+        }
+
+        async function prevPage() {
+            if (currentPage > 1) {
+                currentPage--;
+                await renderPage(currentPage);
+                updatePageNav();
+            }
+        }
+
+        async function nextPage() {
+            if (currentPage < totalPages) {
+                currentPage++;
+                await renderPage(currentPage);
+                updatePageNav();
+            }
+        }
+
+        async function changeZoom() {
+            currentZoom = parseFloat(document.getElementById('zoomLevel').value);
+            if (pdf1 && pdf2) {
+                await renderPage(currentPage);
+            }
+        }
+
+        function showLoading(text) {
+            document.getElementById('loadingText').textContent = text;
+            document.getElementById('loadingOverlay').style.display = 'flex';
+        }
+
+        function hideLoading() {
+            document.getElementById('loadingOverlay').style.display = 'none';
+        }
+
+        // キーボードショートカット
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowLeft') prevPage();
+            if (e.key === 'ArrowRight') nextPage();
+        });
+    </script>
+</body>
+</html>
