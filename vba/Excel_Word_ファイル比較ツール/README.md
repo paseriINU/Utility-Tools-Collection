@@ -4,7 +4,7 @@
 
 ## 機能
 
-### `FileComparator.bas`
+### `Excel_Word_ファイル比較ツール.bas`
 
 - **CompareExcelFiles**: Excelファイルを比較
   - シート単位・セル単位での差異検出
@@ -22,7 +22,7 @@
   - 結果を「比較結果」シートに出力
   - **差分箇所の検索ジャンプ機能**: 選択した行の差分テキストをWordファイル内で検索し、該当箇所に自動ジャンプ
 
-- **InitializeFileComparator**: メインシートを初期化
+- **InitializeExcelWordファイル比較ツール**: メインシートを初期化
 
 ## 必要な環境
 
@@ -37,8 +37,8 @@
 1. Excelを開き、`Alt + F11` でVBAエディタを開く
 2. 「ファイル」→「ファイルのインポート」を選択
 3. 以下の2つのモジュールを順番にインポート：
-   - `FileComparator_Setup.bas`（初期化・シートフォーマット用）
-   - `FileComparator.bas`（メイン処理用）
+   - `Excel_Word_ファイル比較ツール_Setup.bas`（初期化・シートフォーマット用）
+   - `Excel_Word_ファイル比較ツール.bas`（メイン処理用）
 4. `Ctrl + S` で保存（.xlsm形式で保存）
 
 ### 方法2: コードをコピー
@@ -54,7 +54,7 @@
 
 1. マクロを含むExcelファイルを開く
 2. `Alt + F8` でマクロダイアログを開く
-3. 「InitializeFileComparator」を選択して実行
+3. 「InitializeExcelWordファイル比較ツール」を選択して実行
 4. メインシートにExcel比較・Word比較ボタンが表示される
 
 ### ファイルの比較

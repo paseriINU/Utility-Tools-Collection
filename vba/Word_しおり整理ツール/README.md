@@ -44,9 +44,9 @@ Excelから実行し、Word文書のスタイル「表題1」「表題2」「表
 1. Excel上で `Alt + F11` を押してVBAエディタを開く
 2. メニューから「ファイル」→「ファイルのインポート」を選択
 3. 以下の2つのモジュールを順番にインポート：
-   - `WordBookmarkOrganizer_Setup.bas`（初期化・シートフォーマット用）
-   - `WordBookmarkOrganizer.bas`（メイン処理用）
-4. 標準モジュール「WordBookmarkOrganizer_Setup」と「WordBookmarkOrganizer」が追加されたことを確認
+   - `Word_しおり整理ツール_Setup.bas`（初期化・シートフォーマット用）
+   - `Word_しおり整理ツール.bas`（メイン処理用）
+4. 標準モジュール「Word_しおり整理ツール_Setup」と「Word_しおり整理ツール」が追加されたことを確認
 
 ### 3. Word参照設定を追加
 
@@ -128,7 +128,7 @@ Excelシート上にボタンを配置すると、マクロの実行が簡単に
 
 実際の環境で使用しているスタイル名が「表題1」「表題2」「表題3」と異なる場合は、VBAコードを編集してください。
 
-**編集箇所**: `WordBookmarkOrganizer.bas` の99～105行目
+**編集箇所**: `Word_しおり整理ツール.bas` の99～105行目
 
 ```vba
 ' スタイル名に応じてアウトラインレベルを設定

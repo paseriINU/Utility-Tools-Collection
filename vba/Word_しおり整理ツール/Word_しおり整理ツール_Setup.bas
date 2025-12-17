@@ -1,9 +1,9 @@
 '==============================================================================
 ' Word文書のしおり（ブックマーク）整理ツール - セットアップモジュール
-' モジュール名: WordBookmarkOrganizer_Setup
+' モジュール名: Word_しおり整理ツール_Setup
 '==============================================================================
 ' 概要:
-'   WordBookmarkOrganizerツールの初期化とシートフォーマット機能を提供します。
+'   Word_しおり整理ツールの初期化とシートフォーマット機能を提供します。
 '
 ' 含まれる機能:
 '   - メインシート初期化
@@ -17,11 +17,11 @@ Option Explicit
 '==============================================================================
 ' メインシート初期化
 '==============================================================================
-Public Sub InitializeWordBookmarkOrganizer()
+Public Sub InitializeWordしおり整理ツール()
     Dim ws As Worksheet
     Dim mainSheetName As String
 
-    mainSheetName = "WordBookmarkOrganizer"
+    mainSheetName = "Word_しおり整理ツール"
 
     On Error Resume Next
     Application.DisplayAlerts = False
@@ -44,7 +44,7 @@ Public Sub InitializeWordBookmarkOrganizer()
     ' シートを初期化
     FormatBookmarkMainSheet ws
 
-    MsgBox "WordBookmarkOrganizerシートを初期化しました。", vbInformation, "初期化完了"
+    MsgBox "Word_しおり整理ツールシートを初期化しました。", vbInformation, "初期化完了"
 End Sub
 
 '==============================================================================
