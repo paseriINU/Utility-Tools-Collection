@@ -146,6 +146,34 @@ function Select-Branch {
 # メイン処理
 #==============================================================================
 function Main {
+    #--------------------------------------------------------------------------
+    # Gitプロジェクトパスの入力
+    #--------------------------------------------------------------------------
+    Write-Host "----------------------------------------------------------------" -ForegroundColor DarkGray
+    Write-Host "  Gitプロジェクトパスの指定" -ForegroundColor Yellow
+    Write-Host "----------------------------------------------------------------" -ForegroundColor DarkGray
+    Write-Host ""
+    Write-Host "  Gitリポジトリのパスを入力してください。" -ForegroundColor White
+    Write-Host "  （空欄でEnterを押すと現在のディレクトリを使用します）" -ForegroundColor Gray
+    Write-Host ""
+
+    $inputPath = Read-Host "パス"
+
+    if ($inputPath) {
+        # 入力されたパスに移動
+        $inputPath = $inputPath.Trim('"').Trim("'")  # 引用符を除去
+        if (Test-Path $inputPath -PathType Container) {
+            Set-Location $inputPath
+            Write-Host ""
+            Write-Host "[OK] パスを変更しました: $inputPath" -ForegroundColor Green
+        } else {
+            Write-Host ""
+            Write-Host "[エラー] 指定されたパスが存在しません: $inputPath" -ForegroundColor Red
+            return 1
+        }
+    }
+    Write-Host ""
+
     # Gitリポジトリの確認
     if (-not (Test-GitRepository)) {
         Write-Host "[エラー] 現在のディレクトリはGitリポジトリではありません。" -ForegroundColor Red
