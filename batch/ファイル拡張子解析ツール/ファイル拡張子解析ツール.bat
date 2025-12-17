@@ -186,11 +186,12 @@ try {
     #region 詳細表示オプション
     Write-Host "詳細情報を表示しますか?" -ForegroundColor Yellow
     Write-Host " 1. 拡張子別ファイル一覧を表示"
-    Write-Host " 2. CSVファイルにエクスポート"
+    Write-Host " 2. フォルダ別に拡張子を表示"
+    Write-Host " 3. CSVファイルにエクスポート"
     Write-Host ""
     Write-Host " 0. 終了"
     Write-Host ""
-    $detailChoice = Read-Host "選択 (0-2)"
+    $detailChoice = Read-Host "選択 (0-3)"
 
     switch ($detailChoice) {
         "1" {
@@ -229,6 +230,44 @@ try {
             }
         }
         "2" {
+            # フォルダ別に拡張子を表示
+            Write-Host ""
+            Write-Host "================================================================" -ForegroundColor Cyan
+            Write-Host "  フォルダ別 拡張子一覧" -ForegroundColor Cyan
+            Write-Host "================================================================" -ForegroundColor Cyan
+            Write-Host ""
+
+            # ルートフォルダのファイルを処理
+            $rootFiles = $files | Where-Object { $_.DirectoryName -eq $targetPath }
+            if ($rootFiles.Count -gt 0) {
+                $rootExtensions = ($rootFiles | ForEach-Object {
+                    if ([string]::IsNullOrWhiteSpace($_.Extension)) { "(拡張子なし)" } else { $_.Extension.ToLower() }
+                } | Sort-Object -Unique) -join ", "
+                Write-Host "[ルート]" -ForegroundColor Yellow
+                Write-Host "  拡張子: $rootExtensions" -ForegroundColor White
+                Write-Host "  ファイル数: $($rootFiles.Count)" -ForegroundColor Gray
+                Write-Host ""
+            }
+
+            # サブフォルダごとにグループ化
+            $folderGroups = $files | Group-Object DirectoryName | Where-Object { $_.Name -ne $targetPath } | Sort-Object Name
+
+            foreach ($folder in $folderGroups) {
+                # 相対パスで表示
+                $relativeFolderPath = $folder.Name.Substring($targetPath.Length).TrimStart('\', '/')
+
+                # このフォルダ内の拡張子を取得
+                $folderExtensions = ($folder.Group | ForEach-Object {
+                    if ([string]::IsNullOrWhiteSpace($_.Extension)) { "(拡張子なし)" } else { $_.Extension.ToLower() }
+                } | Sort-Object -Unique) -join ", "
+
+                Write-Host "[$relativeFolderPath]" -ForegroundColor Yellow
+                Write-Host "  拡張子: $folderExtensions" -ForegroundColor White
+                Write-Host "  ファイル数: $($folder.Count)" -ForegroundColor Gray
+                Write-Host ""
+            }
+        }
+        "3" {
             $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
             $csvPath = Join-Path -Path $scriptDir -ChildPath "拡張子解析結果_$timestamp.csv"
 
