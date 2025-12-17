@@ -252,8 +252,9 @@ if ($branchChoice -eq "2") {
 
         Write-Color "[OK] ブランチを切り替えました: $targetBranch" "Green"
         $currentBranch = $targetBranch
+    } else {
+        Write-Color "[情報] 同じブランチが選択されました" "Yellow"
     }
-    # 同じブランチの場合はそのまま続行
 }
 
 Write-Host ""
