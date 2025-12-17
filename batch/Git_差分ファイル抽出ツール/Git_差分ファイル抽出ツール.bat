@@ -444,12 +444,14 @@ if ($compareMode -eq "1") {
     if ($hasBranchBase -and [int]$baseSelection -eq $branchBaseNum) {
         $BASE_REF = $branchBase
         $BASE_LABEL = "${branchBaseLabel} [${baseBranchName}からの分岐点]"
+        $baseCommitIndex = $commitLog.Count  # 分岐点は最も古いとみなす
         Write-Host ""
         Write-Host "[選択] 比較元: ${baseBranchName}からの分岐点 [$branchBase]" -ForegroundColor Green
     } else {
         $baseCommit = $commitLog[[int]$baseSelection - 1]
         $BASE_REF = $baseCommit.Hash
         $BASE_LABEL = "[$($baseCommit.Hash)] $($baseCommit.Message)"
+        $baseCommitIndex = [int]$baseSelection - 1  # 比較元のインデックスを保存
         Write-Host ""
         Write-Host "[選択] 比較元コミット: [$($baseCommit.Hash)] $($baseCommit.Message)" -ForegroundColor Green
     }
@@ -463,23 +465,25 @@ if ($compareMode -eq "1") {
     Write-Host " ※ HEADを選択すると、現在の最新状態と比較します" -ForegroundColor Gray
     Write-Host ""
 
+    # 比較元より新しいコミットのみを抽出（インデックスが小さいもの）
+    $newerCommits = @()
+    for ($i = 0; $i -lt $baseCommitIndex; $i++) {
+        $newerCommits += $commitLog[$i]
+    }
+
     # HEADオプションを追加
     Write-Host " 1. HEAD（現在の最新状態）" -ForegroundColor Cyan
 
-    for ($i = 0; $i -lt $commitLog.Count; $i++) {
+    for ($i = 0; $i -lt $newerCommits.Count; $i++) {
         $displayNum = $i + 2
-        $commit = $commitLog[$i]
-        if ($commit.Hash -eq $BASE_REF) {
-            Write-Host " $displayNum. [$($commit.Hash)] $($commit.Date) $($commit.Message) [比較元]" -ForegroundColor Gray
-        } else {
-            Write-Host " $displayNum. [$($commit.Hash)] $($commit.Date) $($commit.Message)"
-        }
+        $commit = $newerCommits[$i]
+        Write-Host " $displayNum. [$($commit.Hash)] $($commit.Date) $($commit.Message)"
     }
     Write-Host ""
     Write-Host " 0. キャンセル"
     Write-Host ""
 
-    $maxNum = $commitLog.Count + 1
+    $maxNum = $newerCommits.Count + 1
     $targetSelection = Read-Host "番号を選択してください (0-$maxNum)"
 
     if ($targetSelection -eq "0") {
@@ -498,18 +502,9 @@ if ($compareMode -eq "1") {
         Write-Host ""
         Write-Host "[選択] 比較先: HEAD（現在の最新状態）" -ForegroundColor Green
     } else {
-        $targetCommit = $commitLog[[int]$targetSelection - 2]
+        $targetCommit = $newerCommits[[int]$targetSelection - 2]
         $TARGET_REF = $targetCommit.Hash
         $TARGET_LABEL = "[$($targetCommit.Hash)] $($targetCommit.Message)"
-
-        if ($BASE_REF -eq $TARGET_REF) {
-            Write-Host "[警告] 比較元と比較先が同じコミットです" -ForegroundColor Yellow
-            $continue = Read-Host "続行しますか? (y/n)"
-            if ($continue -ne "y") {
-                Write-Host "処理を中止しました" -ForegroundColor Yellow
-                exit 0
-            }
-        }
 
         Write-Host ""
         Write-Host "[選択] 比較先コミット: [$($targetCommit.Hash)] $($targetCommit.Message)" -ForegroundColor Green
