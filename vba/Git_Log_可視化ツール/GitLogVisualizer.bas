@@ -646,7 +646,7 @@ Private Sub CreateDashboardSheet(ByRef commits() As CommitInfo, ByVal commitCoun
 
         .Range("B10").Value = "期間:"
         .Range("C10:D10").Merge
-        .Range("C10").Value = Format(minDate, "yyyy/mm/dd") & " 〜 " & Format(maxDate, "yyyy/mm/dd")
+        .Range("C10").Value = Format(minDate, "yyyy/mm/dd") & " " & ChrW(&HFF5E) & " " & Format(maxDate, "yyyy/mm/dd")
         .Range("C10").Font.Bold = True
         .Range("C10").HorizontalAlignment = xlCenter
 
