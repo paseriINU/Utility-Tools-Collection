@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF しおり検証ツール</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Segoe UI', 'Meiryo', sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        h1 {
+            color: #333;
+            border-bottom: 3px solid #4a90d9;
+            padding-bottom: 10px;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .drop-zone {
+            border: 3px dashed #4a90d9;
+            border-radius: 8px;
+            padding: 40px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            background-color: #f8fafc;
+        }
+        .drop-zone:hover, .drop-zone.dragover {
+            background-color: #e3f2fd;
+            border-color: #1976d2;
+        }
+        .drop-zone p {
+            margin: 0;
+            font-size: 16px;
+            color: #666;
+        }
+        .drop-zone .icon {
+            font-size: 48px;
+            margin-bottom: 10px;
+        }
+        input[type="file"] {
+            display: none;
+        }
+        .file-info {
+            margin-top: 15px;
+            padding: 10px;
+            background: #e8f5e9;
+            border-radius: 4px;
+            display: none;
+        }
+        .file-info.show {
+            display: block;
+        }
+        button {
+            background-color: #4a90d9;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            font-size: 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #357abd;
+        }
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        button.secondary {
+            background-color: #6c757d;
+        }
+        button.secondary:hover {
+            background-color: #545b62;
+        }
+        .button-group {
+            margin-top: 15px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+            font-size: 14px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 10px 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #4a90d9;
+            color: white;
+            position: sticky;
+            top: 0;
+        }
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        tr:hover {
+            background-color: #f0f7ff;
+        }
+        .status-ok {
+            background-color: #c6efce !important;
+            color: #006100;
+            font-weight: bold;
+        }
+        .status-warning {
+            background-color: #ffeb9c !important;
+            color: #9c5700;
+            font-weight: bold;
+        }
+        .result-container {
+            max-height: 600px;
+            overflow-y: auto;
+        }
+        .summary {
+            background: #e3f2fd;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 15px;
+        }
+        .summary span {
+            margin-right: 20px;
+        }
+        .error {
+            background: #ffebee;
+            color: #c62828;
+            padding: 15px;
+            border-radius: 4px;
+            margin-top: 15px;
+        }
+        .loading {
+            text-align: center;
+            padding: 20px;
+        }
+        .loading::after {
+            content: '';
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #4a90d9;
+            border-radius: 50%;
+            border-top-color: transparent;
+            animation: spin 1s linear infinite;
+            margin-left: 10px;
+            vertical-align: middle;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .hidden {
+            display: none;
+        }
+        .level-indent {
+            color: #999;
+        }
+        footer {
+            text-align: center;
+            color: #666;
+            font-size: 12px;
+            margin-top: 30px;
+        }
+    </style>
+</head>
+<body>
+    <h1>PDF しおり検証ツール</h1>
+
+    <div class="container">
+        <h2>PDFファイルを選択</h2>
+        <div class="drop-zone" id="dropZone">
+            <div class="icon">📄</div>
+            <p>ここにPDFファイルをドラッグ&ドロップ<br>または クリックしてファイルを選択</p>
+        </div>
+        <input type="file" id="fileInput" accept=".pdf">
+        <div class="file-info" id="fileInfo"></div>
+        <div class="button-group">
+            <button id="validateBtn" disabled>しおり検証</button>
+            <button id="clearBtn" class="secondary" disabled>クリア</button>
+        </div>
+    </div>
+
+    <div class="container hidden" id="resultContainer">
+        <h2>検証結果</h2>
+        <div class="summary" id="summary"></div>
+        <div class="button-group">
+            <button id="csvBtn">CSV出力</button>
+        </div>
+        <div class="result-container">
+            <table id="resultTable">
+                <thead>
+                    <tr>
+                        <th>No</th>
+                        <th>しおり名</th>
+                        <th>階層</th>
+                        <th>リンク先ページ</th>
+                        <th>判定</th>
+                    </tr>
+                </thead>
+                <tbody id="resultBody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="container hidden" id="errorContainer">
+        <div class="error" id="errorMessage"></div>
+    </div>
+
+    <footer>
+        PDF しおり検証ツール - 外部ライブラリ不要・オフライン動作
+    </footer>
+
+    <script>
+        // グローバル変数
+        let selectedFile = null;
+        let bookmarks = [];
+
+        // DOM要素
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+        const fileInfo = document.getElementById('fileInfo');
+        const validateBtn = document.getElementById('validateBtn');
+        const clearBtn = document.getElementById('clearBtn');
+        const csvBtn = document.getElementById('csvBtn');
+        const resultContainer = document.getElementById('resultContainer');
+        const resultBody = document.getElementById('resultBody');
+        const summary = document.getElementById('summary');
+        const errorContainer = document.getElementById('errorContainer');
+        const errorMessage = document.getElementById('errorMessage');
+
+        // ドラッグ&ドロップ
+        dropZone.addEventListener('click', () => fileInput.click());
+
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('dragover');
+        });
+
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('dragover');
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0 && files[0].type === 'application/pdf') {
+                handleFile(files[0]);
+            } else {
+                showError('PDFファイルを選択してください。');
+            }
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleFile(e.target.files[0]);
+            }
+        });
+
+        // ファイル選択処理
+        function handleFile(file) {
+            selectedFile = file;
+            fileInfo.innerHTML = `<strong>選択ファイル:</strong> ${file.name} (${formatFileSize(file.size)})`;
+            fileInfo.classList.add('show');
+            validateBtn.disabled = false;
+            clearBtn.disabled = false;
+            hideError();
+            resultContainer.classList.add('hidden');
+        }
+
+        // ファイルサイズフォーマット
+        function formatFileSize(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+            return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+        }
+
+        // 検証ボタン
+        validateBtn.addEventListener('click', async () => {
+            if (!selectedFile) return;
+
+            validateBtn.disabled = true;
+            validateBtn.innerHTML = '解析中...';
+            hideError();
+
+            try {
+                const arrayBuffer = await selectedFile.arrayBuffer();
+                bookmarks = parsePDFBookmarks(arrayBuffer);
+                displayResults();
+            } catch (error) {
+                showError(error.message);
+            } finally {
+                validateBtn.disabled = false;
+                validateBtn.innerHTML = 'しおり検証';
+            }
+        });
+
+        // クリアボタン
+        clearBtn.addEventListener('click', () => {
+            selectedFile = null;
+            bookmarks = [];
+            fileInput.value = '';
+            fileInfo.classList.remove('show');
+            validateBtn.disabled = true;
+            clearBtn.disabled = true;
+            resultContainer.classList.add('hidden');
+            hideError();
+        });
+
+        // CSV出力ボタン
+        csvBtn.addEventListener('click', () => {
+            if (bookmarks.length === 0) return;
+
+            let csv = '\uFEFF'; // BOM for Excel
+            csv += 'No,しおり名,階層,リンク先ページ,判定\n';
+
+            bookmarks.forEach((bm, i) => {
+                const title = bm.title.replace(/"/g, '""');
+                const status = bm.page ? 'OK' : '確認要';
+                csv += `${i + 1},"${title}",${bm.level},${bm.page || ''},${status}\n`;
+            });
+
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `しおり検証結果_${formatDate(new Date())}.csv`;
+            a.click();
+            URL.revokeObjectURL(url);
+        });
+
+        // 日付フォーマット
+        function formatDate(date) {
+            const y = date.getFullYear();
+            const m = String(date.getMonth() + 1).padStart(2, '0');
+            const d = String(date.getDate()).padStart(2, '0');
+            const h = String(date.getHours()).padStart(2, '0');
+            const min = String(date.getMinutes()).padStart(2, '0');
+            return `${y}${m}${d}_${h}${min}`;
+        }
+
+        // エラー表示
+        function showError(message) {
+            errorMessage.textContent = message;
+            errorContainer.classList.remove('hidden');
+            resultContainer.classList.add('hidden');
+        }
+
+        function hideError() {
+            errorContainer.classList.add('hidden');
+        }
+
+        // 結果表示
+        function displayResults() {
+            if (bookmarks.length === 0) {
+                showError('このPDFにはしおりがありません。');
+                return;
+            }
+
+            const okCount = bookmarks.filter(b => b.page).length;
+            const warningCount = bookmarks.length - okCount;
+
+            summary.innerHTML = `
+                <span><strong>総しおり数:</strong> ${bookmarks.length}</span>
+                <span style="color: #006100;"><strong>OK:</strong> ${okCount}</span>
+                <span style="color: #9c5700;"><strong>確認要:</strong> ${warningCount}</span>
+            `;
+
+            resultBody.innerHTML = '';
+            bookmarks.forEach((bm, i) => {
+                const tr = document.createElement('tr');
+                const status = bm.page ? 'OK' : '確認要';
+                const statusClass = bm.page ? 'status-ok' : 'status-warning';
+                const indent = '　'.repeat(bm.level - 1);
+
+                tr.innerHTML = `
+                    <td>${i + 1}</td>
+                    <td><span class="level-indent">${indent}</span>${escapeHtml(bm.title)}</td>
+                    <td>${bm.level}</td>
+                    <td>${bm.page || '-'}</td>
+                    <td class="${statusClass}">${status}</td>
+                `;
+                resultBody.appendChild(tr);
+            });
+
+            resultContainer.classList.remove('hidden');
+        }
+
+        // HTMLエスケープ
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // PDF解析メイン関数
+        function parsePDFBookmarks(arrayBuffer) {
+            const bytes = new Uint8Array(arrayBuffer);
+            const content = latin1Decode(bytes);
+
+            // PDFバージョン確認
+            if (!content.startsWith('%PDF-')) {
+                throw new Error('有効なPDFファイルではありません。');
+            }
+
+            // しおり（Outlines）の存在確認
+            if (!content.match(/\/Outlines\s+\d+\s+\d+\s+R/) && !content.match(/\/Type\s*\/Outlines/)) {
+                throw new Error('このPDFにはしおりがありません。');
+            }
+
+            // ページオブジェクトとページ番号のマッピングを作成
+            const pageObjects = buildPageMapping(content);
+
+            // しおり情報を抽出
+            const bookmarks = extractBookmarks(content, bytes, pageObjects);
+
+            if (bookmarks.length === 0) {
+                throw new Error('しおりを取得できませんでした。PDFが暗号化されているか、特殊な形式の可能性があります。');
+            }
+
+            return bookmarks;
+        }
+
+        // Latin-1デコード
+        function latin1Decode(bytes) {
+            let result = '';
+            for (let i = 0; i < bytes.length; i++) {
+                result += String.fromCharCode(bytes[i]);
+            }
+            return result;
+        }
+
+        // ページマッピング構築
+        function buildPageMapping(content) {
+            const pageObjects = {};
+            const pageObjPattern = /(\d+)\s+\d+\s+obj[\s\S]*?\/Type\s*\/Page[^s]/g;
+            let match;
+            let pageNum = 1;
+
+            while ((match = pageObjPattern.exec(content)) !== null) {
+                const objNum = match[1];
+                pageObjects[objNum] = pageNum;
+                pageNum++;
+            }
+
+            return pageObjects;
+        }
+
+        // しおり抽出
+        function extractBookmarks(content, bytes, pageObjects) {
+            const bookmarks = [];
+
+            // 方法1: /Title タグを直接検索（ASCII/Latin-1）
+            const titlePattern = /\/Title\s*\(([^)]*)\)/g;
+            let match;
+
+            while ((match = titlePattern.exec(content)) !== null) {
+                let title = match[1];
+                title = decodePDFString(title);
+                bookmarks.push({ title, page: '', level: 1 });
+            }
+
+            // 方法2: UTF-16BE エンコードされたタイトル (<FEFF...>)
+            const hexPattern = /\/Title\s*<(FEFF[0-9A-Fa-f]+)>/g;
+            while ((match = hexPattern.exec(content)) !== null) {
+                const hexStr = match[1].substring(4); // FEFFをスキップ
+                let title = '';
+                for (let i = 0; i < hexStr.length; i += 4) {
+                    if (i + 4 <= hexStr.length) {
+                        const charCode = parseInt(hexStr.substring(i, i + 4), 16);
+                        title += String.fromCharCode(charCode);
+                    }
+                }
+                if (title) {
+                    bookmarks.push({ title, page: '', level: 1 });
+                }
+            }
+
+            // 方法3: 通常の16進数タイトル
+            const hexPattern2 = /\/Title\s*<([0-9A-Fa-f]+)>/g;
+            while ((match = hexPattern2.exec(content)) !== null) {
+                if (match[1].toUpperCase().startsWith('FEFF')) continue; // 既に処理済み
+                const hexStr = match[1];
+                let title = '';
+                for (let i = 0; i < hexStr.length; i += 2) {
+                    if (i + 2 <= hexStr.length) {
+                        const charCode = parseInt(hexStr.substring(i, i + 2), 16);
+                        title += String.fromCharCode(charCode);
+                    }
+                }
+                if (title && title.trim()) {
+                    bookmarks.push({ title, page: '', level: 1 });
+                }
+            }
+
+            // ページ参照を検索して関連付け
+            const destPattern = /\/Dest\s*\[\s*(\d+)\s+\d+\s+R/g;
+            const destinations = [];
+            while ((match = destPattern.exec(content)) !== null) {
+                destinations.push(match[1]);
+            }
+
+            // しおりにページ番号を割り当て
+            for (let i = 0; i < Math.min(bookmarks.length, destinations.length); i++) {
+                const pageRef = destinations[i];
+                if (pageObjects[pageRef]) {
+                    bookmarks[i].page = pageObjects[pageRef];
+                } else {
+                    // オブジェクト番号からページ番号を推測
+                    bookmarks[i].page = parseInt(pageRef) || '';
+                }
+            }
+
+            // 階層構造の解析を試みる
+            analyzeHierarchy(content, bookmarks);
+
+            return bookmarks;
+        }
+
+        // PDFエスケープシーケンスをデコード
+        function decodePDFString(str) {
+            return str
+                .replace(/\\n/g, '\n')
+                .replace(/\\r/g, '\r')
+                .replace(/\\t/g, '\t')
+                .replace(/\\\\/g, '\\')
+                .replace(/\\\(/g, '(')
+                .replace(/\\\)/g, ')')
+                .replace(/\\([0-7]{1,3})/g, (_, oct) => String.fromCharCode(parseInt(oct, 8)));
+        }
+
+        // 階層構造の解析
+        function analyzeHierarchy(content, bookmarks) {
+            // /Parent と /First, /Last を使って階層を推測
+            // 簡易実装: /Count の値から階層を推測
+            const outlineItems = content.match(/\d+\s+\d+\s+obj[\s\S]*?\/Title[\s\S]*?endobj/g) || [];
+
+            outlineItems.forEach((item, index) => {
+                if (index < bookmarks.length) {
+                    // /Parent が存在するかチェック
+                    const parentMatch = item.match(/\/Parent\s+(\d+)/);
+                    const firstMatch = item.match(/\/First\s+(\d+)/);
+
+                    if (parentMatch && !firstMatch) {
+                        // 子要素の可能性
+                        // 前のしおりのレベル + 1 を仮定
+                        if (index > 0) {
+                            bookmarks[index].level = Math.min(bookmarks[index - 1].level + 1, 5);
+                        }
+                    }
+                }
+            });
+        }
+    </script>
+</body>
+</html>
