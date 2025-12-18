@@ -19,10 +19,11 @@ Public Const ROW_REMOTE_USER As Long = 10
 Public Const ROW_REMOTE_PASSWORD As Long = 11
 Public Const ROW_JP1_USER As Long = 12
 Public Const ROW_JP1_PASSWORD As Long = 13
-Public Const ROW_ROOT_PATH As Long = 14
-Public Const ROW_WAIT_COMPLETION As Long = 15
-Public Const ROW_TIMEOUT As Long = 16
-Public Const ROW_POLLING_INTERVAL As Long = 17
+Public Const ROW_SCHEDULER_SERVICE As Long = 14
+Public Const ROW_ROOT_PATH As Long = 15
+Public Const ROW_WAIT_COMPLETION As Long = 17
+Public Const ROW_TIMEOUT As Long = 18
+Public Const ROW_POLLING_INTERVAL As Long = 19
 Public Const COL_SETTING_VALUE As Long = 3
 
 ' ジョブ一覧シートの列位置 - Publicで共有
@@ -149,14 +150,19 @@ Private Sub FormatMainSheet()
     ws.Cells(ROW_JP1_PASSWORD, 4).Value = "※空の場合は実行時に入力"
     ws.Cells(ROW_JP1_PASSWORD, 4).Font.Color = RGB(128, 128, 128)
 
+    ws.Cells(ROW_SCHEDULER_SERVICE, 1).Value = "スケジューラーサービス"
+    ws.Cells(ROW_SCHEDULER_SERVICE, COL_SETTING_VALUE).Value = "AJSROOT1"
+    ws.Cells(ROW_SCHEDULER_SERVICE, 4).Value = "※JP1/AJS3のスケジューラーサービス名（例: AJSROOT1）"
+    ws.Cells(ROW_SCHEDULER_SERVICE, 4).Font.Color = RGB(128, 128, 128)
+
     ws.Cells(ROW_ROOT_PATH, 1).Value = "取得パス"
-    ws.Cells(ROW_ROOT_PATH, COL_SETTING_VALUE).Value = "/AJSROOT1"
-    ws.Cells(ROW_ROOT_PATH, 4).Value = "※例: /AJSROOT1 または /AJSROOT1/グループ名"
+    ws.Cells(ROW_ROOT_PATH, COL_SETTING_VALUE).Value = "/"
+    ws.Cells(ROW_ROOT_PATH, 4).Value = "※ジョブネットのパス（例: / または /グループ名）"
     ws.Cells(ROW_ROOT_PATH, 4).Font.Color = RGB(128, 128, 128)
 
     ' 実行設定セクション
-    ws.Range("A15").Value = "■ 実行設定"
-    ws.Range("A15").Font.Bold = True
+    ws.Range("A16").Value = "■ 実行設定"
+    ws.Range("A16").Font.Bold = True
 
     ws.Cells(ROW_WAIT_COMPLETION, 1).Value = "完了待ち"
     ws.Cells(ROW_WAIT_COMPLETION, COL_SETTING_VALUE).Value = "はい"
@@ -176,11 +182,18 @@ Private Sub FormatMainSheet()
     ws.Columns("C").ColumnWidth = 30
     ws.Columns("D").ColumnWidth = 40
 
-    ' 入力セルの書式
-    With ws.Range(ws.Cells(ROW_EXEC_MODE, COL_SETTING_VALUE), ws.Cells(ROW_POLLING_INTERVAL, COL_SETTING_VALUE))
-        .Interior.Color = RGB(255, 255, 204)
-        .Borders.LineStyle = xlContinuous
-    End With
+    ' 入力セルの書式（設定セルを黄色背景に）
+    Dim settingCells As Variant
+    settingCells = Array(ROW_EXEC_MODE, ROW_JP1_SERVER, ROW_REMOTE_USER, ROW_REMOTE_PASSWORD, _
+                         ROW_JP1_USER, ROW_JP1_PASSWORD, ROW_SCHEDULER_SERVICE, ROW_ROOT_PATH, _
+                         ROW_WAIT_COMPLETION, ROW_TIMEOUT, ROW_POLLING_INTERVAL)
+    Dim r As Variant
+    For Each r In settingCells
+        With ws.Cells(CLng(r), COL_SETTING_VALUE)
+            .Interior.Color = RGB(255, 255, 204)
+            .Borders.LineStyle = xlContinuous
+        End With
+    Next r
 End Sub
 
 '==============================================================================

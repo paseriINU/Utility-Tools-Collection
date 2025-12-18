@@ -113,7 +113,7 @@ Private Function BuildGetJobListScript(config As Object) As String
         script = script & "  }" & vbCrLf
         script = script & vbCrLf
         script = script & "  # ローカルでajsprintを実行" & vbCrLf
-        script = script & "  $result = & $ajsprintPath -F '" & config("RootPath") & "' -R 2>&1" & vbCrLf
+        script = script & "  $result = & $ajsprintPath -F " & config("SchedulerService") & " '" & config("RootPath") & "' -R 2>&1" & vbCrLf
         script = script & "  $result | ForEach-Object { Write-Output $_ }" & vbCrLf
         script = script & "} catch {" & vbCrLf
         script = script & "  Write-Output ""ERROR: $($_.Exception.Message)""" & vbCrLf
@@ -157,13 +157,13 @@ Private Function BuildGetJobListScript(config As Object) As String
         script = script & "  $session = New-PSSession -ComputerName '" & config("JP1Server") & "' -Credential $cred -ErrorAction Stop" & vbCrLf
         script = script & vbCrLf
         script = script & "  $result = Invoke-Command -Session $session -ScriptBlock {" & vbCrLf
-        script = script & "    param($rootPath)" & vbCrLf
+        script = script & "    param($schedulerService, $rootPath)" & vbCrLf
         script = script & "    $ajsprintPath = $null" & vbCrLf
         script = script & "    $searchPaths = @('C:\Program Files\HITACHI\JP1AJS3\bin\ajsprint.exe','C:\Program Files (x86)\HITACHI\JP1AJS3\bin\ajsprint.exe','C:\Program Files\Hitachi\JP1AJS2\bin\ajsprint.exe','C:\Program Files (x86)\Hitachi\JP1AJS2\bin\ajsprint.exe')" & vbCrLf
         script = script & "    foreach ($p in $searchPaths) { if (Test-Path $p) { $ajsprintPath = $p; break } }" & vbCrLf
         script = script & "    if (-not $ajsprintPath) { Write-Output 'ERROR: ajsprint.exe not found'; return }" & vbCrLf
-        script = script & "    & $ajsprintPath -F $rootPath -R 2>&1" & vbCrLf
-        script = script & "  } -ArgumentList '" & config("RootPath") & "'" & vbCrLf
+        script = script & "    & $ajsprintPath -F $schedulerService $rootPath -R 2>&1" & vbCrLf
+        script = script & "  } -ArgumentList '" & config("SchedulerService") & "', '" & config("RootPath") & "'" & vbCrLf
         script = script & vbCrLf
         script = script & "  Remove-PSSession $session" & vbCrLf
         script = script & vbCrLf
@@ -658,8 +658,8 @@ Private Function BuildExecuteJobScript(config As Object, jobnetPath As String, w
         If isHold Then
             script = script & "  # 保留解除" & vbCrLf
             script = script & "  Write-Log '[実行] ajsrelease - 保留解除'" & vbCrLf
-            script = script & "  Write-Log ""コマンド: ajsrelease.exe -F " & jobnetPath & """" & vbCrLf
-            script = script & "  $releaseOutput = & ""$jp1BinPath\ajsrelease.exe"" -F '" & jobnetPath & "' 2>&1" & vbCrLf
+            script = script & "  Write-Log ""コマンド: ajsrelease.exe -F " & config("SchedulerService") & " " & jobnetPath & """" & vbCrLf
+            script = script & "  $releaseOutput = & ""$jp1BinPath\ajsrelease.exe"" -F " & config("SchedulerService") & " '" & jobnetPath & "' 2>&1" & vbCrLf
             script = script & "  Write-Log ""結果: $($releaseOutput -join ' ')""" & vbCrLf
             script = script & "  if ($LASTEXITCODE -ne 0) {" & vbCrLf
             script = script & "    Write-Log '[ERROR] 保留解除失敗'" & vbCrLf
@@ -673,8 +673,8 @@ Private Function BuildExecuteJobScript(config As Object, jobnetPath As String, w
 
         script = script & "  # ajsentry実行" & vbCrLf
         script = script & "  Write-Log '[実行] ajsentry - ジョブ起動'" & vbCrLf
-        script = script & "  Write-Log ""コマンド: ajsentry.exe -F " & jobnetPath & """" & vbCrLf
-        script = script & "  $output = & ""$jp1BinPath\ajsentry.exe"" -F '" & jobnetPath & "' 2>&1" & vbCrLf
+        script = script & "  Write-Log ""コマンド: ajsentry.exe -F " & config("SchedulerService") & " " & jobnetPath & """" & vbCrLf
+        script = script & "  $output = & ""$jp1BinPath\ajsentry.exe"" -F " & config("SchedulerService") & " '" & jobnetPath & "' 2>&1" & vbCrLf
         script = script & "  Write-Log ""結果: $($output -join ' ')""" & vbCrLf
         script = script & "  $exitCode = $LASTEXITCODE" & vbCrLf
         script = script & vbCrLf
@@ -704,7 +704,7 @@ Private Function BuildExecuteJobScript(config As Object, jobnetPath As String, w
             script = script & "      break" & vbCrLf
             script = script & "    }" & vbCrLf
             script = script & vbCrLf
-            script = script & "    $statusResult = & ""$jp1BinPath\ajsstatus.exe"" -F '" & jobnetPath & "' 2>&1" & vbCrLf
+            script = script & "    $statusResult = & ""$jp1BinPath\ajsstatus.exe"" -F " & config("SchedulerService") & " '" & jobnetPath & "' 2>&1" & vbCrLf
             script = script & "    $statusStr = ($statusResult -join ' ').ToLower()" & vbCrLf
             script = script & "    Write-Log ""[ポーリング $pollCount] ステータス: $($statusResult -join ' ')""" & vbCrLf
             script = script & vbCrLf
@@ -726,7 +726,7 @@ Private Function BuildExecuteJobScript(config As Object, jobnetPath As String, w
             script = script & "  Write-Log '[実行] ajsshow - 詳細取得'" & vbCrLf
             script = script & "  $ajsshowPath = ""$jp1BinPath\ajsshow.exe""" & vbCrLf
             script = script & "  if (Test-Path $ajsshowPath) {" & vbCrLf
-            script = script & "    $showResult = & $ajsshowPath -F '" & jobnetPath & "' -E 2>&1" & vbCrLf
+            script = script & "    $showResult = & $ajsshowPath -F " & config("SchedulerService") & " '" & jobnetPath & "' -E 2>&1" & vbCrLf
             script = script & "    Write-Log ""詳細: $($showResult -join ' ')""" & vbCrLf
             script = script & "    Write-Output ""RESULT_MESSAGE:$($showResult -join ' ')""" & vbCrLf
             script = script & "  }" & vbCrLf
@@ -795,14 +795,14 @@ Private Function BuildExecuteJobScript(config As Object, jobnetPath As String, w
             script = script & "  # 保留解除" & vbCrLf
             script = script & "  Write-Log '[実行] ajsrelease - 保留解除（リモート）'" & vbCrLf
             script = script & "  $releaseResult = Invoke-Command -Session $session -ScriptBlock {" & vbCrLf
-            script = script & "    param($jobnetPath)" & vbCrLf
+            script = script & "    param($schedulerService, $jobnetPath)" & vbCrLf
             script = script & "    $ajsreleasePath = $null" & vbCrLf
             script = script & "    $searchPaths = @('C:\Program Files\HITACHI\JP1AJS3\bin\ajsrelease.exe','C:\Program Files (x86)\HITACHI\JP1AJS3\bin\ajsrelease.exe','C:\Program Files\Hitachi\JP1AJS2\bin\ajsrelease.exe','C:\Program Files (x86)\Hitachi\JP1AJS2\bin\ajsrelease.exe')" & vbCrLf
             script = script & "    foreach ($p in $searchPaths) { if (Test-Path $p) { $ajsreleasePath = $p; break } }" & vbCrLf
             script = script & "    if (-not $ajsreleasePath) { Write-Output 'ERROR: ajsrelease.exe not found'; return @{ ExitCode = 1; Output = 'ajsrelease.exe not found' } }" & vbCrLf
-            script = script & "    $output = & $ajsreleasePath -F $jobnetPath 2>&1" & vbCrLf
+            script = script & "    $output = & $ajsreleasePath -F $schedulerService $jobnetPath 2>&1" & vbCrLf
             script = script & "    @{ ExitCode = $LASTEXITCODE; Output = ($output -join ' ') }" & vbCrLf
-            script = script & "  } -ArgumentList '" & jobnetPath & "'" & vbCrLf
+            script = script & "  } -ArgumentList '" & config("SchedulerService") & "', '" & jobnetPath & "'" & vbCrLf
             script = script & "  Write-Log ""結果: $($releaseResult.Output)""" & vbCrLf
             script = script & vbCrLf
             script = script & "  if ($releaseResult.ExitCode -ne 0) {" & vbCrLf
@@ -819,14 +819,14 @@ Private Function BuildExecuteJobScript(config As Object, jobnetPath As String, w
         ' ajsentry実行
         script = script & "  Write-Log '[実行] ajsentry - ジョブ起動（リモート）'" & vbCrLf
         script = script & "  $entryResult = Invoke-Command -Session $session -ScriptBlock {" & vbCrLf
-        script = script & "    param($jobnetPath)" & vbCrLf
+        script = script & "    param($schedulerService, $jobnetPath)" & vbCrLf
         script = script & "    $ajsentryPath = $null" & vbCrLf
         script = script & "    $searchPaths = @('C:\Program Files\HITACHI\JP1AJS3\bin\ajsentry.exe','C:\Program Files (x86)\HITACHI\JP1AJS3\bin\ajsentry.exe','C:\Program Files\Hitachi\JP1AJS2\bin\ajsentry.exe','C:\Program Files (x86)\Hitachi\JP1AJS2\bin\ajsentry.exe')" & vbCrLf
         script = script & "    foreach ($p in $searchPaths) { if (Test-Path $p) { $ajsentryPath = $p; break } }" & vbCrLf
         script = script & "    if (-not $ajsentryPath) { Write-Output 'ERROR: ajsentry.exe not found'; return @{ ExitCode = 1; Output = 'ajsentry.exe not found' } }" & vbCrLf
-        script = script & "    $output = & $ajsentryPath -F $jobnetPath 2>&1" & vbCrLf
+        script = script & "    $output = & $ajsentryPath -F $schedulerService $jobnetPath 2>&1" & vbCrLf
         script = script & "    @{ ExitCode = $LASTEXITCODE; Output = ($output -join ' ') }" & vbCrLf
-        script = script & "  } -ArgumentList '" & jobnetPath & "'" & vbCrLf
+        script = script & "  } -ArgumentList '" & config("SchedulerService") & "', '" & jobnetPath & "'" & vbCrLf
         script = script & "  Write-Log ""結果: $($entryResult.Output)""" & vbCrLf
         script = script & vbCrLf
 
@@ -858,13 +858,13 @@ Private Function BuildExecuteJobScript(config As Object, jobnetPath As String, w
             script = script & "    }" & vbCrLf
             script = script & vbCrLf
             script = script & "    $statusResult = Invoke-Command -Session $session -ScriptBlock {" & vbCrLf
-            script = script & "      param($jobnetPath)" & vbCrLf
+            script = script & "      param($schedulerService, $jobnetPath)" & vbCrLf
             script = script & "      $ajsstatusPath = $null" & vbCrLf
             script = script & "      $searchPaths = @('C:\Program Files\HITACHI\JP1AJS3\bin\ajsstatus.exe','C:\Program Files (x86)\HITACHI\JP1AJS3\bin\ajsstatus.exe','C:\Program Files\Hitachi\JP1AJS2\bin\ajsstatus.exe','C:\Program Files (x86)\Hitachi\JP1AJS2\bin\ajsstatus.exe')" & vbCrLf
             script = script & "      foreach ($p in $searchPaths) { if (Test-Path $p) { $ajsstatusPath = $p; break } }" & vbCrLf
             script = script & "      if (-not $ajsstatusPath) { return 'ERROR: ajsstatus.exe not found' }" & vbCrLf
-            script = script & "      & $ajsstatusPath -F $jobnetPath 2>&1" & vbCrLf
-            script = script & "    } -ArgumentList '" & jobnetPath & "'" & vbCrLf
+            script = script & "      & $ajsstatusPath -F $schedulerService $jobnetPath 2>&1" & vbCrLf
+            script = script & "    } -ArgumentList '" & config("SchedulerService") & "', '" & jobnetPath & "'" & vbCrLf
             script = script & vbCrLf
             script = script & "    $statusStr = ($statusResult -join ' ').ToLower()" & vbCrLf
             script = script & "    Write-Log ""[ポーリング $pollCount] ステータス: $($statusResult -join ' ')""" & vbCrLf
@@ -885,12 +885,12 @@ Private Function BuildExecuteJobScript(config As Object, jobnetPath As String, w
             ' 詳細取得
             script = script & "  Write-Log '[実行] ajsshow - 詳細取得（リモート）'" & vbCrLf
             script = script & "  $showResult = Invoke-Command -Session $session -ScriptBlock {" & vbCrLf
-            script = script & "    param($jobnetPath)" & vbCrLf
+            script = script & "    param($schedulerService, $jobnetPath)" & vbCrLf
             script = script & "    $ajsshowPath = $null" & vbCrLf
             script = script & "    $searchPaths = @('C:\Program Files\HITACHI\JP1AJS3\bin\ajsshow.exe','C:\Program Files (x86)\HITACHI\JP1AJS3\bin\ajsshow.exe','C:\Program Files\Hitachi\JP1AJS2\bin\ajsshow.exe','C:\Program Files (x86)\Hitachi\JP1AJS2\bin\ajsshow.exe')" & vbCrLf
             script = script & "    foreach ($p in $searchPaths) { if (Test-Path $p) { $ajsshowPath = $p; break } }" & vbCrLf
-            script = script & "    if ($ajsshowPath) { & $ajsshowPath -F $jobnetPath -E 2>&1 }" & vbCrLf
-            script = script & "  } -ArgumentList '" & jobnetPath & "'" & vbCrLf
+            script = script & "    if ($ajsshowPath) { & $ajsshowPath -F $schedulerService $jobnetPath -E 2>&1 }" & vbCrLf
+            script = script & "  } -ArgumentList '" & config("SchedulerService") & "', '" & jobnetPath & "'" & vbCrLf
             script = script & "  Write-Log ""詳細: $($showResult -join ' ')""" & vbCrLf
             script = script & "  Write-Output ""RESULT_MESSAGE:$($showResult -join ' ')""" & vbCrLf
         Else
@@ -995,6 +995,7 @@ Private Function GetConfig() As Object
     config("RemotePassword") = CStr(ws.Cells(ROW_REMOTE_PASSWORD, COL_SETTING_VALUE).Value)
     config("JP1User") = CStr(ws.Cells(ROW_JP1_USER, COL_SETTING_VALUE).Value)
     config("JP1Password") = CStr(ws.Cells(ROW_JP1_PASSWORD, COL_SETTING_VALUE).Value)
+    config("SchedulerService") = CStr(ws.Cells(ROW_SCHEDULER_SERVICE, COL_SETTING_VALUE).Value)
     config("RootPath") = CStr(ws.Cells(ROW_ROOT_PATH, COL_SETTING_VALUE).Value)
     config("WaitCompletion") = CStr(ws.Cells(ROW_WAIT_COMPLETION, COL_SETTING_VALUE).Value)
     config("Timeout") = CLng(ws.Cells(ROW_TIMEOUT, COL_SETTING_VALUE).Value)
