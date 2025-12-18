@@ -84,7 +84,6 @@ Private Function BuildGetJobListScript(config As Object) As String
     Dim script As String
 
     script = "$ErrorActionPreference = 'Stop'" & vbCrLf
-    script = script & "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8" & vbCrLf
     script = script & vbCrLf
 
     ' ローカルモードとリモートモードで処理を分岐
@@ -601,7 +600,6 @@ Private Function BuildExecuteJobScript(config As Object, jobnetPath As String, w
     Dim script As String
 
     script = "$ErrorActionPreference = 'Stop'" & vbCrLf
-    script = script & "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8" & vbCrLf
     script = script & vbCrLf
 
     ' ログ出力関数を定義
