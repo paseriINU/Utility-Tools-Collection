@@ -974,7 +974,7 @@ Private Function GetConfig() As Object
 End Function
 
 Private Function ExecutePowerShell(script As String) As String
-    ' 一時ファイルにスクリプトを保存
+    ' 一時ファイルにスクリプトを保存（UTF-8 BOM付きで保存）
     Dim fso As Object
     Set fso = CreateObject("Scripting.FileSystemObject")
 
@@ -984,10 +984,16 @@ Private Function ExecutePowerShell(script As String) As String
     Dim scriptPath As String
     scriptPath = tempFolder & "\jp1_temp_" & Format(Now, "yyyymmddhhnnss") & ".ps1"
 
-    Dim ts As Object
-    Set ts = fso.CreateTextFile(scriptPath, True, True) ' Unicode
-    ts.Write script
-    ts.Close
+    ' ADODB.Streamを使用してUTF-8（BOM付き）で保存
+    Dim stream As Object
+    Set stream = CreateObject("ADODB.Stream")
+    stream.Type = 2 ' adTypeText
+    stream.Charset = "UTF-8"
+    stream.Open
+    stream.WriteText script
+    stream.SaveToFile scriptPath, 2 ' adSaveCreateOverWrite
+    stream.Close
+    Set stream = Nothing
 
     ' PowerShell実行
     Dim shell As Object
@@ -1143,17 +1149,22 @@ Private Function CreateLogFile() As String
     Dim logFilePath As String
     logFilePath = logFolder & "\" & logFileName
 
-    ' ヘッダーを書き込む
-    Dim ts As Object
-    Set ts = fso.CreateTextFile(logFilePath, True, True) ' Unicode
-    ts.WriteLine "================================================================================"
-    ts.WriteLine "JP1 ジョブ管理ツール - 実行ログ"
-    ts.WriteLine "================================================================================"
-    ts.WriteLine "開始日時: " & Format(Now, "yyyy/mm/dd HH:mm:ss")
-    ts.WriteLine "実行モード: " & Worksheets(SHEET_MAIN).Cells(ROW_EXEC_MODE, COL_SETTING_VALUE).Value
-    ts.WriteLine "================================================================================"
-    ts.WriteLine ""
-    ts.Close
+    ' ADODB.Streamを使用してUTF-8（BOM付き）でヘッダーを書き込む
+    Dim stream As Object
+    Set stream = CreateObject("ADODB.Stream")
+    stream.Type = 2 ' adTypeText
+    stream.Charset = "UTF-8"
+    stream.Open
+    stream.WriteText "================================================================================" & vbCrLf
+    stream.WriteText "JP1 ジョブ管理ツール - 実行ログ" & vbCrLf
+    stream.WriteText "================================================================================" & vbCrLf
+    stream.WriteText "開始日時: " & Format(Now, "yyyy/mm/dd HH:mm:ss") & vbCrLf
+    stream.WriteText "実行モード: " & Worksheets(SHEET_MAIN).Cells(ROW_EXEC_MODE, COL_SETTING_VALUE).Value & vbCrLf
+    stream.WriteText "================================================================================" & vbCrLf
+    stream.WriteText "" & vbCrLf
+    stream.SaveToFile logFilePath, 2 ' adSaveCreateOverWrite
+    stream.Close
+    Set stream = Nothing
 
     CreateLogFile = logFilePath
 End Function
