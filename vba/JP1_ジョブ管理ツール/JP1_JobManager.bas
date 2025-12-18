@@ -20,6 +20,8 @@ Private g_LogFilePath As String
 ' ジョブ一覧取得
 '==============================================================================
 Public Sub GetJobList()
+    On Error GoTo ErrorHandler
+
     Dim config As Object
     Set config = GetConfig()
 
@@ -67,6 +69,15 @@ Public Sub GetJobList()
            "ジョブ一覧シートを確認してください。", vbInformation
 
     Worksheets(SHEET_JOBLIST).Activate
+    Exit Sub
+
+ErrorHandler:
+    Application.StatusBar = False
+    Application.ScreenUpdating = True
+    MsgBox "エラーが発生しました。" & vbCrLf & vbCrLf & _
+           "エラー番号: " & Err.Number & vbCrLf & _
+           "エラー内容: " & Err.Description & vbCrLf & _
+           "発生場所: GetJobList", vbCritical, "VBAエラー"
 End Sub
 
 Private Function BuildGetJobListScript(config As Object) As String
@@ -332,6 +343,8 @@ End Function
 ' 選択ジョブ実行
 '==============================================================================
 Public Sub ExecuteCheckedJobs()
+    On Error GoTo ErrorHandler
+
     Dim config As Object
     Set config = GetConfig()
 
@@ -467,6 +480,15 @@ Public Sub ExecuteCheckedJobs()
     End If
 
     Worksheets(SHEET_LOG).Activate
+    Exit Sub
+
+ErrorHandler:
+    Application.StatusBar = False
+    Application.ScreenUpdating = True
+    MsgBox "エラーが発生しました。" & vbCrLf & vbCrLf & _
+           "エラー番号: " & Err.Number & vbCrLf & _
+           "エラー内容: " & Err.Description & vbCrLf & _
+           "発生場所: ExecuteCheckedJobs", vbCritical, "VBAエラー"
 End Sub
 
 Private Function GetOrderedJobs() As Collection
@@ -1009,25 +1031,33 @@ Private Function ExecutePowerShell(script As String) As String
     Set binStream = Nothing
     Set utfStream = Nothing
 
-    ' PowerShell実行
+    ' PowerShell実行（エラーもStdOutにリダイレクト）
     Dim shell As Object
     Set shell = CreateObject("WScript.Shell")
 
     Dim cmd As String
-    cmd = "powershell -NoProfile -ExecutionPolicy Bypass -File """ & scriptPath & """"
+    cmd = "powershell -NoProfile -ExecutionPolicy Bypass -File """ & scriptPath & """ 2>&1"
 
     Dim exec As Object
     Set exec = shell.exec(cmd)
 
-    ' 結果を取得
+    ' 結果を取得（StdOutとStdErr両方）
     Dim output As String
+    Dim errOutput As String
     output = ""
+    errOutput = ""
 
     Do While exec.Status = 0
         DoEvents
     Loop
 
     output = exec.StdOut.ReadAll
+    errOutput = exec.StdErr.ReadAll
+
+    ' エラーがあれば結合
+    If errOutput <> "" Then
+        output = output & vbCrLf & "ERROR: " & errOutput
+    End If
 
     ' 一時ファイル削除
     On Error Resume Next
