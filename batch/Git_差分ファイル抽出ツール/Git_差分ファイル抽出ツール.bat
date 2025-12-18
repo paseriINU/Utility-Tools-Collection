@@ -720,19 +720,45 @@ function Get-ExistingFiles {
         [array]$FilePaths
     )
     $existingFiles = @()
+
     # git ls-tree でリビジョン内のファイル一覧を取得
-    $treeFiles = git ls-tree -r --name-only $Ref 2>$null
-    if ($LASTEXITCODE -eq 0 -and $treeFiles) {
-        $treeFileSet = @{}
-        foreach ($f in $treeFiles) {
-            $treeFileSet[$f] = $true
-        }
-        foreach ($path in $FilePaths) {
-            if ($treeFileSet.ContainsKey($path)) {
-                $existingFiles += $path
-            }
+    $treeOutput = git ls-tree -r --name-only $Ref 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        # エラーの場合は全ファイルを返す（git archiveで個別にエラー処理）
+        Write-Host "  [警告] ファイル一覧の取得に失敗。全ファイルを対象にします。" -ForegroundColor Yellow
+        return $FilePaths
+    }
+
+    # 出力を配列に変換
+    $treeFiles = @()
+    if ($treeOutput) {
+        $treeFiles = @($treeOutput -split "`n" | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne "" })
+    }
+
+    if ($treeFiles.Count -eq 0) {
+        # ファイル一覧が空の場合は全ファイルを返す
+        return $FilePaths
+    }
+
+    # HashTableで高速検索
+    $treeFileSet = @{}
+    foreach ($f in $treeFiles) {
+        $treeFileSet[$f] = $true
+    }
+
+    # 存在するファイルをフィルタリング
+    foreach ($path in $FilePaths) {
+        if ($treeFileSet.ContainsKey($path)) {
+            $existingFiles += $path
         }
     }
+
+    # フィルタリング結果が0件で、元のファイル数がある場合はフォールバック
+    if ($existingFiles.Count -eq 0 -and $FilePaths.Count -gt 0) {
+        Write-Host "  [警告] パス照合に失敗。全ファイルを対象にします。" -ForegroundColor Yellow
+        return $FilePaths
+    }
+
     return $existingFiles
 }
 
