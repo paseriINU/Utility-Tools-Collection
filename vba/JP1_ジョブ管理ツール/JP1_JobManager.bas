@@ -1068,18 +1068,18 @@ Private Function ExecutePowerShell(script As String) As String
     Set binStream = Nothing
     Set utfStream = Nothing
 
-    ' PowerShell実行（非表示・結果をファイルに出力）
+    ' PowerShell実行（表示・結果をファイルに出力）
     Dim shell As Object
     Set shell = CreateObject("WScript.Shell")
 
     Dim cmd As String
-    ' -WindowStyle Hidden で非表示実行、結果を一時ファイルに出力
-    cmd = "powershell -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -Command ""& {" & _
-          "& '" & scriptPath & "' 2>&1 | Out-File -FilePath '" & outputPath & "' -Encoding UTF8" & _
+    ' PowerShellウィンドウを表示して実行、結果を一時ファイルに出力
+    cmd = "powershell -NoProfile -ExecutionPolicy Bypass -Command ""& {" & _
+          "& '" & scriptPath & "' 2>&1 | Tee-Object -FilePath '" & outputPath & "'" & _
           "}"""
 
-    ' vbHide (0) で非表示、True で完了まで待機
-    shell.Run cmd, 0, True
+    ' 1 = vbNormalFocus（通常表示）、True で完了まで待機
+    shell.Run cmd, 1, True
 
     ' 結果ファイルを読み込む
     Dim output As String
