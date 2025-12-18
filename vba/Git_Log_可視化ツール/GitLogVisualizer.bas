@@ -744,7 +744,7 @@ Private Sub CreateDashboardSheet(ByRef commits() As CommitInfo, ByVal commitCoun
             ' データバー的な表現
             Dim barWidth As Double
             barWidth = (authorCounts(i) / maxCount) * 100
-            .Cells(row, 6).Value = String(Int(barWidth / 5), "█") & " " & authorCounts(i)
+            .Cells(row, 6).Value = String(Int(barWidth / 5), ChrW(&H2588)) & " " & authorCounts(i)
             .Cells(row, 6).Font.Color = RGB(68, 114, 196)
             .Cells(row, 6).Font.Name = "Consolas"
             .Cells(row, 6).Font.Size = 10
@@ -1039,4 +1039,234 @@ Private Sub CreateBranchGraphSheet(ByRef commits() As CommitInfo, ByVal commitCo
         .Columns("B:K").ColumnWidth = 10
         .Rows(startRow & ":" & (startRow + commitCount)).RowHeight = 20
     End With
+End Sub
+
+'==============================================================================
+' 現在のブランチを取得
+'==============================================================================
+Public Function GetCurrentBranch(ByVal repoPath As String) As String
+    Dim cmd As String
+    Dim result As String
+
+    cmd = "cd /d """ & repoPath & """ && " & GIT_COMMAND & " branch --show-current"
+    result = ExecuteCommand(cmd)
+
+    GetCurrentBranch = Trim(Replace(Replace(result, vbCr, ""), vbLf, ""))
+End Function
+
+'==============================================================================
+' ブランチ一覧を取得（ローカルブランチ）
+'==============================================================================
+Public Function GetBranchList(ByVal repoPath As String) As String()
+    Dim cmd As String
+    Dim result As String
+    Dim lines() As String
+    Dim branches() As String
+    Dim i As Long
+    Dim branchCount As Long
+    Dim branchName As String
+
+    cmd = "cd /d """ & repoPath & """ && " & GIT_COMMAND & " branch"
+    result = ExecuteCommand(cmd)
+
+    ' 結果を行に分割
+    lines = Split(result, vbLf)
+    branchCount = 0
+    ReDim branches(0 To UBound(lines))
+
+    For i = 0 To UBound(lines)
+        branchName = Trim(Replace(lines(i), vbCr, ""))
+        ' 先頭の * を除去（現在のブランチを示す）
+        If Left(branchName, 2) = "* " Then
+            branchName = Mid(branchName, 3)
+        End If
+        branchName = Trim(branchName)
+
+        If Len(branchName) > 0 Then
+            branches(branchCount) = branchName
+            branchCount = branchCount + 1
+        End If
+    Next i
+
+    ' 配列サイズを調整
+    If branchCount > 0 Then
+        ReDim Preserve branches(0 To branchCount - 1)
+    Else
+        ReDim branches(0 To 0)
+        branches(0) = ""
+    End If
+
+    GetBranchList = branches
+End Function
+
+'==============================================================================
+' ブランチを切り替え
+'==============================================================================
+Public Function SwitchBranch(ByVal repoPath As String, ByVal branchName As String) As Boolean
+    Dim cmd As String
+    Dim result As String
+
+    cmd = "cd /d """ & repoPath & """ && " & GIT_COMMAND & " checkout """ & branchName & """ 2>&1"
+    result = ExecuteCommand(cmd)
+
+    ' エラーチェック
+    If InStr(result, "error:") > 0 Or InStr(result, "fatal:") > 0 Then
+        SwitchBranch = False
+    Else
+        SwitchBranch = True
+    End If
+End Function
+
+'==============================================================================
+' ブランチ選択ダイアログを表示して切り替え
+'==============================================================================
+Public Sub SelectAndSwitchBranch()
+    Dim repoPath As String
+    Dim currentBranch As String
+    Dim branches() As String
+    Dim branchList As String
+    Dim selectedBranch As String
+    Dim i As Long
+    Dim branchNum As Variant
+
+    ' リポジトリパスを取得
+    repoPath = GetRepoPathFromMainSheet()
+    If Len(repoPath) = 0 Then
+        MsgBox "リポジトリパスが設定されていません。" & vbCrLf & _
+               "メインシートでリポジトリパスを設定してください。", vbExclamation, "エラー"
+        Exit Sub
+    End If
+
+    ' 現在のブランチを取得
+    currentBranch = GetCurrentBranch(repoPath)
+
+    ' ブランチ一覧を取得
+    branches = GetBranchList(repoPath)
+
+    If UBound(branches) < 0 Or (UBound(branches) = 0 And branches(0) = "") Then
+        MsgBox "ブランチを取得できませんでした。" & vbCrLf & _
+               "リポジトリパスを確認してください。", vbExclamation, "エラー"
+        Exit Sub
+    End If
+
+    ' ブランチ一覧を作成
+    branchList = "現在のブランチ: " & currentBranch & vbCrLf & vbCrLf & _
+                 "切り替え先のブランチ番号を入力してください:" & vbCrLf & vbCrLf
+
+    For i = 0 To UBound(branches)
+        If branches(i) = currentBranch Then
+            branchList = branchList & (i + 1) & ". " & branches(i) & " (現在)" & vbCrLf
+        Else
+            branchList = branchList & (i + 1) & ". " & branches(i) & vbCrLf
+        End If
+    Next i
+
+    branchList = branchList & vbCrLf & "0. キャンセル"
+
+    ' ユーザーに選択させる
+    branchNum = InputBox(branchList, "ブランチ切り替え", "0")
+
+    If branchNum = "" Or branchNum = "0" Then
+        Exit Sub
+    End If
+
+    ' 入力値を検証
+    If Not IsNumeric(branchNum) Then
+        MsgBox "数字を入力してください。", vbExclamation, "入力エラー"
+        Exit Sub
+    End If
+
+    If CLng(branchNum) < 1 Or CLng(branchNum) > UBound(branches) + 1 Then
+        MsgBox "有効な番号を入力してください。", vbExclamation, "入力エラー"
+        Exit Sub
+    End If
+
+    selectedBranch = branches(CLng(branchNum) - 1)
+
+    ' 現在のブランチと同じ場合
+    If selectedBranch = currentBranch Then
+        MsgBox "既に " & selectedBranch & " ブランチにいます。", vbInformation, "情報"
+        Exit Sub
+    End If
+
+    ' ブランチ切り替えを実行
+    If SwitchBranch(repoPath, selectedBranch) Then
+        MsgBox "ブランチを " & selectedBranch & " に切り替えました。" & vbCrLf & vbCrLf & _
+               "「実行」ボタンを押してログを再取得してください。", vbInformation, "ブランチ切り替え完了"
+
+        ' メインシートの現在のブランチ表示を更新
+        UpdateCurrentBranchDisplay repoPath
+    Else
+        MsgBox "ブランチの切り替えに失敗しました。" & vbCrLf & vbCrLf & _
+               "コミットされていない変更がある場合は、" & vbCrLf & _
+               "先にコミットまたはスタッシュしてください。", vbCritical, "エラー"
+    End If
+End Sub
+
+'==============================================================================
+' メインシートの現在のブランチ表示を更新
+'==============================================================================
+Public Sub UpdateCurrentBranchDisplay(ByVal repoPath As String)
+    Dim ws As Worksheet
+    Dim currentBranch As String
+
+    On Error Resume Next
+    Set ws = ThisWorkbook.Sheets(SHEET_MAIN)
+    On Error GoTo 0
+
+    If ws Is Nothing Then Exit Sub
+
+    currentBranch = GetCurrentBranch(repoPath)
+
+    ' B9セルに現在のブランチを表示（メインシートのレイアウトに依存）
+    If Len(currentBranch) > 0 Then
+        ws.Range("D6").Value = "現在のブランチ: " & currentBranch
+        ws.Range("D6").Font.Color = RGB(0, 128, 0)
+        ws.Range("D6").Font.Bold = True
+    End If
+End Sub
+
+'==============================================================================
+' ブランチ情報を表示（実行ボタン押下時に呼び出し）
+'==============================================================================
+Public Sub ShowBranchInfoBeforeRun()
+    Dim repoPath As String
+    Dim currentBranch As String
+    Dim response As VbMsgBoxResult
+
+    ' リポジトリパスを取得
+    repoPath = GetRepoPathFromMainSheet()
+    If Len(repoPath) = 0 Then
+        ' パスが未設定の場合は通常の実行へ
+        VisualizeGitLog
+        Exit Sub
+    End If
+
+    ' 現在のブランチを取得
+    currentBranch = GetCurrentBranch(repoPath)
+
+    If Len(currentBranch) = 0 Then
+        ' ブランチ取得に失敗した場合は通常の実行へ
+        VisualizeGitLog
+        Exit Sub
+    End If
+
+    ' 確認ダイアログを表示
+    response = MsgBox("現在のブランチ: " & currentBranch & vbCrLf & vbCrLf & _
+                      "このブランチでログを取得しますか？" & vbCrLf & vbCrLf & _
+                      "[はい] - このまま実行" & vbCrLf & _
+                      "[いいえ] - ブランチを切り替え" & vbCrLf & _
+                      "[キャンセル] - 中止", _
+                      vbYesNoCancel + vbQuestion, "ブランチ確認")
+
+    Select Case response
+        Case vbYes
+            ' そのまま実行
+            VisualizeGitLog
+        Case vbNo
+            ' ブランチ切り替えダイアログを表示
+            SelectAndSwitchBranch
+        Case vbCancel
+            ' 何もしない
+    End Select
 End Sub

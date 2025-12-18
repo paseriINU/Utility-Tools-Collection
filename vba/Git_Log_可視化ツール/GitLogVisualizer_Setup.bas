@@ -203,7 +203,25 @@ Private Sub FormatMainSheet(ByRef ws As Worksheet)
             .TextFrame2.TextRange.Font.Name = "Meiryo UI"
             .TextFrame2.TextRange.ParagraphFormat.Alignment = msoAlignCenter
             .TextFrame2.VerticalAnchor = msoAnchorMiddle
-            .OnAction = "VisualizeGitLog"
+            .OnAction = "ShowBranchInfoBeforeRun"
+        End With
+
+        ' ブランチ切り替えボタン
+        Set shp = .Shapes.AddShape(msoShapeRoundedRectangle, btnLeft + 140, btnTop, 140, 40)
+        With shp
+            .Name = "btnSwitchBranch"
+            .Placement = xlFreeFloating
+            .Fill.ForeColor.RGB = RGB(33, 150, 243)
+            .Line.ForeColor.RGB = RGB(25, 118, 210)
+            .Line.Weight = 2
+            .TextFrame2.TextRange.Characters.Text = "ブランチ切替"
+            .TextFrame2.TextRange.Font.Fill.ForeColor.RGB = RGB(255, 255, 255)
+            .TextFrame2.TextRange.Font.Size = 14
+            .TextFrame2.TextRange.Font.Bold = msoTrue
+            .TextFrame2.TextRange.Font.Name = "Meiryo UI"
+            .TextFrame2.TextRange.ParagraphFormat.Alignment = msoAlignCenter
+            .TextFrame2.VerticalAnchor = msoAnchorMiddle
+            .OnAction = "SelectAndSwitchBranch"
         End With
 
         ' =================================================================
