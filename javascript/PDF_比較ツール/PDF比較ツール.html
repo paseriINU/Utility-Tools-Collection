@@ -605,53 +605,129 @@
     </div>
 
     <script>
-        // バックアップ: 最初のスクリプトでエラーが発生してもステータスを更新
+        // ============================================================================
+        // PDF ビジュアル比較ツール - メインスクリプト
+        // ============================================================================
+        // 
+        // 【このツールの概要】
+        // 2つのPDFファイルをピクセル単位で比較し、差分をハイライト表示するツールです。
+        // PDF.jsライブラリを使用してPDFをCanvas（画像）に変換し、比較を行います。
+        // 
+        // 【主な機能】
+        // - PDFファイルのドラッグ&ドロップ読み込み
+        // - ページ間のスクロール同期
+        // - 差分の色分け表示（変更=黄色、追加=緑、削除=赤）
+        // - ズーム機能
+        // 
+        // 【技術的なポイント】
+        // - Canvas API: PDFをピクセルデータとして扱う
+        // - 非同期処理（async/await）: PDFの読み込みと描画に使用
+        // - イベントリスナー: ユーザー操作の検出
+        // ============================================================================
+
+        // ----------------------------------------------------------------------------
+        // PDF.jsライブラリの読み込み状態を確認する関数
+        // ----------------------------------------------------------------------------
+        // この関数は、ページ読み込み時にPDF.jsが正しく読み込まれているか確認します。
+        // CDNからの読み込みに失敗した場合、埋め込みのライブラリを使用します。
         (function checkLibraryStatus() {
+            // HTML内の「ライブラリ状態」表示要素を取得
             const el = document.getElementById('libraryStatus');
+            
+            // 要素が存在し、まだ「読み込み中」の状態であれば更新
             if (el && el.textContent.includes('読み込み中')) {
-                // まだステータスが更新されていない場合
+                // pdfjsLib変数が定義されているか確認（ライブラリが読み込まれているかの判定）
                 if (typeof pdfjsLib !== 'undefined') {
                     try {
+                        // Web Workerの設定（空文字でメインスレッド実行）
+                        // ※Web Worker: 別スレッドでの処理を可能にするWeb API
                         pdfjsLib.GlobalWorkerOptions.workerSrc = '';
-                        window.pdfJsLoaded = true;
-                        window.pdfJsSource = '埋め込み';
+                        
+                        // グローバル変数にライブラリの状態を保存
+                        window.pdfJsLoaded = true;           // 読み込み成功フラグ
+                        window.pdfJsSource = '埋め込み';       // 読み込み元の情報
+                        
+                        // 画面に成功状態を表示（緑色）
                         el.textContent = 'ライブラリ: 埋め込み';
-                        el.style.color = '#4caf50';
+                        el.style.color = '#4caf50';  // 緑色
                     } catch (e) {
+                        // エラーが発生した場合の処理
                         window.pdfJsLoaded = false;
                         window.pdfJsSource = '初期化エラー: ' + e.message;
                         el.textContent = 'ライブラリ: 初期化エラー';
-                        el.style.color = '#f44336';
+                        el.style.color = '#f44336';  // 赤色
                     }
                 } else {
+                    // ライブラリが見つからない場合
                     window.pdfJsLoaded = false;
                     window.pdfJsSource = '読み込み失敗';
                     el.textContent = 'ライブラリ: 読み込み失敗';
-                    el.style.color = '#f44336';
+                    el.style.color = '#f44336';  // 赤色
                 }
             }
         })();
+        // ↑ 即時実行関数（IIFE）: 定義と同時に実行される関数の書き方
 
-        let pdf1 = null;
-        let pdf2 = null;
-        let totalPages = 1;
-        let currentZoom = 1;
-        let totalStats = { changed: 0, added: 0, deleted: 0, diffPixels: 0, totalPixels: 0 };
+        // ============================================================================
+        // グローバル変数の定義
+        // ============================================================================
+        // これらの変数は、プログラム全体で共有される状態を保持します。
+        // 
+        // 【変数の命名規則について】
+        // - pdf1, pdf2: 比較対象のPDFオブジェクト
+        // - totalPages: 全ページ数
+        // - currentZoom: 現在のズーム倍率
+        // - totalStats: 差分の統計情報
+        
+        let pdf1 = null;          // 左側（変更前）のPDFオブジェクト
+        let pdf2 = null;          // 右側（変更後）のPDFオブジェクト
+        let totalPages = 1;       // 比較するPDFの最大ページ数
+        let currentZoom = 1;      // 現在のズーム倍率（1 = 100%）
+        
+        // 差分の統計情報を保持するオブジェクト
+        // ※オブジェクト: 複数の値をまとめて管理できるデータ構造
+        let totalStats = { 
+            changed: 0,      // 変更されたブロック数
+            added: 0,        // 追加されたブロック数
+            deleted: 0,      // 削除されたブロック数
+            diffPixels: 0,   // 差分のあるピクセル数
+            totalPixels: 0   // 全ピクセル数
+        };
 
-        // スクロール同期
-        const panel1 = document.getElementById('panel1');
-        const panel2 = document.getElementById('panel2');
+        // ============================================================================
+        // スクロール同期の設定
+        // ============================================================================
+        // 左右のパネルを同時にスクロールするための処理です。
+        // 一方をスクロールすると、もう一方も連動してスクロールします。
+        
+        // 左右のパネル要素を取得
+        const panel1 = document.getElementById('panel1');  // 左パネル（変更前PDF）
+        const panel2 = document.getElementById('panel2');  // 右パネル（変更後PDF）
+        
+        // スクロール同期中かどうかを示すフラグ
+        // ※無限ループ防止のために使用（A→Bの同期がB→Aの同期を呼び出すことを防ぐ）
         let isSyncing = false;
 
+        // 左パネルのスクロールイベントを監視
+        // ※addEventListener: 指定したイベントが発生したときに関数を実行する仕組み
         panel1.addEventListener('scroll', () => {
+            // 「スクロール同期」チェックボックスがONで、同期処理中でない場合
             if (document.getElementById('syncScroll').checked && !isSyncing) {
-                isSyncing = true;
+                isSyncing = true;  // 同期処理開始をマーク
+                
+                // 右パネルのスクロール位置を左パネルに合わせる
+                // scrollTop: 縦方向のスクロール位置
+                // scrollLeft: 横方向のスクロール位置
                 panel2.scrollTop = panel1.scrollTop;
                 panel2.scrollLeft = panel1.scrollLeft;
+                
+                // 10ミリ秒後に同期フラグをリセット
+                // ※setTimeout: 指定時間後に関数を実行する
                 setTimeout(() => isSyncing = false, 10);
             }
         });
 
+        // 右パネルのスクロールイベントを監視（左パネルと同じロジック）
         panel2.addEventListener('scroll', () => {
             if (document.getElementById('syncScroll').checked && !isSyncing) {
                 isSyncing = true;
@@ -661,30 +737,53 @@
             }
         });
 
-        // ドラッグ&ドロップ処理
+        // ============================================================================
+        // ドラッグ&ドロップ機能の設定
+        // ============================================================================
+        // ファイルをパネルにドラッグ&ドロップして読み込む機能を設定します。
+        // 
+        // 【ドラッグ&ドロップのイベント順序】
+        // 1. dragover: ファイルがドラッグされて要素の上にある時（継続的に発生）
+        // 2. dragleave: ファイルが要素の外に出た時
+        // 3. drop: ファイルがドロップされた時
+        
+        /**
+         * ドラッグ&ドロップの設定を行う関数
+         * @param {HTMLElement} panel - ドロップ対象のパネル要素
+         * @param {number} pdfNum - PDFの番号（1または2）
+         */
         function setupDragDrop(panel, pdfNum) {
+            // ドラッグオーバー時の処理（ファイルがパネル上にある間）
             panel.addEventListener('dragover', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                panel.classList.add('drag-over');
+                e.preventDefault();   // ブラウザのデフォルト動作を無効化
+                e.stopPropagation();  // イベントの伝播を停止
+                panel.classList.add('drag-over');  // ハイライトスタイルを追加
             });
 
+            // ドラッグリーブ時の処理（ファイルがパネルから離れた時）
             panel.addEventListener('dragleave', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                panel.classList.remove('drag-over');
+                panel.classList.remove('drag-over');  // ハイライトスタイルを削除
             });
 
+            // ドロップ時の処理（ファイルが落とされた時）
             panel.addEventListener('drop', async (e) => {
                 e.preventDefault();
                 e.stopPropagation();
                 panel.classList.remove('drag-over');
 
+                // ドロップされたファイルを取得
+                // ※e.dataTransfer: ドラッグ&ドロップで転送されるデータ
                 const files = e.dataTransfer.files;
+                
                 if (files.length > 0) {
-                    const file = files[0];
+                    const file = files[0];  // 最初のファイルのみ使用
+                    
+                    // PDFファイルかどうかを確認
+                    // MIMEタイプまたは拡張子でチェック
                     if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
-                        await loadPDFFromFile(pdfNum, file);
+                        await loadPDFFromFile(pdfNum, file);  // PDF読み込み処理を呼び出し
                     } else {
                         alert('PDFファイルをドロップしてください。');
                     }
@@ -692,18 +791,39 @@
             });
         }
 
-        setupDragDrop(panel1, 1);
-        setupDragDrop(panel2, 2);
+        // 左右のパネルにドラッグ&ドロップ機能を設定
+        setupDragDrop(panel1, 1);  // 左パネル（PDF1）
+        setupDragDrop(panel2, 2);  // 右パネル（PDF2）
 
-        // ファイルからPDFを読み込み（共通処理）
+        // ============================================================================
+        // PDF読み込み処理
+        // ============================================================================
+        // PDFファイルを読み込み、表示の準備を行います。
+        // 
+        // 【async/await について】
+        // - async: この関数が非同期処理を含むことを示す
+        // - await: 非同期処理の完了を待つ
+        // - 非同期処理: 時間のかかる処理を他の処理をブロックせずに実行する仕組み
+        
+        /**
+         * ファイルオブジェクトからPDFを読み込む関数
+         * @param {number} num - PDFの番号（1または2）
+         * @param {File} file - 読み込むPDFファイル
+         */
         async function loadPDFFromFile(num, file) {
+            // 読み込み中のメッセージを表示
             showLoading(`PDF${num}を読み込み中...`);
 
             try {
-                // PDF.jsライブラリのチェック
+                // --------------------------------------------------------------------
+                // ライブラリの存在確認
+                // --------------------------------------------------------------------
+                // PDF.jsが正しく読み込まれているか確認
                 if (typeof pdfjsLib === 'undefined' || !window.pdfJsLoaded) {
                     const statusEl = document.getElementById('libraryStatus');
                     const statusText = statusEl ? statusEl.textContent : '不明';
+                    
+                    // ユーザーに分かりやすいエラーメッセージを作成
                     throw new Error('PDF.jsライブラリが読み込まれていません。\n\n' +
                         'ライブラリ状態: ' + statusText + '\n\n' +
                         '対処方法:\n' +
@@ -712,49 +832,87 @@
                         '3. 別のブラウザ（Chrome/Edge推奨）で試してください');
                 }
 
-                // ファイルサイズチェック
+                // --------------------------------------------------------------------
+                // ファイルの検証
+                // --------------------------------------------------------------------
+                // 空のファイルでないか確認
                 if (file.size === 0) {
                     throw new Error('ファイルが空です。');
                 }
 
+                // --------------------------------------------------------------------
+                // ファイルの読み込み
+                // --------------------------------------------------------------------
+                // ファイルをArrayBuffer（バイナリデータ）として読み込む
+                // ※ArrayBuffer: 生のバイナリデータを扱うためのオブジェクト
                 const arrayBuffer = await file.arrayBuffer();
 
-                // ArrayBufferのチェック
+                // 読み込み結果の検証
                 if (!arrayBuffer || arrayBuffer.byteLength === 0) {
                     throw new Error('ファイルの読み込みに失敗しました。ファイルが破損している可能性があります。');
                 }
 
-                // ワーカーを無効化してシングルスレッドで処理（main.jsエラー回避）
+                // --------------------------------------------------------------------
+                // PDF.jsによるPDFの解析
+                // --------------------------------------------------------------------
+                // getDocument: PDF.jsのメイン関数。PDFデータを解析してオブジェクトを作成
+                // disableWorker: Web Workerを無効化（シングルスレッドで処理）
+                // ※Web Worker無効化の理由: ローカルHTMLファイルでの動作を保証するため
                 const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer, disableWorker: true });
+                
+                // PDFの読み込みが完了するまで待機
+                // ※promise: 非同期処理の結果を表すオブジェクト
                 const pdf = await loadingTask.promise;
 
+                // --------------------------------------------------------------------
+                // 読み込み結果の保存とUI更新
+                // --------------------------------------------------------------------
                 if (num === 1) {
-                    pdf1 = pdf;
+                    // PDF1（左側）の場合
+                    pdf1 = pdf;  // グローバル変数に保存
+                    
+                    // ボタンのスタイルを変更（読み込み完了を示す）
                     document.getElementById('file1Btn').classList.add('loaded');
+                    
+                    // ファイル名を表示（長い場合は省略）
+                    // substring: 文字列の一部を切り出すメソッド
                     document.getElementById('file1Btn').textContent = file.name.substring(0, 20) + (file.name.length > 20 ? '...' : '');
+                    
+                    // 「ファイル未選択」メッセージを非表示
                     document.getElementById('noFile1').style.display = 'none';
                 } else {
+                    // PDF2（右側）の場合（同様の処理）
                     pdf2 = pdf;
                     document.getElementById('file2Btn').classList.add('loaded');
                     document.getElementById('file2Btn').textContent = file.name.substring(0, 20) + (file.name.length > 20 ? '...' : '');
                     document.getElementById('noFile2').style.display = 'none';
                 }
 
+                // 「比較」ボタンの有効/無効を更新
                 updateCompareButton();
 
-                // 両方のPDFが読み込まれたら自動で比較開始
+                // --------------------------------------------------------------------
+                // 自動比較の実行
+                // --------------------------------------------------------------------
+                // 両方のPDFが読み込まれたら、自動的に比較を開始
                 if (pdf1 && pdf2) {
                     hideLoading();
-                    await compare();
+                    await compare();  // 比較処理を実行
                 } else {
                     hideLoading();
                 }
 
             } catch (error) {
+                // --------------------------------------------------------------------
+                // エラー処理
+                // --------------------------------------------------------------------
                 hideLoading();
-                // エラーメッセージを日本語で分かりやすく表示
+                
+                // エラーメッセージを日本語で分かりやすく作成
                 let errorMsg = 'PDFの読み込みに失敗しました。\n\n';
+                
                 if (error.message) {
+                    // エラーの種類に応じたメッセージを表示
                     if (error.message.includes('Invalid PDF')) {
                         errorMsg += '原因: 有効なPDFファイルではありません。';
                     } else if (error.message.includes('password')) {
@@ -765,48 +923,82 @@
                         errorMsg += '原因: ' + error.message;
                     }
                 }
+                
                 alert(errorMsg);
-                console.error('PDF読み込みエラー:', error);
+                console.error('PDF読み込みエラー:', error);  // デバッグ用にコンソールにも出力
             }
         }
 
-        // PDFを読み込み（inputから）
+        /**
+         * ファイル選択ダイアログからPDFを読み込む関数
+         * @param {number} num - PDFの番号（1または2）
+         * @param {HTMLInputElement} input - ファイル入力要素
+         */
         async function loadPDF(num, input) {
-            const file = input.files[0];
-            if (!file) return;
+            const file = input.files[0];  // 選択されたファイルを取得
+            if (!file) return;            // ファイルがない場合は何もしない
             await loadPDFFromFile(num, file);
         }
 
+        /**
+         * 「比較」ボタンの有効/無効を更新する関数
+         * 両方のPDFが読み込まれている場合のみボタンを有効化
+         */
         function updateCompareButton() {
+            // disabled属性: falseなら有効、trueなら無効
+            // !(pdf1 && pdf2): pdf1とpdf2の両方が存在する場合にfalse（有効）
             document.getElementById('compareBtn').disabled = !(pdf1 && pdf2);
         }
 
-        // 比較実行
+        // ============================================================================
+        // PDF比較処理
+        // ============================================================================
+        // 2つのPDFをページごとに比較し、差分をハイライト表示します。
+        
+        /**
+         * PDF比較を実行するメイン関数
+         */
         async function compare() {
+            // 両方のPDFが読み込まれていない場合は終了
             if (!pdf1 || !pdf2) return;
 
             showLoading('比較を実行中...');
 
+            // ページ数を決定（多い方に合わせる）
+            // ※Math.max: 引数の中で最大の値を返す
             totalPages = Math.max(pdf1.numPages, pdf2.numPages);
+            
+            // 統計情報をリセット
             totalStats = { changed: 0, added: 0, deleted: 0, diffPixels: 0, totalPixels: 0 };
 
-            // コンテナをクリアして準備
+            // --------------------------------------------------------------------
+            // 表示コンテナの準備
+            // --------------------------------------------------------------------
+            // ページを表示するコンテナを取得
             const container1 = document.getElementById('pagesContainer1');
             const container2 = document.getElementById('pagesContainer2');
+            
+            // 既存の内容をクリア（前回の比較結果を削除）
+            // innerHTML = '': 要素内のHTMLをすべて削除
             container1.innerHTML = '';
             container2.innerHTML = '';
 
+            // 「ファイル未選択」メッセージを非表示にし、コンテナを表示
             document.getElementById('noFile1').style.display = 'none';
             document.getElementById('noFile2').style.display = 'none';
             container1.style.display = 'flex';
             container2.style.display = 'flex';
 
-            // 全ページをレンダリング
+            // --------------------------------------------------------------------
+            // 全ページのレンダリング
+            // --------------------------------------------------------------------
+            // forループで全ページを順番に処理
             for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
                 showLoading(`ページ ${pageNum} / ${totalPages} を処理中...`);
                 await renderPage(pageNum, container1, container2);
             }
 
+            // 統計バーと凡例を表示
             document.getElementById('statsBar').style.display = 'flex';
             document.getElementById('diffLegend').style.display = 'block';
             updatePageInfo();
@@ -814,31 +1006,53 @@
             hideLoading();
         }
 
-        // ページをレンダリング（全ページ表示用）
+        // ============================================================================
+        // ページレンダリング処理
+        // ============================================================================
+        // 各ページをCanvas要素に描画し、差分検出用のオーバーレイを作成します。
+        
+        /**
+         * 1ページ分のレンダリングを行う関数
+         * @param {number} pageNum - ページ番号
+         * @param {HTMLElement} container1 - 左側のコンテナ
+         * @param {HTMLElement} container2 - 右側のコンテナ
+         */
         async function renderPage(pageNum, container1, container2) {
-            const scale = currentZoom * 1.5; // 高解像度でレンダリング
+            // スケール（拡大率）を計算
+            // 1.5倍は高解像度レンダリング用（より鮮明な画像を得るため）
+            const scale = currentZoom * 1.5;
 
-            // キャンバスコンテナを作成
+            // --------------------------------------------------------------------
+            // キャンバスコンテナの作成
+            // --------------------------------------------------------------------
+            // 各ページ用のコンテナ要素を作成
+            // ※document.createElement: 新しいHTML要素を作成する
             const canvasContainer1 = document.createElement('div');
-            canvasContainer1.className = 'canvas-container';
-            canvasContainer1.id = `container1_page${pageNum}`;
+            canvasContainer1.className = 'canvas-container';        // CSSクラスを設定
+            canvasContainer1.id = `container1_page${pageNum}`;      // ユニークなIDを設定
 
             const canvasContainer2 = document.createElement('div');
             canvasContainer2.className = 'canvas-container';
             canvasContainer2.id = `container2_page${pageNum}`;
 
-            // ページラベルを追加
+            // --------------------------------------------------------------------
+            // ページラベルの作成
+            // --------------------------------------------------------------------
+            // 「ページ 1」などのラベルを表示
             const label1 = document.createElement('div');
             label1.className = 'page-label';
             label1.textContent = `ページ ${pageNum}`;
-            canvasContainer1.appendChild(label1);
+            canvasContainer1.appendChild(label1);  // コンテナに追加
 
             const label2 = document.createElement('div');
             label2.className = 'page-label';
             label2.textContent = `ページ ${pageNum}`;
             canvasContainer2.appendChild(label2);
 
-            // キャンバスを作成
+            // --------------------------------------------------------------------
+            // メインキャンバスの作成（PDF描画用）
+            // --------------------------------------------------------------------
+            // Canvas: HTMLで図形や画像を描画するための要素
             const canvas1 = document.createElement('canvas');
             canvas1.className = 'pdf-canvas';
             canvas1.id = `canvas1_page${pageNum}`;
@@ -847,7 +1061,10 @@
             canvas2.className = 'pdf-canvas';
             canvas2.id = `canvas2_page${pageNum}`;
 
-            // オーバーレイキャンバスを作成
+            // --------------------------------------------------------------------
+            // オーバーレイキャンバスの作成（差分ハイライト用）
+            // --------------------------------------------------------------------
+            // メインキャンバスの上に重ねて差分を表示するための透明なキャンバス
             const overlay1 = document.createElement('canvas');
             overlay1.className = 'diff-overlay';
             overlay1.id = `overlay1_page${pageNum}`;
@@ -856,36 +1073,59 @@
             overlay2.className = 'diff-overlay';
             overlay2.id = `overlay2_page${pageNum}`;
 
+            // コンテナにキャンバスを追加
             canvasContainer1.appendChild(canvas1);
             canvasContainer1.appendChild(overlay1);
             canvasContainer2.appendChild(canvas2);
             canvasContainer2.appendChild(overlay2);
 
+            // メインコンテナに追加
             container1.appendChild(canvasContainer1);
             container2.appendChild(canvasContainer2);
 
+            // --------------------------------------------------------------------
+            // Canvasの描画コンテキストを取得
+            // --------------------------------------------------------------------
+            // getContext('2d'): 2D描画用のAPIを取得
             const ctx1 = canvas1.getContext('2d');
             const ctx2 = canvas2.getContext('2d');
 
-            // PDF1をレンダリング
+            // --------------------------------------------------------------------
+            // PDF1のレンダリング
+            // --------------------------------------------------------------------
             if (pageNum <= pdf1.numPages) {
-                const page1 = await pdf1.getPage(pageNum);
+                // ページが存在する場合
+                const page1 = await pdf1.getPage(pageNum);  // ページオブジェクトを取得
+                
+                // ビューポート（表示領域）を計算
                 const viewport1 = page1.getViewport({ scale });
+                
+                // キャンバスサイズをビューポートに合わせる
                 canvas1.width = viewport1.width;
                 canvas1.height = viewport1.height;
+                
+                // ページをキャンバスに描画
+                // render: PDF.jsのレンダリングメソッド
                 await page1.render({ canvasContext: ctx1, viewport: viewport1 }).promise;
             } else {
+                // ページが存在しない場合（PDF2の方がページ数が多い場合）
                 canvas1.width = 600 * currentZoom;
                 canvas1.height = 800 * currentZoom;
+                
+                // グレーの背景を描画
                 ctx1.fillStyle = '#f0f0f0';
                 ctx1.fillRect(0, 0, canvas1.width, canvas1.height);
+                
+                // 「ページなし」のテキストを表示
                 ctx1.fillStyle = '#999';
                 ctx1.font = '20px sans-serif';
                 ctx1.textAlign = 'center';
                 ctx1.fillText('ページなし', canvas1.width / 2, canvas1.height / 2);
             }
 
-            // PDF2をレンダリング
+            // --------------------------------------------------------------------
+            // PDF2のレンダリング（PDF1と同様の処理）
+            // --------------------------------------------------------------------
             if (pageNum <= pdf2.numPages) {
                 const page2 = await pdf2.getPage(pageNum);
                 const viewport2 = page2.getViewport({ scale });
@@ -903,133 +1143,204 @@
                 ctx2.fillText('ページなし', canvas2.width / 2, canvas2.height / 2);
             }
 
-            // 差分を検出してハイライト
+            // --------------------------------------------------------------------
+            // 差分検出とハイライトの実行
+            // --------------------------------------------------------------------
             await detectAndHighlightDiff(canvas1, canvas2, overlay1, overlay2);
         }
 
-        // 差分検出とハイライト
+        // ============================================================================
+        // 差分検出アルゴリズム
+        // ============================================================================
+        // 2つのキャンバスの画像データを比較し、差分を検出・ハイライトします。
+        // 
+        // 【アルゴリズムの概要】
+        // 1. 両方のキャンバスからピクセルデータを取得
+        // 2. 8x8ピクセルのブロック単位で比較
+        // 3. ブロック内の差分が閾値を超えたらハイライト
+        // 4. 差分の種類（変更/追加/削除）を色分けして表示
+        
+        /**
+         * 差分検出とハイライト表示を行う関数
+         * @param {HTMLCanvasElement} canvas1 - PDF1のキャンバス
+         * @param {HTMLCanvasElement} canvas2 - PDF2のキャンバス
+         * @param {HTMLCanvasElement} overlay1 - PDF1のオーバーレイキャンバス
+         * @param {HTMLCanvasElement} overlay2 - PDF2のオーバーレイキャンバス
+         */
         async function detectAndHighlightDiff(canvas1, canvas2, overlay1, overlay2) {
+            // 描画コンテキストを取得
             const ctx1 = canvas1.getContext('2d');
             const ctx2 = canvas2.getContext('2d');
 
-            // オーバーレイのサイズを設定
+            // オーバーレイのサイズをメインキャンバスに合わせる
             overlay1.width = canvas1.width;
             overlay1.height = canvas1.height;
             overlay2.width = canvas2.width;
             overlay2.height = canvas2.height;
 
+            // オーバーレイの描画コンテキストを取得
             const octx1 = overlay1.getContext('2d');
             const octx2 = overlay2.getContext('2d');
 
-            // 画像データを取得
+            // --------------------------------------------------------------------
+            // ピクセルデータの取得
+            // --------------------------------------------------------------------
+            // getImageData: キャンバスからピクセルデータを取得
+            // 戻り値のdataプロパティは、RGBA形式の1次元配列
+            // [R, G, B, A, R, G, B, A, ...] の形式で各ピクセルの色情報が格納
             const imgData1 = ctx1.getImageData(0, 0, canvas1.width, canvas1.height);
             const imgData2 = ctx2.getImageData(0, 0, canvas2.width, canvas2.height);
 
+            // 比較する領域のサイズ（小さい方に合わせる）
             const width = Math.min(canvas1.width, canvas2.width);
             const height = Math.min(canvas1.height, canvas2.height);
 
-            // ブロック単位で差分を検出
-            const blockSize = 8;
-            let changedBlocks = 0;
-            let addedBlocks = 0;
-            let deletedBlocks = 0;
-            let totalBlocks = 0;
-            let diffPixels = 0;
-            let totalPixels = width * height;
+            // --------------------------------------------------------------------
+            // 差分検出パラメータ
+            // --------------------------------------------------------------------
+            const blockSize = 8;      // ブロックサイズ（8x8ピクセル）
+            let changedBlocks = 0;    // 変更されたブロック数
+            let addedBlocks = 0;      // 追加されたブロック数
+            let deletedBlocks = 0;    // 削除されたブロック数
+            let totalBlocks = 0;      // 全ブロック数
+            let diffPixels = 0;       // 差分ピクセル数
+            let totalPixels = width * height;  // 全ピクセル数
 
+            // オーバーレイをクリア（前回のハイライトを消去）
             octx1.clearRect(0, 0, overlay1.width, overlay1.height);
             octx2.clearRect(0, 0, overlay2.width, overlay2.height);
 
+            // --------------------------------------------------------------------
+            // ブロック単位での差分検出
+            // --------------------------------------------------------------------
+            // 2重ループでブロックを走査
+            // y: 縦方向、x: 横方向
             for (let y = 0; y < height; y += blockSize) {
                 for (let x = 0; x < width; x += blockSize) {
                     totalBlocks++;
 
-                    let diff = 0;
-                    let hasContent1 = false;
-                    let hasContent2 = false;
+                    let diff = 0;            // ブロック内の差分カウント
+                    let hasContent1 = false; // PDF1にコンテンツがあるか
+                    let hasContent2 = false; // PDF2にコンテンツがあるか
 
                     // ブロック内のピクセルを比較
                     for (let by = 0; by < blockSize && y + by < height; by++) {
                         for (let bx = 0; bx < blockSize && x + bx < width; bx++) {
+                            // ピクセルのインデックスを計算
+                            // ※RGBA形式なので4を掛ける
                             const idx1 = ((y + by) * canvas1.width + (x + bx)) * 4;
                             const idx2 = ((y + by) * canvas2.width + (x + bx)) * 4;
 
-                            // グレースケール値で比較
+                            // グレースケール値に変換して比較
+                            // ※グレースケール: RGBの平均値で明るさを表現
                             const gray1 = (imgData1.data[idx1] + imgData1.data[idx1 + 1] + imgData1.data[idx1 + 2]) / 3;
                             const gray2 = (imgData2.data[idx2] + imgData2.data[idx2 + 1] + imgData2.data[idx2 + 2]) / 3;
 
+                            // コンテンツの有無を判定（240より暗ければコンテンツあり）
+                            // ※白=255、黒=0
                             if (gray1 < 240) hasContent1 = true;
                             if (gray2 < 240) hasContent2 = true;
 
+                            // 差分を検出（明るさの差が30以上なら差分としてカウント）
                             if (Math.abs(gray1 - gray2) > 30) {
                                 diff++;
                             }
                         }
                     }
 
-                    // 閾値以上の差分があればハイライト
+                    // --------------------------------------------------------------------
+                    // 差分のハイライト
+                    // --------------------------------------------------------------------
+                    // 閾値: ブロックの10%以上のピクセルに差分があればハイライト
                     const threshold = (blockSize * blockSize) * 0.1;
+                    
                     if (diff > threshold) {
                         diffPixels += blockSize * blockSize;
 
                         if (hasContent1 && hasContent2) {
-                            // 変更（黄色）
+                            // 変更（両方にコンテンツがある）→ 黄色
                             changedBlocks++;
-                            octx1.fillStyle = 'rgba(255, 193, 7, 0.4)';
+                            octx1.fillStyle = 'rgba(255, 193, 7, 0.4)';   // 半透明の黄色
                             octx2.fillStyle = 'rgba(255, 193, 7, 0.4)';
                         } else if (hasContent1 && !hasContent2) {
-                            // 削除（赤）
+                            // 削除（PDF1にのみコンテンツがある）→ 赤色
                             deletedBlocks++;
-                            octx1.fillStyle = 'rgba(244, 67, 54, 0.4)';
-                            octx2.fillStyle = 'rgba(244, 67, 54, 0.2)';
+                            octx1.fillStyle = 'rgba(244, 67, 54, 0.4)';   // 半透明の赤色
+                            octx2.fillStyle = 'rgba(244, 67, 54, 0.2)';   // 薄い赤色
                         } else if (!hasContent1 && hasContent2) {
-                            // 追加（緑）
+                            // 追加（PDF2にのみコンテンツがある）→ 緑色
                             addedBlocks++;
-                            octx1.fillStyle = 'rgba(76, 175, 80, 0.2)';
-                            octx2.fillStyle = 'rgba(76, 175, 80, 0.4)';
+                            octx1.fillStyle = 'rgba(76, 175, 80, 0.2)';   // 薄い緑色
+                            octx2.fillStyle = 'rgba(76, 175, 80, 0.4)';   // 半透明の緑色
                         } else {
+                            // 両方にコンテンツがない場合はスキップ
                             continue;
                         }
 
+                        // ブロックを塗りつぶし
                         octx1.fillRect(x, y, blockSize, blockSize);
                         octx2.fillRect(x, y, blockSize, blockSize);
                     }
                 }
             }
 
-            // 統計を累積
+            // --------------------------------------------------------------------
+            // 統計情報の更新
+            // --------------------------------------------------------------------
+            // 累積統計（全ページ分を合計）
             totalStats.changed += changedBlocks;
             totalStats.added += addedBlocks;
             totalStats.deleted += deletedBlocks;
             totalStats.diffPixels += diffPixels;
             totalStats.totalPixels += totalPixels;
 
-            // 統計を更新
+            // 画面に統計を表示
             document.getElementById('statChanged').textContent = totalStats.changed;
             document.getElementById('statAdded').textContent = totalStats.added;
             document.getElementById('statDeleted').textContent = totalStats.deleted;
+            
+            // 差分パーセンテージを計算
+            // 三項演算子: 条件 ? 真の場合 : 偽の場合
             const diffPercent = totalStats.totalPixels > 0 ? (totalStats.diffPixels / totalStats.totalPixels) * 100 : 0;
-            document.getElementById('diffPercent').textContent = diffPercent.toFixed(1);
+            document.getElementById('diffPercent').textContent = diffPercent.toFixed(1);  // 小数点以下1桁
         }
 
-        // ページ情報を更新
+        // ============================================================================
+        // ユーティリティ関数
+        // ============================================================================
+        
+        /**
+         * ページ情報を更新する関数
+         */
         function updatePageInfo() {
             document.getElementById('pageInfo').textContent = `全 ${totalPages} ページ`;
         }
 
-        // ズーム変更時に全ページを再レンダリング
+        /**
+         * ズーム変更時に全ページを再レンダリングする関数
+         */
         async function changeZoom() {
+            // 選択されたズーム値を取得（文字列から数値に変換）
             currentZoom = parseFloat(document.getElementById('zoomLevel').value);
+            
+            // 両方のPDFが読み込まれていれば再比較
             if (pdf1 && pdf2) {
                 await compare();
             }
         }
 
+        /**
+         * ローディングオーバーレイを表示する関数
+         * @param {string} text - 表示するメッセージ
+         */
         function showLoading(text) {
             document.getElementById('loadingText').textContent = text;
             document.getElementById('loadingOverlay').style.display = 'flex';
         }
 
+        /**
+         * ローディングオーバーレイを非表示にする関数
+         */
         function hideLoading() {
             document.getElementById('loadingOverlay').style.display = 'none';
         }
