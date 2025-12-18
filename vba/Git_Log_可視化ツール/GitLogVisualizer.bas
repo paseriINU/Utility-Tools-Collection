@@ -1001,8 +1001,8 @@ Private Sub CreateBranchGraphSheet(ByRef commits() As CommitInfo, ByVal commitCo
 
             Dim tooltip As Object
             Set tooltip = .Shapes.AddTextbox(msoTextOrientationHorizontal, x + nodeSize + 5, y - 3, 300, 15)
-            tooltip.TextFrame.Characters.Text = commits(i).Hash & " " & commits(i).Subject
-            tooltip.TextFrame.Characters.Font.Size = 8
+            tooltip.TextFrame2.TextRange.Text = commits(i).Hash & " " & commits(i).Subject
+            tooltip.TextFrame2.TextRange.Font.Size = 8
             tooltip.Line.Visible = msoFalse
             tooltip.Fill.Visible = msoFalse
 
