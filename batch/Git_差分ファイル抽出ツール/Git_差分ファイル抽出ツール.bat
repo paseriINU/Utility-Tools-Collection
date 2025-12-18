@@ -519,9 +519,55 @@ if ($compareMode -eq "1") {
 }
 #endregion
 
-#region 出力先フォルダ設定
+#region 差分ファイル取得（最初に実行 - 差分がなければフォルダ検索も不要）
+Write-Host ""
+Write-Host "差分ファイルを検出中..." -ForegroundColor Cyan
 Write-Host ""
 
+# 差分ファイルリストを取得
+if ($INCLUDE_DELETED) {
+    $diffFiles = git diff --name-only "$BASE_REF..$TARGET_REF"
+} else {
+    $diffFiles = git diff --name-only --diff-filter=ACMR "$BASE_REF..$TARGET_REF"
+}
+
+if (-not $diffFiles -or $diffFiles.Count -eq 0) {
+    Write-Host "[情報] 差分ファイルが見つかりませんでした" -ForegroundColor Yellow
+    Write-Host "比較対象は同じ内容です" -ForegroundColor Yellow
+    exit 0
+}
+
+# サブディレクトリ配下のファイルのみをフィルタリング
+$filteredFiles = @()
+foreach ($file in $diffFiles) {
+    if ($subDirPath -ne "") {
+        $subDirPathLinux = $subDirPath.Replace("\", "/")
+        if ($file.StartsWith($subDirPathLinux + "/")) {
+            $relativePath = $file.Substring($subDirPathLinux.Length + 1)
+            $filteredFiles += [PSCustomObject]@{
+                OriginalPath = $file
+                RelativePath = $relativePath
+            }
+        }
+    } else {
+        $filteredFiles += [PSCustomObject]@{
+            OriginalPath = $file
+            RelativePath = $file
+        }
+    }
+}
+
+if ($filteredFiles.Count -eq 0) {
+    Write-Host "[情報] 対象サブディレクトリ配下に差分ファイルが見つかりませんでした" -ForegroundColor Yellow
+    exit 0
+}
+
+$FILE_COUNT = $filteredFiles.Count
+Write-Host "検出された差分ファイル数: $FILE_COUNT 個" -ForegroundColor Green
+Write-Host ""
+#endregion
+
+#region 出力先フォルダ設定（差分がある場合のみ実行）
 $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
 $OUTPUT_DIR = ""
 $OUTPUT_DIR_BEFORE = ""
@@ -579,12 +625,6 @@ if ($NETWORK_OUTPUT_BASE -ne "" -and (Test-Path $NETWORK_OUTPUT_BASE)) {
         }
     }
 
-    # 30_Mフォルダの存在確認と作成
-    if (-not (Test-Path $OUTPUT_DIR)) {
-        Write-Host "[作成] 30_Mフォルダを作成します: $OUTPUT_DIR" -ForegroundColor Yellow
-        New-Item -ItemType Directory -Path $OUTPUT_DIR -Force | Out-Null
-    }
-
     $OUTPUT_DIR_BEFORE = "$OUTPUT_DIR\01_修正前"
     $OUTPUT_DIR_AFTER = "$OUTPUT_DIR\02_修正後"
 
@@ -615,10 +655,20 @@ Write-Host "--------------------------------------------------------------------
 Write-Host ""
 #endregion
 
-#region 出力先フォルダ確認
-if (Test-Path $OUTPUT_DIR) {
-    Write-Host "[警告] 出力先フォルダ '$OUTPUT_DIR' は既に存在します" -ForegroundColor Yellow
-    $overwrite = Read-Host "上書きしますか? (y/n)"
+#region 出力先フォルダ確認（差分があることを確認した後に実行）
+# 修正前・修正後フォルダが存在するかチェック
+$beforeExists = Test-Path $OUTPUT_DIR_BEFORE
+$afterExists = Test-Path $OUTPUT_DIR_AFTER
+
+if ($beforeExists -or $afterExists) {
+    Write-Host "[警告] 以下のフォルダが既に存在します" -ForegroundColor Yellow
+    if ($beforeExists) {
+        Write-Host "  - $OUTPUT_DIR_BEFORE" -ForegroundColor Yellow
+    }
+    if ($afterExists) {
+        Write-Host "  - $OUTPUT_DIR_AFTER" -ForegroundColor Yellow
+    }
+    $overwrite = Read-Host "クリアして書き込みますか? (y/n)"
 
     if ($overwrite -ne "y") {
         Write-Host "処理を中止しました" -ForegroundColor Yellow
@@ -626,118 +676,108 @@ if (Test-Path $OUTPUT_DIR) {
     }
 
     Write-Host "既存のフォルダをクリア中..." -ForegroundColor Yellow
-    Remove-Item -Path $OUTPUT_DIR -Recurse -Force
+    # 修正前・修正後フォルダのみを削除（30_M配下の他のフォルダは保持）
+    if ($beforeExists) {
+        Remove-Item -Path $OUTPUT_DIR_BEFORE -Recurse -Force
+    }
+    if ($afterExists) {
+        Remove-Item -Path $OUTPUT_DIR_AFTER -Recurse -Force
+    }
 }
 
-New-Item -ItemType Directory -Path $OUTPUT_DIR -Force | Out-Null
+# 出力先フォルダを作成
+if (-not (Test-Path $OUTPUT_DIR)) {
+    Write-Host "[作成] 出力先フォルダを作成します: $OUTPUT_DIR" -ForegroundColor Yellow
+    New-Item -ItemType Directory -Path $OUTPUT_DIR -Force | Out-Null
+}
 New-Item -ItemType Directory -Path $OUTPUT_DIR_BEFORE -Force | Out-Null
 New-Item -ItemType Directory -Path $OUTPUT_DIR_AFTER -Force | Out-Null
 #endregion
 
-#region 差分ファイル取得
-Write-Host "差分ファイルを検出中..." -ForegroundColor Cyan
-Write-Host ""
-
-# 差分ファイルリストを取得
-if ($INCLUDE_DELETED) {
-    $diffFiles = git diff --name-only "$BASE_REF..$TARGET_REF"
-} else {
-    $diffFiles = git diff --name-only --diff-filter=ACMR "$BASE_REF..$TARGET_REF"
-}
-
-if (-not $diffFiles -or $diffFiles.Count -eq 0) {
-    Write-Host "[情報] 差分ファイルが見つかりませんでした" -ForegroundColor Yellow
-    Write-Host "比較対象は同じ内容です" -ForegroundColor Yellow
-    exit 0
-}
-
-# サブディレクトリ配下のファイルのみをフィルタリング
-$filteredFiles = @()
-foreach ($file in $diffFiles) {
-    if ($subDirPath -ne "") {
-        $subDirPathLinux = $subDirPath.Replace("\", "/")
-        if ($file.StartsWith($subDirPathLinux + "/")) {
-            $relativePath = $file.Substring($subDirPathLinux.Length + 1)
-            $filteredFiles += [PSCustomObject]@{
-                OriginalPath = $file
-                RelativePath = $relativePath
-            }
-        }
-    } else {
-        $filteredFiles += [PSCustomObject]@{
-            OriginalPath = $file
-            RelativePath = $file
-        }
-    }
-}
-
-if ($filteredFiles.Count -eq 0) {
-    Write-Host "[情報] 対象サブディレクトリ配下に差分ファイルが見つかりませんでした" -ForegroundColor Yellow
-    exit 0
-}
-
-$FILE_COUNT = $filteredFiles.Count
-Write-Host "検出された差分ファイル数: $FILE_COUNT 個" -ForegroundColor Green
-Write-Host ""
-Write-Host "ファイルをコピー中..." -ForegroundColor Cyan
-Write-Host ""
-#endregion
-
-#region ファイルコピー
+#region ファイルコピー（高速一括抽出方式）
 $COPY_COUNT_BEFORE = 0
 $COPY_COUNT_AFTER = 0
 $ERROR_COUNT = 0
+$NEW_FILES = @()
+$DELETED_FILES = @()
+
+# 01_修正前（比較元）のファイルを抽出
+Write-Host "[01_修正前] 比較元からファイルを抽出中..." -ForegroundColor Yellow
 
 foreach ($fileObj in $filteredFiles) {
     $originalPath = $fileObj.OriginalPath
     $relativePath = $fileObj.RelativePath
-
     $relativePathWin = $relativePath -replace '/', '\'
 
-    Write-Host "[処理] $relativePath" -ForegroundColor Cyan
-
-    # 01_修正前（比較元）のファイルをコピー
+    # 出力先パス
     $destFileBefore = Join-Path $OUTPUT_DIR_BEFORE $relativePathWin
     $destDirBefore = Split-Path -Path $destFileBefore -Parent
-    if (-not (Test-Path $destDirBefore)) {
-        New-Item -ItemType Directory -Path $destDirBefore -Force | Out-Null
-    }
 
-    try {
-        $contentBefore = git show "${BASE_REF}:${originalPath}" 2>&1
-        if ($LASTEXITCODE -eq 0) {
-            [System.IO.File]::WriteAllText($destFileBefore, ($contentBefore -join "`n"), [System.Text.Encoding]::UTF8)
-            Write-Host "  [01_修正前] コピー完了" -ForegroundColor Green
-            $COPY_COUNT_BEFORE++
-        } else {
-            Write-Host "  [01_修正前] 新規ファイル（比較元に存在しない）" -ForegroundColor Gray
+    # git show でファイル内容を取得
+    $gitPath = $originalPath -replace '\\', '/'
+    $contentBefore = git show "${BASE_REF}:${gitPath}" 2>&1
+
+    if ($LASTEXITCODE -eq 0) {
+        # ディレクトリ作成
+        if (-not (Test-Path $destDirBefore)) {
+            New-Item -ItemType Directory -Path $destDirBefore -Force | Out-Null
         }
-    } catch {
-        Write-Host "  [01_修正前] エラー: $($_.Exception.Message)" -ForegroundColor Red
-        $ERROR_COUNT++
-    }
-
-    # 02_修正後（比較先）のファイルをコピー
-    $destFileAfter = Join-Path $OUTPUT_DIR_AFTER $relativePathWin
-    $destDirAfter = Split-Path -Path $destFileAfter -Parent
-    if (-not (Test-Path $destDirAfter)) {
-        New-Item -ItemType Directory -Path $destDirAfter -Force | Out-Null
-    }
-
-    try {
-        $contentAfter = git show "${TARGET_REF}:${originalPath}" 2>&1
-        if ($LASTEXITCODE -eq 0) {
-            [System.IO.File]::WriteAllText($destFileAfter, ($contentAfter -join "`n"), [System.Text.Encoding]::UTF8)
-            Write-Host "  [02_修正後] コピー完了" -ForegroundColor Green
-            $COPY_COUNT_AFTER++
-        } else {
-            Write-Host "  [02_修正後] 削除済みファイル（比較先に存在しない）" -ForegroundColor Gray
-        }
-    } catch {
-        Write-Host "  [02_修正後] エラー: $($_.Exception.Message)" -ForegroundColor Red
-        $ERROR_COUNT++
+        # ファイル書き込み
+        [System.IO.File]::WriteAllText($destFileBefore, ($contentBefore -join "`n"), [System.Text.Encoding]::UTF8)
+        $COPY_COUNT_BEFORE++
+        Write-Host "  [OK] $relativePath" -ForegroundColor Gray
+    } else {
+        # 新規ファイル（比較元には存在しない）
+        $NEW_FILES += $relativePath
+        Write-Host "  [新規] $relativePath" -ForegroundColor DarkYellow
     }
 }
+
+Write-Host ""
+Write-Host "  抽出完了: $COPY_COUNT_BEFORE 個" -ForegroundColor Green
+if ($NEW_FILES.Count -gt 0) {
+    Write-Host "  （新規ファイル: $($NEW_FILES.Count) 個）" -ForegroundColor DarkYellow
+}
+Write-Host ""
+
+# 02_修正後（比較先）のファイルを抽出
+Write-Host "[02_修正後] 比較先からファイルを抽出中..." -ForegroundColor Yellow
+
+foreach ($fileObj in $filteredFiles) {
+    $originalPath = $fileObj.OriginalPath
+    $relativePath = $fileObj.RelativePath
+    $relativePathWin = $relativePath -replace '/', '\'
+
+    # 出力先パス
+    $destFileAfter = Join-Path $OUTPUT_DIR_AFTER $relativePathWin
+    $destDirAfter = Split-Path -Path $destFileAfter -Parent
+
+    # git show でファイル内容を取得
+    $gitPath = $originalPath -replace '\\', '/'
+    $contentAfter = git show "${TARGET_REF}:${gitPath}" 2>&1
+
+    if ($LASTEXITCODE -eq 0) {
+        # ディレクトリ作成
+        if (-not (Test-Path $destDirAfter)) {
+            New-Item -ItemType Directory -Path $destDirAfter -Force | Out-Null
+        }
+        # ファイル書き込み
+        [System.IO.File]::WriteAllText($destFileAfter, ($contentAfter -join "`n"), [System.Text.Encoding]::UTF8)
+        $COPY_COUNT_AFTER++
+        Write-Host "  [OK] $relativePath" -ForegroundColor Gray
+    } else {
+        # 削除ファイル（比較先には存在しない）
+        $DELETED_FILES += $relativePath
+        Write-Host "  [削除] $relativePath" -ForegroundColor DarkRed
+    }
+}
+
+Write-Host ""
+Write-Host "  抽出完了: $COPY_COUNT_AFTER 個" -ForegroundColor Green
+if ($DELETED_FILES.Count -gt 0) {
+    Write-Host "  （削除ファイル: $($DELETED_FILES.Count) 個）" -ForegroundColor DarkRed
+}
+Write-Host ""
 #endregion
 
 #region 結果表示

@@ -900,7 +900,7 @@ End Sub
 ' テーブル定義シートからテーブル一覧を取得
 ' 形式: テーブル名(テーブル名称)
 '==============================================================================
-Private Function GetTableList() As String
+Public Function GetTableList() As String
     Dim ws As Worksheet
     Dim result As String
     Dim i As Long

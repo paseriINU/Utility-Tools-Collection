@@ -73,6 +73,8 @@ Public Const ROW_SQL_OUTPUT As Long = 88
 Public Sub InitializeSQL生成ツール()
     On Error GoTo ErrorHandler
 
+    Dim autoColumnFilterEnabled As Boolean
+
     Application.ScreenUpdating = False
 
     ' シートを作成
@@ -94,19 +96,34 @@ Public Sub InitializeSQL生成ツール()
     FormatHelpSheet
 
     ' メインシートにWorksheet_Changeイベントを設定
-    SetupWorksheetChangeEvent
+    autoColumnFilterEnabled = SetupWorksheetChangeEvent()
 
     ' メインシートをアクティブに
     Sheets(SHEET_MAIN).Activate
 
     Application.ScreenUpdating = True
 
-    MsgBox "SQL生成ツールの初期化が完了しました。" & vbCrLf & vbCrLf & _
-           "【使い方】" & vbCrLf & _
-           "1. 「テーブル定義」シートにテーブル・カラム情報を登録" & vbCrLf & _
-           "2. 「メイン」シートで条件を入力" & vbCrLf & _
-           "3. 「SQL生成」ボタンをクリック" & vbCrLf & vbCrLf & _
-           "※テーブル選択時にカラムが自動で絞り込まれます", vbInformation, "初期化完了"
+    If autoColumnFilterEnabled Then
+        MsgBox "SQL生成ツールの初期化が完了しました。" & vbCrLf & vbCrLf & _
+               "【使い方】" & vbCrLf & _
+               "1. 「テーブル定義」シートにテーブル・カラム情報を登録" & vbCrLf & _
+               "2. 「メイン」シートで条件を入力" & vbCrLf & _
+               "3. 「SQL生成」ボタンをクリック" & vbCrLf & vbCrLf & _
+               "※テーブル選択時にカラムが自動で絞り込まれます", vbInformation, "初期化完了"
+    Else
+        MsgBox "SQL生成ツールの初期化が完了しました。" & vbCrLf & vbCrLf & _
+               "【使い方】" & vbCrLf & _
+               "1. 「テーブル定義」シートにテーブル・カラム情報を登録" & vbCrLf & _
+               "2. 「メイン」シートで条件を入力" & vbCrLf & _
+               "3. 「SQL生成」ボタンをクリック" & vbCrLf & vbCrLf & _
+               "【注意】カラム自動絞り込みを有効にするには：" & vbCrLf & _
+               "テーブル選択後「カラム絞込」ボタンをクリックしてください。" & vbCrLf & vbCrLf & _
+               "※自動化するにはVBAプロジェクトへのアクセス許可が必要です。" & vbCrLf & _
+               "「ファイル」→「オプション」→「トラストセンター」→" & vbCrLf & _
+               "「トラストセンターの設定」→「マクロの設定」→" & vbCrLf & _
+               "「VBAプロジェクト オブジェクト モデルへのアクセスを信頼する」", _
+               vbInformation, "初期化完了"
+    End If
 
     Exit Sub
 
@@ -143,8 +160,9 @@ End Sub
 ' ※VBAプロジェクトへのアクセス許可が必要
 '   「ファイル」→「オプション」→「トラストセンター」→「トラストセンターの設定」
 '   →「マクロの設定」→「VBAプロジェクト オブジェクト モデルへのアクセスを信頼する」
+' 戻り値: True=成功, False=失敗（手動設定が必要）
 '==============================================================================
-Private Sub SetupWorksheetChangeEvent()
+Private Function SetupWorksheetChangeEvent() As Boolean
     On Error GoTo ManualSetup
 
     Dim ws As Worksheet
@@ -165,8 +183,11 @@ Private Sub SetupWorksheetChangeEvent()
     lineNum = codeModule.ProcStartLine("Worksheet_Change", 0)
     On Error GoTo ManualSetup
 
-    ' 既に存在する場合はスキップ
-    If lineNum > 0 Then Exit Sub
+    ' 既に存在する場合は成功
+    If lineNum > 0 Then
+        SetupWorksheetChangeEvent = True
+        Exit Function
+    End If
 
     ' イベントコードを追加
     eventCode = vbCrLf & _
@@ -176,14 +197,14 @@ Private Sub SetupWorksheetChangeEvent()
         "End Sub" & vbCrLf
 
     codeModule.AddFromString eventCode
+    SetupWorksheetChangeEvent = True
 
-    Exit Sub
+    Exit Function
 
 ManualSetup:
-    ' VBProjectへのアクセスが許可されていない場合は手動設定の案内
-    ' （初期化時にエラーを出さないよう静かに終了）
-    ' ボタンからの手動更新は引き続き使用可能
-End Sub
+    ' VBProjectへのアクセスが許可されていない場合
+    SetupWorksheetChangeEvent = False
+End Function
 
 '==============================================================================
 ' メインシートのフォーマット

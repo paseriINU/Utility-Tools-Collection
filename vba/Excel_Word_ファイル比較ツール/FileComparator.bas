@@ -44,6 +44,30 @@ Private g_MatchedNew() As Long    ' 新ファイルの段落番号
 Private g_MatchedCount As Long    ' ペア数
 
 '==============================================================================
+' データ構造: Excel比較用
+'==============================================================================
+Private Type ExcelDifferenceInfo
+    SheetName As String      ' シート名
+    CellAddress As String    ' セルアドレス
+    DiffType As String       ' 差異タイプ（変更/追加/削除）
+    OldValue As String       ' 旧ファイルの値
+    NewValue As String       ' 新ファイルの値
+End Type
+
+'==============================================================================
+' データ構造: Word比較用（WinMerge方式：旧/新両方の行番号を保持）
+'==============================================================================
+Private Type WordDifferenceInfo
+    OldParagraphNo As Long   ' 旧ファイルの段落番号（0は該当なし）
+    NewParagraphNo As Long   ' 新ファイルの段落番号（0は該当なし）
+    DiffType As String       ' 差異タイプ（変更/追加/削除/スタイル変更）
+    OldText As String        ' 旧ファイルのテキスト
+    NewText As String        ' 新ファイルのテキスト
+    OldStyle As String       ' 旧ファイルのスタイル情報
+    NewStyle As String       ' 新ファイルのスタイル情報
+End Type
+
+'==============================================================================
 ' 進捗表示用ヘルパー関数
 '==============================================================================
 Private Sub ShowProgress(ByVal phase As String, ByVal current As Long, ByVal total As Long)
@@ -107,30 +131,6 @@ Private Function GetUseLCSMode() As Boolean
 
     On Error GoTo 0
 End Function
-
-'==============================================================================
-' データ構造: Excel比較用
-'==============================================================================
-Private Type ExcelDifferenceInfo
-    SheetName As String      ' シート名
-    CellAddress As String    ' セルアドレス
-    DiffType As String       ' 差異タイプ（変更/追加/削除）
-    OldValue As String       ' 旧ファイルの値
-    NewValue As String       ' 新ファイルの値
-End Type
-
-'==============================================================================
-' データ構造: Word比較用（WinMerge方式：旧/新両方の行番号を保持）
-'==============================================================================
-Private Type WordDifferenceInfo
-    OldParagraphNo As Long   ' 旧ファイルの段落番号（0は該当なし）
-    NewParagraphNo As Long   ' 新ファイルの段落番号（0は該当なし）
-    DiffType As String       ' 差異タイプ（変更/追加/削除/スタイル変更）
-    OldText As String        ' 旧ファイルのテキスト
-    NewText As String        ' 新ファイルのテキスト
-    OldStyle As String       ' 旧ファイルのスタイル情報
-    NewStyle As String       ' 新ファイルのスタイル情報
-End Type
 
 '==============================================================================
 ' Excel専用比較プロシージャ（ボタン用）
@@ -387,12 +387,14 @@ Private Sub CompareWordFilesInternal(ByVal file1Path As String, ByVal file2Path 
     End If
     On Error GoTo ErrorHandler
 
+    ' バックグラウンドで処理（画面に表示しない）
     wordApp.Visible = False
     wordApp.DisplayAlerts = False
+    wordApp.ScreenUpdating = False
 
-    ' ファイルを開く
-    Set doc1 = wordApp.Documents.Open(file1Path, ReadOnly:=True)
-    Set doc2 = wordApp.Documents.Open(file2Path, ReadOnly:=True)
+    ' ファイルを開く（非表示で）
+    Set doc1 = wordApp.Documents.Open(FileName:=file1Path, ReadOnly:=True, Visible:=False)
+    Set doc2 = wordApp.Documents.Open(FileName:=file2Path, ReadOnly:=True, Visible:=False)
 
     ' 比較実行
     diffCount = 0
@@ -404,9 +406,12 @@ Private Sub CompareWordFilesInternal(ByVal file1Path As String, ByVal file2Path 
     doc1.Close SaveChanges:=False
     doc2.Close SaveChanges:=False
 
-    ' Wordを終了（元々起動していなかった場合のみ）
+    ' Wordの設定を復元してから終了
     If Not wordWasRunning Then
         wordApp.Quit
+    Else
+        ' 既存のWordを使用していた場合は設定を復元
+        wordApp.ScreenUpdating = True
     End If
 
     Set doc1 = Nothing
@@ -448,7 +453,14 @@ ErrorHandler:
     On Error Resume Next
     If Not doc1 Is Nothing Then doc1.Close SaveChanges:=False
     If Not doc2 Is Nothing Then doc2.Close SaveChanges:=False
-    If Not wordApp Is Nothing And Not wordWasRunning Then wordApp.Quit
+    If Not wordApp Is Nothing Then
+        If Not wordWasRunning Then
+            wordApp.Quit
+        Else
+            ' 既存のWordを使用していた場合は設定を復元
+            wordApp.ScreenUpdating = True
+        End If
+    End If
     On Error GoTo 0
 
     MsgBox "エラーが発生しました: " & vbCrLf & vbCrLf & _
@@ -714,6 +726,7 @@ Private Sub ComputeLCSDiffOptimized(ByRef texts1() As String, ByRef texts2() As 
     Dim uniqueTexts1 As Long, uniqueTexts2 As Long
     Dim commonTexts As Long
     Dim useLCS As Boolean
+    Dim key As Variant       ' For Each用
 
     ' チェックボックスの状態を取得
     useLCS = GetUseLCSMode()
@@ -740,11 +753,11 @@ Private Sub ComputeLCSDiffOptimized(ByRef texts1() As String, ByRef texts2() As 
 
     ' 共通テキストの数をカウント
     commonTexts = 0
-    For Each i In textHash1.Keys
-        If textHash2.exists(i) Then
+    For Each key In textHash1.Keys
+        If textHash2.exists(key) Then
             commonTexts = commonTexts + 1
         End If
-    Next i
+    Next key
 
     Debug.Print "  ユニークテキスト数: 旧=" & uniqueTexts1 & ", 新=" & uniqueTexts2 & ", 共通=" & commonTexts
 

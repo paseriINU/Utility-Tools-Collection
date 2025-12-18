@@ -12,16 +12,18 @@ Public Const SHEET_JOBLIST As String = "ジョブ一覧"
 Public Const SHEET_LOG As String = "実行ログ"
 
 ' 設定セル位置（メインシート）- Publicで共有
-Public Const ROW_EXEC_MODE As Long = 5
-Public Const ROW_JP1_SERVER As Long = 7
-Public Const ROW_REMOTE_USER As Long = 8
-Public Const ROW_REMOTE_PASSWORD As Long = 9
-Public Const ROW_JP1_USER As Long = 10
-Public Const ROW_JP1_PASSWORD As Long = 11
-Public Const ROW_ROOT_PATH As Long = 12
-Public Const ROW_WAIT_COMPLETION As Long = 13
-Public Const ROW_TIMEOUT As Long = 14
-Public Const ROW_POLLING_INTERVAL As Long = 15
+' ※ボタンが上部（3-4行目）にあるため、設定は6行目以降に配置
+Public Const ROW_EXEC_MODE As Long = 7
+Public Const ROW_JP1_SERVER As Long = 9
+Public Const ROW_REMOTE_USER As Long = 10
+Public Const ROW_REMOTE_PASSWORD As Long = 11
+Public Const ROW_JP1_USER As Long = 12
+Public Const ROW_JP1_PASSWORD As Long = 13
+Public Const ROW_SCHEDULER_SERVICE As Long = 14
+Public Const ROW_ROOT_PATH As Long = 15
+Public Const ROW_WAIT_COMPLETION As Long = 17
+Public Const ROW_TIMEOUT As Long = 18
+Public Const ROW_POLLING_INTERVAL As Long = 19
 Public Const COL_SETTING_VALUE As Long = 3
 
 ' ジョブ一覧シートの列位置 - Publicで共有
@@ -110,9 +112,13 @@ Private Sub FormatMainSheet()
     ' 説明
     ws.Range("A2").Value = "JP1サーバに接続してジョブネット一覧を取得し、選択したジョブを実行します。"
 
-    ' 設定セクション
-    ws.Range("A4").Value = "■ 接続設定"
-    ws.Range("A4").Font.Bold = True
+    ' ボタン追加（図形ボタン・固定サイズ・色付き）- タイトルの下に配置
+    ' メインシートには「ジョブ一覧取得」ボタンのみ
+    AddButton ws, 20, 55, 130, 32, "GetJobList", "ジョブ一覧取得", RGB(0, 112, 192)        ' 青
+
+    ' 設定セクション（ボタンの下）
+    ws.Range("A6").Value = "■ 接続設定"
+    ws.Range("A6").Font.Bold = True
 
     ws.Cells(ROW_EXEC_MODE, 1).Value = "実行モード"
     ws.Cells(ROW_EXEC_MODE, COL_SETTING_VALUE).Value = "リモート"
@@ -120,8 +126,8 @@ Private Sub FormatMainSheet()
     ws.Cells(ROW_EXEC_MODE, 4).Value = "※ローカル: このPCのJP1を使用、リモート: WinRM経由で接続"
     ws.Cells(ROW_EXEC_MODE, 4).Font.Color = RGB(128, 128, 128)
 
-    ws.Range("A6").Value = "【リモート接続設定】（ローカルモード時は不要）"
-    ws.Range("A6").Font.Color = RGB(128, 128, 128)
+    ws.Range("A8").Value = "【リモート接続設定】（ローカルモード時は不要）"
+    ws.Range("A8").Font.Color = RGB(128, 128, 128)
 
     ws.Cells(ROW_JP1_SERVER, 1).Value = "JP1サーバ"
     ws.Cells(ROW_JP1_SERVER, COL_SETTING_VALUE).Value = "192.168.1.100"
@@ -142,31 +148,31 @@ Private Sub FormatMainSheet()
     ws.Cells(ROW_JP1_PASSWORD, 4).Value = "※空の場合は実行時に入力"
     ws.Cells(ROW_JP1_PASSWORD, 4).Font.Color = RGB(128, 128, 128)
 
+    ws.Cells(ROW_SCHEDULER_SERVICE, 1).Value = "スケジューラーサービス"
+    ws.Cells(ROW_SCHEDULER_SERVICE, COL_SETTING_VALUE).Value = "AJSROOT1"
+    ws.Cells(ROW_SCHEDULER_SERVICE, 4).Value = "※JP1/AJS3のスケジューラーサービス名（例: AJSROOT1）"
+    ws.Cells(ROW_SCHEDULER_SERVICE, 4).Font.Color = RGB(128, 128, 128)
+
     ws.Cells(ROW_ROOT_PATH, 1).Value = "取得パス"
-    ws.Cells(ROW_ROOT_PATH, COL_SETTING_VALUE).Value = "/"
-    ws.Cells(ROW_ROOT_PATH, 4).Value = "※ジョブネット取得の起点パス（/で全件）"
+    ws.Cells(ROW_ROOT_PATH, COL_SETTING_VALUE).Value = "/*"
+    ws.Cells(ROW_ROOT_PATH, 4).Value = "※ジョブネットのパス（例: /* または /グループ名/*）"
     ws.Cells(ROW_ROOT_PATH, 4).Font.Color = RGB(128, 128, 128)
 
     ' 実行設定セクション
     ws.Range("A16").Value = "■ 実行設定"
     ws.Range("A16").Font.Bold = True
 
-    ws.Cells(ROW_WAIT_COMPLETION + 4, 1).Value = "完了待ち"
-    ws.Cells(ROW_WAIT_COMPLETION + 4, COL_SETTING_VALUE).Value = "はい"
-    AddDropdown ws, ws.Cells(ROW_WAIT_COMPLETION + 4, COL_SETTING_VALUE), "はい,いいえ"
+    ws.Cells(ROW_WAIT_COMPLETION, 1).Value = "完了待ち"
+    ws.Cells(ROW_WAIT_COMPLETION, COL_SETTING_VALUE).Value = "はい"
+    AddDropdown ws, ws.Cells(ROW_WAIT_COMPLETION, COL_SETTING_VALUE), "はい,いいえ"
 
-    ws.Cells(ROW_TIMEOUT + 4, 1).Value = "タイムアウト（秒）"
-    ws.Cells(ROW_TIMEOUT + 4, COL_SETTING_VALUE).Value = 0
-    ws.Cells(ROW_TIMEOUT + 4, 4).Value = "※0=無制限"
-    ws.Cells(ROW_TIMEOUT + 4, 4).Font.Color = RGB(128, 128, 128)
+    ws.Cells(ROW_TIMEOUT, 1).Value = "タイムアウト（秒）"
+    ws.Cells(ROW_TIMEOUT, COL_SETTING_VALUE).Value = 0
+    ws.Cells(ROW_TIMEOUT, 4).Value = "※0=無制限"
+    ws.Cells(ROW_TIMEOUT, 4).Font.Color = RGB(128, 128, 128)
 
-    ws.Cells(ROW_POLLING_INTERVAL + 4, 1).Value = "状態確認間隔（秒）"
-    ws.Cells(ROW_POLLING_INTERVAL + 4, COL_SETTING_VALUE).Value = 10
-
-    ' ボタン追加
-    AddButton ws, 200, 50, 150, 30, "GetJobList", "ジョブ一覧取得"
-    AddButton ws, 200, 90, 150, 30, "ExecuteCheckedJobs", "選択ジョブ実行"
-    AddButton ws, 200, 130, 150, 30, "ClearJobList", "一覧クリア"
+    ws.Cells(ROW_POLLING_INTERVAL, 1).Value = "状態確認間隔（秒）"
+    ws.Cells(ROW_POLLING_INTERVAL, COL_SETTING_VALUE).Value = 10
 
     ' 列幅調整
     ws.Columns("A").ColumnWidth = 20
@@ -174,11 +180,18 @@ Private Sub FormatMainSheet()
     ws.Columns("C").ColumnWidth = 30
     ws.Columns("D").ColumnWidth = 40
 
-    ' 入力セルの書式
-    With ws.Range(ws.Cells(ROW_EXEC_MODE, COL_SETTING_VALUE), ws.Cells(ROW_POLLING_INTERVAL + 4, COL_SETTING_VALUE))
-        .Interior.Color = RGB(255, 255, 204)
-        .Borders.LineStyle = xlContinuous
-    End With
+    ' 入力セルの書式（設定セルを黄色背景に）
+    Dim settingCells As Variant
+    settingCells = Array(ROW_EXEC_MODE, ROW_JP1_SERVER, ROW_REMOTE_USER, ROW_REMOTE_PASSWORD, _
+                         ROW_JP1_USER, ROW_JP1_PASSWORD, ROW_SCHEDULER_SERVICE, ROW_ROOT_PATH, _
+                         ROW_WAIT_COMPLETION, ROW_TIMEOUT, ROW_POLLING_INTERVAL)
+    Dim r As Variant
+    For Each r In settingCells
+        With ws.Cells(CLng(r), COL_SETTING_VALUE)
+            .Interior.Color = RGB(255, 255, 204)
+            .Borders.LineStyle = xlContinuous
+        End With
+    Next r
 End Sub
 
 '==============================================================================
@@ -201,6 +214,10 @@ Private Sub FormatJobListSheet()
         .HorizontalAlignment = xlCenter
         .RowHeight = 25
     End With
+
+    ' ボタン追加（図形ボタン・固定サイズ・色付き）- タイトルの下に配置
+    AddButton ws, 20, 30, 130, 28, "ExecuteCheckedJobs", "選択ジョブ実行", RGB(0, 176, 80) ' 緑
+    AddButton ws, 160, 30, 130, 28, "ClearJobList", "一覧クリア", RGB(192, 80, 77)          ' 赤
 
     ' 説明
     ws.Range("A2").Value = "実行するジョブの「順序」列に数字（1, 2, 3...）を入力してください。順序が入っているジョブを1番から順に実行します。保留中のジョブは実行時に自動で保留解除されます。"
@@ -298,10 +315,37 @@ Private Sub AddDropdown(ws As Worksheet, cell As Range, options As String)
     End With
 End Sub
 
-Private Sub AddButton(ws As Worksheet, left As Double, top As Double, width As Double, height As Double, macroName As String, caption As String)
-    Dim btn As Button
-    Set btn = ws.Buttons.Add(left, top, width, height)
-    btn.OnAction = macroName
-    btn.caption = caption
-    btn.Font.Size = 10
+Private Sub AddButton(ws As Worksheet, left As Double, top As Double, width As Double, height As Double, macroName As String, caption As String, Optional fillColor As Long = -1)
+    ' 図形ボタンを追加（固定サイズ・色付き）
+    Dim shp As Shape
+    Set shp = ws.Shapes.AddShape(msoShapeRoundedRectangle, left, top, width, height)
+
+    With shp
+        .Name = "btn_" & macroName
+        .OnAction = macroName
+
+        ' 塗りつぶし色（デフォルトは青系）
+        If fillColor = -1 Then
+            .Fill.ForeColor.RGB = RGB(0, 112, 192)
+        Else
+            .Fill.ForeColor.RGB = fillColor
+        End If
+
+        ' 枠線
+        .Line.ForeColor.RGB = RGB(0, 80, 150)
+        .Line.Weight = 1
+
+        ' テキスト設定
+        .TextFrame2.TextRange.Text = caption
+        .TextFrame2.TextRange.Font.Size = 10
+        .TextFrame2.TextRange.Font.Bold = msoTrue
+        .TextFrame2.TextRange.Font.Fill.ForeColor.RGB = RGB(255, 255, 255)
+        .TextFrame2.TextRange.ParagraphFormat.Alignment = msoAlignCenter
+        .TextFrame2.VerticalAnchor = msoAnchorMiddle
+        .TextFrame2.MarginLeft = 0
+        .TextFrame2.MarginRight = 0
+
+        ' セルに依存しない（固定位置・固定サイズ）
+        .Placement = xlFreeFloating
+    End With
 End Sub
