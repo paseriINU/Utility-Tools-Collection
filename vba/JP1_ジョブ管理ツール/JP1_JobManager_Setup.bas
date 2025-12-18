@@ -163,10 +163,11 @@ Private Sub FormatMainSheet()
     ws.Cells(ROW_POLLING_INTERVAL + 4, 1).Value = "状態確認間隔（秒）"
     ws.Cells(ROW_POLLING_INTERVAL + 4, COL_SETTING_VALUE).Value = 10
 
-    ' ボタン追加（図形ボタン・固定サイズ・色付き）- 入力欄の右側に配置
-    AddButton ws, 450, 50, 150, 30, "GetJobList", "ジョブ一覧取得", RGB(0, 112, 192)        ' 青
-    AddButton ws, 450, 90, 150, 30, "ExecuteCheckedJobs", "選択ジョブ実行", RGB(0, 176, 80) ' 緑
-    AddButton ws, 450, 130, 150, 30, "ClearJobList", "一覧クリア", RGB(192, 80, 77)          ' 赤
+    ' ボタン追加（図形ボタン・固定サイズ・色付き）- 設定欄の下に横3列配置
+    ' 23行目あたりに配置（top=約440）
+    AddButton ws, 20, 440, 130, 32, "GetJobList", "ジョブ一覧取得", RGB(0, 112, 192)        ' 青
+    AddButton ws, 160, 440, 130, 32, "ExecuteCheckedJobs", "選択ジョブ実行", RGB(0, 176, 80) ' 緑
+    AddButton ws, 300, 440, 130, 32, "ClearJobList", "一覧クリア", RGB(192, 80, 77)          ' 赤
 
     ' 列幅調整
     ws.Columns("A").ColumnWidth = 20
