@@ -721,14 +721,14 @@ function Get-ExistingFiles {
     )
     $existingFiles = @()
 
-    # 各ファイルの存在を git show で個別チェック
+    # 各ファイルの存在を git rev-parse で個別チェック（軽量・高速）
     foreach ($path in $FilePaths) {
         # パスをLinux形式に正規化
-        $checkPath = $path -replace '\\', '/'
+        $checkPath = $path -replace [regex]::Escape('\'), '/'
         
-        # git show でファイルの存在確認（出力は破棄）
+        # git rev-parse --verify で存在確認（内容を取得しない）
         $gitRef = $Ref + ":" + $checkPath
-        git show $gitRef 2>&1 | Out-Null
+        git rev-parse --verify --quiet $gitRef 2>$null | Out-Null
         if ($LASTEXITCODE -eq 0) {
             $existingFiles += $path
         }
