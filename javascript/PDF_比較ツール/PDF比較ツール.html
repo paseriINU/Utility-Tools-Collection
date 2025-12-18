@@ -4,26 +4,31 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PDF ビジュアル比較ツール</title>
-    <!-- CDNフォールバック: 埋め込みが失敗した場合に使用 -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" 
-            onerror="console.log('CDN load failed, using embedded')"
-            onload="window.pdfJsCdnLoaded=true; if(typeof pdfjsLib!=='undefined'){pdfjsLib.GlobalWorkerOptions.workerSrc='';window.pdfJsLoaded=true;window.pdfJsSource='CDN'}"></script>
     <script>
-        // グローバルエラーハンドラー: スクリプトエラーをキャッチ
+        // ライブラリロード状態の初期化
+        window.pdfJsLoaded = false;
+        window.pdfJsSource = '初期化中';
+        
+        // グローバルエラーハンドラー
         window.onerror = function(msg, url, line, col, error) {
             console.error('Script error:', msg, 'at line', line);
-            // ステータスを更新
-            var el = document.getElementById('libraryStatus');
-            if (el && el.textContent.indexOf('読み込み中') !== -1) {
-                el.textContent = 'ライブラリ: エラー (行' + line + ')';
-                el.style.color = '#f44336';
-                window.pdfJsLoaded = false;
-                window.pdfJsSource = 'スクリプトエラー: ' + msg;
-            }
+            return false;
         };
     </script>
+    <!-- CDN優先: オフライン環境では埋め込みにフォールバック -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <script>
-        // PDF.js ライブラリ埋め込み (v3.11.174)
+        // CDNロード後の初期化チェック
+        if (typeof pdfjsLib !== 'undefined') {
+            pdfjsLib.GlobalWorkerOptions.workerSrc = '';
+            window.pdfJsLoaded = true;
+            window.pdfJsSource = 'CDN';
+        }
+    </script>
+    <script>
+        // PDF.js ライブラリ埋め込み (v3.11.174) - CDN失敗時のフォールバック
+        // CDNが成功した場合はスキップ
+        if (typeof pdfjsLib === 'undefined') {
 /**
  * @licstart The following is the entire license notice for the
  * JavaScript code in this page
@@ -73,28 +78,28 @@
         const workerBlob = new Blob([workerCode], { type: 'application/javascript' });
 
         // PDF.jsライブラリの存在チェックと初期化
-        try {
-            if (typeof pdfjsLib !== 'undefined') {
-                // ワーカーを無効化（単一HTMLファイルで動作させるため）
-                pdfjsLib.GlobalWorkerOptions.workerSrc = '';
-                window.pdfJsLoaded = true;
-                window.pdfJsSource = '埋め込み';
-            } else {
+        // CDNまたは埋め込みからロードされたライブラリを初期化
+        (function initPdfJs() {
+            try {
+                if (typeof pdfjsLib !== 'undefined') {
+                    pdfjsLib.GlobalWorkerOptions.workerSrc = '';
+                    window.pdfJsLoaded = true;
+                    window.pdfJsSource = window.pdfJsSource || '埋め込み';
+                } else {
+                    window.pdfJsLoaded = false;
+                    window.pdfJsSource = '読み込み失敗';
+                }
+            } catch (e) {
                 window.pdfJsLoaded = false;
-                window.pdfJsSource = '読み込み失敗';
-                console.error('PDF.js library failed to load');
+                window.pdfJsSource = 'エラー: ' + e.message;
             }
-        } catch (initError) {
-            window.pdfJsLoaded = false;
-            window.pdfJsSource = '初期化エラー: ' + initError.message;
-            console.error('PDF.js initialization error:', initError);
-        }
+        })();
 
         function updateStatus() {
-            const el = document.getElementById('libraryStatus');
+            var el = document.getElementById('libraryStatus');
             if (el) {
                 if (window.pdfJsLoaded) {
-                    el.textContent = `ライブラリ: ${window.pdfJsSource}`;
+                    el.textContent = 'ライブラリ: ' + window.pdfJsSource;
                     el.style.color = '#4caf50';
                 } else {
                     el.textContent = 'ライブラリ: ' + (window.pdfJsSource || '読み込み失敗');
@@ -103,12 +108,12 @@
             }
         }
 
-        // DOM準備完了時にステータス更新（複数のイベントで確実に実行）
-        if (document.readyState === 'complete' || document.readyState === 'interactive') {
-            setTimeout(updateStatus, 0);
-        }
-        window.addEventListener('load', updateStatus);
+        // ステータス更新を複数回試行
+        setTimeout(updateStatus, 0);
+        setTimeout(updateStatus, 100);
+        setTimeout(updateStatus, 500);
         document.addEventListener('DOMContentLoaded', updateStatus);
+        window.addEventListener('load', updateStatus);
     </script>
     <style>
         * {

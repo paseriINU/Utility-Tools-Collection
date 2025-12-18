@@ -721,38 +721,14 @@ function Get-ExistingFiles {
     )
     $existingFiles = @()
 
-    # git ls-tree でリビジョン内のファイル一覧を取得
-    $treeOutput = git ls-tree -r --name-only $Ref 2>&1
-    if ($LASTEXITCODE -ne 0) {
-        # エラーの場合は全ファイルを返す（git archiveで個別にエラー処理）
-        Write-Host "  [警告] ファイル一覧の取得に失敗。全ファイルを対象にします。" -ForegroundColor Yellow
-        return $FilePaths
-    }
-
-    # 出力を配列に変換（改行コード対応）
-    $treeFiles = @()
-    if ($treeOutput) {
-        # 文字列として結合してから分割（オブジェクト配列対応）
-        $treeOutputStr = ($treeOutput | Out-String) -replace "`r`n", "`n" -replace "`r", "`n"
-        $treeFiles = @($treeOutputStr -split "`n" | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne "" })
-    }
-
-    if ($treeFiles.Count -eq 0) {
-        # ファイル一覧が空の場合は全ファイルを返す
-        return $FilePaths
-    }
-
-    # HashTableで高速検索（パスを正規化してスラッシュに統一）
-    $treeFileSet = @{}
-    foreach ($f in $treeFiles) {
-        $normalizedPath = $f -replace '\\', '/'
-        $treeFileSet[$normalizedPath] = $true
-    }
-
-    # 存在するファイルをフィルタリング（パスを正規化して比較）
+    # 各ファイルの存在を git cat-file -e で個別チェック（確実な方法）
     foreach ($path in $FilePaths) {
-        $normalizedPath = $path -replace '\\', '/'
-        if ($treeFileSet.ContainsKey($normalizedPath)) {
+        # パスをLinux形式に正規化
+        $normalizedPath = $path -replace '\', '/'
+        
+        # git cat-file -e でファイルの存在確認
+        $null = git cat-file -e "${Ref}:${normalizedPath}" 2>&1
+        if ($LASTEXITCODE -eq 0) {
             $existingFiles += $path
         }
     }
