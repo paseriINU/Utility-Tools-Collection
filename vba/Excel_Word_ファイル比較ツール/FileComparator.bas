@@ -714,6 +714,7 @@ Private Sub ComputeLCSDiffOptimized(ByRef texts1() As String, ByRef texts2() As 
     Dim uniqueTexts1 As Long, uniqueTexts2 As Long
     Dim commonTexts As Long
     Dim useLCS As Boolean
+    Dim key As Variant       ' For Each用
 
     ' チェックボックスの状態を取得
     useLCS = GetUseLCSMode()
@@ -740,11 +741,11 @@ Private Sub ComputeLCSDiffOptimized(ByRef texts1() As String, ByRef texts2() As 
 
     ' 共通テキストの数をカウント
     commonTexts = 0
-    For Each i In textHash1.Keys
-        If textHash2.exists(i) Then
+    For Each key In textHash1.Keys
+        If textHash2.exists(key) Then
             commonTexts = commonTexts + 1
         End If
-    Next i
+    Next key
 
     Debug.Print "  ユニークテキスト数: 旧=" & uniqueTexts1 & ", 新=" & uniqueTexts2 & ", 共通=" & commonTexts
 
