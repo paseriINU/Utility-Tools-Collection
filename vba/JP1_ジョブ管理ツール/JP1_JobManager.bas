@@ -982,7 +982,7 @@ End Sub
 '==============================================================================
 Private Function GetConfig() As Object
     Dim ws As Worksheet
-    Set ws = Worksheets(SHEET_MAIN)
+    Set ws = Worksheets(SHEET_SETTINGS)
 
     Dim config As Object
     Set config = CreateObject("Scripting.Dictionary")
@@ -1012,7 +1012,7 @@ Private Function GetConfig() As Object
     Else
         ' リモートモード: 接続情報が必須
         If config("JP1Server") = "" Or config("RemoteUser") = "" Or config("JP1User") = "" Then
-            MsgBox "接続設定が不完全です。メインシートで設定を入力してください。", vbExclamation
+            MsgBox "接続設定が不完全です。設定シートで設定を入力してください。", vbExclamation
             Set GetConfig = Nothing
             Exit Function
         End If
@@ -1246,7 +1246,7 @@ Private Function CreateLogFile() As String
     logContent = logContent & "JP1 ジョブ管理ツール - 実行ログ" & vbCrLf
     logContent = logContent & "================================================================================" & vbCrLf
     logContent = logContent & "開始日時: " & Format(Now, "yyyy/mm/dd HH:mm:ss") & vbCrLf
-    logContent = logContent & "実行モード: " & Worksheets(SHEET_MAIN).Cells(ROW_EXEC_MODE, COL_SETTING_VALUE).Value & vbCrLf
+    logContent = logContent & "実行モード: " & Worksheets(SHEET_SETTINGS).Cells(ROW_EXEC_MODE, COL_SETTING_VALUE).Value & vbCrLf
     logContent = logContent & "================================================================================" & vbCrLf
     logContent = logContent & "" & vbCrLf
 
