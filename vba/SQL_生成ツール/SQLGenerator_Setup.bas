@@ -247,7 +247,7 @@ Private Sub FormatMainSheet()
         .Range("B" & ROW_MAIN_TABLE + 1).Value = ""
         .Range("D" & ROW_MAIN_TABLE + 1).Value = "別名:"
         .Range("E" & ROW_MAIN_TABLE + 1).Value = ""
-        .Range("G" & ROW_MAIN_TABLE + 1).Value = "※データを取得する主となるテーブル。別名を付けると短く参照できます"
+        .Range("G" & ROW_MAIN_TABLE + 1).Value = "※テーブル選択後「↻」ボタンでカラム更新"
         .Range("G" & ROW_MAIN_TABLE + 1).Font.Color = RGB(128, 128, 128)
         .Range("G" & ROW_MAIN_TABLE + 1).Font.Size = 9
 
@@ -257,6 +257,9 @@ Private Sub FormatMainSheet()
         If tableList <> "" Then
             AddDropdown ws, "B" & ROW_MAIN_TABLE + 1, tableList, "TableList"
         End If
+
+        ' テーブル選択後のカラム更新ボタン（小さいボタン）
+        AddSmallButton ws, "C" & ROW_MAIN_TABLE + 1, ChrW(&H21BB), "RefreshColumnDropdownsByTable"
 
         ' 結合テーブル（JOIN）
         .Range("A" & ROW_JOIN_START).Value = "結合テーブル (JOIN) - 複数テーブルを連結してデータを取得"
@@ -893,6 +896,20 @@ Private Sub AddButton(ByVal ws As Worksheet, ByVal cellAddr As String, ByVal cap
 
     Set rng = ws.Range(cellAddr)
     Set btn = ws.Buttons.Add(rng.Left, rng.Top, 110, 28)
+    btn.OnAction = macroName
+    btn.caption = caption
+    btn.Font.Size = 10
+End Sub
+
+'==============================================================================
+' 小さいボタン追加（カラム更新用）
+'==============================================================================
+Private Sub AddSmallButton(ByVal ws As Worksheet, ByVal cellAddr As String, ByVal caption As String, ByVal macroName As String)
+    Dim btn As Object
+    Dim rng As Range
+
+    Set rng = ws.Range(cellAddr)
+    Set btn = ws.Buttons.Add(rng.Left, rng.Top + 2, 22, 18)
     btn.OnAction = macroName
     btn.caption = caption
     btn.Font.Size = 10
