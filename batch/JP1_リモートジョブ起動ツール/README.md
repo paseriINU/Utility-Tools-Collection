@@ -447,12 +447,136 @@ jp1_remote_server3.bat  → JP1_SERVER=192.168.1.102
 
 ---
 
+## 📘 JP1/AJS3 コマンドリファレンス
+
+このツールで使用するJP1/AJS3コマンドの一覧と説明です。
+
+> **詳細版**: すべてのJP1/AJS3コマンドの詳細は [JP1_AJS3_COMMANDS.md](./JP1_AJS3_COMMANDS.md) を参照してください。
+
+### コマンド一覧
+
+| コマンド | 説明 | 用途 |
+|----------|------|------|
+| `ajsentry` | ジョブネットを即時実行する | ジョブネットの起動 |
+| `ajsstatus` | ジョブネットの実行状態を取得する | 完了待ち・状態監視 |
+| `ajsshow` | ジョブネットの詳細情報を取得する | 実行結果の詳細取得 |
+
+### ajsentry（ジョブネット起動）
+
+ジョブネットを即時実行するコマンドです。
+
+```cmd
+ajsentry.exe -h <ホスト名> -u <JP1ユーザー> -p <パスワード> -F <ジョブネットパス>
+```
+
+**主なオプション**:
+
+| オプション | 説明 |
+|-----------|------|
+| `-h` | 接続先のJP1/AJS3マネージャーのホスト名 |
+| `-u` | JP1ユーザー名 |
+| `-p` | JP1パスワード |
+| `-F` | 起動するジョブネットのフルパス |
+
+**実行例**:
+```cmd
+ajsentry.exe -h localhost -u jp1admin -p password -F /main_unit/jobgroup1/daily_batch
+```
+
+**正常終了時の出力**:
+```
+KAVS1820-I ajsentryコマンドが正常終了しました。
+```
+
+---
+
+### ajsstatus（状態確認）
+
+ジョブネットの実行状態を取得するコマンドです。
+
+```cmd
+ajsstatus.exe -h <ホスト名> -u <JP1ユーザー> -p <パスワード> -F <ジョブネットパス>
+```
+
+**主なオプション**:
+
+| オプション | 説明 |
+|-----------|------|
+| `-h` | 接続先のJP1/AJS3マネージャーのホスト名 |
+| `-u` | JP1ユーザー名 |
+| `-p` | JP1パスワード |
+| `-F` | 状態を確認するジョブネットのフルパス |
+
+**実行例**:
+```cmd
+ajsstatus.exe -h localhost -u jp1admin -p password -F /main_unit/jobgroup1/daily_batch
+```
+
+**状態の種類**:
+
+| 状態 | 説明 |
+|------|------|
+| `now running` / `running` | 実行中 |
+| `wait` / `queued` | 待機中・キュー待ち |
+| `ended normally` / `normal end` | 正常終了 |
+| `ended abnormally` / `abnormal end` | 異常終了 |
+| `killed` / `interrupted` | 強制終了・中断 |
+
+---
+
+### ajsshow（詳細情報取得）
+
+ジョブネットの詳細情報を取得するコマンドです。
+
+```cmd
+ajsshow.exe -h <ホスト名> -u <JP1ユーザー> -p <パスワード> -F <ジョブネットパス> -E
+```
+
+**主なオプション**:
+
+| オプション | 説明 |
+|-----------|------|
+| `-h` | 接続先のJP1/AJS3マネージャーのホスト名 |
+| `-u` | JP1ユーザー名 |
+| `-p` | JP1パスワード |
+| `-F` | 情報を取得するジョブネットのフルパス |
+| `-E` | 実行結果の詳細情報を取得 |
+| `-i` | ユニット定義情報を取得 |
+
+**実行例**:
+```cmd
+ajsshow.exe -h localhost -u jp1admin -p password -F /main_unit/jobgroup1/daily_batch -E
+```
+
+**出力例**:
+```
+UNIT-NAME       : /main_unit/jobgroup1/daily_batch
+STATUS          : ENDED NORMALLY
+START-TIME      : 2025/12/17 10:30:00
+END-TIME        : 2025/12/17 10:32:35
+RETURN-CODE     : 0
+```
+
+---
+
+### コマンドの配置場所
+
+JP1/AJS3コマンドは通常、以下のパスにインストールされています：
+
+```
+C:\Program Files\HITACHI\JP1AJS3\bin\
+C:\Program Files\Hitachi\JP1AJS2\bin\
+```
+
+---
+
 ## 📚 参考資料
 
 - [PowerShell Remotingについて](https://learn.microsoft.com/ja-jp/powershell/scripting/learn/ps101/08-powershell-remoting)
 - [Enable-PSRemoting](https://learn.microsoft.com/ja-jp/powershell/module/microsoft.powershell.core/enable-psremoting)
 - [JP1/AJS3 ajsentryコマンド](https://www.hitachi.co.jp/Prod/comp/soft1/manual/pc/d3K2211/AJSK01/EU210278.HTM)
+- [JP1/AJS3 コマンドリファレンス](https://www.hitachi.co.jp/Prod/comp/soft1/manual/pc/d3K2211/AJSK01/EU210000.HTM)
 
 ---
 
-**更新日**: 2025-12-02
+**更新日**: 2025-12-18

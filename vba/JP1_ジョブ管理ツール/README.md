@@ -277,6 +277,215 @@ JP1 ジョブ管理ツール 実行ログ
 
 → タイムアウト設定を確認してください。長時間ジョブの場合は値を大きくするか、0（無制限）に設定。
 
+## 📘 JP1/AJS3 コマンドリファレンス
+
+このツールで使用するJP1/AJS3コマンドの一覧と説明です。
+
+> **詳細版**: すべてのJP1/AJS3コマンドの詳細は [JP1_AJS3_COMMANDS.md](./JP1_AJS3_COMMANDS.md) を参照してください。
+
+### コマンド一覧
+
+| コマンド | 説明 | 用途 |
+|----------|------|------|
+| `ajsprint` | ジョブネット定義情報を出力する | ジョブ一覧の取得 |
+| `ajsentry` | ジョブネットを即時実行する | ジョブネットの起動 |
+| `ajsstatus` | ジョブネットの実行状態を取得する | 完了待ち・状態監視 |
+| `ajsshow` | ジョブネットの詳細情報を取得する | 実行結果の詳細取得 |
+| `ajsrelease` | ジョブネットの保留を解除する | 保留中ジョブの解除 |
+
+---
+
+### ajsprint（ジョブネット一覧取得）
+
+ジョブネットの定義情報を出力するコマンドです。ジョブ一覧を取得するために使用します。
+
+```cmd
+ajsprint.exe -F <スケジューラーサービス名> <取得パス> -R
+```
+
+**主なオプション**:
+
+| オプション | 説明 |
+|-----------|------|
+| `-F` | スケジューラーサービス名（デフォルト: `AJSROOT1`） |
+| `-R` | 再帰的にサブユニットも取得 |
+
+**実行例**:
+```cmd
+ajsprint.exe -F AJSROOT1 / -R
+```
+
+**出力形式**:
+```
+unit=/main_unit/jobgroup1/daily_batch,daily_batch,ty=n,cm="日次バッチ処理";
+unit=/main_unit/jobgroup1/weekly_batch,weekly_batch,ty=n,hd=y,cm="週次バッチ処理";
+```
+
+| フィールド | 説明 |
+|-----------|------|
+| `unit=` | ジョブネットのフルパス |
+| `ty=n` | ユニットタイプ（n=ジョブネット） |
+| `hd=y` | 保留中（y=保留） |
+| `cm=` | コメント |
+
+---
+
+### ajsentry（ジョブネット起動）
+
+ジョブネットを即時実行するコマンドです。
+
+```cmd
+ajsentry.exe -F <スケジューラーサービス名> <ジョブネットパス>
+```
+
+**主なオプション**:
+
+| オプション | 説明 |
+|-----------|------|
+| `-F` | スケジューラーサービス名 |
+| `-h` | 接続先のJP1/AJS3マネージャーのホスト名（リモート接続時） |
+| `-u` | JP1ユーザー名（リモート接続時） |
+| `-p` | JP1パスワード（リモート接続時） |
+
+**実行例**:
+```cmd
+rem ローカル実行
+ajsentry.exe -F AJSROOT1 /main_unit/jobgroup1/daily_batch
+
+rem リモート実行
+ajsentry.exe -h localhost -u jp1admin -p password -F /main_unit/jobgroup1/daily_batch
+```
+
+**正常終了時の出力**:
+```
+KAVS1820-I ajsentryコマンドが正常終了しました。
+```
+
+---
+
+### ajsstatus（状態確認）
+
+ジョブネットの実行状態を取得するコマンドです。
+
+```cmd
+ajsstatus.exe -F <スケジューラーサービス名> <ジョブネットパス>
+```
+
+**主なオプション**:
+
+| オプション | 説明 |
+|-----------|------|
+| `-F` | スケジューラーサービス名 |
+| `-h` | 接続先のJP1/AJS3マネージャーのホスト名（リモート接続時） |
+| `-u` | JP1ユーザー名（リモート接続時） |
+| `-p` | JP1パスワード（リモート接続時） |
+
+**実行例**:
+```cmd
+ajsstatus.exe -F AJSROOT1 /main_unit/jobgroup1/daily_batch
+```
+
+**状態の種類**:
+
+| 状態 | 説明 |
+|------|------|
+| `now running` / `running` | 実行中 |
+| `wait` / `queued` | 待機中・キュー待ち |
+| `ended normally` / `normal end` | 正常終了 |
+| `ended abnormally` / `abnormal end` | 異常終了 |
+| `killed` / `interrupted` | 強制終了・中断 |
+| `failed` | 失敗 |
+
+---
+
+### ajsshow（詳細情報取得）
+
+ジョブネットの詳細情報を取得するコマンドです。
+
+```cmd
+ajsshow.exe -F <スケジューラーサービス名> <ジョブネットパス> -E
+```
+
+**主なオプション**:
+
+| オプション | 説明 |
+|-----------|------|
+| `-F` | スケジューラーサービス名 |
+| `-E` | 実行結果の詳細情報を取得 |
+| `-i` | ユニット定義情報を取得 |
+| `-h` | 接続先のJP1/AJS3マネージャーのホスト名（リモート接続時） |
+| `-u` | JP1ユーザー名（リモート接続時） |
+| `-p` | JP1パスワード（リモート接続時） |
+
+**実行例**:
+```cmd
+ajsshow.exe -F AJSROOT1 /main_unit/jobgroup1/daily_batch -E
+```
+
+**出力例**:
+```
+UNIT-NAME       : /main_unit/jobgroup1/daily_batch
+STATUS          : ENDED NORMALLY
+START-TIME      : 2025/12/17 10:30:00
+END-TIME        : 2025/12/17 10:32:35
+RETURN-CODE     : 0
+```
+
+---
+
+### ajsrelease（保留解除）
+
+保留中のジョブネットを解除するコマンドです。
+
+```cmd
+ajsrelease.exe -F <スケジューラーサービス名> <ジョブネットパス>
+```
+
+**主なオプション**:
+
+| オプション | 説明 |
+|-----------|------|
+| `-F` | スケジューラーサービス名 |
+| `-h` | 接続先のJP1/AJS3マネージャーのホスト名（リモート接続時） |
+| `-u` | JP1ユーザー名（リモート接続時） |
+| `-p` | JP1パスワード（リモート接続時） |
+
+**実行例**:
+```cmd
+ajsrelease.exe -F AJSROOT1 /main_unit/jobgroup1/weekly_batch
+```
+
+**正常終了時の出力**:
+```
+KAVS1820-I ajsreleaseコマンドが正常終了しました。
+```
+
+---
+
+### コマンドの配置場所
+
+JP1/AJS3コマンドは通常、以下のパスにインストールされています：
+
+```
+C:\Program Files\HITACHI\JP1AJS3\bin\
+C:\Program Files (x86)\HITACHI\JP1AJS3\bin\
+C:\Program Files\Hitachi\JP1AJS2\bin\
+C:\Program Files (x86)\Hitachi\JP1AJS2\bin\
+```
+
+---
+
+## 📚 参考資料
+
+- [JP1/AJS3 ajsprintコマンド](https://www.hitachi.co.jp/Prod/comp/soft1/manual/pc/d3K2211/AJSK01/EU210296.HTM)
+- [JP1/AJS3 ajsentryコマンド](https://www.hitachi.co.jp/Prod/comp/soft1/manual/pc/d3K2211/AJSK01/EU210278.HTM)
+- [JP1/AJS3 ajsstatusコマンド](https://www.hitachi.co.jp/Prod/comp/soft1/manual/pc/d3K2211/AJSK01/EU210314.HTM)
+- [JP1/AJS3 ajsshowコマンド](https://www.hitachi.co.jp/Prod/comp/soft1/manual/pc/d3K2211/AJSK01/EU210310.HTM)
+- [JP1/AJS3 ajsreleaseコマンド](https://www.hitachi.co.jp/Prod/comp/soft1/manual/pc/d3K2211/AJSK01/EU210302.HTM)
+- [JP1/AJS3 コマンドリファレンス](https://www.hitachi.co.jp/Prod/comp/soft1/manual/pc/d3K2211/AJSK01/EU210000.HTM)
+
+---
+
 ## ライセンス
 
 MIT License
