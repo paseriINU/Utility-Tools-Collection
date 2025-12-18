@@ -729,10 +729,12 @@ function Get-ExistingFiles {
         return $FilePaths
     }
 
-    # 出力を配列に変換
+    # 出力を配列に変換（改行コード対応）
     $treeFiles = @()
     if ($treeOutput) {
-        $treeFiles = @($treeOutput -split "`n" | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne "" })
+        # 文字列として結合してから分割（オブジェクト配列対応）
+        $treeOutputStr = ($treeOutput | Out-String) -replace "`r`n", "`n" -replace "`r", "`n"
+        $treeFiles = @($treeOutputStr -split "`n" | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne "" })
     }
 
     if ($treeFiles.Count -eq 0) {
@@ -740,15 +742,17 @@ function Get-ExistingFiles {
         return $FilePaths
     }
 
-    # HashTableで高速検索
+    # HashTableで高速検索（パスを正規化してスラッシュに統一）
     $treeFileSet = @{}
     foreach ($f in $treeFiles) {
-        $treeFileSet[$f] = $true
+        $normalizedPath = $f -replace '\\', '/'
+        $treeFileSet[$normalizedPath] = $true
     }
 
-    # 存在するファイルをフィルタリング
+    # 存在するファイルをフィルタリング（パスを正規化して比較）
     foreach ($path in $FilePaths) {
-        if ($treeFileSet.ContainsKey($path)) {
+        $normalizedPath = $path -replace '\\', '/'
+        if ($treeFileSet.ContainsKey($normalizedPath)) {
             $existingFiles += $path
         }
     }

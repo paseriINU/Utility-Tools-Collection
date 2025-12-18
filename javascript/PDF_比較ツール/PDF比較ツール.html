@@ -4,6 +4,24 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>PDF ビジュアル比較ツール</title>
+    <!-- CDNフォールバック: 埋め込みが失敗した場合に使用 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" 
+            onerror="console.log('CDN load failed, using embedded')"
+            onload="window.pdfJsCdnLoaded=true; if(typeof pdfjsLib!=='undefined'){pdfjsLib.GlobalWorkerOptions.workerSrc='';window.pdfJsLoaded=true;window.pdfJsSource='CDN'}"></script>
+    <script>
+        // グローバルエラーハンドラー: スクリプトエラーをキャッチ
+        window.onerror = function(msg, url, line, col, error) {
+            console.error('Script error:', msg, 'at line', line);
+            // ステータスを更新
+            var el = document.getElementById('libraryStatus');
+            if (el && el.textContent.indexOf('読み込み中') !== -1) {
+                el.textContent = 'ライブラリ: エラー (行' + line + ')';
+                el.style.color = '#f44336';
+                window.pdfJsLoaded = false;
+                window.pdfJsSource = 'スクリプトエラー: ' + msg;
+            }
+        };
+    </script>
     <script>
         // PDF.js ライブラリ埋め込み (v3.11.174)
 /**
