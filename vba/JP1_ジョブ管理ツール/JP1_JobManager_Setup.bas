@@ -7,11 +7,11 @@ Option Explicit
 '==============================================================================
 
 ' シート名定数（Publicで共有）
-Public Const SHEET_MAIN As String = "メイン"
+Public Const SHEET_SETTINGS As String = "設定"
 Public Const SHEET_JOBLIST As String = "ジョブ一覧"
 Public Const SHEET_LOG As String = "実行ログ"
 
-' 設定セル位置（メインシート）- Publicで共有
+' 設定セル位置（設定シート）- Publicで共有
 ' ※ボタンが上部（3-4行目）にあるため、設定は6行目以降に配置
 Public Const ROW_EXEC_MODE As Long = 7
 Public Const ROW_JP1_SERVER As Long = 9
@@ -37,8 +37,8 @@ Public Const COL_LAST_EXEC_TIME As Long = 7
 Public Const COL_LAST_END_TIME As Long = 8
 Public Const COL_LAST_RETURN_CODE As Long = 9
 Public Const COL_LAST_MESSAGE As Long = 10
-Public Const ROW_JOBLIST_HEADER As Long = 3
-Public Const ROW_JOBLIST_DATA_START As Long = 4
+Public Const ROW_JOBLIST_HEADER As Long = 4
+Public Const ROW_JOBLIST_DATA_START As Long = 5
 
 '==============================================================================
 ' 初期化（メインエントリポイント）
@@ -47,12 +47,12 @@ Public Sub InitializeJP1Manager()
     Application.ScreenUpdating = False
 
     ' シート作成
-    CreateSheet SHEET_MAIN
+    CreateSheet SHEET_SETTINGS
     CreateSheet SHEET_JOBLIST
     CreateSheet SHEET_LOG
 
-    ' メインシートのフォーマット
-    FormatMainSheet
+    ' 設定シートのフォーマット
+    FormatSettingsSheet
 
     ' ジョブ一覧シートのフォーマット
     FormatJobListSheet
@@ -60,13 +60,13 @@ Public Sub InitializeJP1Manager()
     ' ログシートのフォーマット
     FormatLogSheet
 
-    ' メインシートをアクティブに
-    Worksheets(SHEET_MAIN).Activate
+    ' 設定シートをアクティブに
+    Worksheets(SHEET_SETTINGS).Activate
 
     Application.ScreenUpdating = True
 
     MsgBox "初期化が完了しました。" & vbCrLf & vbCrLf & _
-           "1. メインシートで接続設定を入力してください" & vbCrLf & _
+           "1. 設定シートで接続設定を入力してください" & vbCrLf & _
            "2. 「ジョブ一覧取得」ボタンでジョブを取得" & vbCrLf & _
            "3. ジョブ一覧シートで順序を設定" & vbCrLf & _
            "4. 「選択ジョブ実行」ボタンで実行", _
@@ -89,18 +89,18 @@ Private Sub CreateSheet(sheetName As String)
 End Sub
 
 '==============================================================================
-' メインシートのフォーマット
+' 設定シートのフォーマット
 '==============================================================================
-Private Sub FormatMainSheet()
+Private Sub FormatSettingsSheet()
     Dim ws As Worksheet
-    Set ws = Worksheets(SHEET_MAIN)
+    Set ws = Worksheets(SHEET_SETTINGS)
 
     ws.Cells.Clear
 
     ' タイトル
     With ws.Range("A1:F1")
         .Merge
-        .Value = "JP1 ジョブ管理ツール"
+        .Value = "JP1 ジョブ管理ツール - 接続設定"
         .Font.Size = 16
         .Font.Bold = True
         .Interior.Color = RGB(0, 112, 192)
@@ -113,7 +113,7 @@ Private Sub FormatMainSheet()
     ws.Range("A2").Value = "JP1サーバに接続してジョブネット一覧を取得し、選択したジョブを実行します。"
 
     ' ボタン追加（図形ボタン・固定サイズ・色付き）- タイトルの下に配置
-    ' メインシートには「ジョブ一覧取得」ボタンのみ
+    ' 設定シートには「ジョブ一覧取得」ボタンのみ
     AddButton ws, 20, 55, 130, 32, "GetJobList", "ジョブ一覧取得", RGB(0, 112, 192)        ' 青
 
     ' 設定セクション（ボタンの下）
@@ -219,8 +219,11 @@ Private Sub FormatJobListSheet()
     AddButton ws, 20, 30, 130, 28, "ExecuteCheckedJobs", "選択ジョブ実行", RGB(0, 176, 80) ' 緑
     AddButton ws, 160, 30, 130, 28, "ClearJobList", "一覧クリア", RGB(192, 80, 77)          ' 赤
 
-    ' 説明
-    ws.Range("A2").Value = "実行するジョブの「順序」列に数字（1, 2, 3...）を入力してください。順序が入っているジョブを1番から順に実行します。保留中のジョブは実行時に自動で保留解除されます。"
+    ' 2行目はボタン配置用に空ける
+    ws.Rows(2).RowHeight = 35
+
+    ' 説明（3行目）
+    ws.Range("A3").Value = "実行するジョブの「順序」列に数字（1, 2, 3...）を入力してください。順序が入っているジョブを1番から順に実行します。保留中のジョブは実行時に自動で保留解除されます。"
 
     ' ヘッダー
     ws.Cells(ROW_JOBLIST_HEADER, COL_ORDER).Value = "順序"
