@@ -181,9 +181,10 @@ Public Sub VisualizeGitLog()
     If Len(commits(lowerBound).Hash) > 0 Then
         commitCount = upperBound - lowerBound + 1
     End If
-    On Error GoTo ErrorHandler
 
 CheckCommitCount:
+    On Error GoTo ErrorHandler
+
     If commitCount = 0 Then
         MsgBox "コミットが取得できませんでした。" & vbCrLf & _
                "リポジトリパスとGitのインストールを確認してください。", vbExclamation
@@ -196,17 +197,34 @@ CheckCommitCount:
     Debug.Print "シートを準備しています..."
     PrepareSheets
 
+    ' 各シート作成は個別にエラー処理（非致命的エラーを許容）
+    On Error Resume Next
+
     ' ダッシュボードシートを作成
     Debug.Print "ダッシュボードを作成しています..."
     CreateDashboardSheet commits, commitCount, gitRepoPath
+    If Err.Number <> 0 Then
+        Debug.Print "ダッシュボード作成中にエラー: " & Err.Description
+        Err.Clear
+    End If
 
     ' 履歴シートを作成
     Debug.Print "履歴シートを作成しています..."
     CreateHistorySheet commits, commitCount, gitRepoPath
+    If Err.Number <> 0 Then
+        Debug.Print "履歴シート作成中にエラー: " & Err.Description
+        Err.Clear
+    End If
 
     ' ブランチグラフシートを作成
     Debug.Print "ブランチグラフを作成しています..."
     CreateBranchGraphSheet commits, commitCount, gitRepoPath
+    If Err.Number <> 0 Then
+        Debug.Print "ブランチグラフ作成中にエラー: " & Err.Description
+        Err.Clear
+    End If
+
+    On Error GoTo ErrorHandler
 
     ' ダッシュボードシートをアクティブに
     ThisWorkbook.Sheets(SHEET_DASHBOARD).Select
