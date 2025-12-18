@@ -627,8 +627,25 @@
             showLoading(`PDF${num}を読み込み中...`);
 
             try {
+                // PDF.jsライブラリのチェック
+                if (typeof pdfjsLib === 'undefined') {
+                    throw new Error('PDF.jsライブラリが読み込まれていません。ページを再読み込みしてください。');
+                }
+
+                // ファイルサイズチェック
+                if (file.size === 0) {
+                    throw new Error('ファイルが空です。');
+                }
+
                 const arrayBuffer = await file.arrayBuffer();
-                const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+
+                // ArrayBufferのチェック
+                if (!arrayBuffer || arrayBuffer.byteLength === 0) {
+                    throw new Error('ファイルの読み込みに失敗しました。ファイルが破損している可能性があります。');
+                }
+
+                const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+                const pdf = await loadingTask.promise;
 
                 if (num === 1) {
                     pdf1 = pdf;
@@ -654,7 +671,21 @@
 
             } catch (error) {
                 hideLoading();
-                alert('PDFの読み込みに失敗しました: ' + error.message);
+                // エラーメッセージを日本語で分かりやすく表示
+                let errorMsg = 'PDFの読み込みに失敗しました。\n\n';
+                if (error.message) {
+                    if (error.message.includes('Invalid PDF')) {
+                        errorMsg += '原因: 有効なPDFファイルではありません。';
+                    } else if (error.message.includes('password')) {
+                        errorMsg += '原因: パスワード保護されたPDFです。';
+                    } else if (error.message.includes('encrypted')) {
+                        errorMsg += '原因: 暗号化されたPDFです。';
+                    } else {
+                        errorMsg += '原因: ' + error.message;
+                    }
+                }
+                alert(errorMsg);
+                console.error('PDF読み込みエラー:', error);
             }
         }
 
