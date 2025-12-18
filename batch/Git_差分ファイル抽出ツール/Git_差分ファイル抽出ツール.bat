@@ -579,12 +579,7 @@ if ($NETWORK_OUTPUT_BASE -ne "" -and (Test-Path $NETWORK_OUTPUT_BASE)) {
         }
     }
 
-    # 30_Mフォルダの存在確認と作成
-    if (-not (Test-Path $OUTPUT_DIR)) {
-        Write-Host "[作成] 30_Mフォルダを作成します: $OUTPUT_DIR" -ForegroundColor Yellow
-        New-Item -ItemType Directory -Path $OUTPUT_DIR -Force | Out-Null
-    }
-
+    # 30_Mフォルダのパスを設定（作成は差分確認後に行う）
     $OUTPUT_DIR_BEFORE = "$OUTPUT_DIR\01_修正前"
     $OUTPUT_DIR_AFTER = "$OUTPUT_DIR\02_修正後"
 
@@ -694,6 +689,7 @@ if ($beforeExists -or $afterExists) {
 
 # 出力先フォルダを作成
 if (-not (Test-Path $OUTPUT_DIR)) {
+    Write-Host "[作成] 出力先フォルダを作成します: $OUTPUT_DIR" -ForegroundColor Yellow
     New-Item -ItemType Directory -Path $OUTPUT_DIR -Force | Out-Null
 }
 New-Item -ItemType Directory -Path $OUTPUT_DIR_BEFORE -Force | Out-Null
