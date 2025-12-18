@@ -519,9 +519,55 @@ if ($compareMode -eq "1") {
 }
 #endregion
 
-#region 出力先フォルダ設定
+#region 差分ファイル取得（最初に実行 - 差分がなければフォルダ検索も不要）
+Write-Host ""
+Write-Host "差分ファイルを検出中..." -ForegroundColor Cyan
 Write-Host ""
 
+# 差分ファイルリストを取得
+if ($INCLUDE_DELETED) {
+    $diffFiles = git diff --name-only "$BASE_REF..$TARGET_REF"
+} else {
+    $diffFiles = git diff --name-only --diff-filter=ACMR "$BASE_REF..$TARGET_REF"
+}
+
+if (-not $diffFiles -or $diffFiles.Count -eq 0) {
+    Write-Host "[情報] 差分ファイルが見つかりませんでした" -ForegroundColor Yellow
+    Write-Host "比較対象は同じ内容です" -ForegroundColor Yellow
+    exit 0
+}
+
+# サブディレクトリ配下のファイルのみをフィルタリング
+$filteredFiles = @()
+foreach ($file in $diffFiles) {
+    if ($subDirPath -ne "") {
+        $subDirPathLinux = $subDirPath.Replace("\", "/")
+        if ($file.StartsWith($subDirPathLinux + "/")) {
+            $relativePath = $file.Substring($subDirPathLinux.Length + 1)
+            $filteredFiles += [PSCustomObject]@{
+                OriginalPath = $file
+                RelativePath = $relativePath
+            }
+        }
+    } else {
+        $filteredFiles += [PSCustomObject]@{
+            OriginalPath = $file
+            RelativePath = $file
+        }
+    }
+}
+
+if ($filteredFiles.Count -eq 0) {
+    Write-Host "[情報] 対象サブディレクトリ配下に差分ファイルが見つかりませんでした" -ForegroundColor Yellow
+    exit 0
+}
+
+$FILE_COUNT = $filteredFiles.Count
+Write-Host "検出された差分ファイル数: $FILE_COUNT 個" -ForegroundColor Green
+Write-Host ""
+#endregion
+
+#region 出力先フォルダ設定（差分がある場合のみ実行）
 $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
 $OUTPUT_DIR = ""
 $OUTPUT_DIR_BEFORE = ""
@@ -579,7 +625,6 @@ if ($NETWORK_OUTPUT_BASE -ne "" -and (Test-Path $NETWORK_OUTPUT_BASE)) {
         }
     }
 
-    # 30_Mフォルダのパスを設定（作成は差分確認後に行う）
     $OUTPUT_DIR_BEFORE = "$OUTPUT_DIR\01_修正前"
     $OUTPUT_DIR_AFTER = "$OUTPUT_DIR\02_修正後"
 
@@ -607,53 +652,6 @@ Write-Host "出力先フォルダ  : $OUTPUT_DIR" -ForegroundColor White
 Write-Host "  01_修正前     : 比較元のファイル" -ForegroundColor Gray
 Write-Host "  02_修正後     : 比較先のファイル" -ForegroundColor Gray
 Write-Host "------------------------------------------------------------------------" -ForegroundColor White
-Write-Host ""
-#endregion
-
-#region 差分ファイル取得（フォルダ操作の前に実行）
-Write-Host "差分ファイルを検出中..." -ForegroundColor Cyan
-Write-Host ""
-
-# 差分ファイルリストを取得
-if ($INCLUDE_DELETED) {
-    $diffFiles = git diff --name-only "$BASE_REF..$TARGET_REF"
-} else {
-    $diffFiles = git diff --name-only --diff-filter=ACMR "$BASE_REF..$TARGET_REF"
-}
-
-if (-not $diffFiles -or $diffFiles.Count -eq 0) {
-    Write-Host "[情報] 差分ファイルが見つかりませんでした" -ForegroundColor Yellow
-    Write-Host "比較対象は同じ内容です" -ForegroundColor Yellow
-    exit 0
-}
-
-# サブディレクトリ配下のファイルのみをフィルタリング
-$filteredFiles = @()
-foreach ($file in $diffFiles) {
-    if ($subDirPath -ne "") {
-        $subDirPathLinux = $subDirPath.Replace("\", "/")
-        if ($file.StartsWith($subDirPathLinux + "/")) {
-            $relativePath = $file.Substring($subDirPathLinux.Length + 1)
-            $filteredFiles += [PSCustomObject]@{
-                OriginalPath = $file
-                RelativePath = $relativePath
-            }
-        }
-    } else {
-        $filteredFiles += [PSCustomObject]@{
-            OriginalPath = $file
-            RelativePath = $file
-        }
-    }
-}
-
-if ($filteredFiles.Count -eq 0) {
-    Write-Host "[情報] 対象サブディレクトリ配下に差分ファイルが見つかりませんでした" -ForegroundColor Yellow
-    exit 0
-}
-
-$FILE_COUNT = $filteredFiles.Count
-Write-Host "検出された差分ファイル数: $FILE_COUNT 個" -ForegroundColor Green
 Write-Host ""
 #endregion
 
