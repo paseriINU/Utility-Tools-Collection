@@ -113,7 +113,10 @@ Private Function BuildGetJobListScript(config As Object) As String
         script = script & "  }" & vbCrLf
         script = script & vbCrLf
         script = script & "  # ローカルでajsprintを実行" & vbCrLf
-        script = script & "  $result = & $ajsprintPath -F '" & config("RootPath") & "' -R 2>&1" & vbCrLf
+        script = script & "  $rootPath = '" & config("RootPath") & "'" & vbCrLf
+        script = script & "  Write-Output ""DEBUG: RootPath=$rootPath""" & vbCrLf
+        script = script & "  Write-Output ""DEBUG: Command=$ajsprintPath -F $rootPath -R""" & vbCrLf
+        script = script & "  $result = & $ajsprintPath -F $rootPath -R 2>&1" & vbCrLf
         script = script & "  $result | ForEach-Object { Write-Output $_ }" & vbCrLf
         script = script & "} catch {" & vbCrLf
         script = script & "  Write-Output ""ERROR: $($_.Exception.Message)""" & vbCrLf
