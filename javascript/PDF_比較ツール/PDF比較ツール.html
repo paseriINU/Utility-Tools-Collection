@@ -55,15 +55,21 @@
         const workerBlob = new Blob([workerCode], { type: 'application/javascript' });
 
         // PDF.jsライブラリの存在チェックと初期化
-        if (typeof pdfjsLib !== 'undefined') {
-            // ワーカーを無効化（単一HTMLファイルで動作させるため）
-            pdfjsLib.GlobalWorkerOptions.workerSrc = '';
-            window.pdfJsLoaded = true;
-            window.pdfJsSource = '埋め込み';
-        } else {
+        try {
+            if (typeof pdfjsLib !== 'undefined') {
+                // ワーカーを無効化（単一HTMLファイルで動作させるため）
+                pdfjsLib.GlobalWorkerOptions.workerSrc = '';
+                window.pdfJsLoaded = true;
+                window.pdfJsSource = '埋め込み';
+            } else {
+                window.pdfJsLoaded = false;
+                window.pdfJsSource = '読み込み失敗';
+                console.error('PDF.js library failed to load');
+            }
+        } catch (initError) {
             window.pdfJsLoaded = false;
-            window.pdfJsSource = '読み込み失敗';
-            console.error('PDF.js library failed to load');
+            window.pdfJsSource = '初期化エラー: ' + initError.message;
+            console.error('PDF.js initialization error:', initError);
         }
 
         function updateStatus() {
@@ -73,16 +79,18 @@
                     el.textContent = `ライブラリ: ${window.pdfJsSource}`;
                     el.style.color = '#4caf50';
                 } else {
-                    el.textContent = 'ライブラリ: 読み込み失敗';
+                    el.textContent = 'ライブラリ: ' + (window.pdfJsSource || '読み込み失敗');
                     el.style.color = '#f44336';
                 }
             }
         }
-        if (document.readyState === 'complete') {
-            updateStatus();
-        } else {
-            window.addEventListener('load', updateStatus);
+
+        // DOM準備完了時にステータス更新（複数のイベントで確実に実行）
+        if (document.readyState === 'complete' || document.readyState === 'interactive') {
+            setTimeout(updateStatus, 0);
         }
+        window.addEventListener('load', updateStatus);
+        document.addEventListener('DOMContentLoaded', updateStatus);
     </script>
     <style>
         * {
@@ -573,6 +581,33 @@
     </div>
 
     <script>
+        // バックアップ: 最初のスクリプトでエラーが発生してもステータスを更新
+        (function checkLibraryStatus() {
+            const el = document.getElementById('libraryStatus');
+            if (el && el.textContent.includes('読み込み中')) {
+                // まだステータスが更新されていない場合
+                if (typeof pdfjsLib !== 'undefined') {
+                    try {
+                        pdfjsLib.GlobalWorkerOptions.workerSrc = '';
+                        window.pdfJsLoaded = true;
+                        window.pdfJsSource = '埋め込み';
+                        el.textContent = 'ライブラリ: 埋め込み';
+                        el.style.color = '#4caf50';
+                    } catch (e) {
+                        window.pdfJsLoaded = false;
+                        window.pdfJsSource = '初期化エラー: ' + e.message;
+                        el.textContent = 'ライブラリ: 初期化エラー';
+                        el.style.color = '#f44336';
+                    }
+                } else {
+                    window.pdfJsLoaded = false;
+                    window.pdfJsSource = '読み込み失敗';
+                    el.textContent = 'ライブラリ: 読み込み失敗';
+                    el.style.color = '#f44336';
+                }
+            }
+        })();
+
         let pdf1 = null;
         let pdf2 = null;
         let totalPages = 1;
