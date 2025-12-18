@@ -59,11 +59,17 @@ Public Sub GetJobList()
     Dim result As String
     result = ExecutePowerShell(psScript)
 
-    ' 結果をパース
-    ParseJobListResult result
+    ' 結果をパース（戻り値で成功/失敗を判定）
+    Dim parseSuccess As Boolean
+    parseSuccess = ParseJobListResult(result)
 
     Application.StatusBar = False
     Application.ScreenUpdating = True
+
+    ' エラーの場合は完了メッセージを表示しない
+    If Not parseSuccess Then
+        Exit Sub
+    End If
 
     MsgBox "ジョブ一覧の取得が完了しました。" & vbCrLf & _
            "ジョブ一覧シートを確認してください。", vbInformation
@@ -176,7 +182,10 @@ Private Function BuildGetJobListScript(config As Object) As String
     BuildGetJobListScript = script
 End Function
 
-Private Sub ParseJobListResult(result As String)
+Private Function ParseJobListResult(result As String) As Boolean
+    ' 戻り値: True=成功, False=エラー
+    ParseJobListResult = False
+
     Dim ws As Worksheet
     Set ws = Worksheets(SHEET_JOBLIST)
 
@@ -206,7 +215,7 @@ Private Sub ParseJobListResult(result As String)
         ' エラーチェック
         If InStr(line, "ERROR:") > 0 Then
             MsgBox "エラーが発生しました:" & vbCrLf & line, vbExclamation
-            Exit Sub
+            Exit Function
         End If
 
         ' ジョブネット定義の行を検出（unit=で始まる行）
@@ -255,8 +264,12 @@ Private Sub ParseJobListResult(result As String)
     If row = ROW_JOBLIST_DATA_START Then
         MsgBox "ジョブネットが見つかりませんでした。" & vbCrLf & _
                "取得パスを確認してください。", vbExclamation
+        Exit Function
     End If
-End Sub
+
+    ' 成功
+    ParseJobListResult = True
+End Function
 
 Private Function ExtractUnitPath(line As String) As String
     ' unit=/path/to/jobnet から /path/to/jobnet を抽出
