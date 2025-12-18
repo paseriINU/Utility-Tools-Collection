@@ -163,10 +163,10 @@ Private Sub FormatMainSheet()
     ws.Cells(ROW_POLLING_INTERVAL + 4, 1).Value = "状態確認間隔（秒）"
     ws.Cells(ROW_POLLING_INTERVAL + 4, COL_SETTING_VALUE).Value = 10
 
-    ' ボタン追加
-    AddButton ws, 200, 50, 150, 30, "GetJobList", "ジョブ一覧取得"
-    AddButton ws, 200, 90, 150, 30, "ExecuteCheckedJobs", "選択ジョブ実行"
-    AddButton ws, 200, 130, 150, 30, "ClearJobList", "一覧クリア"
+    ' ボタン追加（図形ボタン・固定サイズ・色付き）
+    AddButton ws, 200, 50, 150, 30, "GetJobList", "ジョブ一覧取得", RGB(0, 112, 192)        ' 青
+    AddButton ws, 200, 90, 150, 30, "ExecuteCheckedJobs", "選択ジョブ実行", RGB(0, 176, 80) ' 緑
+    AddButton ws, 200, 130, 150, 30, "ClearJobList", "一覧クリア", RGB(192, 80, 77)          ' 赤
 
     ' 列幅調整
     ws.Columns("A").ColumnWidth = 20
@@ -298,10 +298,37 @@ Private Sub AddDropdown(ws As Worksheet, cell As Range, options As String)
     End With
 End Sub
 
-Private Sub AddButton(ws As Worksheet, left As Double, top As Double, width As Double, height As Double, macroName As String, caption As String)
-    Dim btn As Button
-    Set btn = ws.Buttons.Add(left, top, width, height)
-    btn.OnAction = macroName
-    btn.caption = caption
-    btn.Font.Size = 10
+Private Sub AddButton(ws As Worksheet, left As Double, top As Double, width As Double, height As Double, macroName As String, caption As String, Optional fillColor As Long = -1)
+    ' 図形ボタンを追加（固定サイズ・色付き）
+    Dim shp As Shape
+    Set shp = ws.Shapes.AddShape(msoShapeRoundedRectangle, left, top, width, height)
+
+    With shp
+        .Name = "btn_" & macroName
+        .OnAction = macroName
+
+        ' 塗りつぶし色（デフォルトは青系）
+        If fillColor = -1 Then
+            .Fill.ForeColor.RGB = RGB(0, 112, 192)
+        Else
+            .Fill.ForeColor.RGB = fillColor
+        End If
+
+        ' 枠線
+        .Line.ForeColor.RGB = RGB(0, 80, 150)
+        .Line.Weight = 1
+
+        ' テキスト設定
+        .TextFrame2.TextRange.Text = caption
+        .TextFrame2.TextRange.Font.Size = 10
+        .TextFrame2.TextRange.Font.Bold = msoTrue
+        .TextFrame2.TextRange.Font.Fill.ForeColor.RGB = RGB(255, 255, 255)
+        .TextFrame2.TextRange.ParagraphFormat.Alignment = msoAlignCenter
+        .TextFrame2.VerticalAnchor = msoAnchorMiddle
+        .TextFrame2.MarginLeft = 0
+        .TextFrame2.MarginRight = 0
+
+        ' セルに依存しない（固定位置・固定サイズ）
+        .Placement = xlFreeFloating
+    End With
 End Sub
