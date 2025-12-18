@@ -748,11 +748,8 @@ Write-Host "[01_修正前] 比較元からファイルを抽出中..." -Foregrou
 $tempArchiveBefore = Join-Path $env:TEMP "git_diff_before_$([System.Guid]::NewGuid().ToString('N')).tar"
 
 # 比較元に存在するファイルのみをフィルタリング
-$existingInBase = Get-ExistingFiles -Ref $BASE_REF -FilePaths $originalPaths
-$newFileCount = $originalPaths.Count - $existingInBase.Count
-if ($newFileCount -gt 0) {
-    Write-Host "  （新規追加ファイル: $newFileCount 個はスキップ）" -ForegroundColor Gray
-}
+# 全ファイルを対象にする（git archiveが存在しないファイルはスキップ）
+$existingInBase = $originalPaths
 
 try {
     if ($existingInBase.Count -gt 0) {
@@ -840,11 +837,8 @@ Write-Host "[02_修正後] 比較先からファイルを抽出中..." -Foregrou
 $tempArchiveAfter = Join-Path $env:TEMP "git_diff_after_$([System.Guid]::NewGuid().ToString('N')).tar"
 
 # 比較先に存在するファイルのみをフィルタリング
-$existingInTarget = Get-ExistingFiles -Ref $TARGET_REF -FilePaths $originalPaths
-$deletedFileCount = $originalPaths.Count - $existingInTarget.Count
-if ($deletedFileCount -gt 0) {
-    Write-Host "  （削除済みファイル: $deletedFileCount 個はスキップ）" -ForegroundColor Gray
-}
+# 全ファイルを対象にする（git archiveが存在しないファイルはスキップ）
+$existingInTarget = $originalPaths
 
 try {
     if ($existingInTarget.Count -gt 0) {
