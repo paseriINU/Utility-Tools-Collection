@@ -97,12 +97,18 @@ Private Function BuildGetJobListScript(config As Object) As String
         ' ローカル実行モード（WinRM不使用）
         script = script & "try {" & vbCrLf
         script = script & "  # JP1コマンドパスの検出" & vbCrLf
-        script = script & "  $ajsprintPath = 'C:\Program Files\HITACHI\JP1AJS3\bin\ajsprint.exe'" & vbCrLf
-        script = script & "  if (-not (Test-Path $ajsprintPath)) {" & vbCrLf
-        script = script & "    $ajsprintPath = 'C:\Program Files\Hitachi\JP1AJS2\bin\ajsprint.exe'" & vbCrLf
+        script = script & "  $ajsprintPath = $null" & vbCrLf
+        script = script & "  $searchPaths = @(" & vbCrLf
+        script = script & "    'C:\Program Files\HITACHI\JP1AJS3\bin\ajsprint.exe'," & vbCrLf
+        script = script & "    'C:\Program Files (x86)\HITACHI\JP1AJS3\bin\ajsprint.exe'," & vbCrLf
+        script = script & "    'C:\Program Files\Hitachi\JP1AJS2\bin\ajsprint.exe'," & vbCrLf
+        script = script & "    'C:\Program Files (x86)\Hitachi\JP1AJS2\bin\ajsprint.exe'" & vbCrLf
+        script = script & "  )" & vbCrLf
+        script = script & "  foreach ($path in $searchPaths) {" & vbCrLf
+        script = script & "    if (Test-Path $path) { $ajsprintPath = $path; break }" & vbCrLf
         script = script & "  }" & vbCrLf
-        script = script & "  if (-not (Test-Path $ajsprintPath)) {" & vbCrLf
-        script = script & "    Write-Output ""ERROR: JP1コマンドが見つかりません。このPCにJP1/AJS3がインストールされているか確認してください。""" & vbCrLf
+        script = script & "  if (-not $ajsprintPath) {" & vbCrLf
+        script = script & "    Write-Output ""ERROR: JP1コマンド(ajsprint.exe)が見つかりません。JP1/AJS3 Managerがインストールされているか確認してください。""" & vbCrLf
         script = script & "    exit 1" & vbCrLf
         script = script & "  }" & vbCrLf
         script = script & vbCrLf
@@ -152,10 +158,10 @@ Private Function BuildGetJobListScript(config As Object) As String
         script = script & vbCrLf
         script = script & "  $result = Invoke-Command -Session $session -ScriptBlock {" & vbCrLf
         script = script & "    param($jp1User, $jp1Pass, $rootPath)" & vbCrLf
-        script = script & "    $ajsprintPath = 'C:\Program Files\HITACHI\JP1AJS3\bin\ajsprint.exe'" & vbCrLf
-        script = script & "    if (-not (Test-Path $ajsprintPath)) {" & vbCrLf
-        script = script & "      $ajsprintPath = 'C:\Program Files\Hitachi\JP1AJS2\bin\ajsprint.exe'" & vbCrLf
-        script = script & "    }" & vbCrLf
+        script = script & "    $ajsprintPath = $null" & vbCrLf
+        script = script & "    $searchPaths = @('C:\Program Files\HITACHI\JP1AJS3\bin\ajsprint.exe','C:\Program Files (x86)\HITACHI\JP1AJS3\bin\ajsprint.exe','C:\Program Files\Hitachi\JP1AJS2\bin\ajsprint.exe','C:\Program Files (x86)\Hitachi\JP1AJS2\bin\ajsprint.exe')" & vbCrLf
+        script = script & "    foreach ($p in $searchPaths) { if (Test-Path $p) { $ajsprintPath = $p; break } }" & vbCrLf
+        script = script & "    if (-not $ajsprintPath) { Write-Output 'ERROR: ajsprint.exe not found'; return }" & vbCrLf
         script = script & "    & $ajsprintPath -h localhost -u $jp1User -p $jp1Pass -F $rootPath -R 2>&1" & vbCrLf
         script = script & "  } -ArgumentList '" & config("JP1User") & "', '" & EscapePSString(config("JP1Password")) & "', '" & config("RootPath") & "'" & vbCrLf
         script = script & vbCrLf
@@ -635,13 +641,14 @@ Private Function BuildExecuteJobScript(config As Object, jobnetPath As String, w
         script = script & "  Write-Log '--------------------------------------------------------------------------------'" & vbCrLf
         script = script & vbCrLf
         script = script & "  # JP1コマンドパスの検出" & vbCrLf
-        script = script & "  $jp1BinPath = 'C:\Program Files\HITACHI\JP1AJS3\bin'" & vbCrLf
-        script = script & "  if (-not (Test-Path ""$jp1BinPath\ajsentry.exe"")) {" & vbCrLf
-        script = script & "    $jp1BinPath = 'C:\Program Files\Hitachi\JP1AJS2\bin'" & vbCrLf
+        script = script & "  $jp1BinPath = $null" & vbCrLf
+        script = script & "  $searchPaths = @('C:\Program Files\HITACHI\JP1AJS3\bin','C:\Program Files (x86)\HITACHI\JP1AJS3\bin','C:\Program Files\Hitachi\JP1AJS2\bin','C:\Program Files (x86)\Hitachi\JP1AJS2\bin')" & vbCrLf
+        script = script & "  foreach ($path in $searchPaths) {" & vbCrLf
+        script = script & "    if (Test-Path ""$path\ajsentry.exe"") { $jp1BinPath = $path; break }" & vbCrLf
         script = script & "  }" & vbCrLf
-        script = script & "  if (-not (Test-Path ""$jp1BinPath\ajsentry.exe"")) {" & vbCrLf
+        script = script & "  if (-not $jp1BinPath) {" & vbCrLf
         script = script & "    Write-Log '[ERROR] JP1コマンドが見つかりません'" & vbCrLf
-        script = script & "    Write-Output ""ERROR: JP1コマンドが見つかりません。このPCにJP1/AJS3がインストールされているか確認してください。""" & vbCrLf
+        script = script & "    Write-Output ""ERROR: JP1コマンドが見つかりません。JP1/AJS3 Managerがインストールされているか確認してください。""" & vbCrLf
         script = script & "    exit 1" & vbCrLf
         script = script & "  }" & vbCrLf
         script = script & "  Write-Log ""JP1コマンドパス: $jp1BinPath""" & vbCrLf
@@ -789,8 +796,10 @@ Private Function BuildExecuteJobScript(config As Object, jobnetPath As String, w
             script = script & "  Write-Log '[実行] ajsrelease - 保留解除（リモート）'" & vbCrLf
             script = script & "  $releaseResult = Invoke-Command -Session $session -ScriptBlock {" & vbCrLf
             script = script & "    param($jp1User, $jp1Pass, $jobnetPath)" & vbCrLf
-            script = script & "    $ajsreleasePath = 'C:\Program Files\HITACHI\JP1AJS3\bin\ajsrelease.exe'" & vbCrLf
-            script = script & "    if (-not (Test-Path $ajsreleasePath)) { $ajsreleasePath = 'C:\Program Files\Hitachi\JP1AJS2\bin\ajsrelease.exe' }" & vbCrLf
+            script = script & "    $ajsreleasePath = $null" & vbCrLf
+            script = script & "    $searchPaths = @('C:\Program Files\HITACHI\JP1AJS3\bin\ajsrelease.exe','C:\Program Files (x86)\HITACHI\JP1AJS3\bin\ajsrelease.exe','C:\Program Files\Hitachi\JP1AJS2\bin\ajsrelease.exe','C:\Program Files (x86)\Hitachi\JP1AJS2\bin\ajsrelease.exe')" & vbCrLf
+            script = script & "    foreach ($p in $searchPaths) { if (Test-Path $p) { $ajsreleasePath = $p; break } }" & vbCrLf
+            script = script & "    if (-not $ajsreleasePath) { Write-Output 'ERROR: ajsrelease.exe not found'; return @{ ExitCode = 1; Output = 'ajsrelease.exe not found' } }" & vbCrLf
             script = script & "    $output = & $ajsreleasePath -h localhost -u $jp1User -p $jp1Pass -F $jobnetPath 2>&1" & vbCrLf
             script = script & "    @{ ExitCode = $LASTEXITCODE; Output = ($output -join ' ') }" & vbCrLf
             script = script & "  } -ArgumentList '" & config("JP1User") & "', '" & EscapePSString(config("JP1Password")) & "', '" & jobnetPath & "'" & vbCrLf
@@ -811,8 +820,10 @@ Private Function BuildExecuteJobScript(config As Object, jobnetPath As String, w
         script = script & "  Write-Log '[実行] ajsentry - ジョブ起動（リモート）'" & vbCrLf
         script = script & "  $entryResult = Invoke-Command -Session $session -ScriptBlock {" & vbCrLf
         script = script & "    param($jp1User, $jp1Pass, $jobnetPath)" & vbCrLf
-        script = script & "    $ajsentryPath = 'C:\Program Files\HITACHI\JP1AJS3\bin\ajsentry.exe'" & vbCrLf
-        script = script & "    if (-not (Test-Path $ajsentryPath)) { $ajsentryPath = 'C:\Program Files\Hitachi\JP1AJS2\bin\ajsentry.exe' }" & vbCrLf
+        script = script & "    $ajsentryPath = $null" & vbCrLf
+        script = script & "    $searchPaths = @('C:\Program Files\HITACHI\JP1AJS3\bin\ajsentry.exe','C:\Program Files (x86)\HITACHI\JP1AJS3\bin\ajsentry.exe','C:\Program Files\Hitachi\JP1AJS2\bin\ajsentry.exe','C:\Program Files (x86)\Hitachi\JP1AJS2\bin\ajsentry.exe')" & vbCrLf
+        script = script & "    foreach ($p in $searchPaths) { if (Test-Path $p) { $ajsentryPath = $p; break } }" & vbCrLf
+        script = script & "    if (-not $ajsentryPath) { Write-Output 'ERROR: ajsentry.exe not found'; return @{ ExitCode = 1; Output = 'ajsentry.exe not found' } }" & vbCrLf
         script = script & "    $output = & $ajsentryPath -h localhost -u $jp1User -p $jp1Pass -F $jobnetPath 2>&1" & vbCrLf
         script = script & "    @{ ExitCode = $LASTEXITCODE; Output = ($output -join ' ') }" & vbCrLf
         script = script & "  } -ArgumentList '" & config("JP1User") & "', '" & EscapePSString(config("JP1Password")) & "', '" & jobnetPath & "'" & vbCrLf
@@ -848,8 +859,10 @@ Private Function BuildExecuteJobScript(config As Object, jobnetPath As String, w
             script = script & vbCrLf
             script = script & "    $statusResult = Invoke-Command -Session $session -ScriptBlock {" & vbCrLf
             script = script & "      param($jp1User, $jp1Pass, $jobnetPath)" & vbCrLf
-            script = script & "      $ajsstatusPath = 'C:\Program Files\HITACHI\JP1AJS3\bin\ajsstatus.exe'" & vbCrLf
-            script = script & "      if (-not (Test-Path $ajsstatusPath)) { $ajsstatusPath = 'C:\Program Files\Hitachi\JP1AJS2\bin\ajsstatus.exe' }" & vbCrLf
+            script = script & "      $ajsstatusPath = $null" & vbCrLf
+            script = script & "      $searchPaths = @('C:\Program Files\HITACHI\JP1AJS3\bin\ajsstatus.exe','C:\Program Files (x86)\HITACHI\JP1AJS3\bin\ajsstatus.exe','C:\Program Files\Hitachi\JP1AJS2\bin\ajsstatus.exe','C:\Program Files (x86)\Hitachi\JP1AJS2\bin\ajsstatus.exe')" & vbCrLf
+            script = script & "      foreach ($p in $searchPaths) { if (Test-Path $p) { $ajsstatusPath = $p; break } }" & vbCrLf
+            script = script & "      if (-not $ajsstatusPath) { return 'ERROR: ajsstatus.exe not found' }" & vbCrLf
             script = script & "      & $ajsstatusPath -h localhost -u $jp1User -p $jp1Pass -F $jobnetPath 2>&1" & vbCrLf
             script = script & "    } -ArgumentList '" & config("JP1User") & "', '" & EscapePSString(config("JP1Password")) & "', '" & jobnetPath & "'" & vbCrLf
             script = script & vbCrLf
@@ -873,9 +886,10 @@ Private Function BuildExecuteJobScript(config As Object, jobnetPath As String, w
             script = script & "  Write-Log '[実行] ajsshow - 詳細取得（リモート）'" & vbCrLf
             script = script & "  $showResult = Invoke-Command -Session $session -ScriptBlock {" & vbCrLf
             script = script & "    param($jp1User, $jp1Pass, $jobnetPath)" & vbCrLf
-            script = script & "    $ajsshowPath = 'C:\Program Files\HITACHI\JP1AJS3\bin\ajsshow.exe'" & vbCrLf
-            script = script & "    if (-not (Test-Path $ajsshowPath)) { $ajsshowPath = 'C:\Program Files\Hitachi\JP1AJS2\bin\ajsshow.exe' }" & vbCrLf
-            script = script & "    if (Test-Path $ajsshowPath) { & $ajsshowPath -h localhost -u $jp1User -p $jp1Pass -F $jobnetPath -E 2>&1 }" & vbCrLf
+            script = script & "    $ajsshowPath = $null" & vbCrLf
+            script = script & "    $searchPaths = @('C:\Program Files\HITACHI\JP1AJS3\bin\ajsshow.exe','C:\Program Files (x86)\HITACHI\JP1AJS3\bin\ajsshow.exe','C:\Program Files\Hitachi\JP1AJS2\bin\ajsshow.exe','C:\Program Files (x86)\Hitachi\JP1AJS2\bin\ajsshow.exe')" & vbCrLf
+            script = script & "    foreach ($p in $searchPaths) { if (Test-Path $p) { $ajsshowPath = $p; break } }" & vbCrLf
+            script = script & "    if ($ajsshowPath) { & $ajsshowPath -h localhost -u $jp1User -p $jp1Pass -F $jobnetPath -E 2>&1 }" & vbCrLf
             script = script & "  } -ArgumentList '" & config("JP1User") & "', '" & EscapePSString(config("JP1Password")) & "', '" & jobnetPath & "'" & vbCrLf
             script = script & "  Write-Log ""詳細: $($showResult -join ' ')""" & vbCrLf
             script = script & "  Write-Output ""RESULT_MESSAGE:$($showResult -join ' ')""" & vbCrLf
