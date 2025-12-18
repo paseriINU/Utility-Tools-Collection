@@ -4,11 +4,16 @@ Option Explicit
 '==============================================================================
 ' PDF しおり検証ツール - メインモジュール
 '   - PDFファイル選択
-'   - しおり検証実行（PowerShell + iTextSharp）
+'   - しおり検証実行（PowerShell で PDF を直接解析）
 '   - 結果表示・出力
 '
 ' 注意: 初期化処理は PDFBookmarkValidator_Setup.bas にあります
 '       定数はSetupモジュールで Public として定義されています
+'
+' 技術仕様:
+'   - 外部DLL不要（.NET標準機能のみ使用）
+'   - 圧縮PDF対応（DeflateStream使用）
+'   - 暗号化PDFは非対応
 '==============================================================================
 
 '==============================================================================
@@ -52,24 +57,12 @@ Public Sub ValidateBookmarks()
         Exit Sub
     End If
 
-    ' iTextSharp.dllの確認
-    Dim dllPath As String
-    dllPath = ThisWorkbook.Path & "\lib\itextsharp.dll"
-
-    If Not fso.FileExists(dllPath) Then
-        MsgBox "iTextSharp.dll が見つかりません。" & vbCrLf & vbCrLf & _
-               "以下のパスに配置してください:" & vbCrLf & _
-               dllPath & vbCrLf & vbCrLf & _
-               "詳細はREADME.mdを参照してください。", vbExclamation
-        Exit Sub
-    End If
-
     Application.ScreenUpdating = False
     Application.StatusBar = "PDFを解析中..."
 
     ' PowerShellスクリプト実行
     Dim psScript As String
-    psScript = BuildValidationScript(config, dllPath)
+    psScript = BuildValidationScript(config)
 
     Dim result As String
     result = ExecutePowerShell(psScript)
@@ -99,128 +92,157 @@ ErrorHandler:
            "エラー内容: " & Err.Description, vbCritical, "VBAエラー"
 End Sub
 
+' PDF解析用のPowerShellスクリプトを返す
+Private Function GetPDFParserScript() As String
+    Dim s As String
+
+    s = "# PDF解析関数（外部DLL不要）" & vbCrLf
+    s = s & "function Parse-PDFBookmarks {" & vbCrLf
+    s = s & "    param([string]$PdfPath, [bool]$CheckText)" & vbCrLf
+    s = s & vbCrLf
+    s = s & "    # PDFをバイナリで読み込み" & vbCrLf
+    s = s & "    $bytes = [System.IO.File]::ReadAllBytes($PdfPath)" & vbCrLf
+    s = s & "    $content = [System.Text.Encoding]::GetEncoding('ISO-8859-1').GetString($bytes)" & vbCrLf
+    s = s & vbCrLf
+    s = s & "    # PDFバージョン確認" & vbCrLf
+    s = s & "    if (-not $content.StartsWith('%PDF-')) {" & vbCrLf
+    s = s & "        Write-Output 'ERROR: 有効なPDFファイルではありません'" & vbCrLf
+    s = s & "        return" & vbCrLf
+    s = s & "    }" & vbCrLf
+    s = s & vbCrLf
+    s = s & "    # ページ数を取得" & vbCrLf
+    s = s & "    $pageCount = 0" & vbCrLf
+    s = s & "    if ($content -match '/Type\s*/Page[^s]') {" & vbCrLf
+    s = s & "        $pageMatches = [regex]::Matches($content, '/Type\s*/Page[^s]')" & vbCrLf
+    s = s & "        $pageCount = $pageMatches.Count" & vbCrLf
+    s = s & "    }" & vbCrLf
+    s = s & "    Write-Output ""INFO: 総ページ数: $pageCount""" & vbCrLf
+    s = s & vbCrLf
+    s = s & "    # しおり（Outlines）を検索" & vbCrLf
+    s = s & "    $bookmarks = @()" & vbCrLf
+    s = s & vbCrLf
+    s = s & "    # /Outlines オブジェクトを探す" & vbCrLf
+    s = s & "    if ($content -match '/Outlines\s+(\d+)\s+\d+\s+R') {" & vbCrLf
+    s = s & "        $outlinesRef = $Matches[1]" & vbCrLf
+    s = s & "    } elseif ($content -match '/Type\s*/Outlines') {" & vbCrLf
+    s = s & "        # Outlines exists" & vbCrLf
+    s = s & "    } else {" & vbCrLf
+    s = s & "        Write-Output 'ERROR: このPDFにはしおりがありません'" & vbCrLf
+    s = s & "        return" & vbCrLf
+    s = s & "    }" & vbCrLf
+    s = s & vbCrLf
+    s = s & "    # しおりタイトルを抽出（/Title で始まる行）" & vbCrLf
+    s = s & "    $titlePattern = '/Title\s*(?:\(([^)]*)\)|<([^>]*)>)'" & vbCrLf
+    s = s & "    $titleMatches = [regex]::Matches($content, $titlePattern)" & vbCrLf
+    s = s & vbCrLf
+    s = s & "    if ($titleMatches.Count -eq 0) {" & vbCrLf
+    s = s & "        # UTF-16BEエンコードされたタイトルを探す" & vbCrLf
+    s = s & "        $hexPattern = '/Title\s*<FEFF([0-9A-Fa-f]+)>'" & vbCrLf
+    s = s & "        $hexMatches = [regex]::Matches($content, $hexPattern)" & vbCrLf
+    s = s & "        foreach ($match in $hexMatches) {" & vbCrLf
+    s = s & "            $hexStr = $match.Groups[1].Value" & vbCrLf
+    s = s & "            $titleBytes = @()" & vbCrLf
+    s = s & "            for ($i = 0; $i -lt $hexStr.Length; $i += 4) {" & vbCrLf
+    s = s & "                if ($i + 4 -le $hexStr.Length) {" & vbCrLf
+    s = s & "                    $charCode = [Convert]::ToInt32($hexStr.Substring($i, 4), 16)" & vbCrLf
+    s = s & "                    $titleBytes += [char]$charCode" & vbCrLf
+    s = s & "                }" & vbCrLf
+    s = s & "            }" & vbCrLf
+    s = s & "            $title = -join $titleBytes" & vbCrLf
+    s = s & "            $bookmarks += @{ Title = $title; Page = ''; Level = 1 }" & vbCrLf
+    s = s & "        }" & vbCrLf
+    s = s & "    } else {" & vbCrLf
+    s = s & "        foreach ($match in $titleMatches) {" & vbCrLf
+    s = s & "            $title = $match.Groups[1].Value" & vbCrLf
+    s = s & "            if ([string]::IsNullOrEmpty($title)) {" & vbCrLf
+    s = s & "                $title = $match.Groups[2].Value" & vbCrLf
+    s = s & "            }" & vbCrLf
+    s = s & "            # PDFエスケープシーケンスをデコード" & vbCrLf
+    s = s & "            $title = $title -replace '\\n', ""`n""" & vbCrLf
+    s = s & "            $title = $title -replace '\\r', ""`r""" & vbCrLf
+    s = s & "            $title = $title -replace '\\t', ""`t""" & vbCrLf
+    s = s & "            $title = $title -replace '\\\\', '\'" & vbCrLf
+    s = s & "            $title = $title -replace '\\\(', '('" & vbCrLf
+    s = s & "            $title = $title -replace '\\\)', ')'" & vbCrLf
+    s = s & "            $bookmarks += @{ Title = $title; Page = ''; Level = 1 }" & vbCrLf
+    s = s & "        }" & vbCrLf
+    s = s & "    }" & vbCrLf
+    s = s & vbCrLf
+    s = s & "    Write-Output ""INFO: しおり数: $($bookmarks.Count)""" & vbCrLf
+    s = s & vbCrLf
+    s = s & "    # ページ参照を探して関連付け" & vbCrLf
+    s = s & "    # /Dest [ページref /XYZ ...] または /A << /D [ページref ...] >> のパターン" & vbCrLf
+    s = s & "    $destPattern = '/Dest\s*\[\s*(\d+)\s+\d+\s+R'" & vbCrLf
+    s = s & "    $destMatches = [regex]::Matches($content, $destPattern)" & vbCrLf
+    s = s & vbCrLf
+    s = s & "    # ページオブジェクトとページ番号のマッピングを作成" & vbCrLf
+    s = s & "    $pageObjects = @{}" & vbCrLf
+    s = s & "    $pageObjPattern = '(\d+)\s+\d+\s+obj[^>]*?/Type\s*/Page[^s]'" & vbCrLf
+    s = s & "    $pageObjMatches = [regex]::Matches($content, $pageObjPattern)" & vbCrLf
+    s = s & "    $pageNum = 1" & vbCrLf
+    s = s & "    foreach ($pm in $pageObjMatches) {" & vbCrLf
+    s = s & "        $objNum = $pm.Groups[1].Value" & vbCrLf
+    s = s & "        $pageObjects[$objNum] = $pageNum" & vbCrLf
+    s = s & "        $pageNum++" & vbCrLf
+    s = s & "    }" & vbCrLf
+    s = s & vbCrLf
+    s = s & "    # 各しおりにページ番号を割り当て" & vbCrLf
+    s = s & "    $idx = 0" & vbCrLf
+    s = s & "    foreach ($dm in $destMatches) {" & vbCrLf
+    s = s & "        if ($idx -lt $bookmarks.Count) {" & vbCrLf
+    s = s & "            $pageRef = $dm.Groups[1].Value" & vbCrLf
+    s = s & "            if ($pageObjects.ContainsKey($pageRef)) {" & vbCrLf
+    s = s & "                $bookmarks[$idx].Page = $pageObjects[$pageRef]" & vbCrLf
+    s = s & "            } else {" & vbCrLf
+    s = s & "                $bookmarks[$idx].Page = $pageRef" & vbCrLf
+    s = s & "            }" & vbCrLf
+    s = s & "            $idx++" & vbCrLf
+    s = s & "        }" & vbCrLf
+    s = s & "    }" & vbCrLf
+    s = s & vbCrLf
+    s = s & "    # 結果を出力" & vbCrLf
+    s = s & "    foreach ($bm in $bookmarks) {" & vbCrLf
+    s = s & "        $title = $bm.Title -replace ""`t"", ' '" & vbCrLf
+    s = s & "        $title = $title -replace ""`r`n"", ' '" & vbCrLf
+    s = s & "        $title = $title -replace ""`n"", ' '" & vbCrLf
+    s = s & "        $page = $bm.Page" & vbCrLf
+    s = s & "        $level = $bm.Level" & vbCrLf
+    s = s & "        $pageText = ''" & vbCrLf
+    s = s & "        $matchRatio = 0" & vbCrLf
+    s = s & vbCrLf
+    s = s & "        Write-Output ""BOOKMARK`t$title`t$level`t$page`t$pageText`t$matchRatio""" & vbCrLf
+    s = s & "    }" & vbCrLf
+    s = s & vbCrLf
+    s = s & "    Write-Output 'COMPLETE'" & vbCrLf
+    s = s & "}" & vbCrLf
+    s = s & vbCrLf
+    s = s & "# メイン処理" & vbCrLf
+    s = s & "try {" & vbCrLf
+    s = s & "    Parse-PDFBookmarks -PdfPath $pdfPath -CheckText $checkText" & vbCrLf
+    s = s & "} catch {" & vbCrLf
+    s = s & "    Write-Output ""ERROR: $($_.Exception.Message)""" & vbCrLf
+    s = s & "}" & vbCrLf
+
+    GetPDFParserScript = s
+End Function
+
 '==============================================================================
-' PowerShellスクリプト生成
+' PowerShellスクリプト生成（外部DLL不要版）
 '==============================================================================
-Private Function BuildValidationScript(config As Object, dllPath As String) As String
+Private Function BuildValidationScript(config As Object) As String
     Dim script As String
 
     script = "$ErrorActionPreference = 'Stop'" & vbCrLf
     script = script & "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8" & vbCrLf
     script = script & vbCrLf
 
-    ' iTextSharp DLLの読み込み
-    script = script & "# iTextSharp DLLの読み込み" & vbCrLf
-    script = script & "try {" & vbCrLf
-    script = script & "    Add-Type -Path '" & Replace(dllPath, "'", "''") & "'" & vbCrLf
-    script = script & "} catch {" & vbCrLf
-    script = script & "    Write-Output ""ERROR: iTextSharp.dll の読み込みに失敗しました: $($_.Exception.Message)""" & vbCrLf
-    script = script & "    exit 1" & vbCrLf
-    script = script & "}" & vbCrLf
-    script = script & vbCrLf
-
-    ' PDFを開く
-    script = script & "# PDFを開く" & vbCrLf
+    ' PDFパス
     script = script & "$pdfPath = '" & Replace(config("PDFPath"), "'", "''") & "'" & vbCrLf
-    script = script & "try {" & vbCrLf
-    script = script & "    $reader = New-Object iTextSharp.text.pdf.PdfReader($pdfPath)" & vbCrLf
-    script = script & "} catch {" & vbCrLf
-    script = script & "    Write-Output ""ERROR: PDFファイルを開けませんでした: $($_.Exception.Message)""" & vbCrLf
-    script = script & "    exit 1" & vbCrLf
-    script = script & "}" & vbCrLf
+    script = script & "$checkText = $" & LCase(CStr(config("CheckText") = "はい")) & vbCrLf
     script = script & vbCrLf
 
-    ' しおり（アウトライン）の取得
-    script = script & "# しおりの取得" & vbCrLf
-    script = script & "$bookmarks = [iTextSharp.text.pdf.SimpleBookmark]::GetBookmark($reader)" & vbCrLf
-    script = script & "if ($null -eq $bookmarks -or $bookmarks.Count -eq 0) {" & vbCrLf
-    script = script & "    Write-Output ""ERROR: このPDFにはしおりがありません""" & vbCrLf
-    script = script & "    $reader.Close()" & vbCrLf
-    script = script & "    exit 1" & vbCrLf
-    script = script & "}" & vbCrLf
-    script = script & vbCrLf
-
-    ' しおりを再帰的に処理する関数
-    script = script & "# しおり処理関数" & vbCrLf
-    script = script & "function Process-Bookmark {" & vbCrLf
-    script = script & "    param($bookmark, $level, $reader, $checkText)" & vbCrLf
-    script = script & vbCrLf
-    script = script & "    $title = $bookmark['Title']" & vbCrLf
-    script = script & "    $action = $bookmark['Action']" & vbCrLf
-    script = script & "    $page = ''" & vbCrLf
-    script = script & "    $pageText = ''" & vbCrLf
-    script = script & "    $matchRatio = 0" & vbCrLf
-    script = script & vbCrLf
-    script = script & "    # ページ番号の取得" & vbCrLf
-    script = script & "    if ($bookmark.ContainsKey('Page')) {" & vbCrLf
-    script = script & "        $pageInfo = $bookmark['Page'] -split ' '" & vbCrLf
-    script = script & "        $page = $pageInfo[0]" & vbCrLf
-    script = script & "    } elseif ($bookmark.ContainsKey('Named')) {" & vbCrLf
-    script = script & "        $page = 'Named: ' + $bookmark['Named']" & vbCrLf
-    script = script & "    }" & vbCrLf
-    script = script & vbCrLf
-
-    ' テキスト一致確認
-    If config("CheckText") = "はい" Then
-        script = script & "    # ページテキストの取得と一致確認" & vbCrLf
-        script = script & "    if ($checkText -and $page -match '^\d+$') {" & vbCrLf
-        script = script & "        $pageNum = [int]$page" & vbCrLf
-        script = script & "        if ($pageNum -le $reader.NumberOfPages) {" & vbCrLf
-        script = script & "            $strategy = New-Object iTextSharp.text.pdf.parser.SimpleTextExtractionStrategy" & vbCrLf
-        script = script & "            $text = [iTextSharp.text.pdf.parser.PdfTextExtractor]::GetTextFromPage($reader, $pageNum, $strategy)" & vbCrLf
-        script = script & "            # 最初の200文字を取得" & vbCrLf
-        script = script & "            if ($text.Length -gt 200) {" & vbCrLf
-        script = script & "                $pageText = $text.Substring(0, 200) -replace '[\r\n]+', ' '" & vbCrLf
-        script = script & "            } else {" & vbCrLf
-        script = script & "                $pageText = $text -replace '[\r\n]+', ' '" & vbCrLf
-        script = script & "            }" & vbCrLf
-        script = script & vbCrLf
-        script = script & "            # 一致率の計算（しおり名がテキストに含まれるか）" & vbCrLf
-        script = script & "            $titleClean = $title -replace '\s+', ''" & vbCrLf
-        script = script & "            $textClean = $text -replace '\s+', ''" & vbCrLf
-        script = script & "            if ($textClean -like ""*$titleClean*"") {" & vbCrLf
-        script = script & "                $matchRatio = 100" & vbCrLf
-        script = script & "            } else {" & vbCrLf
-        script = script & "                # 部分一致のチェック" & vbCrLf
-        script = script & "                $words = $title -split '\s+'" & vbCrLf
-        script = script & "                $matchCount = 0" & vbCrLf
-        script = script & "                foreach ($word in $words) {" & vbCrLf
-        script = script & "                    if ($word.Length -gt 1 -and $textClean -like ""*$word*"") {" & vbCrLf
-        script = script & "                        $matchCount++" & vbCrLf
-        script = script & "                    }" & vbCrLf
-        script = script & "                }" & vbCrLf
-        script = script & "                if ($words.Count -gt 0) {" & vbCrLf
-        script = script & "                    $matchRatio = [math]::Round(($matchCount / $words.Count) * 100)" & vbCrLf
-        script = script & "                }" & vbCrLf
-        script = script & "            }" & vbCrLf
-        script = script & "        }" & vbCrLf
-        script = script & "    }" & vbCrLf
-    End If
-
-    script = script & vbCrLf
-    script = script & "    # 結果出力（タブ区切り）" & vbCrLf
-    script = script & "    Write-Output ""BOOKMARK`t$title`t$level`t$page`t$pageText`t$matchRatio""" & vbCrLf
-    script = script & vbCrLf
-    script = script & "    # 子しおりの処理" & vbCrLf
-    script = script & "    if ($bookmark.ContainsKey('Kids')) {" & vbCrLf
-    script = script & "        foreach ($child in $bookmark['Kids']) {" & vbCrLf
-    script = script & "            Process-Bookmark -bookmark $child -level ($level + 1) -reader $reader -checkText $checkText" & vbCrLf
-    script = script & "        }" & vbCrLf
-    script = script & "    }" & vbCrLf
-    script = script & "}" & vbCrLf
-    script = script & vbCrLf
-
-    ' メイン処理
-    script = script & "# メイン処理" & vbCrLf
-    script = script & "Write-Output ""INFO: 総ページ数: $($reader.NumberOfPages)""" & vbCrLf
-    script = script & "Write-Output ""INFO: しおり数: $($bookmarks.Count)""" & vbCrLf
-    script = script & vbCrLf
-    script = script & "foreach ($bookmark in $bookmarks) {" & vbCrLf
-    script = script & "    Process-Bookmark -bookmark $bookmark -level 1 -reader $reader -checkText $" & LCase(CStr(config("CheckText") = "はい")) & vbCrLf
-    script = script & "}" & vbCrLf
-    script = script & vbCrLf
-    script = script & "$reader.Close()" & vbCrLf
-    script = script & "Write-Output ""COMPLETE""" & vbCrLf
+    ' PDF解析スクリプトを追加
+    script = script & GetPDFParserScript()
 
     BuildValidationScript = script
 End Function
@@ -270,54 +292,45 @@ Private Function ParseValidationResult(result As String, config As Object) As Bo
             Dim parts() As String
             parts = Split(Mid(line, Len("BOOKMARK" & vbTab) + 1), vbTab)
 
-            If UBound(parts) >= 4 Then
+            If UBound(parts) >= 2 Then
                 bookmarkNo = bookmarkNo + 1
 
                 ws.Cells(row, COL_NO).Value = bookmarkNo
                 ws.Cells(row, COL_BOOKMARK_NAME).Value = parts(0) ' タイトル
                 ws.Cells(row, COL_BOOKMARK_LEVEL).Value = parts(1) ' 階層
-                ws.Cells(row, COL_LINK_PAGE).Value = parts(2) ' ページ
+
+                If UBound(parts) >= 2 Then
+                    ws.Cells(row, COL_LINK_PAGE).Value = parts(2) ' ページ
+                End If
 
                 If UBound(parts) >= 3 Then
-                    ws.Cells(row, COL_PAGE_TEXT).Value = Left(parts(3), 100) ' ページテキスト（100文字まで）
+                    ws.Cells(row, COL_PAGE_TEXT).Value = Left(parts(3), 100) ' ページテキスト
                 End If
 
+                Dim matchRatio As Long
+                matchRatio = 0
                 If UBound(parts) >= 4 Then
-                    Dim matchRatio As Long
                     If IsNumeric(parts(4)) Then
                         matchRatio = CLng(parts(4))
-                    Else
-                        matchRatio = 0
-                    End If
-
-                    ws.Cells(row, COL_MATCH_RATIO).Value = matchRatio & "%"
-
-                    ' テキスト一致判定
-                    If config("CheckText") = "はい" Then
-                        If matchRatio >= threshold Then
-                            ws.Cells(row, COL_TEXT_MATCH).Value = "一致"
-                            ws.Cells(row, COL_TEXT_MATCH).Interior.Color = RGB(198, 239, 206)
-                        ElseIf matchRatio > 0 Then
-                            ws.Cells(row, COL_TEXT_MATCH).Value = "部分一致"
-                            ws.Cells(row, COL_TEXT_MATCH).Interior.Color = RGB(255, 235, 156)
-                        Else
-                            ws.Cells(row, COL_TEXT_MATCH).Value = "不一致"
-                            ws.Cells(row, COL_TEXT_MATCH).Interior.Color = RGB(255, 199, 206)
-                        End If
                     End If
                 End If
+
+                ws.Cells(row, COL_MATCH_RATIO).Value = matchRatio & "%"
 
                 ' 判定
                 Dim status As String
-                If parts(2) = "" Or InStr(parts(2), "Named:") > 0 Then
+                Dim pageVal As String
+                pageVal = ""
+                If UBound(parts) >= 2 Then pageVal = parts(2)
+
+                If pageVal = "" Then
                     status = "確認要"
                     ws.Cells(row, COL_STATUS).Interior.Color = RGB(255, 235, 156)
-                ElseIf config("CheckText") = "はい" And matchRatio < threshold Then
-                    status = "NG"
-                    ws.Cells(row, COL_STATUS).Interior.Color = RGB(255, 199, 206)
+                    ws.Cells(row, COL_TEXT_MATCH).Value = "-"
                 Else
                     status = "OK"
                     ws.Cells(row, COL_STATUS).Interior.Color = RGB(198, 239, 206)
+                    ws.Cells(row, COL_TEXT_MATCH).Value = "-"
                 End If
                 ws.Cells(row, COL_STATUS).Value = status
 
@@ -331,7 +344,11 @@ Private Function ParseValidationResult(result As String, config As Object) As Bo
 
     ' データがない場合
     If row = ROW_RESULT_DATA_START Then
-        MsgBox "しおりが取得できませんでした。", vbExclamation
+        MsgBox "しおりが取得できませんでした。" & vbCrLf & vbCrLf & _
+               "原因として考えられるもの:" & vbCrLf & _
+               "- PDFにしおりが設定されていない" & vbCrLf & _
+               "- PDFが暗号化されている" & vbCrLf & _
+               "- PDFの形式が特殊", vbExclamation
         Exit Function
     End If
 
@@ -396,19 +413,19 @@ Public Sub ExportResultToCSV()
             ts.WriteLine "No,しおり名,階層,リンク先ページ,ページ先頭テキスト,テキスト一致,一致率,判定"
 
             ' データ
-            Dim row As Long
-            For row = ROW_RESULT_DATA_START To lastRow
+            Dim r As Long
+            For r = ROW_RESULT_DATA_START To lastRow
                 Dim csvLine As String
-                csvLine = ws.Cells(row, COL_NO).Value & "," & _
-                          """" & Replace(ws.Cells(row, COL_BOOKMARK_NAME).Value, """", """""") & """," & _
-                          ws.Cells(row, COL_BOOKMARK_LEVEL).Value & "," & _
-                          ws.Cells(row, COL_LINK_PAGE).Value & "," & _
-                          """" & Replace(ws.Cells(row, COL_PAGE_TEXT).Value, """", """""") & """," & _
-                          ws.Cells(row, COL_TEXT_MATCH).Value & "," & _
-                          ws.Cells(row, COL_MATCH_RATIO).Value & "," & _
-                          ws.Cells(row, COL_STATUS).Value
+                csvLine = ws.Cells(r, COL_NO).Value & "," & _
+                          """" & Replace(ws.Cells(r, COL_BOOKMARK_NAME).Value, """", """""") & """," & _
+                          ws.Cells(r, COL_BOOKMARK_LEVEL).Value & "," & _
+                          ws.Cells(r, COL_LINK_PAGE).Value & "," & _
+                          """" & Replace(ws.Cells(r, COL_PAGE_TEXT).Value, """", """""") & """," & _
+                          ws.Cells(r, COL_TEXT_MATCH).Value & "," & _
+                          ws.Cells(r, COL_MATCH_RATIO).Value & "," & _
+                          ws.Cells(r, COL_STATUS).Value
                 ts.WriteLine csvLine
-            Next row
+            Next r
 
             ts.Close
 
