@@ -491,40 +491,41 @@ Private Function ExecuteCommand(ByVal cmd As String) As String
 End Function
 
 '==============================================================================
+' シートが存在するかチェック（エラーハンドリングを使わない方法）
+'==============================================================================
+Private Function SheetExists(ByVal sheetName As String) As Boolean
+    Dim sh As Object
+    SheetExists = False
+    For Each sh In ThisWorkbook.Sheets
+        If sh.Name = sheetName Then
+            SheetExists = True
+            Exit Function
+        End If
+    Next sh
+End Function
+
+'==============================================================================
 ' シートを準備
 '==============================================================================
 Private Sub PrepareSheets()
     Dim sheetNames As Variant
     Dim sheetName As Variant
     Dim ws As Worksheet
-    Dim sheetExists As Boolean
 
     sheetNames = Array(SHEET_DASHBOARD, SHEET_HISTORY, SHEET_BRANCH_GRAPH)
 
     For Each sheetName In sheetNames
-        sheetExists = False
-        Set ws = Nothing
-
-        On Error Resume Next
-        Set ws = ThisWorkbook.Sheets(CStr(sheetName))
-        If Not ws Is Nothing Then
-            sheetExists = True
-        End If
-        Err.Clear
-        On Error GoTo 0
-
-        If sheetExists Then
+        If SheetExists(CStr(sheetName)) Then
+            ' シートが存在する場合はクリア
+            Set ws = ThisWorkbook.Sheets(CStr(sheetName))
             ws.Cells.Clear
             On Error Resume Next
             ws.Cells.Interior.ColorIndex = xlNone
             On Error GoTo 0
         Else
-            On Error Resume Next
+            ' シートが存在しない場合は新規作成
             Set ws = ThisWorkbook.Sheets.Add(After:=ThisWorkbook.Sheets(ThisWorkbook.Sheets.Count))
-            If Not ws Is Nothing Then
-                ws.Name = CStr(sheetName)
-            End If
-            On Error GoTo 0
+            ws.Name = CStr(sheetName)
         End If
 
         Set ws = Nothing
