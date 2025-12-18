@@ -996,9 +996,9 @@ Private Function GetConfig() As Object
     config("JP1User") = CStr(ws.Cells(ROW_JP1_USER, COL_SETTING_VALUE).Value)
     config("JP1Password") = CStr(ws.Cells(ROW_JP1_PASSWORD, COL_SETTING_VALUE).Value)
     config("RootPath") = CStr(ws.Cells(ROW_ROOT_PATH, COL_SETTING_VALUE).Value)
-    config("WaitCompletion") = CStr(ws.Cells(ROW_WAIT_COMPLETION + 4, COL_SETTING_VALUE).Value)
-    config("Timeout") = CLng(ws.Cells(ROW_TIMEOUT + 4, COL_SETTING_VALUE).Value)
-    config("PollingInterval") = CLng(ws.Cells(ROW_POLLING_INTERVAL + 4, COL_SETTING_VALUE).Value)
+    config("WaitCompletion") = CStr(ws.Cells(ROW_WAIT_COMPLETION, COL_SETTING_VALUE).Value)
+    config("Timeout") = CLng(ws.Cells(ROW_TIMEOUT, COL_SETTING_VALUE).Value)
+    config("PollingInterval") = CLng(ws.Cells(ROW_POLLING_INTERVAL, COL_SETTING_VALUE).Value)
 
     ' 必須項目チェック（ローカルモードとリモートモードで異なる）
     If config("ExecMode") = "ローカル" Then
