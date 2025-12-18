@@ -974,7 +974,7 @@ Private Function GetConfig() As Object
 End Function
 
 Private Function ExecutePowerShell(script As String) As String
-    ' 一時ファイルにスクリプトを保存（UTF-8 BOM付きで保存）
+    ' 一時ファイルにスクリプトを保存（UTF-8 BOMなしで保存）
     Dim fso As Object
     Set fso = CreateObject("Scripting.FileSystemObject")
 
@@ -984,16 +984,30 @@ Private Function ExecutePowerShell(script As String) As String
     Dim scriptPath As String
     scriptPath = tempFolder & "\jp1_temp_" & Format(Now, "yyyymmddhhnnss") & ".ps1"
 
-    ' ADODB.Streamを使用してUTF-8（BOM付き）で保存
-    Dim stream As Object
-    Set stream = CreateObject("ADODB.Stream")
-    stream.Type = 2 ' adTypeText
-    stream.Charset = "UTF-8"
-    stream.Open
-    stream.WriteText script
-    stream.SaveToFile scriptPath, 2 ' adSaveCreateOverWrite
-    stream.Close
-    Set stream = Nothing
+    ' ADODB.Streamを使用してUTF-8（BOMなし）で保存
+    Dim utfStream As Object
+    Set utfStream = CreateObject("ADODB.Stream")
+    utfStream.Type = 2 ' adTypeText
+    utfStream.Charset = "UTF-8"
+    utfStream.Open
+    utfStream.WriteText script
+
+    ' BOMをスキップしてバイナリで保存
+    utfStream.Position = 0
+    utfStream.Type = 1 ' adTypeBinary
+    utfStream.Position = 3 ' BOM（3バイト）をスキップ
+
+    Dim binStream As Object
+    Set binStream = CreateObject("ADODB.Stream")
+    binStream.Type = 1 ' adTypeBinary
+    binStream.Open
+    utfStream.CopyTo binStream
+    binStream.SaveToFile scriptPath, 2 ' adSaveCreateOverWrite
+
+    binStream.Close
+    utfStream.Close
+    Set binStream = Nothing
+    Set utfStream = Nothing
 
     ' PowerShell実行
     Dim shell As Object
@@ -1149,22 +1163,39 @@ Private Function CreateLogFile() As String
     Dim logFilePath As String
     logFilePath = logFolder & "\" & logFileName
 
-    ' ADODB.Streamを使用してUTF-8（BOM付き）でヘッダーを書き込む
-    Dim stream As Object
-    Set stream = CreateObject("ADODB.Stream")
-    stream.Type = 2 ' adTypeText
-    stream.Charset = "UTF-8"
-    stream.Open
-    stream.WriteText "================================================================================" & vbCrLf
-    stream.WriteText "JP1 ジョブ管理ツール - 実行ログ" & vbCrLf
-    stream.WriteText "================================================================================" & vbCrLf
-    stream.WriteText "開始日時: " & Format(Now, "yyyy/mm/dd HH:mm:ss") & vbCrLf
-    stream.WriteText "実行モード: " & Worksheets(SHEET_MAIN).Cells(ROW_EXEC_MODE, COL_SETTING_VALUE).Value & vbCrLf
-    stream.WriteText "================================================================================" & vbCrLf
-    stream.WriteText "" & vbCrLf
-    stream.SaveToFile logFilePath, 2 ' adSaveCreateOverWrite
-    stream.Close
-    Set stream = Nothing
+    ' ADODB.Streamを使用してUTF-8（BOMなし）でヘッダーを書き込む
+    Dim logContent As String
+    logContent = "================================================================================" & vbCrLf
+    logContent = logContent & "JP1 ジョブ管理ツール - 実行ログ" & vbCrLf
+    logContent = logContent & "================================================================================" & vbCrLf
+    logContent = logContent & "開始日時: " & Format(Now, "yyyy/mm/dd HH:mm:ss") & vbCrLf
+    logContent = logContent & "実行モード: " & Worksheets(SHEET_MAIN).Cells(ROW_EXEC_MODE, COL_SETTING_VALUE).Value & vbCrLf
+    logContent = logContent & "================================================================================" & vbCrLf
+    logContent = logContent & "" & vbCrLf
+
+    Dim utfStream As Object
+    Set utfStream = CreateObject("ADODB.Stream")
+    utfStream.Type = 2 ' adTypeText
+    utfStream.Charset = "UTF-8"
+    utfStream.Open
+    utfStream.WriteText logContent
+
+    ' BOMをスキップしてバイナリで保存
+    utfStream.Position = 0
+    utfStream.Type = 1 ' adTypeBinary
+    utfStream.Position = 3 ' BOM（3バイト）をスキップ
+
+    Dim binStream As Object
+    Set binStream = CreateObject("ADODB.Stream")
+    binStream.Type = 1 ' adTypeBinary
+    binStream.Open
+    utfStream.CopyTo binStream
+    binStream.SaveToFile logFilePath, 2 ' adSaveCreateOverWrite
+
+    binStream.Close
+    utfStream.Close
+    Set binStream = Nothing
+    Set utfStream = Nothing
 
     CreateLogFile = logFilePath
 End Function
