@@ -851,9 +851,11 @@ SkipAuthorSection:
         .Columns("G").ColumnWidth = 10
         .Columns("H").ColumnWidth = 10
         .Columns("I").ColumnWidth = 3
-
-        .Range("A1").Select
     End With
+
+    ' シートをアクティブにしてからセルを選択
+    ws.Activate
+    ws.Range("A1").Select
 End Sub
 
 '==============================================================================
