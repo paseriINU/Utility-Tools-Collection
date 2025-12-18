@@ -44,6 +44,30 @@ Private g_MatchedNew() As Long    ' 新ファイルの段落番号
 Private g_MatchedCount As Long    ' ペア数
 
 '==============================================================================
+' データ構造: Excel比較用
+'==============================================================================
+Private Type ExcelDifferenceInfo
+    SheetName As String      ' シート名
+    CellAddress As String    ' セルアドレス
+    DiffType As String       ' 差異タイプ（変更/追加/削除）
+    OldValue As String       ' 旧ファイルの値
+    NewValue As String       ' 新ファイルの値
+End Type
+
+'==============================================================================
+' データ構造: Word比較用（WinMerge方式：旧/新両方の行番号を保持）
+'==============================================================================
+Private Type WordDifferenceInfo
+    OldParagraphNo As Long   ' 旧ファイルの段落番号（0は該当なし）
+    NewParagraphNo As Long   ' 新ファイルの段落番号（0は該当なし）
+    DiffType As String       ' 差異タイプ（変更/追加/削除/スタイル変更）
+    OldText As String        ' 旧ファイルのテキスト
+    NewText As String        ' 新ファイルのテキスト
+    OldStyle As String       ' 旧ファイルのスタイル情報
+    NewStyle As String       ' 新ファイルのスタイル情報
+End Type
+
+'==============================================================================
 ' 進捗表示用ヘルパー関数
 '==============================================================================
 Private Sub ShowProgress(ByVal phase As String, ByVal current As Long, ByVal total As Long)
@@ -107,30 +131,6 @@ Private Function GetUseLCSMode() As Boolean
 
     On Error GoTo 0
 End Function
-
-'==============================================================================
-' データ構造: Excel比較用
-'==============================================================================
-Private Type ExcelDifferenceInfo
-    SheetName As String      ' シート名
-    CellAddress As String    ' セルアドレス
-    DiffType As String       ' 差異タイプ（変更/追加/削除）
-    OldValue As String       ' 旧ファイルの値
-    NewValue As String       ' 新ファイルの値
-End Type
-
-'==============================================================================
-' データ構造: Word比較用（WinMerge方式：旧/新両方の行番号を保持）
-'==============================================================================
-Private Type WordDifferenceInfo
-    OldParagraphNo As Long   ' 旧ファイルの段落番号（0は該当なし）
-    NewParagraphNo As Long   ' 新ファイルの段落番号（0は該当なし）
-    DiffType As String       ' 差異タイプ（変更/追加/削除/スタイル変更）
-    OldText As String        ' 旧ファイルのテキスト
-    NewText As String        ' 新ファイルのテキスト
-    OldStyle As String       ' 旧ファイルのスタイル情報
-    NewStyle As String       ' 新ファイルのスタイル情報
-End Type
 
 '==============================================================================
 ' Excel専用比較プロシージャ（ボタン用）
