@@ -387,12 +387,14 @@ Private Sub CompareWordFilesInternal(ByVal file1Path As String, ByVal file2Path 
     End If
     On Error GoTo ErrorHandler
 
+    ' バックグラウンドで処理（画面に表示しない）
     wordApp.Visible = False
     wordApp.DisplayAlerts = False
+    wordApp.ScreenUpdating = False
 
-    ' ファイルを開く
-    Set doc1 = wordApp.Documents.Open(file1Path, ReadOnly:=True)
-    Set doc2 = wordApp.Documents.Open(file2Path, ReadOnly:=True)
+    ' ファイルを開く（非表示で）
+    Set doc1 = wordApp.Documents.Open(FileName:=file1Path, ReadOnly:=True, Visible:=False)
+    Set doc2 = wordApp.Documents.Open(FileName:=file2Path, ReadOnly:=True, Visible:=False)
 
     ' 比較実行
     diffCount = 0
@@ -404,9 +406,12 @@ Private Sub CompareWordFilesInternal(ByVal file1Path As String, ByVal file2Path 
     doc1.Close SaveChanges:=False
     doc2.Close SaveChanges:=False
 
-    ' Wordを終了（元々起動していなかった場合のみ）
+    ' Wordの設定を復元してから終了
     If Not wordWasRunning Then
         wordApp.Quit
+    Else
+        ' 既存のWordを使用していた場合は設定を復元
+        wordApp.ScreenUpdating = True
     End If
 
     Set doc1 = Nothing
@@ -448,7 +453,14 @@ ErrorHandler:
     On Error Resume Next
     If Not doc1 Is Nothing Then doc1.Close SaveChanges:=False
     If Not doc2 Is Nothing Then doc2.Close SaveChanges:=False
-    If Not wordApp Is Nothing And Not wordWasRunning Then wordApp.Quit
+    If Not wordApp Is Nothing Then
+        If Not wordWasRunning Then
+            wordApp.Quit
+        Else
+            ' 既存のWordを使用していた場合は設定を復元
+            wordApp.ScreenUpdating = True
+        End If
+    End If
     On Error GoTo 0
 
     MsgBox "エラーが発生しました: " & vbCrLf & vbCrLf & _
