@@ -644,7 +644,8 @@
                     throw new Error('ファイルの読み込みに失敗しました。ファイルが破損している可能性があります。');
                 }
 
-                const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+                // ワーカーを無効化してシングルスレッドで処理（main.jsエラー回避）
+                const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer, disableWorker: true });
                 const pdf = await loadingTask.promise;
 
                 if (num === 1) {
