@@ -37,8 +37,8 @@ Public Const COL_LAST_EXEC_TIME As Long = 7
 Public Const COL_LAST_END_TIME As Long = 8
 Public Const COL_LAST_RETURN_CODE As Long = 9
 Public Const COL_LAST_MESSAGE As Long = 10
-Public Const ROW_JOBLIST_HEADER As Long = 3
-Public Const ROW_JOBLIST_DATA_START As Long = 4
+Public Const ROW_JOBLIST_HEADER As Long = 4
+Public Const ROW_JOBLIST_DATA_START As Long = 5
 
 '==============================================================================
 ' 初期化（メインエントリポイント）
@@ -219,8 +219,11 @@ Private Sub FormatJobListSheet()
     AddButton ws, 20, 30, 130, 28, "ExecuteCheckedJobs", "選択ジョブ実行", RGB(0, 176, 80) ' 緑
     AddButton ws, 160, 30, 130, 28, "ClearJobList", "一覧クリア", RGB(192, 80, 77)          ' 赤
 
-    ' 説明
-    ws.Range("A2").Value = "実行するジョブの「順序」列に数字（1, 2, 3...）を入力してください。順序が入っているジョブを1番から順に実行します。保留中のジョブは実行時に自動で保留解除されます。"
+    ' 2行目はボタン配置用に空ける
+    ws.Rows(2).RowHeight = 35
+
+    ' 説明（3行目）
+    ws.Range("A3").Value = "実行するジョブの「順序」列に数字（1, 2, 3...）を入力してください。順序が入っているジョブを1番から順に実行します。保留中のジョブは実行時に自動で保留解除されます。"
 
     ' ヘッダー
     ws.Cells(ROW_JOBLIST_HEADER, COL_ORDER).Value = "順序"
