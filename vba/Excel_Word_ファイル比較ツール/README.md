@@ -4,7 +4,7 @@
 
 ## 機能
 
-### `Excel_Word_ファイル比較ツール.bas`
+### `FileComparator.bas`
 
 - **CompareExcelFiles**: Excelファイルを比較
   - シート単位・セル単位での差異検出
@@ -37,8 +37,8 @@
 1. Excelを開き、`Alt + F11` でVBAエディタを開く
 2. 「ファイル」→「ファイルのインポート」を選択
 3. 以下の2つのモジュールを順番にインポート：
-   - `Excel_Word_ファイル比較ツール_Setup.bas`（初期化・シートフォーマット用）
-   - `Excel_Word_ファイル比較ツール.bas`（メイン処理用）
+   - `FileComparator_Setup.bas`（初期化・シートフォーマット用）
+   - `FileComparator.bas`（メイン処理用）
 4. `Ctrl + S` で保存（.xlsm形式で保存）
 
 ### 方法2: コードをコピー
