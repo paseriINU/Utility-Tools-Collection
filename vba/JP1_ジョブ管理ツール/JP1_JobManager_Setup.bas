@@ -112,11 +112,9 @@ Private Sub FormatMainSheet()
     ' 説明
     ws.Range("A2").Value = "JP1サーバに接続してジョブネット一覧を取得し、選択したジョブを実行します。"
 
-    ' ボタン追加（図形ボタン・固定サイズ・色付き）- タイトルの下に横3列配置
-    ' 3行目あたりに配置（top=約55）
+    ' ボタン追加（図形ボタン・固定サイズ・色付き）- タイトルの下に配置
+    ' メインシートには「ジョブ一覧取得」ボタンのみ
     AddButton ws, 20, 55, 130, 32, "GetJobList", "ジョブ一覧取得", RGB(0, 112, 192)        ' 青
-    AddButton ws, 160, 55, 130, 32, "ExecuteCheckedJobs", "選択ジョブ実行", RGB(0, 176, 80) ' 緑
-    AddButton ws, 300, 55, 130, 32, "ClearJobList", "一覧クリア", RGB(192, 80, 77)          ' 赤
 
     ' 設定セクション（ボタンの下）
     ws.Range("A6").Value = "■ 接続設定"
@@ -216,6 +214,10 @@ Private Sub FormatJobListSheet()
         .HorizontalAlignment = xlCenter
         .RowHeight = 25
     End With
+
+    ' ボタン追加（図形ボタン・固定サイズ・色付き）- タイトルの下に配置
+    AddButton ws, 20, 30, 130, 28, "ExecuteCheckedJobs", "選択ジョブ実行", RGB(0, 176, 80) ' 緑
+    AddButton ws, 160, 30, 130, 28, "ClearJobList", "一覧クリア", RGB(192, 80, 77)          ' 赤
 
     ' 説明
     ws.Range("A2").Value = "実行するジョブの「順序」列に数字（1, 2, 3...）を入力してください。順序が入っているジョブを1番から順に実行します。保留中のジョブは実行時に自動で保留解除されます。"
