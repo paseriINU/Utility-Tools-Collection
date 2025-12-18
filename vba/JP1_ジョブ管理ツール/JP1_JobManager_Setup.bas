@@ -143,8 +143,8 @@ Private Sub FormatMainSheet()
     ws.Cells(ROW_JP1_PASSWORD, 4).Font.Color = RGB(128, 128, 128)
 
     ws.Cells(ROW_ROOT_PATH, 1).Value = "取得パス"
-    ws.Cells(ROW_ROOT_PATH, COL_SETTING_VALUE).Value = "/"
-    ws.Cells(ROW_ROOT_PATH, 4).Value = "※ジョブネット取得の起点パス（/で全件）"
+    ws.Cells(ROW_ROOT_PATH, COL_SETTING_VALUE).Value = "/AJSROOT1"
+    ws.Cells(ROW_ROOT_PATH, 4).Value = "※例: /AJSROOT1 または /AJSROOT1/グループ名"
     ws.Cells(ROW_ROOT_PATH, 4).Font.Color = RGB(128, 128, 128)
 
     ' 実行設定セクション
