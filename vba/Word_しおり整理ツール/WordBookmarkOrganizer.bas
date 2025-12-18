@@ -9,7 +9,7 @@
 '   - Microsoft Word XX.X Object Library
 '
 ' 注意:
-'   - 初期化とシートフォーマット機能は Word_しおり整理ツール_Setup.bas に分離されています
+'   - 初期化とシートフォーマット機能は WordBookmarkOrganizer_Setup.bas に分離されています
 '
 ' 作成日: 2025-12-06
 ' 更新日: 2025-12-17 - セットアップモジュールを分離

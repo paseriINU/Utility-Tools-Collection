@@ -1,13 +1,13 @@
 '==============================================================================
 ' Oracle SELECT文生成ツール - メインモジュール (ビジネスロジック)
-' モジュール名: SQL_生成ツール
+' モジュール名: SQLGenerator
 '==============================================================================
 ' 概要:
 '   ExcelからOracle用のSELECT文を対話的に生成するツールです。
 '   複雑なJOIN、サブクエリ、UNION、WITH句にも対応しています。
 '
-'   ※このモジュールはSQL_生成ツール_Setupモジュールと組み合わせて使用します。
-'   ※定数と初期化関数はSQL_生成ツール_Setupモジュールに定義されています。
+'   ※このモジュールはSQLGenerator_Setupモジュールと組み合わせて使用します。
+'   ※定数と初期化関数はSQLGenerator_Setupモジュールに定義されています。
 '
 ' 機能:
 '   - SQL生成（SELECT, FROM, WHERE, GROUP BY, HAVING, ORDER BY, LIMIT, UNION, WITH句）
@@ -19,7 +19,7 @@
 '   - Microsoft Excel 2010以降
 '
 ' 使い方:
-'   1. このモジュールとSQL_生成ツール_Setup.basの両方をVBAエディタにインポート
+'   1. このモジュールとSQLGenerator_Setup.basの両方をVBAエディタにインポート
 '   2. InitializeSQL生成ツール マクロを実行してシートを初期化
 '   3. 各シートに必要な情報を入力
 '   4. GenerateSQL マクロを実行してSQLを生成
@@ -30,9 +30,9 @@
 Option Explicit
 
 '==============================================================================
-' 注意: 定数はSQL_生成ツール_Setupモジュールで定義されています
+' 注意: 定数はSQLGenerator_Setupモジュールで定義されています
 '==============================================================================
-' 以下の定数はSQL_生成ツール_SetupモジュールでPublicとして定義されており、
+' 以下の定数はSQLGenerator_SetupモジュールでPublicとして定義されており、
 ' このモジュールから直接参照できます:
 '   - SHEET_MAIN, SHEET_TABLE_DEF, SHEET_HISTORY, SHEET_SUBQUERY, SHEET_CTE, SHEET_UNION, SHEET_HELP
 '   - ROW_TITLE, ROW_OPTIONS, ROW_MAIN_TABLE, ROW_JOIN_START, ROW_JOIN_END
