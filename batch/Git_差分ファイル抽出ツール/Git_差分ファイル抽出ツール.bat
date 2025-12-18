@@ -615,45 +615,7 @@ Write-Host "--------------------------------------------------------------------
 Write-Host ""
 #endregion
 
-#region 出力先フォルダ確認
-# 修正前・修正後フォルダが存在するかチェック
-$beforeExists = Test-Path $OUTPUT_DIR_BEFORE
-$afterExists = Test-Path $OUTPUT_DIR_AFTER
-
-if ($beforeExists -or $afterExists) {
-    Write-Host "[警告] 以下のフォルダが既に存在します" -ForegroundColor Yellow
-    if ($beforeExists) {
-        Write-Host "  - $OUTPUT_DIR_BEFORE" -ForegroundColor Yellow
-    }
-    if ($afterExists) {
-        Write-Host "  - $OUTPUT_DIR_AFTER" -ForegroundColor Yellow
-    }
-    $overwrite = Read-Host "クリアして書き込みますか? (y/n)"
-
-    if ($overwrite -ne "y") {
-        Write-Host "処理を中止しました" -ForegroundColor Yellow
-        exit 0
-    }
-
-    Write-Host "既存のフォルダをクリア中..." -ForegroundColor Yellow
-    # 修正前・修正後フォルダのみを削除（30_M配下の他のフォルダは保持）
-    if ($beforeExists) {
-        Remove-Item -Path $OUTPUT_DIR_BEFORE -Recurse -Force
-    }
-    if ($afterExists) {
-        Remove-Item -Path $OUTPUT_DIR_AFTER -Recurse -Force
-    }
-}
-
-# 出力先フォルダを作成
-if (-not (Test-Path $OUTPUT_DIR)) {
-    New-Item -ItemType Directory -Path $OUTPUT_DIR -Force | Out-Null
-}
-New-Item -ItemType Directory -Path $OUTPUT_DIR_BEFORE -Force | Out-Null
-New-Item -ItemType Directory -Path $OUTPUT_DIR_AFTER -Force | Out-Null
-#endregion
-
-#region 差分ファイル取得
+#region 差分ファイル取得（フォルダ操作の前に実行）
 Write-Host "差分ファイルを検出中..." -ForegroundColor Cyan
 Write-Host ""
 
@@ -698,6 +660,44 @@ if ($filteredFiles.Count -eq 0) {
 $FILE_COUNT = $filteredFiles.Count
 Write-Host "検出された差分ファイル数: $FILE_COUNT 個" -ForegroundColor Green
 Write-Host ""
+#endregion
+
+#region 出力先フォルダ確認（差分があることを確認した後に実行）
+# 修正前・修正後フォルダが存在するかチェック
+$beforeExists = Test-Path $OUTPUT_DIR_BEFORE
+$afterExists = Test-Path $OUTPUT_DIR_AFTER
+
+if ($beforeExists -or $afterExists) {
+    Write-Host "[警告] 以下のフォルダが既に存在します" -ForegroundColor Yellow
+    if ($beforeExists) {
+        Write-Host "  - $OUTPUT_DIR_BEFORE" -ForegroundColor Yellow
+    }
+    if ($afterExists) {
+        Write-Host "  - $OUTPUT_DIR_AFTER" -ForegroundColor Yellow
+    }
+    $overwrite = Read-Host "クリアして書き込みますか? (y/n)"
+
+    if ($overwrite -ne "y") {
+        Write-Host "処理を中止しました" -ForegroundColor Yellow
+        exit 0
+    }
+
+    Write-Host "既存のフォルダをクリア中..." -ForegroundColor Yellow
+    # 修正前・修正後フォルダのみを削除（30_M配下の他のフォルダは保持）
+    if ($beforeExists) {
+        Remove-Item -Path $OUTPUT_DIR_BEFORE -Recurse -Force
+    }
+    if ($afterExists) {
+        Remove-Item -Path $OUTPUT_DIR_AFTER -Recurse -Force
+    }
+}
+
+# 出力先フォルダを作成
+if (-not (Test-Path $OUTPUT_DIR)) {
+    New-Item -ItemType Directory -Path $OUTPUT_DIR -Force | Out-Null
+}
+New-Item -ItemType Directory -Path $OUTPUT_DIR_BEFORE -Force | Out-Null
+New-Item -ItemType Directory -Path $OUTPUT_DIR_AFTER -Force | Out-Null
 #endregion
 
 #region ファイルコピー（高速一括抽出方式）
