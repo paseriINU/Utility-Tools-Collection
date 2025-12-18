@@ -755,6 +755,13 @@ Private Sub CreateDashboardSheet(ByRef commits() As CommitInfo, ByVal commitCoun
         Dim items As Variant
 
         authorCount = authorDict.Count
+
+        ' 作者がいない場合はスキップ
+        If authorCount = 0 Then
+            .Range("B16").Value = "（データなし）"
+            GoTo SkipAuthorSection
+        End If
+
         ReDim authors(0 To authorCount - 1)
         ReDim authorCounts(0 To authorCount - 1)
 
@@ -791,6 +798,7 @@ Private Sub CreateDashboardSheet(ByRef commits() As CommitInfo, ByVal commitCoun
 
         Dim maxCount As Long
         maxCount = authorCounts(0)
+        If maxCount = 0 Then maxCount = 1  ' ゼロ除算防止
 
         For i = 0 To maxAuthors - 1
             row = 16 + i
@@ -830,6 +838,7 @@ Private Sub CreateDashboardSheet(ByRef commits() As CommitInfo, ByVal commitCoun
             .Range(.Cells(row, 2), .Cells(row, 8)).Font.Italic = True
         End If
 
+SkipAuthorSection:
         ' =================================================================
         ' 列幅調整
         ' =================================================================
