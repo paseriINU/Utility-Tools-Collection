@@ -1029,8 +1029,19 @@ Private Function ExecutePowerShell(script As String) As String
     Dim tempFolder As String
     tempFolder = fso.GetSpecialFolder(2) ' Temp folder
 
+    Dim timestamp As String
+    timestamp = Format(Now, "yyyymmddhhnnss") & "_" & Int(Rnd * 10000)
+
     Dim scriptPath As String
-    scriptPath = tempFolder & "\jp1_temp_" & Format(Now, "yyyymmddhhnnss") & ".ps1"
+    scriptPath = tempFolder & "\jp1_temp_" & timestamp & ".ps1"
+
+    Dim outputPath As String
+    outputPath = tempFolder & "\jp1_output_" & timestamp & ".txt"
+
+    ' スクリプトをラップして結果をファイルに出力
+    Dim wrappedScript As String
+    wrappedScript = script & vbCrLf
+    wrappedScript = wrappedScript & "# 出力完了マーカー" & vbCrLf
 
     ' ADODB.Streamを使用してUTF-8（BOMなし）で保存
     Dim utfStream As Object
@@ -1038,7 +1049,7 @@ Private Function ExecutePowerShell(script As String) As String
     utfStream.Type = 2 ' adTypeText
     utfStream.Charset = "UTF-8"
     utfStream.Open
-    utfStream.WriteText script
+    utfStream.WriteText wrappedScript
 
     ' BOMをスキップしてバイナリで保存
     utfStream.Position = 0
@@ -1057,35 +1068,45 @@ Private Function ExecutePowerShell(script As String) As String
     Set binStream = Nothing
     Set utfStream = Nothing
 
-    ' PowerShell実行（エラーもStdOutにリダイレクト）
+    ' PowerShell実行（非表示・結果をファイルに出力）
     Dim shell As Object
     Set shell = CreateObject("WScript.Shell")
 
     Dim cmd As String
-    cmd = "powershell -NoProfile -ExecutionPolicy Bypass -File """ & scriptPath & """ 2>&1"
+    ' -WindowStyle Hidden で非表示実行、結果を一時ファイルに出力
+    cmd = "powershell -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -Command ""& {" & _
+          "& '" & scriptPath & "' 2>&1 | Out-File -FilePath '" & outputPath & "' -Encoding UTF8" & _
+          "}"""
 
-    Dim exec As Object
-    Set exec = shell.exec(cmd)
+    ' vbHide (0) で非表示、True で完了まで待機
+    shell.Run cmd, 0, True
 
-    ' 結果を取得（StdOutとStdErr両方）
+    ' 結果ファイルを読み込む
     Dim output As String
-    Dim errOutput As String
     output = ""
-    errOutput = ""
 
-    Do While exec.Status = 0
-        DoEvents
-    Loop
+    If fso.FileExists(outputPath) Then
+        ' UTF-8で読み込み
+        Set utfStream = CreateObject("ADODB.Stream")
+        utfStream.Type = 2 ' adTypeText
+        utfStream.Charset = "UTF-8"
+        utfStream.Open
+        utfStream.LoadFromFile outputPath
 
-    output = exec.StdOut.ReadAll
-    errOutput = exec.StdErr.ReadAll
+        If Not utfStream.EOS Then
+            output = utfStream.ReadText
+        End If
 
-    ' エラーがあれば結合
-    If errOutput <> "" Then
-        output = output & vbCrLf & "ERROR: " & errOutput
+        utfStream.Close
+        Set utfStream = Nothing
+
+        ' 出力ファイル削除
+        On Error Resume Next
+        fso.DeleteFile outputPath
+        On Error GoTo 0
     End If
 
-    ' 一時ファイル削除
+    ' スクリプトファイル削除
     On Error Resume Next
     fso.DeleteFile scriptPath
     On Error GoTo 0
