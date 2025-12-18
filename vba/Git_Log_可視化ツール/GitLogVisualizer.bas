@@ -425,6 +425,54 @@ Private Function ParseGitDate(ByVal dateStr As String) As Date
 End Function
 
 '==============================================================================
+' コマンドを実行して結果を返す
+'==============================================================================
+Private Function ExecuteCommand(ByVal cmd As String) As String
+    Dim wsh As Object
+    Dim fso As Object
+    Dim tempFile As String
+    Dim output As String
+    Dim stream As Object
+
+    Set wsh = CreateObject("WScript.Shell")
+    Set fso = CreateObject("Scripting.FileSystemObject")
+
+    tempFile = fso.GetSpecialFolder(2) & "\cmd_" & fso.GetTempName & ".txt"
+
+    ' コマンドを実行して結果を一時ファイルに出力
+    wsh.Run "cmd /c chcp 65001 >nul && " & cmd & " > """ & tempFile & """ 2>&1", 0, True
+
+    ' 結果を読み込み
+    If fso.FileExists(tempFile) Then
+        On Error Resume Next
+        Set stream = CreateObject("ADODB.Stream")
+        If stream Is Nothing Then
+            output = fso.OpenTextFile(tempFile, 1, False, -1).ReadAll
+        Else
+            stream.Type = 2
+            stream.Charset = "UTF-8"
+            stream.Open
+            stream.LoadFromFile tempFile
+            output = stream.ReadText
+            stream.Close
+            Set stream = Nothing
+        End If
+        On Error GoTo 0
+
+        On Error Resume Next
+        fso.DeleteFile tempFile
+        On Error GoTo 0
+    Else
+        output = ""
+    End If
+
+    ExecuteCommand = output
+
+    Set fso = Nothing
+    Set wsh = Nothing
+End Function
+
+'==============================================================================
 ' シートを準備
 '==============================================================================
 Private Sub PrepareSheets()
