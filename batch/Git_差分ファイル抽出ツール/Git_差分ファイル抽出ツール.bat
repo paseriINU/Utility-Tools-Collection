@@ -698,63 +698,158 @@ if ($filteredFiles.Count -eq 0) {
 $FILE_COUNT = $filteredFiles.Count
 Write-Host "検出された差分ファイル数: $FILE_COUNT 個" -ForegroundColor Green
 Write-Host ""
-Write-Host "ファイルをコピー中..." -ForegroundColor Cyan
-Write-Host ""
 #endregion
 
-#region ファイルコピー
+#region ファイルコピー（高速一括抽出方式）
 $COPY_COUNT_BEFORE = 0
 $COPY_COUNT_AFTER = 0
 $ERROR_COUNT = 0
+$NEW_FILES = @()
+$DELETED_FILES = @()
 
-foreach ($fileObj in $filteredFiles) {
-    $originalPath = $fileObj.OriginalPath
-    $relativePath = $fileObj.RelativePath
+# ファイルパスのリストを作成
+$originalPaths = $filteredFiles | ForEach-Object { $_.OriginalPath }
 
-    $relativePathWin = $relativePath -replace '/', '\'
+Write-Host "ファイルを抽出中（高速モード）..." -ForegroundColor Cyan
+Write-Host ""
 
-    Write-Host "[処理] $relativePath" -ForegroundColor Cyan
+# 01_修正前（比較元）のファイルを一括抽出
+Write-Host "[01_修正前] 比較元からファイルを抽出中..." -ForegroundColor Yellow
+$tempArchiveBefore = Join-Path $env:TEMP "git_diff_before_$([System.Guid]::NewGuid().ToString('N')).tar"
 
-    # 01_修正前（比較元）のファイルをコピー
-    $destFileBefore = Join-Path $OUTPUT_DIR_BEFORE $relativePathWin
-    $destDirBefore = Split-Path -Path $destFileBefore -Parent
-    if (-not (Test-Path $destDirBefore)) {
-        New-Item -ItemType Directory -Path $destDirBefore -Force | Out-Null
-    }
+try {
+    # git archive でファイルを一括抽出
+    $archiveArgs = @($BASE_REF) + $originalPaths
+    $archiveResult = & git archive --format=tar -o $tempArchiveBefore @archiveArgs 2>&1
 
-    try {
-        $contentBefore = git show "${BASE_REF}:${originalPath}" 2>&1
-        if ($LASTEXITCODE -eq 0) {
-            [System.IO.File]::WriteAllText($destFileBefore, ($contentBefore -join "`n"), [System.Text.Encoding]::UTF8)
-            Write-Host "  [01_修正前] コピー完了" -ForegroundColor Green
-            $COPY_COUNT_BEFORE++
-        } else {
-            Write-Host "  [01_修正前] 新規ファイル（比較元に存在しない）" -ForegroundColor Gray
+    if ($LASTEXITCODE -eq 0 -and (Test-Path $tempArchiveBefore)) {
+        # tarファイルを展開
+        Push-Location $OUTPUT_DIR_BEFORE
+        tar -xf $tempArchiveBefore 2>&1 | Out-Null
+        Pop-Location
+
+        # サブディレクトリの場合、ファイルを正しい位置に移動
+        if ($subDirPath -ne "") {
+            $subDirInArchive = Join-Path $OUTPUT_DIR_BEFORE ($subDirPath -replace '\\', '/')
+            if (Test-Path $subDirInArchive) {
+                Get-ChildItem -Path $subDirInArchive -Recurse -File | ForEach-Object {
+                    $relativePath = $_.FullName.Substring($subDirInArchive.Length + 1)
+                    $destPath = Join-Path $OUTPUT_DIR_BEFORE $relativePath
+                    $destDir = Split-Path -Path $destPath -Parent
+                    if (-not (Test-Path $destDir)) {
+                        New-Item -ItemType Directory -Path $destDir -Force | Out-Null
+                    }
+                    Move-Item -Path $_.FullName -Destination $destPath -Force
+                }
+                # 空になったサブディレクトリを削除
+                $topSubDir = ($subDirPath -split '[\\/]')[0]
+                $topSubDirPath = Join-Path $OUTPUT_DIR_BEFORE $topSubDir
+                if (Test-Path $topSubDirPath) {
+                    Remove-Item -Path $topSubDirPath -Recurse -Force -ErrorAction SilentlyContinue
+                }
+            }
         }
-    } catch {
-        Write-Host "  [01_修正前] エラー: $($_.Exception.Message)" -ForegroundColor Red
-        $ERROR_COUNT++
-    }
 
-    # 02_修正後（比較先）のファイルをコピー
-    $destFileAfter = Join-Path $OUTPUT_DIR_AFTER $relativePathWin
-    $destDirAfter = Split-Path -Path $destFileAfter -Parent
-    if (-not (Test-Path $destDirAfter)) {
-        New-Item -ItemType Directory -Path $destDirAfter -Force | Out-Null
-    }
-
-    try {
-        $contentAfter = git show "${TARGET_REF}:${originalPath}" 2>&1
-        if ($LASTEXITCODE -eq 0) {
-            [System.IO.File]::WriteAllText($destFileAfter, ($contentAfter -join "`n"), [System.Text.Encoding]::UTF8)
-            Write-Host "  [02_修正後] コピー完了" -ForegroundColor Green
-            $COPY_COUNT_AFTER++
-        } else {
-            Write-Host "  [02_修正後] 削除済みファイル（比較先に存在しない）" -ForegroundColor Gray
+        $COPY_COUNT_BEFORE = (Get-ChildItem -Path $OUTPUT_DIR_BEFORE -Recurse -File -ErrorAction SilentlyContinue | Measure-Object).Count
+        Write-Host "  抽出完了: $COPY_COUNT_BEFORE 個" -ForegroundColor Green
+    } else {
+        # アーカイブ作成に失敗した場合は個別抽出にフォールバック
+        Write-Host "  一括抽出に失敗。個別抽出モードで実行します..." -ForegroundColor Yellow
+        foreach ($fileObj in $filteredFiles) {
+            $originalPath = $fileObj.OriginalPath
+            $relativePath = $fileObj.RelativePath
+            $relativePathWin = $relativePath -replace '/', '\'
+            $destFileBefore = Join-Path $OUTPUT_DIR_BEFORE $relativePathWin
+            $destDirBefore = Split-Path -Path $destFileBefore -Parent
+            if (-not (Test-Path $destDirBefore)) {
+                New-Item -ItemType Directory -Path $destDirBefore -Force | Out-Null
+            }
+            $contentBefore = git show "${BASE_REF}:${originalPath}" 2>&1
+            if ($LASTEXITCODE -eq 0) {
+                [System.IO.File]::WriteAllText($destFileBefore, ($contentBefore -join "`n"), [System.Text.Encoding]::UTF8)
+                $COPY_COUNT_BEFORE++
+            } else {
+                $NEW_FILES += $relativePath
+            }
         }
-    } catch {
-        Write-Host "  [02_修正後] エラー: $($_.Exception.Message)" -ForegroundColor Red
-        $ERROR_COUNT++
+        Write-Host "  抽出完了: $COPY_COUNT_BEFORE 個" -ForegroundColor Green
+    }
+} catch {
+    Write-Host "  エラー: $($_.Exception.Message)" -ForegroundColor Red
+    $ERROR_COUNT++
+} finally {
+    if (Test-Path $tempArchiveBefore) {
+        Remove-Item -Path $tempArchiveBefore -Force -ErrorAction SilentlyContinue
+    }
+}
+
+# 02_修正後（比較先）のファイルを一括抽出
+Write-Host "[02_修正後] 比較先からファイルを抽出中..." -ForegroundColor Yellow
+$tempArchiveAfter = Join-Path $env:TEMP "git_diff_after_$([System.Guid]::NewGuid().ToString('N')).tar"
+
+try {
+    # git archive でファイルを一括抽出
+    $archiveArgs = @($TARGET_REF) + $originalPaths
+    $archiveResult = & git archive --format=tar -o $tempArchiveAfter @archiveArgs 2>&1
+
+    if ($LASTEXITCODE -eq 0 -and (Test-Path $tempArchiveAfter)) {
+        # tarファイルを展開
+        Push-Location $OUTPUT_DIR_AFTER
+        tar -xf $tempArchiveAfter 2>&1 | Out-Null
+        Pop-Location
+
+        # サブディレクトリの場合、ファイルを正しい位置に移動
+        if ($subDirPath -ne "") {
+            $subDirInArchive = Join-Path $OUTPUT_DIR_AFTER ($subDirPath -replace '\\', '/')
+            if (Test-Path $subDirInArchive) {
+                Get-ChildItem -Path $subDirInArchive -Recurse -File | ForEach-Object {
+                    $relativePath = $_.FullName.Substring($subDirInArchive.Length + 1)
+                    $destPath = Join-Path $OUTPUT_DIR_AFTER $relativePath
+                    $destDir = Split-Path -Path $destPath -Parent
+                    if (-not (Test-Path $destDir)) {
+                        New-Item -ItemType Directory -Path $destDir -Force | Out-Null
+                    }
+                    Move-Item -Path $_.FullName -Destination $destPath -Force
+                }
+                # 空になったサブディレクトリを削除
+                $topSubDir = ($subDirPath -split '[\\/]')[0]
+                $topSubDirPath = Join-Path $OUTPUT_DIR_AFTER $topSubDir
+                if (Test-Path $topSubDirPath) {
+                    Remove-Item -Path $topSubDirPath -Recurse -Force -ErrorAction SilentlyContinue
+                }
+            }
+        }
+
+        $COPY_COUNT_AFTER = (Get-ChildItem -Path $OUTPUT_DIR_AFTER -Recurse -File -ErrorAction SilentlyContinue | Measure-Object).Count
+        Write-Host "  抽出完了: $COPY_COUNT_AFTER 個" -ForegroundColor Green
+    } else {
+        # アーカイブ作成に失敗した場合は個別抽出にフォールバック
+        Write-Host "  一括抽出に失敗。個別抽出モードで実行します..." -ForegroundColor Yellow
+        foreach ($fileObj in $filteredFiles) {
+            $originalPath = $fileObj.OriginalPath
+            $relativePath = $fileObj.RelativePath
+            $relativePathWin = $relativePath -replace '/', '\'
+            $destFileAfter = Join-Path $OUTPUT_DIR_AFTER $relativePathWin
+            $destDirAfter = Split-Path -Path $destFileAfter -Parent
+            if (-not (Test-Path $destDirAfter)) {
+                New-Item -ItemType Directory -Path $destDirAfter -Force | Out-Null
+            }
+            $contentAfter = git show "${TARGET_REF}:${originalPath}" 2>&1
+            if ($LASTEXITCODE -eq 0) {
+                [System.IO.File]::WriteAllText($destFileAfter, ($contentAfter -join "`n"), [System.Text.Encoding]::UTF8)
+                $COPY_COUNT_AFTER++
+            } else {
+                $DELETED_FILES += $relativePath
+            }
+        }
+        Write-Host "  抽出完了: $COPY_COUNT_AFTER 個" -ForegroundColor Green
+    }
+} catch {
+    Write-Host "  エラー: $($_.Exception.Message)" -ForegroundColor Red
+    $ERROR_COUNT++
+} finally {
+    if (Test-Path $tempArchiveAfter) {
+        Remove-Item -Path $tempArchiveAfter -Force -ErrorAction SilentlyContinue
     }
 }
 #endregion
