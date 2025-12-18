@@ -780,10 +780,21 @@ try {
         $archiveResult = & git archive --format=tar -o $tempArchiveBefore @archiveArgs 2>&1
 
         if ($LASTEXITCODE -eq 0 -and (Test-Path $tempArchiveBefore)) {
-            # tarファイルを展開
-            Push-Location $OUTPUT_DIR_BEFORE
+            # tarファイルを展開（ネットワークパス対応: ローカルの一時ディレクトリに展開後コピー）
+            $tempExtractDir = Join-Path $env:TEMP "git_diff_extract_before_$([System.Guid]::NewGuid().ToString('N'))"
+            New-Item -ItemType Directory -Path $tempExtractDir -Force | Out-Null
+            
+            Push-Location $tempExtractDir
             tar -xf $tempArchiveBefore 2>&1 | Out-Null
             Pop-Location
+            
+            # 展開されたファイルを目的のフォルダにコピー
+            if ((Get-ChildItem -Path $tempExtractDir -Recurse -File -ErrorAction SilentlyContinue | Measure-Object).Count -gt 0) {
+                Copy-Item -Path "$tempExtractDir\*" -Destination $OUTPUT_DIR_BEFORE -Recurse -Force
+            }
+            
+            # 一時ディレクトリを削除
+            Remove-Item -Path $tempExtractDir -Recurse -Force -ErrorAction SilentlyContinue
 
             # サブディレクトリの場合、ファイルを正しい位置に移動
             if ($subDirPath -ne "") {
@@ -861,10 +872,21 @@ try {
         $archiveResult = & git archive --format=tar -o $tempArchiveAfter @archiveArgs 2>&1
 
         if ($LASTEXITCODE -eq 0 -and (Test-Path $tempArchiveAfter)) {
-            # tarファイルを展開
-            Push-Location $OUTPUT_DIR_AFTER
+            # tarファイルを展開（ネットワークパス対応: ローカルの一時ディレクトリに展開後コピー）
+            $tempExtractDir = Join-Path $env:TEMP "git_diff_extract_after_$([System.Guid]::NewGuid().ToString('N'))"
+            New-Item -ItemType Directory -Path $tempExtractDir -Force | Out-Null
+            
+            Push-Location $tempExtractDir
             tar -xf $tempArchiveAfter 2>&1 | Out-Null
             Pop-Location
+            
+            # 展開されたファイルを目的のフォルダにコピー
+            if ((Get-ChildItem -Path $tempExtractDir -Recurse -File -ErrorAction SilentlyContinue | Measure-Object).Count -gt 0) {
+                Copy-Item -Path "$tempExtractDir\*" -Destination $OUTPUT_DIR_AFTER -Recurse -Force
+            }
+            
+            # 一時ディレクトリを削除
+            Remove-Item -Path $tempExtractDir -Recurse -Force -ErrorAction SilentlyContinue
 
             # サブディレクトリの場合、ファイルを正しい位置に移動
             if ($subDirPath -ne "") {
