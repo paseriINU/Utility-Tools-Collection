@@ -85,7 +85,7 @@ Public Sub GetJobList()
     lastDataRow = wsJobList.Cells(wsJobList.Rows.Count, COL_JOBNET_PATH).End(xlUp).row
     If lastDataRow >= ROW_JOBLIST_DATA_START Then
         ' ヘッダー行からデータ最終行までを範囲としてオートフィルタを設定
-        wsJobList.Range(wsJobList.Cells(ROW_JOBLIST_HEADER, COL_ORDER), wsJobList.Cells(lastDataRow, COL_LAST_MESSAGE)).AutoFilter _
+        wsJobList.Range(wsJobList.Cells(ROW_JOBLIST_HEADER, COL_ORDER), wsJobList.Cells(lastDataRow, COL_LOG_PATH)).AutoFilter _
             Field:=COL_UNIT_TYPE, Criteria1:="ジョブネット"
     End If
 
@@ -241,7 +241,7 @@ Private Function ParseJobListResult(result As String, rootPath As String) As Boo
     Dim lastRow As Long
     lastRow = ws.Cells(ws.Rows.Count, COL_JOBNET_PATH).End(xlUp).Row
     If lastRow >= ROW_JOBLIST_DATA_START Then
-        ws.Range(ws.Cells(ROW_JOBLIST_DATA_START, COL_ORDER), ws.Cells(lastRow, COL_LAST_MESSAGE)).Clear
+        ws.Range(ws.Cells(ROW_JOBLIST_DATA_START, COL_ORDER), ws.Cells(lastRow, COL_LOG_PATH)).Clear
     End If
 
     ' 結果をパース
@@ -382,7 +382,7 @@ Private Function ParseJobListResult(result As String, rootPath As String) As Boo
                     If isHold Then
                         ws.Cells(currentRow, COL_HOLD).Value = "保留中"
                         ws.Cells(currentRow, COL_HOLD).HorizontalAlignment = xlCenter
-                        ws.Range(ws.Cells(currentRow, COL_ORDER), ws.Cells(currentRow, COL_LAST_MESSAGE)).Interior.Color = RGB(255, 235, 156)
+                        ws.Range(ws.Cells(currentRow, COL_ORDER), ws.Cells(currentRow, COL_LOG_PATH)).Interior.Color = RGB(255, 235, 156)
                         ws.Cells(currentRow, COL_HOLD).Font.Bold = True
                         ws.Cells(currentRow, COL_HOLD).Font.Color = RGB(156, 87, 0)
                     Else
@@ -395,7 +395,7 @@ Private Function ParseJobListResult(result As String, rootPath As String) As Boo
                     End With
 
                     ' 罫線
-                    ws.Range(ws.Cells(currentRow, COL_ORDER), ws.Cells(currentRow, COL_LAST_MESSAGE)).Borders.LineStyle = xlContinuous
+                    ws.Range(ws.Cells(currentRow, COL_ORDER), ws.Cells(currentRow, COL_LOG_PATH)).Borders.LineStyle = xlContinuous
                 End If
 
                 ' スタックをクリアしてポップ
@@ -1037,6 +1037,10 @@ Private Function ExecuteSingleJob(ByVal config As Object, ByVal jobnetPath As St
             result("EndTime") = Trim(Replace(line, "RESULT_END:", ""))
         ElseIf InStr(line, "RESULT_MESSAGE:") > 0 Then
             result("Message") = Trim(Replace(line, "RESULT_MESSAGE:", ""))
+        ElseIf InStr(line, "RESULT_LOGPATH:") > 0 Then
+            result("LogPath") = Trim(Replace(line, "RESULT_LOGPATH:", ""))
+        ElseIf InStr(line, "RESULT_DETAIL:") > 0 Then
+            result("Detail") = Trim(Replace(line, "RESULT_DETAIL:", ""))
         ElseIf InStr(line, "ERROR:") > 0 Then
             result("Status") = "エラー"
             result("Message") = line
@@ -1197,6 +1201,31 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
             script = script & "  # エラーメッセージを除いたメッセージを出力" & vbCrLf
             script = script & "  $cleanMsg = $lastStatusStr -replace 'KAVS\d+-[IEW][^\r\n]*', '' -replace '\s+', ' '" & vbCrLf
             script = script & "  Write-Output ""RESULT_MESSAGE:$cleanMsg""" & vbCrLf
+            script = script & vbCrLf
+            script = script & "  # 警告検出終了・異常終了の場合は詳細情報を取得（ローカルモード）" & vbCrLf
+            script = script & "  if ($lastStatusStr -match '警告検出終了|異常終了|異常検出終了|ended abnormally|ended with warning') {" & vbCrLf
+            script = script & "    Write-Log '[詳細取得] ajsshow -b で実行結果詳細を取得中...'" & vbCrLf
+            script = script & "    $detailResult = & $ajsshowPath -F '" & config("SchedulerService") & "' -b '" & jobnetPath & "' 2>&1" & vbCrLf
+            script = script & "    $detailStr = $detailResult -join ""`n""" & vbCrLf
+            script = script & "    Write-Log ""詳細結果: $detailStr""" & vbCrLf
+            script = script & vbCrLf
+            script = script & "    # ログパスを抽出（so=標準出力、se=標準エラー）" & vbCrLf
+            script = script & "    $logPath = ''" & vbCrLf
+            script = script & "    if ($detailStr -match 'se=([^;\r\n]+)') { $logPath = $matches[1].Trim() }" & vbCrLf
+            script = script & "    elseif ($detailStr -match 'so=([^;\r\n]+)') { $logPath = $matches[1].Trim() }" & vbCrLf
+            script = script & "    if ($logPath) {" & vbCrLf
+            script = script & "      Write-Output ""RESULT_LOGPATH:$logPath""" & vbCrLf
+            script = script & "      Write-Log ""ログパス: $logPath""" & vbCrLf
+            script = script & "    }" & vbCrLf
+            script = script & vbCrLf
+            script = script & "    # 詳細メッセージを抽出（戻り値、実行ホストなど）" & vbCrLf
+            script = script & "    $detailMsg = ''" & vbCrLf
+            script = script & "    if ($detailStr -match 'rc=(\d+)') { $detailMsg += ""戻り値:$($matches[1]) "" }" & vbCrLf
+            script = script & "    if ($detailStr -match 'ex=([^;\r\n]+)') { $detailMsg += ""実行ホスト:$($matches[1].Trim()) "" }" & vbCrLf
+            script = script & "    if ($detailMsg) {" & vbCrLf
+            script = script & "      Write-Output ""RESULT_DETAIL:$detailMsg""" & vbCrLf
+            script = script & "    }" & vbCrLf
+            script = script & "  }" & vbCrLf
         Else
             script = script & "  Write-Log '[完了] 起動成功（完了待ちなし）'" & vbCrLf
             script = script & "  Write-Output ""RESULT_STATUS:起動成功""" & vbCrLf
@@ -1380,6 +1409,38 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
             script = script & "  # エラーメッセージを除いたメッセージを出力" & vbCrLf
             script = script & "  $cleanMsg = $lastStatusStr -replace 'KAVS\d+-[IEW][^\r\n]*', '' -replace '\s+', ' '" & vbCrLf
             script = script & "  Write-Output ""RESULT_MESSAGE:$cleanMsg""" & vbCrLf
+            script = script & vbCrLf
+            script = script & "  # 警告検出終了・異常終了の場合は詳細情報を取得（リモートモード）" & vbCrLf
+            script = script & "  if ($lastStatusStr -match '警告検出終了|異常終了|異常検出終了|ended abnormally|ended with warning') {" & vbCrLf
+            script = script & "    Write-Log '[詳細取得] ajsshow -b で実行結果詳細を取得中...'" & vbCrLf
+            script = script & "    $detailResult = Invoke-Command -Session $session -ScriptBlock {" & vbCrLf
+            script = script & "      param($schedulerService, $jobnetPath)" & vbCrLf
+            script = script & "      $ajsshowPath = $null" & vbCrLf
+            script = script & "      $searchPaths = @('C:\Program Files\HITACHI\JP1AJS3\bin\ajsshow.exe','C:\Program Files (x86)\HITACHI\JP1AJS3\bin\ajsshow.exe','C:\Program Files\Hitachi\JP1AJS2\bin\ajsshow.exe','C:\Program Files (x86)\Hitachi\JP1AJS2\bin\ajsshow.exe')" & vbCrLf
+            script = script & "      foreach ($p in $searchPaths) { if (Test-Path $p) { $ajsshowPath = $p; break } }" & vbCrLf
+            script = script & "      if (-not $ajsshowPath) { return 'ERROR: ajsshow.exe not found' }" & vbCrLf
+            script = script & "      & $ajsshowPath '-F' $schedulerService '-b' $jobnetPath 2>&1" & vbCrLf
+            script = script & "    } -ArgumentList '" & config("SchedulerService") & "', '" & jobnetPath & "'" & vbCrLf
+            script = script & "    $detailStr = $detailResult -join ""`n""" & vbCrLf
+            script = script & "    Write-Log ""詳細結果: $detailStr""" & vbCrLf
+            script = script & vbCrLf
+            script = script & "    # ログパスを抽出（so=標準出力、se=標準エラー）" & vbCrLf
+            script = script & "    $logPath = ''" & vbCrLf
+            script = script & "    if ($detailStr -match 'se=([^;\r\n]+)') { $logPath = $matches[1].Trim() }" & vbCrLf
+            script = script & "    elseif ($detailStr -match 'so=([^;\r\n]+)') { $logPath = $matches[1].Trim() }" & vbCrLf
+            script = script & "    if ($logPath) {" & vbCrLf
+            script = script & "      Write-Output ""RESULT_LOGPATH:$logPath""" & vbCrLf
+            script = script & "      Write-Log ""ログパス: $logPath""" & vbCrLf
+            script = script & "    }" & vbCrLf
+            script = script & vbCrLf
+            script = script & "    # 詳細メッセージを抽出（戻り値、実行ホストなど）" & vbCrLf
+            script = script & "    $detailMsg = ''" & vbCrLf
+            script = script & "    if ($detailStr -match 'rc=(\d+)') { $detailMsg += ""戻り値:$($matches[1]) "" }" & vbCrLf
+            script = script & "    if ($detailStr -match 'ex=([^;\r\n]+)') { $detailMsg += ""実行ホスト:$($matches[1].Trim()) "" }" & vbCrLf
+            script = script & "    if ($detailMsg) {" & vbCrLf
+            script = script & "      Write-Output ""RESULT_DETAIL:$detailMsg""" & vbCrLf
+            script = script & "    }" & vbCrLf
+            script = script & "  }" & vbCrLf
         Else
             script = script & "  Write-Log '[完了] 起動成功（完了待ちなし）'" & vbCrLf
             script = script & "  Write-Output ""RESULT_STATUS:起動成功""" & vbCrLf
@@ -1419,9 +1480,31 @@ Private Sub UpdateJobListStatus(ByVal row As Long, ByVal result As Object)
     ws.Cells(row, COL_LAST_EXEC_TIME).Value = result("StartTime")
     ws.Cells(row, COL_LAST_END_TIME).Value = result("EndTime")
 
-    ' 詳細メッセージを記録
+    ' 詳細メッセージを記録（詳細情報があれば追加）
+    Dim msgText As String
+    msgText = ""
+    If result("Detail") <> "" Then
+        msgText = result("Detail")
+    End If
     If result("Message") <> "" Then
-        ws.Cells(row, COL_LAST_MESSAGE).Value = result("Message")
+        If msgText <> "" Then msgText = msgText & " | "
+        msgText = msgText & result("Message")
+    End If
+    If msgText <> "" Then
+        ws.Cells(row, COL_LAST_MESSAGE).Value = msgText
+    End If
+
+    ' ログパスを記録（ハイパーリンク設定）
+    If result("LogPath") <> "" Then
+        Dim logPath As String
+        logPath = result("LogPath")
+        ws.Cells(row, COL_LOG_PATH).Value = logPath
+        ' ファイルパスの場合はハイパーリンクを設定
+        On Error Resume Next
+        ws.Hyperlinks.Add Anchor:=ws.Cells(row, COL_LOG_PATH), _
+                          Address:=logPath, _
+                          TextToDisplay:=logPath
+        On Error GoTo 0
     End If
 
     ' 保留解除された場合（成功時）、保留列をクリアしてハイライトを解除
@@ -1431,7 +1514,7 @@ Private Sub UpdateJobListStatus(ByVal row As Long, ByVal result As Object)
             ws.Cells(row, COL_HOLD).Font.Bold = False
             ws.Cells(row, COL_HOLD).Font.Color = RGB(0, 0, 0)
             ' 行のハイライトを解除
-            ws.Range(ws.Cells(row, COL_ORDER), ws.Cells(row, COL_LAST_MESSAGE)).Interior.ColorIndex = xlNone
+            ws.Range(ws.Cells(row, COL_ORDER), ws.Cells(row, COL_LOG_PATH)).Interior.ColorIndex = xlNone
         End If
     End If
 
@@ -1462,20 +1545,25 @@ Public Sub ClearJobList()
         ' A列（順序）をクリア
         ws.Range(ws.Cells(ROW_JOBLIST_DATA_START, COL_ORDER), ws.Cells(lastRow, COL_ORDER)).ClearContents
 
-        ' J〜N列（実行結果）をクリア
-        ws.Range(ws.Cells(ROW_JOBLIST_DATA_START, COL_LAST_STATUS), ws.Cells(lastRow, COL_LAST_MESSAGE)).ClearContents
+        ' J〜O列（実行結果・ログパス）をクリア
+        ws.Range(ws.Cells(ROW_JOBLIST_DATA_START, COL_LAST_STATUS), ws.Cells(lastRow, COL_LOG_PATH)).ClearContents
+
+        ' ハイパーリンクも削除
+        On Error Resume Next
+        ws.Range(ws.Cells(ROW_JOBLIST_DATA_START, COL_LOG_PATH), ws.Cells(lastRow, COL_LOG_PATH)).Hyperlinks.Delete
+        On Error GoTo 0
 
         ' 背景色を初期状態に戻す
         Dim row As Long
         For row = ROW_JOBLIST_DATA_START To lastRow
             If ws.Cells(row, COL_HOLD).Value = "保留中" Then
                 ' 保留行は黄色ハイライトを再適用
-                ws.Range(ws.Cells(row, COL_ORDER), ws.Cells(row, COL_LAST_MESSAGE)).Interior.Color = RGB(255, 235, 156)
+                ws.Range(ws.Cells(row, COL_ORDER), ws.Cells(row, COL_LOG_PATH)).Interior.Color = RGB(255, 235, 156)
                 ws.Cells(row, COL_HOLD).Font.Bold = True
                 ws.Cells(row, COL_HOLD).Font.Color = RGB(156, 87, 0)
             Else
                 ' 保留中でない行の背景色をクリア
-                ws.Range(ws.Cells(row, COL_ORDER), ws.Cells(row, COL_LAST_MESSAGE)).Interior.ColorIndex = xlNone
+                ws.Range(ws.Cells(row, COL_ORDER), ws.Cells(row, COL_LOG_PATH)).Interior.ColorIndex = xlNone
             End If
         Next row
 
@@ -1483,7 +1571,7 @@ Public Sub ClearJobList()
         If ws.AutoFilterMode Then
             ws.AutoFilterMode = False
         End If
-        ws.Range(ws.Cells(ROW_JOBLIST_HEADER, COL_ORDER), ws.Cells(lastRow, COL_LAST_MESSAGE)).AutoFilter _
+        ws.Range(ws.Cells(ROW_JOBLIST_HEADER, COL_ORDER), ws.Cells(lastRow, COL_LOG_PATH)).AutoFilter _
             Field:=COL_UNIT_TYPE, Criteria1:="ジョブネット"
     End If
 

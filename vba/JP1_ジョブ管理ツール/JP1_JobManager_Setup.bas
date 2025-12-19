@@ -41,6 +41,7 @@ Public Const COL_LAST_EXEC_TIME As Long = 11
 Public Const COL_LAST_END_TIME As Long = 12
 Public Const COL_LAST_RETURN_CODE As Long = 13
 Public Const COL_LAST_MESSAGE As Long = 14
+Public Const COL_LOG_PATH As Long = 15        ' ログファイルパス
 Public Const ROW_JOBLIST_HEADER As Long = 4
 Public Const ROW_JOBLIST_DATA_START As Long = 5
 
@@ -244,8 +245,9 @@ Private Sub FormatJobListSheet()
     ws.Cells(ROW_JOBLIST_HEADER, COL_LAST_END_TIME).Value = "終了時刻"
     ws.Cells(ROW_JOBLIST_HEADER, COL_LAST_RETURN_CODE).Value = "戻り値"
     ws.Cells(ROW_JOBLIST_HEADER, COL_LAST_MESSAGE).Value = "詳細メッセージ"
+    ws.Cells(ROW_JOBLIST_HEADER, COL_LOG_PATH).Value = "ログパス"
 
-    With ws.Range(ws.Cells(ROW_JOBLIST_HEADER, COL_ORDER), ws.Cells(ROW_JOBLIST_HEADER, COL_LAST_MESSAGE))
+    With ws.Range(ws.Cells(ROW_JOBLIST_HEADER, COL_ORDER), ws.Cells(ROW_JOBLIST_HEADER, COL_LOG_PATH))
         .Font.Bold = True
         .Interior.Color = RGB(79, 129, 189)
         .Font.Color = RGB(255, 255, 255)
@@ -268,9 +270,10 @@ Private Sub FormatJobListSheet()
     ws.Columns(COL_LAST_END_TIME).ColumnWidth = 18
     ws.Columns(COL_LAST_RETURN_CODE).ColumnWidth = 8
     ws.Columns(COL_LAST_MESSAGE).ColumnWidth = 50
+    ws.Columns(COL_LOG_PATH).ColumnWidth = 60
 
     ' フィルター設定
-    ws.Range(ws.Cells(ROW_JOBLIST_HEADER, COL_ORDER), ws.Cells(ROW_JOBLIST_HEADER, COL_LAST_MESSAGE)).AutoFilter
+    ws.Range(ws.Cells(ROW_JOBLIST_HEADER, COL_ORDER), ws.Cells(ROW_JOBLIST_HEADER, COL_LOG_PATH)).AutoFilter
 End Sub
 
 '==============================================================================
