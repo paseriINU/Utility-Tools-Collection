@@ -52,6 +52,13 @@ Public Sub GetJobList()
     Application.ScreenUpdating = False
     Application.StatusBar = "ジョブ一覧を取得中..."
 
+    ' 既存のオートフィルタを解除
+    Dim wsJobList As Worksheet
+    Set wsJobList = Worksheets(SHEET_JOBLIST)
+    If wsJobList.AutoFilterMode Then
+        wsJobList.AutoFilterMode = False
+    End If
+
     ' PowerShellスクリプト生成・実行
     Dim psScript As String
     psScript = BuildGetJobListScript(config)
@@ -71,6 +78,15 @@ Public Sub GetJobList()
     ' エラーの場合は完了メッセージを表示しない
     If Not parseSuccess Then
         Exit Sub
+    End If
+
+    ' 種別「ジョブネット」でオートフィルタを適用
+    Dim lastDataRow As Long
+    lastDataRow = wsJobList.Cells(wsJobList.Rows.Count, COL_JOBNET_PATH).End(xlUp).row
+    If lastDataRow >= ROW_JOBLIST_DATA_START Then
+        ' ヘッダー行からデータ最終行までを範囲としてオートフィルタを設定
+        wsJobList.Range(wsJobList.Cells(ROW_JOBLIST_HEADER, COL_ORDER), wsJobList.Cells(lastDataRow, COL_LAST_MESSAGE)).AutoFilter _
+            Field:=COL_UNIT_TYPE, Criteria1:="ジョブネット"
     End If
 
     MsgBox "ジョブ一覧の取得が完了しました。" & vbCrLf & _
