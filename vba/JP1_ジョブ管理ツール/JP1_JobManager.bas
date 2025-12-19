@@ -1057,29 +1057,16 @@ Private Function ExecutePowerShell(script As String) As String
     wrappedScript = script & vbCrLf
     wrappedScript = wrappedScript & "# 出力完了マーカー" & vbCrLf
 
-    ' ADODB.Streamを使用してUTF-8（BOMなし）で保存
+    ' ADODB.Streamを使用してUTF-8（BOM付き）で保存
+    ' PowerShellはBOM付きUTF-8を自動認識するため、日本語パスが正しく処理される
     Dim utfStream As Object
     Set utfStream = CreateObject("ADODB.Stream")
     utfStream.Type = 2 ' adTypeText
     utfStream.Charset = "UTF-8"
     utfStream.Open
     utfStream.WriteText wrappedScript
-
-    ' BOMをスキップしてバイナリで保存
-    utfStream.Position = 0
-    utfStream.Type = 1 ' adTypeBinary
-    utfStream.Position = 3 ' BOM（3バイト）をスキップ
-
-    Dim binStream As Object
-    Set binStream = CreateObject("ADODB.Stream")
-    binStream.Type = 1 ' adTypeBinary
-    binStream.Open
-    utfStream.CopyTo binStream
-    binStream.SaveToFile scriptPath, 2 ' adSaveCreateOverWrite
-
-    binStream.Close
+    utfStream.SaveToFile scriptPath, 2 ' adSaveCreateOverWrite（BOM付きで保存）
     utfStream.Close
-    Set binStream = Nothing
     Set utfStream = Nothing
 
     ' PowerShell実行（表示・結果をファイルに出力）
@@ -1087,12 +1074,11 @@ Private Function ExecutePowerShell(script As String) As String
     Set shell = CreateObject("WScript.Shell")
 
     Dim cmd As String
-    ' PowerShellウィンドウを表示して実行、結果を一時ファイルに出力
-    ' chcp 65001 でUTF-8コードページに設定してからPowerShellを起動
-    cmd = "cmd /c ""chcp 65001 >nul && powershell -NoProfile -ExecutionPolicy Bypass -Command ""& {" & _
+    ' PowerShellウィンドウを直接表示して実行、結果を一時ファイルに出力
+    cmd = "powershell -NoProfile -ExecutionPolicy Bypass -Command ""& {" & _
           "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; " & _
           "& '" & scriptPath & "' 2>&1 | Tee-Object -FilePath '" & outputPath & "'" & _
-          "}""""
+          "}"""
 
     ' 1 = vbNormalFocus（通常表示）、True で完了まで待機
     shell.Run cmd, 1, True
