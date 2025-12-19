@@ -85,7 +85,7 @@ Public Sub GetJobList()
     lastDataRow = wsJobList.Cells(wsJobList.Rows.Count, COL_JOBNET_PATH).End(xlUp).row
     If lastDataRow >= ROW_JOBLIST_DATA_START Then
         ' ヘッダー行からデータ最終行までを範囲としてオートフィルタを設定
-        wsJobList.Range(wsJobList.Cells(ROW_JOBLIST_HEADER, COL_ORDER), wsJobList.Cells(lastDataRow, COL_LOG_PATH)).AutoFilter _
+        wsJobList.Range(wsJobList.Cells(ROW_JOBLIST_HEADER, COL_ORDER), wsJobList.Cells(lastDataRow, COL_LAST_MESSAGE)).AutoFilter _
             Field:=COL_UNIT_TYPE, Criteria1:="ジョブネット"
     End If
 
@@ -241,7 +241,7 @@ Private Function ParseJobListResult(result As String, rootPath As String) As Boo
     Dim lastRow As Long
     lastRow = ws.Cells(ws.Rows.Count, COL_JOBNET_PATH).End(xlUp).Row
     If lastRow >= ROW_JOBLIST_DATA_START Then
-        ws.Range(ws.Cells(ROW_JOBLIST_DATA_START, COL_ORDER), ws.Cells(lastRow, COL_LOG_PATH)).Clear
+        ws.Range(ws.Cells(ROW_JOBLIST_DATA_START, COL_ORDER), ws.Cells(lastRow, COL_LAST_MESSAGE)).Clear
     End If
 
     ' 結果をパース
@@ -382,7 +382,7 @@ Private Function ParseJobListResult(result As String, rootPath As String) As Boo
                     If isHold Then
                         ws.Cells(currentRow, COL_HOLD).Value = "保留中"
                         ws.Cells(currentRow, COL_HOLD).HorizontalAlignment = xlCenter
-                        ws.Range(ws.Cells(currentRow, COL_ORDER), ws.Cells(currentRow, COL_LOG_PATH)).Interior.Color = RGB(255, 235, 156)
+                        ws.Range(ws.Cells(currentRow, COL_ORDER), ws.Cells(currentRow, COL_LAST_MESSAGE)).Interior.Color = RGB(255, 235, 156)
                         ws.Cells(currentRow, COL_HOLD).Font.Bold = True
                         ws.Cells(currentRow, COL_HOLD).Font.Color = RGB(156, 87, 0)
                     Else
@@ -395,7 +395,7 @@ Private Function ParseJobListResult(result As String, rootPath As String) As Boo
                     End With
 
                     ' 罫線
-                    ws.Range(ws.Cells(currentRow, COL_ORDER), ws.Cells(currentRow, COL_LOG_PATH)).Borders.LineStyle = xlContinuous
+                    ws.Range(ws.Cells(currentRow, COL_ORDER), ws.Cells(currentRow, COL_LAST_MESSAGE)).Borders.LineStyle = xlContinuous
                 End If
 
                 ' スタックをクリアしてポップ
@@ -1685,7 +1685,7 @@ Private Sub UpdateJobListStatus(ByVal row As Long, ByVal result As Object)
             ws.Cells(row, COL_HOLD).Font.Bold = False
             ws.Cells(row, COL_HOLD).Font.Color = RGB(0, 0, 0)
             ' 行のハイライトを解除
-            ws.Range(ws.Cells(row, COL_ORDER), ws.Cells(row, COL_LOG_PATH)).Interior.ColorIndex = xlNone
+            ws.Range(ws.Cells(row, COL_ORDER), ws.Cells(row, COL_LAST_MESSAGE)).Interior.ColorIndex = xlNone
         End If
     End If
 
@@ -1719,7 +1719,7 @@ Public Sub ClearJobList()
         ws.Range(ws.Cells(ROW_JOBLIST_DATA_START, COL_ORDER), ws.Cells(lastRow, COL_ORDER)).ClearContents
 
         ' J〜O列（実行結果・ログパス）をクリア
-        ws.Range(ws.Cells(ROW_JOBLIST_DATA_START, COL_LAST_STATUS), ws.Cells(lastRow, COL_LOG_PATH)).ClearContents
+        ws.Range(ws.Cells(ROW_JOBLIST_DATA_START, COL_LAST_STATUS), ws.Cells(lastRow, COL_LAST_MESSAGE)).ClearContents
 
         ' ハイパーリンクも削除（N列）
         On Error Resume Next
@@ -1731,12 +1731,12 @@ Public Sub ClearJobList()
         For row = ROW_JOBLIST_DATA_START To lastRow
             If ws.Cells(row, COL_HOLD).Value = "保留中" Then
                 ' 保留行は黄色ハイライトを再適用
-                ws.Range(ws.Cells(row, COL_ORDER), ws.Cells(row, COL_LOG_PATH)).Interior.Color = RGB(255, 235, 156)
+                ws.Range(ws.Cells(row, COL_ORDER), ws.Cells(row, COL_LAST_MESSAGE)).Interior.Color = RGB(255, 235, 156)
                 ws.Cells(row, COL_HOLD).Font.Bold = True
                 ws.Cells(row, COL_HOLD).Font.Color = RGB(156, 87, 0)
             Else
                 ' 保留中でない行の背景色をクリア
-                ws.Range(ws.Cells(row, COL_ORDER), ws.Cells(row, COL_LOG_PATH)).Interior.ColorIndex = xlNone
+                ws.Range(ws.Cells(row, COL_ORDER), ws.Cells(row, COL_LAST_MESSAGE)).Interior.ColorIndex = xlNone
             End If
         Next row
 
@@ -1744,7 +1744,7 @@ Public Sub ClearJobList()
         If ws.AutoFilterMode Then
             ws.AutoFilterMode = False
         End If
-        ws.Range(ws.Cells(ROW_JOBLIST_HEADER, COL_ORDER), ws.Cells(lastRow, COL_LOG_PATH)).AutoFilter _
+        ws.Range(ws.Cells(ROW_JOBLIST_HEADER, COL_ORDER), ws.Cells(lastRow, COL_LAST_MESSAGE)).AutoFilter _
             Field:=COL_UNIT_TYPE, Criteria1:="ジョブネット"
     End If
 
