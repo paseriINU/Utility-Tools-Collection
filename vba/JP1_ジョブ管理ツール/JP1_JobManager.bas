@@ -899,7 +899,16 @@ Public Sub ExecuteCheckedJobs()
         wsLog.Cells(logRow, 3).Value = execResult("Status")
         wsLog.Cells(logRow, 4).Value = execResult("StartTime")
         wsLog.Cells(logRow, 5).Value = execResult("EndTime")
-        wsLog.Cells(logRow, 6).Value = execResult("Message")
+
+        ' F列にログパスをハイパーリンク付きで設定
+        If execResult("LogPath") <> "" Then
+            wsLog.Cells(logRow, 6).Value = execResult("LogPath")
+            On Error Resume Next
+            wsLog.Hyperlinks.Add Anchor:=wsLog.Cells(logRow, 6), _
+                                 Address:=execResult("LogPath"), _
+                                 TextToDisplay:=execResult("LogPath")
+            On Error GoTo 0
+        End If
 
         ' 色付け
         If execResult("Status") = "正常終了" Then
