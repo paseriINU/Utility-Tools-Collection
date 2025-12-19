@@ -339,6 +339,12 @@ Private Function ParseJobListResult(result As String, rootPath As String) As Boo
                     ' ユニット名を設定（unit=の最初のフィールド）
                     ws.Cells(row, COL_JOBNET_NAME).Value = ExtractUnitName(currentHeader)
                     ws.Cells(row, COL_COMMENT).Value = ExtractCommentFromBlock(currentBlock)
+                    ' スクリプトファイル名 (sc=)
+                    ws.Cells(row, COL_SCRIPT).Value = ExtractAttributeFromBlock(currentBlock, "sc")
+                    ' パラメーター (prm=)
+                    ws.Cells(row, COL_PARAMETER).Value = ExtractAttributeFromBlock(currentBlock, "prm")
+                    ' ワークパス (wkp=)
+                    ws.Cells(row, COL_WORK_PATH).Value = ExtractAttributeFromBlock(currentBlock, "wkp")
 
                     ' 保留状態を解析
                     Dim isHold As Boolean
@@ -439,6 +445,47 @@ Private Function ExtractCommentFromBlock(blockContent As String) As String
         endPos = InStr(startPos, blockContent, """")
         If endPos > startPos Then
             ExtractCommentFromBlock = Mid(blockContent, startPos, endPos - startPos)
+        End If
+    End If
+End Function
+
+Private Function ExtractAttributeFromBlock(blockContent As String, attrName As String) As String
+    ' 指定された属性名の値を抽出
+    ' 形式1: attr="value"; (ダブルクォート囲み)
+    ' 形式2: attr=value; (クォートなし)
+    Dim startPos As Long
+    Dim endPos As Long
+    Dim searchStr As String
+
+    ExtractAttributeFromBlock = ""
+
+    ' ダブルクォート形式を先にチェック: attr="value"
+    searchStr = attrName & "="""
+    startPos = InStr(blockContent, searchStr)
+    If startPos > 0 Then
+        startPos = startPos + Len(searchStr)
+        endPos = InStr(startPos, blockContent, """")
+        If endPos > startPos Then
+            ExtractAttributeFromBlock = Mid(blockContent, startPos, endPos - startPos)
+            Exit Function
+        End If
+    End If
+
+    ' クォートなし形式: attr=value;
+    searchStr = attrName & "="
+    startPos = InStr(blockContent, searchStr)
+    If startPos > 0 Then
+        startPos = startPos + Len(searchStr)
+        ' セミコロンまたはスペースまでを取得
+        endPos = InStr(startPos, blockContent, ";")
+        Dim endPosSpace As Long
+        endPosSpace = InStr(startPos, blockContent, " ")
+
+        If endPos > startPos Then
+            If endPosSpace > startPos And endPosSpace < endPos Then
+                endPos = endPosSpace
+            End If
+            ExtractAttributeFromBlock = Mid(blockContent, startPos, endPos - startPos)
         End If
     End If
 End Function
@@ -896,19 +943,20 @@ Private Function GetOrderedJobs() As Collection
     Dim arr() As Variant
     ReDim arr(1 To orderedRows.Count)
     Dim i As Long
+    Dim k As Long  ' ソート用ループ変数
     For i = 1 To orderedRows.Count
         Set arr(i) = orderedRows(i)
     Next i
 
     Dim temp As Object
     For i = 1 To UBound(arr) - 1
-        For j = i + 1 To UBound(arr)
-            If arr(i)("Order") > arr(j)("Order") Then
+        For k = i + 1 To UBound(arr)
+            If arr(i)("Order") > arr(k)("Order") Then
                 Set temp = arr(i)
-                Set arr(i) = arr(j)
-                Set arr(j) = temp
+                Set arr(i) = arr(k)
+                Set arr(k) = temp
             End If
-        Next j
+        Next k
     Next i
 
     For i = 1 To UBound(arr)
