@@ -60,9 +60,10 @@ Public Sub GetJobList()
     result = ExecutePowerShell(psScript)
 
     ' 結果をパース（戻り値で成功/失敗を判定）
-    ' フルパス = "/" + スケジューラサービス名 + ルートパス + "/" + ユニット名
+    ' コマンド実行時は -F オプションでスケジューラサービスを指定するため
+    ' パスにはスケジューラサービス名を含めない（ルートパス + "/" + ユニット名）
     Dim parseSuccess As Boolean
-    parseSuccess = ParseJobListResult(result, config("SchedulerService"), config("RootPath"))
+    parseSuccess = ParseJobListResult(result, config("RootPath"))
 
     Application.StatusBar = False
     Application.ScreenUpdating = True
@@ -199,7 +200,7 @@ Private Function BuildGetJobListScript(config As Object) As String
     BuildGetJobListScript = script
 End Function
 
-Private Function ParseJobListResult(result As String, schedulerService As String, rootPath As String) As Boolean
+Private Function ParseJobListResult(result As String, rootPath As String) As Boolean
     ' 戻り値: True=成功, False=エラー
     ' JP1 ajsprint出力形式（ネスト対応）:
     '   unit=ユニット名,,admin,グループ;    ← 2番目のフィールドは空
@@ -212,7 +213,9 @@ Private Function ParseJobListResult(result As String, schedulerService As String
     '           ...
     '       }
     '   }
-    ' フルパス = "/" + スケジューラサービス名 + ルートパス + "/" + ユニット名
+    ' フルパス = ルートパス + "/" + ユニット名
+    ' ※コマンド実行時は -F オプションでスケジューラサービスを指定するため
+    '   パスにはスケジューラサービス名を含めない
     ParseJobListResult = False
 
     Dim ws As Worksheet
@@ -234,16 +237,9 @@ Private Function ParseJobListResult(result As String, schedulerService As String
 
     Dim i As Long
 
-    ' フルパスのベース = "/" + スケジューラサービス名 + ルートパス
+    ' ルートパスの末尾のスラッシュを正規化
     Dim basePath As String
-    basePath = "/" & schedulerService
-    ' ルートパスを追加（先頭の/の有無を考慮）
-    If Left(rootPath, 1) = "/" Then
-        basePath = basePath & rootPath
-    Else
-        basePath = basePath & "/" & rootPath
-    End If
-    ' 末尾のスラッシュを正規化
+    basePath = rootPath
     If Right(basePath, 1) = "/" Then
         basePath = Left(basePath, Len(basePath) - 1)
     End If
