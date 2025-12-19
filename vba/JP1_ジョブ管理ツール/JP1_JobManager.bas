@@ -1696,8 +1696,8 @@ Private Sub RestartAsAdmin()
 
     shell.Run cmd, 0, False
 
-    ' 現在のExcelを終了
-    Application.Quit
+    ' このブックのみを閉じる（他のExcelブックは維持）
+    ThisWorkbook.Close SaveChanges:=False
 End Sub
 
 '==============================================================================
