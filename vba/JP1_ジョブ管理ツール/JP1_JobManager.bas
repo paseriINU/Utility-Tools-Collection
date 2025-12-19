@@ -1144,32 +1144,10 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
             ' 最後のステータス情報から開始時間・終了時間を抽出
             script = script & "  Write-Log ""最終ステータス: $lastStatusStr""" & vbCrLf
             script = script & vbCrLf
-            script = script & "  # ajsshow結果から時間を抽出（複数の日時パターンに対応）" & vbCrLf
-            script = script & "  # パターン1: YYYY/MM/DD HH:MM:SS" & vbCrLf
-            script = script & "  # パターン2: YYYY-MM-DD HH:MM:SS" & vbCrLf
-            script = script & "  # パターン3: MM/DD HH:MM（年なし）" & vbCrLf
-            script = script & "  $timePattern1 = '\d{4}[/-]\d{2}[/-]\d{2}\s+\d{2}:\d{2}:\d{2}'" & vbCrLf
-            script = script & "  $timePattern2 = '\d{4}[/-]\d{2}[/-]\d{2}\s+\d{2}:\d{2}'" & vbCrLf
-            script = script & "  $timePattern3 = '\d{2}[/-]\d{2}\s+\d{2}:\d{2}'" & vbCrLf
-            script = script & vbCrLf
-            script = script & "  # statusResultの各行をログ出力（デバッグ用）" & vbCrLf
-            script = script & "  Write-Log ""[DEBUG] statusResult件数: $($statusResult.Count)""" & vbCrLf
-            script = script & "  $lineNum = 0" & vbCrLf
-            script = script & "  foreach ($line in $statusResult) {" & vbCrLf
-            script = script & "    $lineNum++" & vbCrLf
-            script = script & "    Write-Log ""[DEBUG] 行$lineNum : $line""" & vbCrLf
-            script = script & "  }" & vbCrLf
-            script = script & vbCrLf
-            script = script & "  # 全体から時間を抽出" & vbCrLf
-            script = script & "  $allTimes = [regex]::Matches($lastStatusStr, $timePattern1)" & vbCrLf
-            script = script & "  if ($allTimes.Count -eq 0) {" & vbCrLf
-            script = script & "    $allTimes = [regex]::Matches($lastStatusStr, $timePattern2)" & vbCrLf
-            script = script & "  }" & vbCrLf
-            script = script & "  if ($allTimes.Count -eq 0) {" & vbCrLf
-            script = script & "    $allTimes = [regex]::Matches($lastStatusStr, $timePattern3)" & vbCrLf
-            script = script & "  }" & vbCrLf
-            script = script & vbCrLf
-            script = script & "  Write-Log ""[DEBUG] 検出した時間数: $($allTimes.Count)""" & vbCrLf
+            script = script & "  # ajsshow結果から時間を抽出（YYYY/MM/DD HH:MM形式）" & vbCrLf
+            script = script & "  $timePattern = '\d{4}/\d{2}/\d{2}\s+\d{2}:\d{2}'" & vbCrLf
+            script = script & "  $allTimes = [regex]::Matches($lastStatusStr, $timePattern)" & vbCrLf
+            script = script & "  Write-Log ""検出した時間数: $($allTimes.Count)""" & vbCrLf
             script = script & "  if ($allTimes.Count -ge 1) {" & vbCrLf
             script = script & "    Write-Output ""RESULT_START:$($allTimes[0].Value)""" & vbCrLf
             script = script & "    Write-Log ""開始時間: $($allTimes[0].Value)""" & vbCrLf
@@ -1345,32 +1323,10 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
             ' 最後のステータス情報から開始時間・終了時間を抽出
             script = script & "  Write-Log ""最終ステータス: $lastStatusStr""" & vbCrLf
             script = script & vbCrLf
-            script = script & "  # ajsshow結果から時間を抽出（複数の日時パターンに対応）" & vbCrLf
-            script = script & "  # パターン1: YYYY/MM/DD HH:MM:SS" & vbCrLf
-            script = script & "  # パターン2: YYYY-MM-DD HH:MM:SS" & vbCrLf
-            script = script & "  # パターン3: MM/DD HH:MM（年なし）" & vbCrLf
-            script = script & "  $timePattern1 = '\d{4}[/-]\d{2}[/-]\d{2}\s+\d{2}:\d{2}:\d{2}'" & vbCrLf
-            script = script & "  $timePattern2 = '\d{4}[/-]\d{2}[/-]\d{2}\s+\d{2}:\d{2}'" & vbCrLf
-            script = script & "  $timePattern3 = '\d{2}[/-]\d{2}\s+\d{2}:\d{2}'" & vbCrLf
-            script = script & vbCrLf
-            script = script & "  # statusResultの各行をログ出力（デバッグ用）" & vbCrLf
-            script = script & "  Write-Log ""[DEBUG] statusResult件数: $($statusResult.Count)""" & vbCrLf
-            script = script & "  $lineNum = 0" & vbCrLf
-            script = script & "  foreach ($line in $statusResult) {" & vbCrLf
-            script = script & "    $lineNum++" & vbCrLf
-            script = script & "    Write-Log ""[DEBUG] 行$lineNum : $line""" & vbCrLf
-            script = script & "  }" & vbCrLf
-            script = script & vbCrLf
-            script = script & "  # 全体から時間を抽出" & vbCrLf
-            script = script & "  $allTimes = [regex]::Matches($lastStatusStr, $timePattern1)" & vbCrLf
-            script = script & "  if ($allTimes.Count -eq 0) {" & vbCrLf
-            script = script & "    $allTimes = [regex]::Matches($lastStatusStr, $timePattern2)" & vbCrLf
-            script = script & "  }" & vbCrLf
-            script = script & "  if ($allTimes.Count -eq 0) {" & vbCrLf
-            script = script & "    $allTimes = [regex]::Matches($lastStatusStr, $timePattern3)" & vbCrLf
-            script = script & "  }" & vbCrLf
-            script = script & vbCrLf
-            script = script & "  Write-Log ""[DEBUG] 検出した時間数: $($allTimes.Count)""" & vbCrLf
+            script = script & "  # ajsshow結果から時間を抽出（YYYY/MM/DD HH:MM形式）" & vbCrLf
+            script = script & "  $timePattern = '\d{4}/\d{2}/\d{2}\s+\d{2}:\d{2}'" & vbCrLf
+            script = script & "  $allTimes = [regex]::Matches($lastStatusStr, $timePattern)" & vbCrLf
+            script = script & "  Write-Log ""検出した時間数: $($allTimes.Count)""" & vbCrLf
             script = script & "  if ($allTimes.Count -ge 1) {" & vbCrLf
             script = script & "    Write-Output ""RESULT_START:$($allTimes[0].Value)""" & vbCrLf
             script = script & "    Write-Log ""開始時間: $($allTimes[0].Value)""" & vbCrLf
