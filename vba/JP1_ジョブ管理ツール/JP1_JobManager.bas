@@ -322,40 +322,58 @@ Private Function ParseJobListResult(result As String, rootPath As String) As Boo
                 currentBlock = blockStack(stackDepth)
                 currentFullPath = pathStack(stackDepth)
 
-                ' ty=n（ジョブネット）かチェック
-                If InStr(currentBlock, "ty=n") > 0 Then
-                    If currentFullPath <> "" Then
-                        ws.Cells(row, COL_ORDER).Value = ""
-                        ' フルパス（ルートからのパス）を設定
-                        ws.Cells(row, COL_JOBNET_PATH).Value = currentFullPath
-                        ' ジョブネット名を設定（unit=の最初のフィールド）
-                        ws.Cells(row, COL_JOBNET_NAME).Value = ExtractUnitName(currentHeader)
-                        ws.Cells(row, COL_COMMENT).Value = ExtractCommentFromBlock(currentBlock)
+                ' ユニットタイプを判定（ty=g:グループ, ty=n:ジョブネット, ty=j:ジョブ）
+                Dim unitType As String
+                Dim unitTypeDisplay As String
+                unitType = ""
+                unitTypeDisplay = ""
 
-                        ' 保留状態を解析
-                        Dim isHold As Boolean
-                        isHold = (InStr(currentBlock, "hd=h") > 0) Or (InStr(currentBlock, "hd=H") > 0)
+                If InStr(currentBlock, "ty=g") > 0 Then
+                    unitType = "g"
+                    unitTypeDisplay = "グループ"
+                ElseIf InStr(currentBlock, "ty=n") > 0 Then
+                    unitType = "n"
+                    unitTypeDisplay = "ジョブネット"
+                ElseIf InStr(currentBlock, "ty=j") > 0 Then
+                    unitType = "j"
+                    unitTypeDisplay = "ジョブ"
+                End If
 
-                        If isHold Then
-                            ws.Cells(row, COL_HOLD).Value = "保留中"
-                            ws.Cells(row, COL_HOLD).HorizontalAlignment = xlCenter
-                            ws.Range(ws.Cells(row, COL_ORDER), ws.Cells(row, COL_LAST_MESSAGE)).Interior.Color = RGB(255, 235, 156)
-                            ws.Cells(row, COL_HOLD).Font.Bold = True
-                            ws.Cells(row, COL_HOLD).Font.Color = RGB(156, 87, 0)
-                        Else
-                            ws.Cells(row, COL_HOLD).Value = ""
-                        End If
+                ' ty=g, ty=n, ty=j のいずれかの場合に一覧に追加
+                If unitType <> "" And currentFullPath <> "" Then
+                    ws.Cells(row, COL_ORDER).Value = ""
+                    ' 種別を設定
+                    ws.Cells(row, COL_UNIT_TYPE).Value = unitTypeDisplay
+                    ws.Cells(row, COL_UNIT_TYPE).HorizontalAlignment = xlCenter
+                    ' フルパス（ルートからのパス）を設定
+                    ws.Cells(row, COL_JOBNET_PATH).Value = currentFullPath
+                    ' ユニット名を設定（unit=の最初のフィールド）
+                    ws.Cells(row, COL_JOBNET_NAME).Value = ExtractUnitName(currentHeader)
+                    ws.Cells(row, COL_COMMENT).Value = ExtractCommentFromBlock(currentBlock)
 
-                        ' 順序列の書式
-                        With ws.Cells(row, COL_ORDER)
-                            .HorizontalAlignment = xlCenter
-                        End With
+                    ' 保留状態を解析
+                    Dim isHold As Boolean
+                    isHold = (InStr(currentBlock, "hd=h") > 0) Or (InStr(currentBlock, "hd=H") > 0)
 
-                        ' 罫線
-                        ws.Range(ws.Cells(row, COL_ORDER), ws.Cells(row, COL_LAST_MESSAGE)).Borders.LineStyle = xlContinuous
-
-                        row = row + 1
+                    If isHold Then
+                        ws.Cells(row, COL_HOLD).Value = "保留中"
+                        ws.Cells(row, COL_HOLD).HorizontalAlignment = xlCenter
+                        ws.Range(ws.Cells(row, COL_ORDER), ws.Cells(row, COL_LAST_MESSAGE)).Interior.Color = RGB(255, 235, 156)
+                        ws.Cells(row, COL_HOLD).Font.Bold = True
+                        ws.Cells(row, COL_HOLD).Font.Color = RGB(156, 87, 0)
+                    Else
+                        ws.Cells(row, COL_HOLD).Value = ""
                     End If
+
+                    ' 順序列の書式
+                    With ws.Cells(row, COL_ORDER)
+                        .HorizontalAlignment = xlCenter
+                    End With
+
+                    ' 罫線
+                    ws.Range(ws.Cells(row, COL_ORDER), ws.Cells(row, COL_LAST_MESSAGE)).Borders.LineStyle = xlContinuous
+
+                    row = row + 1
                 End If
 
                 ' スタックをクリアしてポップ
@@ -391,7 +409,7 @@ NextLine:
 
     ' データがない場合
     If row = ROW_JOBLIST_DATA_START Then
-        MsgBox "ジョブネットが見つかりませんでした。" & vbCrLf & _
+        MsgBox "ユニットが見つかりませんでした。" & vbCrLf & _
                "取得パスを確認してください。", vbExclamation
         Exit Function
     End If

@@ -28,15 +28,16 @@ Public Const COL_SETTING_VALUE As Long = 3
 
 ' ジョブ一覧シートの列位置 - Publicで共有
 Public Const COL_ORDER As Long = 1
-Public Const COL_JOBNET_PATH As Long = 2
-Public Const COL_JOBNET_NAME As Long = 3
-Public Const COL_COMMENT As Long = 4
-Public Const COL_HOLD As Long = 5
-Public Const COL_LAST_STATUS As Long = 6
-Public Const COL_LAST_EXEC_TIME As Long = 7
-Public Const COL_LAST_END_TIME As Long = 8
-Public Const COL_LAST_RETURN_CODE As Long = 9
-Public Const COL_LAST_MESSAGE As Long = 10
+Public Const COL_UNIT_TYPE As Long = 2      ' 種別（グループ/ジョブネット/ジョブ）
+Public Const COL_JOBNET_PATH As Long = 3
+Public Const COL_JOBNET_NAME As Long = 4
+Public Const COL_COMMENT As Long = 5
+Public Const COL_HOLD As Long = 6
+Public Const COL_LAST_STATUS As Long = 7
+Public Const COL_LAST_EXEC_TIME As Long = 8
+Public Const COL_LAST_END_TIME As Long = 9
+Public Const COL_LAST_RETURN_CODE As Long = 10
+Public Const COL_LAST_MESSAGE As Long = 11
 Public Const ROW_JOBLIST_HEADER As Long = 4
 Public Const ROW_JOBLIST_DATA_START As Long = 5
 
@@ -227,8 +228,9 @@ Private Sub FormatJobListSheet()
 
     ' ヘッダー
     ws.Cells(ROW_JOBLIST_HEADER, COL_ORDER).Value = "順序"
-    ws.Cells(ROW_JOBLIST_HEADER, COL_JOBNET_PATH).Value = "ジョブネットパス"
-    ws.Cells(ROW_JOBLIST_HEADER, COL_JOBNET_NAME).Value = "ジョブネット名"
+    ws.Cells(ROW_JOBLIST_HEADER, COL_UNIT_TYPE).Value = "種別"
+    ws.Cells(ROW_JOBLIST_HEADER, COL_JOBNET_PATH).Value = "ユニットパス"
+    ws.Cells(ROW_JOBLIST_HEADER, COL_JOBNET_NAME).Value = "ユニット名"
     ws.Cells(ROW_JOBLIST_HEADER, COL_COMMENT).Value = "コメント"
     ws.Cells(ROW_JOBLIST_HEADER, COL_HOLD).Value = "保留"
     ws.Cells(ROW_JOBLIST_HEADER, COL_LAST_STATUS).Value = "最終実行結果"
@@ -247,6 +249,7 @@ Private Sub FormatJobListSheet()
 
     ' 列幅調整
     ws.Columns(COL_ORDER).ColumnWidth = 6
+    ws.Columns(COL_UNIT_TYPE).ColumnWidth = 12
     ws.Columns(COL_JOBNET_PATH).ColumnWidth = 50
     ws.Columns(COL_JOBNET_NAME).ColumnWidth = 25
     ws.Columns(COL_COMMENT).ColumnWidth = 30
