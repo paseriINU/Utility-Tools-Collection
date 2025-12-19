@@ -910,11 +910,15 @@ Public Sub ExecuteCheckedJobs()
             On Error GoTo 0
         End If
 
-        ' 色付け
+        ' 色付け（ジョブ一覧シートと同じ配色）
         If execResult("Status") = "正常終了" Then
-            wsLog.Cells(logRow, 3).Interior.Color = RGB(198, 239, 206)
+            wsLog.Cells(logRow, 3).Interior.Color = RGB(198, 239, 206)  ' 緑（正常）
+        ElseIf execResult("Status") = "起動成功" Then
+            wsLog.Cells(logRow, 3).Interior.Color = RGB(255, 235, 156)  ' 黄（起動のみ）
+        ElseIf execResult("Status") = "警告検出終了" Or execResult("Status") = "警告終了" Then
+            wsLog.Cells(logRow, 3).Interior.Color = RGB(255, 192, 0)    ' オレンジ（警告）
         Else
-            wsLog.Cells(logRow, 3).Interior.Color = RGB(255, 199, 206)
+            wsLog.Cells(logRow, 3).Interior.Color = RGB(255, 199, 206)  ' 赤（異常）
         End If
 
         wsLog.Range(wsLog.Cells(logRow, 1), wsLog.Cells(logRow, 6)).Borders.LineStyle = xlContinuous
