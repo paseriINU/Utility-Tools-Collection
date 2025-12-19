@@ -1702,8 +1702,13 @@
                 } else {
                     // 解凍されたコンテンツから抽出（文字列として処理）
                     const titleStr = content.substring(pos.start, pos.end);
-                    // 8進数エスケープ等をデコード
-                    title = decodePDFString(titleStr);
+                    // 8進数エスケープ等をデコード後、バイト配列として処理
+                    const decoded = decodePDFString(titleStr);
+                    const titleBytes = new Uint8Array(decoded.length);
+                    for (let i = 0; i < decoded.length; i++) {
+                        titleBytes[i] = decoded.charCodeAt(i) & 0xFF;
+                    }
+                    title = decodeTitle(titleBytes);
                 }
 
                 if (title && title.trim()) {
