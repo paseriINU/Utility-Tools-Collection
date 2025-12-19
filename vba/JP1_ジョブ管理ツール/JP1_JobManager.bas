@@ -113,6 +113,13 @@ End Sub
 Public Sub GetGroupList()
     On Error GoTo ErrorHandler
 
+    ' 確認メッセージ
+    If MsgBox("JP1サーバから全てのグループ名を抽出します。" & vbCrLf & _
+              "処理に時間がかかる場合がありますがよろしいですか？", _
+              vbYesNo + vbQuestion, "グループ名取得") = vbNo Then
+        Exit Sub
+    End If
+
     Dim config As Object
     Set config = GetConfig()
 
