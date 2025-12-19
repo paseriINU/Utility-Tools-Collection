@@ -237,6 +237,7 @@ Private Function ParseJobListResult(result As String) As Boolean
     Const MAX_DEPTH As Long = 10
     Dim unitStack(1 To MAX_DEPTH) As String   ' unit=...ヘッダーのスタック
     Dim blockStack(1 To MAX_DEPTH) As String  ' ブロック内容のスタック
+    Dim pathStack(1 To MAX_DEPTH) As String   ' フルパスのスタック
     Dim stackDepth As Long                     ' 現在のスタック深度
 
     stackDepth = 0
@@ -269,6 +270,23 @@ Private Function ParseJobListResult(result As String) As Boolean
                     If stackDepth <= MAX_DEPTH Then
                         unitStack(stackDepth) = line
                         blockStack(stackDepth) = ""
+
+                        ' フルパスを構築
+                        Dim currentUnitPath As String
+                        currentUnitPath = ExtractUnitPath(line)
+
+                        If stackDepth = 1 Then
+                            ' ルートレベル: パスをそのまま使用
+                            pathStack(stackDepth) = currentUnitPath
+                        Else
+                            ' ネストレベル: 親のパスと結合
+                            ' currentUnitPathが/で始まっていればそのまま使用、そうでなければ親と結合
+                            If Left(currentUnitPath, 1) = "/" Then
+                                pathStack(stackDepth) = currentUnitPath
+                            Else
+                                pathStack(stackDepth) = pathStack(stackDepth - 1) & "/" & currentUnitPath
+                            End If
+                        End If
                     End If
                 End If
             End If
@@ -295,17 +313,18 @@ Private Function ParseJobListResult(result As String) As Boolean
             If stackDepth > 0 Then
                 Dim currentHeader As String
                 Dim currentBlock As String
+                Dim currentFullPath As String
                 currentHeader = unitStack(stackDepth)
                 currentBlock = blockStack(stackDepth)
+                currentFullPath = pathStack(stackDepth)
 
                 ' ty=n（ジョブネット）かチェック
                 If InStr(currentBlock, "ty=n") > 0 Then
-                    Dim unitMatch As String
-                    unitMatch = ExtractUnitPath(currentHeader)
-
-                    If unitMatch <> "" Then
+                    If currentFullPath <> "" Then
                         ws.Cells(row, COL_ORDER).Value = ""
-                        ws.Cells(row, COL_JOBNET_PATH).Value = unitMatch
+                        ' フルパス（ルートからのパス）を設定
+                        ws.Cells(row, COL_JOBNET_PATH).Value = currentFullPath
+                        ' ジョブネット名を設定
                         ws.Cells(row, COL_JOBNET_NAME).Value = ExtractJobNameFromHeader(currentHeader)
                         ws.Cells(row, COL_COMMENT).Value = ExtractCommentFromBlock(currentBlock)
 
@@ -338,6 +357,7 @@ Private Function ParseJobListResult(result As String) As Boolean
                 ' スタックをクリアしてポップ
                 unitStack(stackDepth) = ""
                 blockStack(stackDepth) = ""
+                pathStack(stackDepth) = ""
                 stackDepth = stackDepth - 1
             End If
             GoTo NextLine
