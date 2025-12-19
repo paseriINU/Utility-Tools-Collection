@@ -1324,6 +1324,238 @@
 
         /*
         ======================================================================
+          タイトル位置検索関数
+
+          PDF内の /Title (...) パターンの位置を検索
+          ネストした括弧にも対応
+        ======================================================================
+        */
+        function findTitlePositions(content) {
+            const positions = [];
+            const pattern = /\/Title\s*\(/g;
+            let match;
+
+            while ((match = pattern.exec(content)) !== null) {
+                const start = match.index + match[0].length;
+                // ネストした括弧を考慮して終端を見つける
+                let depth = 1;
+                let end = start;
+                let escaped = false;
+
+                while (end < content.length && depth > 0) {
+                    const char = content[end];
+                    if (escaped) {
+                        escaped = false;
+                    } else if (char === '\\') {
+                        escaped = true;
+                    } else if (char === '(') {
+                        depth++;
+                    } else if (char === ')') {
+                        depth--;
+                    }
+                    end++;
+                }
+
+                if (depth === 0) {
+                    positions.push({ start, end: end - 1 });
+                }
+            }
+
+            return positions;
+        }
+
+        /*
+        ======================================================================
+          タイトルバイト抽出関数
+
+          指定位置からタイトルのバイトデータを抽出
+        ======================================================================
+        */
+        function extractTitleBytes(bytes, start, end) {
+            if (start < 0 || end > bytes.length || start >= end) {
+                return null;
+            }
+            return bytes.slice(start, end);
+        }
+
+        /*
+        ======================================================================
+          タイトルデコード関数
+
+          バイト配列を適切なエンコーディングでデコード
+          UTF-8、Shift_JIS、Latin-1を試行
+        ======================================================================
+        */
+        function decodeTitle(titleBytes) {
+            if (!titleBytes || titleBytes.length === 0) {
+                return '';
+            }
+
+            // PDFエスケープシーケンスを処理するためにまずLatin-1でデコード
+            let rawStr = '';
+            for (let i = 0; i < titleBytes.length; i++) {
+                rawStr += String.fromCharCode(titleBytes[i]);
+            }
+
+            // PDFエスケープシーケンスをデコード
+            const decodedStr = decodePDFString(rawStr);
+
+            // デコード後のバイト配列を取得
+            const processedBytes = new Uint8Array(decodedStr.length);
+            for (let i = 0; i < decodedStr.length; i++) {
+                processedBytes[i] = decodedStr.charCodeAt(i) & 0xFF;
+            }
+
+            // UTF-8として解釈を試みる
+            try {
+                const utf8Str = new TextDecoder('utf-8', { fatal: true }).decode(processedBytes);
+                // 制御文字や不正な文字がないかチェック
+                if (!utf8Str.includes('\uFFFD') && /[\u3000-\u9FFF\u4E00-\u9FFF]/.test(utf8Str)) {
+                    return utf8Str;
+                }
+            } catch (e) {
+                // UTF-8でデコードできない場合は次を試す
+            }
+
+            // Shift_JISとして解釈を試みる
+            try {
+                const shiftJisStr = decodeShiftJIS(processedBytes);
+                if (shiftJisStr && /[\u3000-\u9FFF\u4E00-\u9FFF]/.test(shiftJisStr)) {
+                    return shiftJisStr;
+                }
+            } catch (e) {
+                // Shift_JISでもデコードできない場合
+            }
+
+            // 最終手段: PDFエスケープをデコードした文字列をそのまま返す
+            return decodedStr;
+        }
+
+        /*
+        ======================================================================
+          Shift_JISデコード関数
+
+          Shift_JIS（CP932）でエンコードされたバイト配列をデコード
+        ======================================================================
+        */
+        function decodeShiftJIS(bytes) {
+            let result = '';
+            let i = 0;
+
+            while (i < bytes.length) {
+                const b1 = bytes[i];
+
+                // ASCII範囲（0x00-0x7F）
+                if (b1 <= 0x7F) {
+                    result += String.fromCharCode(b1);
+                    i++;
+                }
+                // 半角カナ（0xA1-0xDF）
+                else if (b1 >= 0xA1 && b1 <= 0xDF) {
+                    // 半角カナをUnicodeに変換（0xFF61 - 0xFF9F）
+                    result += String.fromCharCode(0xFF61 + (b1 - 0xA1));
+                    i++;
+                }
+                // 2バイト文字の第1バイト
+                else if ((b1 >= 0x81 && b1 <= 0x9F) || (b1 >= 0xE0 && b1 <= 0xFC)) {
+                    if (i + 1 >= bytes.length) {
+                        result += '?';
+                        i++;
+                        continue;
+                    }
+                    const b2 = bytes[i + 1];
+
+                    // JIS X 0208の区点コードに変換
+                    let ku, ten;
+                    if (b1 <= 0x9F) {
+                        ku = (b1 - 0x81) * 2 + 1;
+                    } else {
+                        ku = (b1 - 0xC1) * 2 + 1;
+                    }
+
+                    if (b2 <= 0x7E) {
+                        ten = b2 - 0x1F;
+                    } else if (b2 <= 0x9E) {
+                        ten = b2 - 0x20;
+                    } else {
+                        ku++;
+                        ten = b2 - 0x9E;
+                    }
+
+                    // 区点コードからUnicodeに変換
+                    const unicode = jisToUnicode(ku, ten);
+                    if (unicode) {
+                        result += String.fromCharCode(unicode);
+                    } else {
+                        result += '?';
+                    }
+                    i += 2;
+                } else {
+                    result += '?';
+                    i++;
+                }
+            }
+
+            return result;
+        }
+
+        /*
+        ======================================================================
+          JIS X 0208 から Unicode への変換
+
+          簡略版: 主要な日本語文字の変換テーブル
+        ======================================================================
+        */
+        function jisToUnicode(ku, ten) {
+            // 基本的なJIS X 0208 → Unicode変換
+            // 完全なテーブルは大きすぎるため、主要な範囲のみ対応
+
+            // ひらがな（区点コード 4区）
+            if (ku === 4 && ten >= 1 && ten <= 83) {
+                return 0x3041 + (ten - 1);
+            }
+            // カタカナ（区点コード 5区）
+            if (ku === 5 && ten >= 1 && ten <= 86) {
+                return 0x30A1 + (ten - 1);
+            }
+            // 記号類（1区）
+            if (ku === 1) {
+                const symbols1 = [
+                    0x3000, 0x3001, 0x3002, 0xFF0C, 0xFF0E, 0x30FB, 0xFF1A, 0xFF1B,
+                    0xFF1F, 0xFF01, 0x309B, 0x309C, 0x00B4, 0xFF40, 0x00A8, 0xFF3E,
+                    0xFFE3, 0xFF3F, 0x30FD, 0x30FE, 0x309D, 0x309E, 0x3003, 0x4EDD,
+                    0x3005, 0x3006, 0x3007, 0x30FC, 0x2015, 0x2010, 0xFF0F, 0x005C,
+                    0x301C, 0x2016, 0xFF5C, 0x2026, 0x2025, 0x2018, 0x2019, 0x201C,
+                    0x201D, 0xFF08, 0xFF09, 0x3014, 0x3015, 0xFF3B, 0xFF3D, 0xFF5B,
+                    0xFF5D, 0x3008, 0x3009, 0x300A, 0x300B, 0x300C, 0x300D, 0x300E,
+                    0x300F, 0x3010, 0x3011, 0xFF0B, 0x2212, 0x00B1, 0x00D7, 0x00F7,
+                    0xFF1D, 0x2260, 0xFF1C, 0xFF1E, 0x2266, 0x2267, 0x221E, 0x2234,
+                    0x2642, 0x2640, 0x00B0, 0x2032, 0x2033, 0x2103, 0xFFE5, 0xFF04,
+                    0xFFE0, 0xFFE1, 0xFF05, 0xFF03, 0xFF06, 0xFF0A, 0xFF20, 0x00A7,
+                    0x2606, 0x2605, 0x25CB, 0x25CF, 0x25CE, 0x25C7
+                ];
+                if (ten >= 1 && ten <= symbols1.length) {
+                    return symbols1[ten - 1];
+                }
+            }
+            // 漢字（16区～84区）はUnicode CJK統合漢字に対応
+            // 簡略化のため、線形近似で変換（精度は完璧ではない）
+            if (ku >= 16 && ku <= 47) {
+                // 第1水準漢字
+                const offset = (ku - 16) * 94 + (ten - 1);
+                return 0x4E00 + offset;
+            }
+            if (ku >= 48 && ku <= 84) {
+                // 第2水準漢字
+                const offset = (ku - 48) * 94 + (ten - 1) + 2965;
+                return 0x4E00 + offset;
+            }
+
+            return null;
+        }
+
+        /*
+        ======================================================================
           しおり抽出関数
 
           PDF内のしおり情報（タイトル、ページ番号）を抽出
@@ -1334,19 +1566,22 @@
 
             /*
             --------------------------------------------------------------
-              方法1: ASCII/Latin-1のタイトルを検索
+              方法1: 括弧形式のタイトルを検索（日本語対応強化）
               /Title (テキスト) の形式
+              日本語はShift_JIS、UTF-8、またはバイナリで格納されている
             --------------------------------------------------------------
             */
-            const titlePattern = /\/Title\s*\(([^)]*)\)/g;
-            let match;
+            // バイナリから直接タイトルを抽出（ネストした括弧にも対応）
+            const titlePositions = findTitlePositions(content);
 
-            while ((match = titlePattern.exec(content)) !== null) {
-                let title = match[1];
-                // PDFエスケープシーケンスをデコード
-                title = decodePDFString(title);
-                // push(): 配列に要素を追加
-                bookmarks.push({ title, page: '', level: 1 });
+            for (const pos of titlePositions) {
+                const titleBytes = extractTitleBytes(bytes, pos.start, pos.end);
+                if (titleBytes && titleBytes.length > 0) {
+                    const title = decodeTitle(titleBytes);
+                    if (title && title.trim()) {
+                        bookmarks.push({ title: title.trim(), page: '', level: 1 });
+                    }
+                }
             }
 
             /*
@@ -1356,7 +1591,8 @@
               FEFF: UTF-16BEのBOM（バイトオーダーマーク）
             --------------------------------------------------------------
             */
-            const hexPattern = /\/Title\s*<(FEFF[0-9A-Fa-f]+)>/g;
+            let match;
+            const hexPattern = /\/Title\s*<(FEFF[0-9A-Fa-f]+)>/gi;
             while ((match = hexPattern.exec(content)) !== null) {
                 // FEFFをスキップして実際の文字データを取得
                 const hexStr = match[1].substring(4);
@@ -1369,33 +1605,37 @@
                         title += String.fromCharCode(charCode);
                     }
                 }
-                if (title) {
-                    bookmarks.push({ title, page: '', level: 1 });
+                if (title && title.trim()) {
+                    // 重複チェック
+                    if (!bookmarks.some(b => b.title === title.trim())) {
+                        bookmarks.push({ title: title.trim(), page: '', level: 1 });
+                    }
                 }
             }
 
             /*
             --------------------------------------------------------------
-              方法3: 通常の16進数タイトル（Latin-1）
+              方法3: 通常の16進数タイトル
               /Title <48656C6C6F> の形式
+              Shift_JISまたはUTF-8としてデコードを試みる
             --------------------------------------------------------------
             */
-            const hexPattern2 = /\/Title\s*<([0-9A-Fa-f]+)>/g;
+            const hexPattern2 = /\/Title\s*<([0-9A-Fa-f]+)>/gi;
             while ((match = hexPattern2.exec(content)) !== null) {
                 // UTF-16BEは既に処理済みなのでスキップ
                 if (match[1].toUpperCase().startsWith('FEFF')) continue;
                 const hexStr = match[1];
-                let title = '';
-                // 2桁ずつ処理（1バイト=2桁の16進数）
+                // 16進数をバイト配列に変換
+                const titleBytes = new Uint8Array(hexStr.length / 2);
                 for (let i = 0; i < hexStr.length; i += 2) {
-                    if (i + 2 <= hexStr.length) {
-                        const charCode = parseInt(hexStr.substring(i, i + 2), 16);
-                        title += String.fromCharCode(charCode);
-                    }
+                    titleBytes[i / 2] = parseInt(hexStr.substring(i, i + 2), 16);
                 }
-                // trim(): 前後の空白を削除
+                const title = decodeTitle(titleBytes);
                 if (title && title.trim()) {
-                    bookmarks.push({ title, page: '', level: 1 });
+                    // 重複チェック
+                    if (!bookmarks.some(b => b.title === title.trim())) {
+                        bookmarks.push({ title: title.trim(), page: '', level: 1 });
+                    }
                 }
             }
 
