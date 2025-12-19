@@ -61,7 +61,7 @@ Public Sub GetJobList()
 
     ' 結果をパース（戻り値で成功/失敗を判定）
     Dim parseSuccess As Boolean
-    parseSuccess = ParseJobListResult(result)
+    parseSuccess = ParseJobListResult(result, config("RootPath"))
 
     Application.StatusBar = False
     Application.ScreenUpdating = True
@@ -198,19 +198,20 @@ Private Function BuildGetJobListScript(config As Object) As String
     BuildGetJobListScript = script
 End Function
 
-Private Function ParseJobListResult(result As String) As Boolean
+Private Function ParseJobListResult(result As String, rootPath As String) As Boolean
     ' 戻り値: True=成功, False=エラー
     ' JP1 ajsprint出力形式（ネスト対応）:
-    '   unit=パス,名前,admin,グループ;
+    '   unit=ユニット名,,admin,グループ;    ← 2番目のフィールドは空
     '   {
     '       ty=n;
     '       cm="コメント";
-    '       unit=子パス,子名前,admin,グループ;  ← ネストされたユニット
+    '       unit=子ユニット名,,admin,グループ;  ← ネストされたユニット
     '       {
     '           ty=n;
     '           ...
     '       }
     '   }
+    ' フルパス = 設定シートの取得パス(rootPath) + "/" + ユニット名
     ParseJobListResult = False
 
     Dim ws As Worksheet
@@ -231,6 +232,13 @@ Private Function ParseJobListResult(result As String) As Boolean
     row = ROW_JOBLIST_DATA_START
 
     Dim i As Long
+
+    ' ルートパスの末尾のスラッシュを正規化
+    Dim basePath As String
+    basePath = rootPath
+    If Right(basePath, 1) = "/" Then
+        basePath = Left(basePath, Len(basePath) - 1)
+    End If
 
     ' ネスト対応のためスタック構造を使用
     ' 配列でスタックをシミュレート（最大ネスト深度10）
@@ -271,21 +279,17 @@ Private Function ParseJobListResult(result As String) As Boolean
                         unitStack(stackDepth) = line
                         blockStack(stackDepth) = ""
 
-                        ' フルパスを構築
-                        Dim currentUnitPath As String
-                        currentUnitPath = ExtractUnitPath(line)
+                        ' ユニット名を取得（unit=の最初のフィールド）
+                        Dim unitName As String
+                        unitName = ExtractUnitName(line)
 
+                        ' フルパスを構築: 親パス + "/" + ユニット名
                         If stackDepth = 1 Then
-                            ' ルートレベル: パスをそのまま使用
-                            pathStack(stackDepth) = currentUnitPath
+                            ' ルートレベル: basePath + "/" + ユニット名
+                            pathStack(stackDepth) = basePath & "/" & unitName
                         Else
-                            ' ネストレベル: 親のパスと結合
-                            ' currentUnitPathが/で始まっていればそのまま使用、そうでなければ親と結合
-                            If Left(currentUnitPath, 1) = "/" Then
-                                pathStack(stackDepth) = currentUnitPath
-                            Else
-                                pathStack(stackDepth) = pathStack(stackDepth - 1) & "/" & currentUnitPath
-                            End If
+                            ' ネストレベル: 親のパス + "/" + ユニット名
+                            pathStack(stackDepth) = pathStack(stackDepth - 1) & "/" & unitName
                         End If
                     End If
                 End If
@@ -324,8 +328,8 @@ Private Function ParseJobListResult(result As String) As Boolean
                         ws.Cells(row, COL_ORDER).Value = ""
                         ' フルパス（ルートからのパス）を設定
                         ws.Cells(row, COL_JOBNET_PATH).Value = currentFullPath
-                        ' ジョブネット名を設定
-                        ws.Cells(row, COL_JOBNET_NAME).Value = ExtractJobNameFromHeader(currentHeader)
+                        ' ジョブネット名を設定（unit=の最初のフィールド）
+                        ws.Cells(row, COL_JOBNET_NAME).Value = ExtractUnitName(currentHeader)
                         ws.Cells(row, COL_COMMENT).Value = ExtractCommentFromBlock(currentBlock)
 
                         ' 保留状態を解析
@@ -434,6 +438,7 @@ End Function
 
 Private Function ExtractUnitPath(line As String) As String
     ' unit=/path/to/jobnet から /path/to/jobnet を抽出
+    ' 注: JP1のajsprintでは最初のフィールドがユニット名
     Dim startPos As Long
     Dim endPos As Long
 
@@ -445,6 +450,12 @@ Private Function ExtractUnitPath(line As String) As String
             ExtractUnitPath = Mid(line, startPos, endPos - startPos)
         End If
     End If
+End Function
+
+Private Function ExtractUnitName(line As String) As String
+    ' unit=ユニット名,,admin,group; からユニット名を抽出
+    ' 最初のフィールド（カンマまで）を返す
+    ExtractUnitName = ExtractUnitPath(line)
 End Function
 
 Private Function ExtractJobName(line As String) As String
