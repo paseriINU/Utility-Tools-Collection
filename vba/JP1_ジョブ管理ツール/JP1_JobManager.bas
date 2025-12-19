@@ -1270,7 +1270,7 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
             script = script & "      elseif ($detailStr -match '[A-Za-z]:[^\r\n]+\.err') { $logPath = $matches[0] }" & vbCrLf
             script = script & "      Write-Log ""[DEBUG-14] 抽出したログパス: $logPath""" & vbCrLf
             script = script & "      if ($logPath) {" & vbCrLf
-            script = script & "        Write-Output ""RESULT_LOGPATH:$logFile""" & vbCrLf
+            script = script & "        Write-Output ""RESULT_LOGPATH:$logPath""" & vbCrLf
             script = script & "      }" & vbCrLf
             script = script & vbCrLf
             script = script & "      # まず標準エラーファイルを直接読み取る（ローカルモード）" & vbCrLf
@@ -1582,7 +1582,7 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
             script = script & vbCrLf
             script = script & "      # 標準エラーファイルパスを出力（表示用）" & vbCrLf
             script = script & "      if ($stderrFile) {" & vbCrLf
-            script = script & "        Write-Output ""RESULT_LOGPATH:$logFile""" & vbCrLf
+            script = script & "        Write-Output ""RESULT_LOGPATH:$stderrFile""" & vbCrLf
             script = script & "      }" & vbCrLf
             script = script & vbCrLf
             script = script & "      # まず標準エラーファイルを直接読み取る（リモート）" & vbCrLf
