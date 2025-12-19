@@ -1117,6 +1117,14 @@ Public Sub ExecuteCheckedJobs()
         Exit Sub
     End If
 
+    ' 順序のバリデーション
+    Dim validationError As String
+    validationError = ValidateJobOrder(jobs)
+    If validationError <> "" Then
+        MsgBox validationError, vbExclamation, "順序指定エラー"
+        Exit Sub
+    End If
+
     ' 保留中のジョブ数をカウント
     Dim holdCount As Long
     holdCount = 0
@@ -1306,6 +1314,71 @@ Private Function GetOrderedJobs() As Collection
     Next i
 
     Set GetOrderedJobs = jobs
+End Function
+
+Private Function ValidateJobOrder(jobs As Collection) As String
+    ' 順序指定のバリデーション
+    ' 戻り値: エラーメッセージ（正常な場合は空文字）
+
+    If jobs.Count = 0 Then
+        ValidateJobOrder = ""
+        Exit Function
+    End If
+
+    ' 順序番号を配列に収集
+    Dim orders() As Long
+    ReDim orders(1 To jobs.Count)
+    Dim i As Long
+    i = 0
+    Dim j As Variant
+    For Each j In jobs
+        i = i + 1
+        orders(i) = j("Order")
+    Next j
+
+    ' 重複チェック
+    Dim k As Long
+    For i = 1 To UBound(orders) - 1
+        For k = i + 1 To UBound(orders)
+            If orders(i) = orders(k) Then
+                ValidateJobOrder = "順序番号 " & orders(i) & " が重複しています。" & vbCrLf & _
+                                   "各ジョブには異なる順序番号を指定してください。"
+                Exit Function
+            End If
+        Next k
+    Next i
+
+    ' 連続性チェック（1から始まって連続しているか）
+    ' まずソート
+    Dim temp As Long
+    For i = 1 To UBound(orders) - 1
+        For k = i + 1 To UBound(orders)
+            If orders(i) > orders(k) Then
+                temp = orders(i)
+                orders(i) = orders(k)
+                orders(k) = temp
+            End If
+        Next k
+    Next i
+
+    ' 1から始まっているか
+    If orders(1) <> 1 Then
+        ValidateJobOrder = "順序番号は 1 から開始してください。" & vbCrLf & _
+                           "現在の最小値: " & orders(1)
+        Exit Function
+    End If
+
+    ' 連続しているか
+    For i = 2 To UBound(orders)
+        If orders(i) <> orders(i - 1) + 1 Then
+            ValidateJobOrder = "順序番号が連続していません。" & vbCrLf & _
+                               orders(i - 1) & " の次は " & (orders(i - 1) + 1) & " を指定してください。" & vbCrLf & _
+                               "（現在: " & orders(i) & "）"
+            Exit Function
+        End If
+    Next i
+
+    ValidateJobOrder = ""
 End Function
 
 Private Function ExecuteSingleJob(ByVal config As Object, ByVal jobnetPath As String, ByVal isHold As Boolean, ByVal logFilePath As String) As Object
