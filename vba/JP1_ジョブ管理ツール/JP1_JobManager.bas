@@ -287,10 +287,11 @@ Private Function ParseJobListResult(result As String, rootPath As String) As Boo
                         Dim unitName As String
                         unitName = ExtractUnitName(line)
 
-                        ' フルパスを構築: 親パス + "/" + ユニット名
+                        ' フルパスを構築
                         If stackDepth = 1 Then
-                            ' ルートレベル: basePath + "/" + ユニット名
-                            pathStack(stackDepth) = basePath & "/" & unitName
+                            ' ルートレベル: ajsprintで指定したパスのユニット自体が
+                            ' 最初に出力されるため、basePathをそのまま使用
+                            pathStack(stackDepth) = basePath
                         Else
                             ' ネストレベル: 親のパス + "/" + ユニット名
                             pathStack(stackDepth) = pathStack(stackDepth - 1) & "/" & unitName
