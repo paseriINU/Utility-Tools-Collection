@@ -1427,10 +1427,11 @@ Private Sub UpdateJobListStatus(ByVal row As Long, ByVal result As Object)
 End Sub
 
 '==============================================================================
-' 一覧クリア
+' 一覧クリア（実行結果のみクリア、ジョブ定義は保持）
 '==============================================================================
 Public Sub ClearJobList()
-    If MsgBox("ジョブ一覧をクリアしますか？ (y/n)", vbYesNo + vbQuestion) = vbNo Then Exit Sub
+    If MsgBox("実行結果をクリアしますか？" & vbCrLf & _
+              "（ジョブ定義情報は保持されます）", vbYesNo + vbQuestion) = vbNo Then Exit Sub
 
     Dim ws As Worksheet
     Set ws = Worksheets(SHEET_JOBLIST)
@@ -1439,10 +1440,30 @@ Public Sub ClearJobList()
     lastRow = ws.Cells(ws.Rows.Count, COL_JOBNET_PATH).End(xlUp).Row
 
     If lastRow >= ROW_JOBLIST_DATA_START Then
-        ws.Range(ws.Cells(ROW_JOBLIST_DATA_START, COL_ORDER), ws.Cells(lastRow, COL_LAST_MESSAGE)).Clear
+        ' A列（順序）をクリア
+        ws.Range(ws.Cells(ROW_JOBLIST_DATA_START, COL_ORDER), ws.Cells(lastRow, COL_ORDER)).ClearContents
+
+        ' J〜N列（実行結果）をクリア
+        ws.Range(ws.Cells(ROW_JOBLIST_DATA_START, COL_LAST_STATUS), ws.Cells(lastRow, COL_LAST_MESSAGE)).ClearContents
+
+        ' 背景色をクリア（保留行のハイライトは保持）
+        Dim row As Long
+        For row = ROW_JOBLIST_DATA_START To lastRow
+            ' 保留中でない行の背景色をクリア
+            If ws.Cells(row, COL_HOLD).Value <> "保留中" Then
+                ws.Range(ws.Cells(row, COL_ORDER), ws.Cells(row, COL_LAST_MESSAGE)).Interior.ColorIndex = xlNone
+            End If
+        Next row
+
+        ' オートフィルタを再適用（種別「ジョブネット」）
+        If ws.AutoFilterMode Then
+            ws.AutoFilterMode = False
+        End If
+        ws.Range(ws.Cells(ROW_JOBLIST_HEADER, COL_ORDER), ws.Cells(lastRow, COL_LAST_MESSAGE)).AutoFilter _
+            Field:=COL_UNIT_TYPE, Criteria1:="ジョブネット"
     End If
 
-    MsgBox "クリアしました。", vbInformation
+    MsgBox "実行結果をクリアしました。", vbInformation
 End Sub
 
 '==============================================================================
