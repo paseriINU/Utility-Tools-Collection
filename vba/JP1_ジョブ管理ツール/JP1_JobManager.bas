@@ -1804,6 +1804,9 @@ Public Sub ClearLogHistory()
 
         ' 背景色もクリア
         ws.Range(ws.Cells(5, 1), ws.Cells(lastRow, 6)).Interior.ColorIndex = xlNone
+
+        ' 罫線もクリア
+        ws.Range(ws.Cells(5, 1), ws.Cells(lastRow, 6)).Borders.LineStyle = xlNone
     End If
 
     MsgBox "実行ログの履歴を削除しました。", vbInformation
