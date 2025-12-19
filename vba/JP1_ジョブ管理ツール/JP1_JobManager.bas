@@ -1032,12 +1032,13 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
     script = script & vbCrLf
 
     ' ログ出力関数を定義
-    script = script & "# ログ出力関数" & vbCrLf
+    script = script & "# ログ出力関数（ファイルとコンソール両方に出力）" & vbCrLf
     script = script & "$logFile = '" & Replace(logFilePath, "'", "''") & "'" & vbCrLf
     script = script & "function Write-Log {" & vbCrLf
     script = script & "  param([string]$Message)" & vbCrLf
     script = script & "  $timestamp = Get-Date -Format 'yyyy/MM/dd HH:mm:ss'" & vbCrLf
     script = script & "  $logLine = ""[$timestamp] $Message""" & vbCrLf
+    script = script & "  Write-Host $logLine" & vbCrLf
     script = script & "  Add-Content -Path $logFile -Value $logLine -Encoding UTF8" & vbCrLf
     script = script & "}" & vbCrLf
     script = script & vbCrLf
