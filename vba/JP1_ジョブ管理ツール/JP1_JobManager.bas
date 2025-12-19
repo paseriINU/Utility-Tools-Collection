@@ -1211,19 +1211,30 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
             script = script & vbCrLf
             script = script & "    # ログパスを抽出（so=標準出力、se=標準エラー）" & vbCrLf
             script = script & "    $logPath = ''" & vbCrLf
-            script = script & "    if ($detailStr -match 'se=([^;\r\n]+)') { $logPath = $matches[1].Trim() }" & vbCrLf
-            script = script & "    elseif ($detailStr -match 'so=([^;\r\n]+)') { $logPath = $matches[1].Trim() }" & vbCrLf
+            script = script & "    $seLogPath = ''" & vbCrLf
+            script = script & "    $soLogPath = ''" & vbCrLf
+            script = script & "    if ($detailStr -match 'se=([^;\r\n]+)') { $seLogPath = $matches[1].Trim() }" & vbCrLf
+            script = script & "    if ($detailStr -match 'so=([^;\r\n]+)') { $soLogPath = $matches[1].Trim() }" & vbCrLf
+            script = script & "    # 標準エラーを優先、なければ標準出力" & vbCrLf
+            script = script & "    $logPath = if ($seLogPath) { $seLogPath } else { $soLogPath }" & vbCrLf
             script = script & "    if ($logPath) {" & vbCrLf
             script = script & "      Write-Output ""RESULT_LOGPATH:$logPath""" & vbCrLf
             script = script & "      Write-Log ""ログパス: $logPath""" & vbCrLf
-            script = script & "    }" & vbCrLf
             script = script & vbCrLf
-            script = script & "    # 詳細メッセージを抽出（戻り値、実行ホストなど）" & vbCrLf
-            script = script & "    $detailMsg = ''" & vbCrLf
-            script = script & "    if ($detailStr -match 'rc=(\d+)') { $detailMsg += ""戻り値:$($matches[1]) "" }" & vbCrLf
-            script = script & "    if ($detailStr -match 'ex=([^;\r\n]+)') { $detailMsg += ""実行ホスト:$($matches[1].Trim()) "" }" & vbCrLf
-            script = script & "    if ($detailMsg) {" & vbCrLf
-            script = script & "      Write-Output ""RESULT_DETAIL:$detailMsg""" & vbCrLf
+            script = script & "      # ログファイルの内容を読み込み" & vbCrLf
+            script = script & "      $logContent = ''" & vbCrLf
+            script = script & "      if (Test-Path $logPath) {" & vbCrLf
+            script = script & "        $logContent = Get-Content $logPath -Raw -ErrorAction SilentlyContinue" & vbCrLf
+            script = script & "        if ($logContent) {" & vbCrLf
+            script = script & "          # 改行を半角スペースに置換、長すぎる場合は切り詰め" & vbCrLf
+            script = script & "          $logContent = $logContent -replace '[\r\n]+', ' ' -replace '\s+', ' '" & vbCrLf
+            script = script & "          if ($logContent.Length -gt 500) { $logContent = $logContent.Substring(0, 500) + '...' }" & vbCrLf
+            script = script & "          Write-Output ""RESULT_DETAIL:$logContent""" & vbCrLf
+            script = script & "          Write-Log ""ログ内容: $logContent""" & vbCrLf
+            script = script & "        }" & vbCrLf
+            script = script & "      } else {" & vbCrLf
+            script = script & "        Write-Log ""ログファイルが見つかりません: $logPath""" & vbCrLf
+            script = script & "      }" & vbCrLf
             script = script & "    }" & vbCrLf
             script = script & "  }" & vbCrLf
         Else
@@ -1426,19 +1437,30 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
             script = script & vbCrLf
             script = script & "    # ログパスを抽出（so=標準出力、se=標準エラー）" & vbCrLf
             script = script & "    $logPath = ''" & vbCrLf
-            script = script & "    if ($detailStr -match 'se=([^;\r\n]+)') { $logPath = $matches[1].Trim() }" & vbCrLf
-            script = script & "    elseif ($detailStr -match 'so=([^;\r\n]+)') { $logPath = $matches[1].Trim() }" & vbCrLf
+            script = script & "    $seLogPath = ''" & vbCrLf
+            script = script & "    $soLogPath = ''" & vbCrLf
+            script = script & "    if ($detailStr -match 'se=([^;\r\n]+)') { $seLogPath = $matches[1].Trim() }" & vbCrLf
+            script = script & "    if ($detailStr -match 'so=([^;\r\n]+)') { $soLogPath = $matches[1].Trim() }" & vbCrLf
+            script = script & "    # 標準エラーを優先、なければ標準出力" & vbCrLf
+            script = script & "    $logPath = if ($seLogPath) { $seLogPath } else { $soLogPath }" & vbCrLf
             script = script & "    if ($logPath) {" & vbCrLf
             script = script & "      Write-Output ""RESULT_LOGPATH:$logPath""" & vbCrLf
             script = script & "      Write-Log ""ログパス: $logPath""" & vbCrLf
-            script = script & "    }" & vbCrLf
             script = script & vbCrLf
-            script = script & "    # 詳細メッセージを抽出（戻り値、実行ホストなど）" & vbCrLf
-            script = script & "    $detailMsg = ''" & vbCrLf
-            script = script & "    if ($detailStr -match 'rc=(\d+)') { $detailMsg += ""戻り値:$($matches[1]) "" }" & vbCrLf
-            script = script & "    if ($detailStr -match 'ex=([^;\r\n]+)') { $detailMsg += ""実行ホスト:$($matches[1].Trim()) "" }" & vbCrLf
-            script = script & "    if ($detailMsg) {" & vbCrLf
-            script = script & "      Write-Output ""RESULT_DETAIL:$detailMsg""" & vbCrLf
+            script = script & "      # リモートサーバ上のログファイル内容を読み込み" & vbCrLf
+            script = script & "      $logContent = Invoke-Command -Session $session -ScriptBlock {" & vbCrLf
+            script = script & "        param($path)" & vbCrLf
+            script = script & "        if (Test-Path $path) {" & vbCrLf
+            script = script & "          Get-Content $path -Raw -ErrorAction SilentlyContinue" & vbCrLf
+            script = script & "        } else { '' }" & vbCrLf
+            script = script & "      } -ArgumentList $logPath" & vbCrLf
+            script = script & "      if ($logContent) {" & vbCrLf
+            script = script & "        # 改行を半角スペースに置換、長すぎる場合は切り詰め" & vbCrLf
+            script = script & "        $logContent = $logContent -replace '[\r\n]+', ' ' -replace '\s+', ' '" & vbCrLf
+            script = script & "        if ($logContent.Length -gt 500) { $logContent = $logContent.Substring(0, 500) + '...' }" & vbCrLf
+            script = script & "        Write-Output ""RESULT_DETAIL:$logContent""" & vbCrLf
+            script = script & "        Write-Log ""ログ内容: $logContent""" & vbCrLf
+            script = script & "      }" & vbCrLf
             script = script & "    }" & vbCrLf
             script = script & "  }" & vbCrLf
         Else
