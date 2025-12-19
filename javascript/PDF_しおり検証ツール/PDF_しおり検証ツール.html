@@ -1465,8 +1465,12 @@
                 processedBytes[0] === 0xFE &&
                 processedBytes[1] === 0xFF) {
                 try {
+                    // BOMを含めてデコード
                     const utf16Str = new TextDecoder('utf-16be').decode(processedBytes);
-                    if (utf16Str && utf16Str.trim()) return utf16Str;
+                    if (utf16Str && utf16Str.trim()) {
+                        // BOMを除去して返す
+                        return utf16Str.replace(/^\uFEFF/, '');
+                    }
                 } catch (e) { }
             }
 
@@ -1481,36 +1485,61 @@
                 } catch (e) { }
             }
 
-            // UTF-16BEパターン検出（BOMなしでも偶数バイトで高バイトが0の場合）
-            // Acrobat JavaScriptはしばしばこの形式を使用
-            if (processedBytes.length >= 4 && processedBytes.length % 2 === 0) {
+            // UTF-16BEパターン検出（BOMなし）
+            // 偶数バイトで、高バイトが0x00-0x7Fの範囲（基本的なUnicode文字）
+            if (processedBytes.length >= 2 && processedBytes.length % 2 === 0) {
                 let isUtf16Be = true;
-                let hasHighByte = false;
+                let hasNonAscii = false;
+                let validPairs = 0;
+
                 for (let i = 0; i < processedBytes.length; i += 2) {
                     const high = processedBytes[i];
                     const low = processedBytes[i + 1];
-                    // ASCII範囲の文字は高バイトが0
+                    const charCode = (high << 8) | low;
+
+                    // NULLバイトペアはスキップ
+                    if (charCode === 0) {
+                        continue;
+                    }
+
+                    // ASCII範囲の文字（高バイトが0、低バイトが印刷可能）
                     if (high === 0 && low >= 0x20 && low <= 0x7E) {
+                        validPairs++;
                         continue;
                     }
-                    // 日本語（CJK）の範囲かチェック
-                    if (high >= 0x30 && high <= 0x9F) {
-                        hasHighByte = true;
+
+                    // 日本語（ひらがな、カタカナ、漢字）
+                    // ひらがな: U+3040-U+309F
+                    // カタカナ: U+30A0-U+30FF
+                    // CJK統合漢字: U+4E00-U+9FFF
+                    if ((charCode >= 0x3040 && charCode <= 0x309F) ||  // ひらがな
+                        (charCode >= 0x30A0 && charCode <= 0x30FF) ||  // カタカナ
+                        (charCode >= 0x4E00 && charCode <= 0x9FFF) ||  // CJK統合漢字
+                        (charCode >= 0x3000 && charCode <= 0x303F) ||  // CJK記号
+                        (charCode >= 0xFF00 && charCode <= 0xFFEF)) {  // 全角英数
+                        hasNonAscii = true;
+                        validPairs++;
                         continue;
                     }
-                    // その他の有効なUnicode範囲
-                    if (high > 0 && high < 0xD8) {
-                        hasHighByte = true;
+
+                    // その他の有効なUnicode範囲（サロゲートペア以外）
+                    if (charCode >= 0x0080 && charCode < 0xD800) {
+                        hasNonAscii = true;
+                        validPairs++;
                         continue;
                     }
+
+                    // 無効な文字
                     isUtf16Be = false;
                     break;
                 }
-                if (isUtf16Be && hasHighByte) {
+
+                // 有効なペアが過半数を占めていればUTF-16BEとして処理
+                if (isUtf16Be && validPairs > 0) {
                     try {
                         const utf16Str = new TextDecoder('utf-16be').decode(processedBytes);
-                        // 有効な文字列かチェック
-                        if (utf16Str && utf16Str.trim() && !/[\uFFFD]/.test(utf16Str)) {
+                        // 置換文字が含まれていないかチェック
+                        if (utf16Str && utf16Str.trim() && !/\uFFFD/.test(utf16Str)) {
                             return utf16Str;
                         }
                     } catch (e) { }
