@@ -1175,16 +1175,17 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
 
         script = script & "try {" & vbCrLf
         script = script & "  Write-Log '[準備] WinRM設定を確認中...'" & vbCrLf
-        script = script & "  # 現在のTrustedHostsを取得" & vbCrLf
-        script = script & "  $originalTrustedHosts = (Get-Item WSMan:\localhost\Client\TrustedHosts -ErrorAction SilentlyContinue).Value" & vbCrLf
         script = script & vbCrLf
-        script = script & "  # WinRMサービスの起動確認" & vbCrLf
+        script = script & "  # WinRMサービスの起動確認（TrustedHosts取得前に起動が必要）" & vbCrLf
         script = script & "  $winrmService = Get-Service -Name WinRM -ErrorAction SilentlyContinue" & vbCrLf
         script = script & "  if ($winrmService.Status -ne 'Running') {" & vbCrLf
         script = script & "    Write-Log '[準備] WinRMサービスを起動'" & vbCrLf
         script = script & "    Start-Service -Name WinRM -ErrorAction Stop" & vbCrLf
         script = script & "    $winrmServiceWasStarted = $true" & vbCrLf
         script = script & "  }" & vbCrLf
+        script = script & vbCrLf
+        script = script & "  # 現在のTrustedHostsを取得（WinRMサービス起動後に取得）" & vbCrLf
+        script = script & "  $originalTrustedHosts = (Get-Item WSMan:\localhost\Client\TrustedHosts -ErrorAction SilentlyContinue).Value" & vbCrLf
         script = script & vbCrLf
         script = script & "  # TrustedHostsに接続先を追加（必要な場合のみ）" & vbCrLf
         script = script & "  if ($originalTrustedHosts -notmatch '" & config("JP1Server") & "') {" & vbCrLf
