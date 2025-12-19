@@ -1314,10 +1314,8 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
             script = script & "      }" & vbCrLf
             script = script & vbCrLf
             script = script & "      if ($logContent) {" & vbCrLf
-            script = script & "        $logStr = $logContent -join ""`n""" & vbCrLf
-            script = script & "        # 長すぎる場合は切り詰め" & vbCrLf
-            script = script & "        if ($logStr.Length -gt 1000) { $logStr = $logStr.Substring(0, 1000) + '...' }" & vbCrLf
-            script = script & "        Write-Output ""RESULT_DETAIL:$logStr""" & vbCrLf
+            script = script & "        Write-Log '[詳細] 標準エラーログ:'" & vbCrLf
+            script = script & "        foreach ($line in $logContent) { Write-Log ""  $line"" }" & vbCrLf
             script = script & "      } else {" & vbCrLf
             script = script & "        Write-Log '標準エラーログを取得できませんでした'" & vbCrLf
             script = script & "      }" & vbCrLf
@@ -1619,13 +1617,8 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
             script = script & "      }" & vbCrLf
             script = script & vbCrLf
             script = script & "      if ($logContent) {" & vbCrLf
-            script = script & "        $logStr = $logContent -join ""`n""" & vbCrLf
-            script = script & "        Write-Log ""[DEBUG-34] ログ取得結果(リモート): $logStr""" & vbCrLf
-            script = script & "        if ($logStr -and $logStr -notmatch 'KAVS' -and $logStr -notmatch 'ERROR:') {" & vbCrLf
-            script = script & "          # 長すぎる場合は切り詰め" & vbCrLf
-            script = script & "          if ($logStr.Length -gt 1000) { $logStr = $logStr.Substring(0, 1000) + '...' }" & vbCrLf
-            script = script & "          Write-Output ""RESULT_DETAIL:$logStr""" & vbCrLf
-            script = script & "        }" & vbCrLf
+            script = script & "        Write-Log '[詳細] 標準エラーログ:'" & vbCrLf
+            script = script & "        foreach ($line in $logContent) { Write-Log ""  $line"" }" & vbCrLf
             script = script & "      } else {" & vbCrLf
             script = script & "        Write-Log '標準エラーログを取得できませんでした'" & vbCrLf
             script = script & "      }" & vbCrLf
@@ -1671,20 +1664,6 @@ Private Sub UpdateJobListStatus(ByVal row As Long, ByVal result As Object)
     ws.Cells(row, COL_LAST_STATUS).Value = result("Status")
     ws.Cells(row, COL_LAST_EXEC_TIME).Value = result("StartTime")
     ws.Cells(row, COL_LAST_END_TIME).Value = result("EndTime")
-
-    ' 詳細メッセージを記録（詳細情報があれば追加）
-    Dim msgText As String
-    msgText = ""
-    If result("Detail") <> "" Then
-        msgText = result("Detail")
-    End If
-    If result("Message") <> "" Then
-        If msgText <> "" Then msgText = msgText & " | "
-        msgText = msgText & result("Message")
-    End If
-    If msgText <> "" Then
-        ws.Cells(row, COL_LAST_MESSAGE).Value = msgText
-    End If
 
     ' ログパスを記録（ハイパーリンク設定）
     If result("LogPath") <> "" Then
