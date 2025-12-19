@@ -165,14 +165,14 @@ Public Sub GetGroupList()
     Dim ws As Worksheet
     Set ws = Worksheets(SHEET_SETTINGS)
 
-    ' F列の既存データをクリア
+    ' F列の既存データをクリア（1行目は結合セルのため2行目から開始）
     Dim lastGroupRow As Long
     lastGroupRow = ws.Cells(ws.Rows.Count, 6).End(xlUp).row
-    If lastGroupRow >= 1 Then
-        ws.Range(ws.Cells(1, 6), ws.Cells(lastGroupRow, 6)).ClearContents
+    If lastGroupRow >= 2 Then
+        ws.Range(ws.Cells(2, 6), ws.Cells(lastGroupRow, 6)).ClearContents
     End If
 
-    ' グループリストを配列に変換して書き込み
+    ' グループリストを配列に変換して書き込み（2行目から開始）
     Dim groupArray() As String
     groupArray = Split(groupList, ",")
 
@@ -181,15 +181,15 @@ Public Sub GetGroupList()
     groupCount = UBound(groupArray) + 1
 
     For i = 0 To UBound(groupArray)
-        ws.Cells(i + 1, 6).Value = groupArray(i)
+        ws.Cells(i + 2, 6).Value = groupArray(i)  ' 2行目から書き込み
     Next i
 
     ' F列を非表示に
     ws.Columns("F").Hidden = True
 
-    ' 取得パス欄（C15）にドロップダウンリストを設定（セル範囲参照）
+    ' 取得パス欄（C15）にドロップダウンリストを設定（セル範囲参照、2行目から）
     Dim listRange As String
-    listRange = "=" & SHEET_SETTINGS & "!$F$1:$F$" & groupCount
+    listRange = "=" & SHEET_SETTINGS & "!$F$2:$F$" & (groupCount + 1)
 
     With ws.Cells(ROW_ROOT_PATH, COL_SETTING_VALUE).Validation
         .Delete
