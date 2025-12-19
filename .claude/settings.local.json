@@ -2,7 +2,6 @@
   "permissions": {
     "allow": [
       "Bash(powershell -Command:*)",
-      "Bash(rm:*)",
       "Bash(tree:*)",
       "Bash(find:*)",
       "Bash(git add:*)",
@@ -13,7 +12,16 @@
       "Bash(git stash:*)",
       "Bash(git reset:*)",
       "Bash(git checkout:*)",
-      "Bash(gh pr create:*)"
+      "Bash(gh pr create:*)",
+      "Bash(git branch:*)",
+      "Bash(system_profiler:*)",
+      "Bash(tmutil destinationinfo:*)",
+      "Bash(log show:*)",
+      "Bash(sysctl:*)",
+      "Bash(cat:*)",
+      "Bash(tmutil status:*)",
+      "Bash(git fetch:*)",
+      "Bash(gh pr merge:*)"
     ],
     "deny": [],
     "ask": []

@@ -9,6 +9,9 @@ Option Explicit
 '       定数はSetupモジュールで Public として定義されています
 '==============================================================================
 
+' デバッグモード（Trueにすると[DEBUG-XX]ログが出力されます）
+Private Const DEBUG_MODE As Boolean = False
+
 ' 管理者権限状態を保持
 Private g_AdminChecked As Boolean
 Private g_IsAdmin As Boolean
@@ -85,7 +88,7 @@ Public Sub GetJobList()
     lastDataRow = wsJobList.Cells(wsJobList.Rows.Count, COL_JOBNET_PATH).End(xlUp).row
     If lastDataRow >= ROW_JOBLIST_DATA_START Then
         ' ヘッダー行からデータ最終行までを範囲としてオートフィルタを設定
-        wsJobList.Range(wsJobList.Cells(ROW_JOBLIST_HEADER, COL_ORDER), wsJobList.Cells(lastDataRow, COL_LOG_PATH)).AutoFilter _
+        wsJobList.Range(wsJobList.Cells(ROW_JOBLIST_HEADER, COL_ORDER), wsJobList.Cells(lastDataRow, COL_LAST_MESSAGE)).AutoFilter _
             Field:=COL_UNIT_TYPE, Criteria1:="ジョブネット"
     End If
 
@@ -103,6 +106,312 @@ ErrorHandler:
            "エラー内容: " & Err.Description & vbCrLf & _
            "発生場所: GetJobList", vbCritical, "VBAエラー"
 End Sub
+
+'==============================================================================
+' グループ名取得（取得パスのドロップダウンリスト更新）
+'==============================================================================
+Public Sub GetGroupList()
+    On Error GoTo ErrorHandler
+
+    ' 確認メッセージ
+    If MsgBox("JP1サーバから全てのグループ名を抽出します。" & vbCrLf & _
+              "処理に時間がかかる場合がありますがよろしいですか？", _
+              vbYesNo + vbQuestion, "グループ名取得") = vbNo Then
+        Exit Sub
+    End If
+
+    Dim config As Object
+    Set config = GetConfig()
+
+    If config Is Nothing Then Exit Sub
+
+    ' リモートモードの場合、管理者権限をチェック
+    If Not EnsureAdminForRemoteMode(config) Then Exit Sub
+
+    ' パスワード入力（リモートモードの場合のみリモートパスワードが必要）
+    If config("ExecMode") <> "ローカル" Then
+        If config("RemotePassword") = "" Then
+            config("RemotePassword") = InputBox("リモートサーバのパスワードを入力してください:", "パスワード入力")
+            If config("RemotePassword") = "" Then
+                MsgBox "パスワードが入力されませんでした。", vbExclamation
+                Exit Sub
+            End If
+        End If
+    End If
+
+    Application.StatusBar = "グループ名を取得中..."
+    Application.ScreenUpdating = False
+
+    ' PowerShellスクリプト生成・実行（ルート直下のみ取得、-Rなし）
+    Dim psScript As String
+    psScript = BuildGetGroupListScript(config)
+
+    Dim result As String
+    result = ExecutePowerShell(psScript)
+
+    ' 結果をパースしてグループ名リストを作成
+    Dim groupList As String
+    groupList = ParseGroupListResult(result)
+
+    If groupList = "" Then
+        Application.StatusBar = False
+        Application.ScreenUpdating = True
+        MsgBox "グループが見つかりませんでした。" & vbCrLf & _
+               "接続設定を確認してください。", vbExclamation, "グループ名取得"
+        Exit Sub
+    End If
+
+    ' グループリストを設定シートのG列に書き込み（ドロップダウン用）
+    Dim ws As Worksheet
+    Set ws = Worksheets(SHEET_SETTINGS)
+
+    ' G列の既存データをクリア
+    Dim lastGroupRow As Long
+    lastGroupRow = ws.Cells(ws.Rows.Count, 7).End(xlUp).row
+    If lastGroupRow >= 1 Then
+        ws.Range(ws.Cells(1, 7), ws.Cells(lastGroupRow, 7)).ClearContents
+    End If
+
+    ' グループリストを配列に変換して書き込み
+    Dim groupArray() As String
+    groupArray = Split(groupList, ",")
+
+    Dim i As Long
+    Dim groupCount As Long
+    groupCount = UBound(groupArray) + 1
+
+    For i = 0 To UBound(groupArray)
+        ws.Cells(i + 1, 7).Value = groupArray(i)
+    Next i
+
+    ' G列を非表示に
+    ws.Columns("G").Hidden = True
+
+    ' 取得パス欄（C15）にドロップダウンリストを設定（セル範囲参照）
+    Dim listRange As String
+    listRange = "=" & SHEET_SETTINGS & "!$G$1:$G$" & groupCount
+
+    With ws.Cells(ROW_ROOT_PATH, COL_SETTING_VALUE).Validation
+        .Delete
+        .Add Type:=xlValidateList, AlertStyle:=xlValidAlertStop, Formula1:=listRange
+        .IgnoreBlank = True
+        .InCellDropdown = True
+    End With
+
+    Application.StatusBar = False
+    Application.ScreenUpdating = True
+
+    MsgBox "グループ名を取得しました（" & groupCount & " 件）。" & vbCrLf & _
+           "取得パス欄のドロップダウンから選択できます。", vbInformation, "グループ名取得"
+    Exit Sub
+
+ErrorHandler:
+    Application.StatusBar = False
+    Application.ScreenUpdating = True
+    MsgBox "エラーが発生しました。" & vbCrLf & vbCrLf & _
+           "エラー番号: " & Err.Number & vbCrLf & _
+           "エラー内容: " & Err.Description & vbCrLf & _
+           "発生場所: GetGroupList", vbCritical, "VBAエラー"
+End Sub
+
+Private Function BuildGetGroupListScript(config As Object) As String
+    Dim script As String
+
+    script = "$ErrorActionPreference = 'Stop'" & vbCrLf
+    script = script & vbCrLf
+
+    ' UTF-8エンコーディング設定（日本語パス対応）
+    script = script & "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8" & vbCrLf
+    script = script & "$OutputEncoding = [System.Text.Encoding]::UTF8" & vbCrLf
+    script = script & "chcp 65001 | Out-Null" & vbCrLf
+    script = script & vbCrLf
+
+    ' ローカルモードとリモートモードで処理を分岐
+    If config("ExecMode") = "ローカル" Then
+        ' ローカル実行モード
+        script = script & "try {" & vbCrLf
+        script = script & "  $ajsprintPath = $null" & vbCrLf
+        script = script & "  $searchPaths = @(" & vbCrLf
+        script = script & "    'C:\Program Files\HITACHI\JP1AJS3\bin\ajsprint.exe'," & vbCrLf
+        script = script & "    'C:\Program Files (x86)\HITACHI\JP1AJS3\bin\ajsprint.exe'," & vbCrLf
+        script = script & "    'C:\Program Files\Hitachi\JP1AJS2\bin\ajsprint.exe'," & vbCrLf
+        script = script & "    'C:\Program Files (x86)\Hitachi\JP1AJS2\bin\ajsprint.exe'" & vbCrLf
+        script = script & "  )" & vbCrLf
+        script = script & "  foreach ($path in $searchPaths) {" & vbCrLf
+        script = script & "    if (Test-Path $path) { $ajsprintPath = $path; break }" & vbCrLf
+        script = script & "  }" & vbCrLf
+        script = script & "  if (-not $ajsprintPath) {" & vbCrLf
+        script = script & "    Write-Output 'ERROR: JP1コマンド(ajsprint.exe)が見つかりません。'" & vbCrLf
+        script = script & "    exit 1" & vbCrLf
+        script = script & "  }" & vbCrLf
+        script = script & vbCrLf
+        script = script & "  # 全グループを再帰的に取得（-Rあり）" & vbCrLf
+        script = script & "  $result = & $ajsprintPath -F " & config("SchedulerService") & " '/*' -R 2>&1" & vbCrLf
+        script = script & "  $result | ForEach-Object { Write-Output $_ }" & vbCrLf
+        script = script & "} catch {" & vbCrLf
+        script = script & "  Write-Output ""ERROR: $($_.Exception.Message)""" & vbCrLf
+        script = script & "}" & vbCrLf
+    Else
+        ' リモート実行モード（WinRM使用）
+        script = script & "$securePass = ConvertTo-SecureString '" & EscapePSString(config("RemotePassword")) & "' -AsPlainText -Force" & vbCrLf
+        script = script & "$cred = New-Object System.Management.Automation.PSCredential('" & config("RemoteUser") & "', $securePass)" & vbCrLf
+        script = script & vbCrLf
+
+        ' WinRM設定の保存と自動設定
+        script = script & "$originalTrustedHosts = $null" & vbCrLf
+        script = script & "$winrmConfigChanged = $false" & vbCrLf
+        script = script & "$winrmServiceWasStarted = $false" & vbCrLf
+        script = script & vbCrLf
+
+        script = script & "try {" & vbCrLf
+        script = script & "  $winrmService = Get-Service -Name WinRM -ErrorAction SilentlyContinue" & vbCrLf
+        script = script & "  if ($winrmService.Status -ne 'Running') {" & vbCrLf
+        script = script & "    Start-Service -Name WinRM -ErrorAction Stop" & vbCrLf
+        script = script & "    $winrmServiceWasStarted = $true" & vbCrLf
+        script = script & "  }" & vbCrLf
+        script = script & vbCrLf
+        script = script & "  $originalTrustedHosts = (Get-Item WSMan:\localhost\Client\TrustedHosts -ErrorAction SilentlyContinue).Value" & vbCrLf
+        script = script & vbCrLf
+        script = script & "  if ($originalTrustedHosts -notmatch '" & config("JP1Server") & "') {" & vbCrLf
+        script = script & "    if ($originalTrustedHosts) {" & vbCrLf
+        script = script & "      Set-Item WSMan:\localhost\Client\TrustedHosts -Value ""$originalTrustedHosts," & config("JP1Server") & """ -Force" & vbCrLf
+        script = script & "    } else {" & vbCrLf
+        script = script & "      Set-Item WSMan:\localhost\Client\TrustedHosts -Value '" & config("JP1Server") & "' -Force" & vbCrLf
+        script = script & "    }" & vbCrLf
+        script = script & "    $winrmConfigChanged = $true" & vbCrLf
+        script = script & "  }" & vbCrLf
+        script = script & vbCrLf
+
+        ' リモート実行
+        script = script & "  $session = New-PSSession -ComputerName '" & config("JP1Server") & "' -Credential $cred -ErrorAction Stop" & vbCrLf
+        script = script & vbCrLf
+        script = script & "  $result = Invoke-Command -Session $session -ScriptBlock {" & vbCrLf
+        script = script & "    param($schedulerService)" & vbCrLf
+        script = script & "    $ajsprintPath = $null" & vbCrLf
+        script = script & "    $searchPaths = @('C:\Program Files\HITACHI\JP1AJS3\bin\ajsprint.exe','C:\Program Files (x86)\HITACHI\JP1AJS3\bin\ajsprint.exe','C:\Program Files\Hitachi\JP1AJS2\bin\ajsprint.exe','C:\Program Files (x86)\Hitachi\JP1AJS2\bin\ajsprint.exe')" & vbCrLf
+        script = script & "    foreach ($p in $searchPaths) { if (Test-Path $p) { $ajsprintPath = $p; break } }" & vbCrLf
+        script = script & "    if (-not $ajsprintPath) { Write-Output 'ERROR: ajsprint.exe not found'; return }" & vbCrLf
+        script = script & "    # 全グループを再帰的に取得（-Rあり）" & vbCrLf
+        script = script & "    $output = & $ajsprintPath '-F' $schedulerService '/*' '-R' 2>&1" & vbCrLf
+        script = script & "    $output | Where-Object { $_ -notmatch '^KAVS\d+-I' }" & vbCrLf
+        script = script & "  } -ArgumentList '" & config("SchedulerService") & "'" & vbCrLf
+        script = script & vbCrLf
+        script = script & "  Remove-PSSession $session" & vbCrLf
+        script = script & vbCrLf
+        script = script & "  $result | ForEach-Object { Write-Output $_ }" & vbCrLf
+        script = script & "} catch {" & vbCrLf
+        script = script & "  Write-Output ""ERROR: $($_.Exception.Message)""" & vbCrLf
+        script = script & "} finally {" & vbCrLf
+        script = script & "  if ($winrmConfigChanged) {" & vbCrLf
+        script = script & "    if ($originalTrustedHosts) {" & vbCrLf
+        script = script & "      Set-Item WSMan:\localhost\Client\TrustedHosts -Value $originalTrustedHosts -Force -ErrorAction SilentlyContinue" & vbCrLf
+        script = script & "    } else {" & vbCrLf
+        script = script & "      Clear-Item WSMan:\localhost\Client\TrustedHosts -Force -ErrorAction SilentlyContinue" & vbCrLf
+        script = script & "    }" & vbCrLf
+        script = script & "  }" & vbCrLf
+        script = script & "  if ($winrmServiceWasStarted) {" & vbCrLf
+        script = script & "    Stop-Service -Name WinRM -Force -ErrorAction SilentlyContinue" & vbCrLf
+        script = script & "  }" & vbCrLf
+        script = script & "}" & vbCrLf
+    End If
+
+    BuildGetGroupListScript = script
+End Function
+
+Private Function ParseGroupListResult(result As String) As String
+    ' グループ名を抽出してドロップダウン用のリストを作成（ネスト対応）
+    ' 戻り値: カンマ区切りのパスリスト（例: /,/グループA,/グループA/サブグループ）
+    ' ※アスタリスクなしで保存（ジョブ一覧取得時に-Rオプションで再帰取得）
+
+    ' エラーチェック
+    If InStr(result, "ERROR:") > 0 Then
+        ParseGroupListResult = ""
+        Exit Function
+    End If
+
+    Dim lines() As String
+    lines = Split(result, vbCrLf)
+
+    Dim groupPaths As String
+    groupPaths = "/"  ' デフォルトで全件取得オプションを追加（ルート）
+
+    ' ネスト対応のためスタック構造を使用
+    Const MAX_DEPTH As Long = 20
+    Dim pathStack(1 To MAX_DEPTH) As String   ' パスのスタック
+    Dim typeStack(1 To MAX_DEPTH) As String   ' ユニットタイプのスタック
+    Dim stackDepth As Long
+    stackDepth = 0
+
+    Dim i As Long
+    Dim pendingUnitName As String
+    pendingUnitName = ""
+
+    For i = LBound(lines) To UBound(lines)
+        Dim lineStr As String
+        lineStr = Trim(Replace(lines(i), vbTab, ""))
+
+        ' 空行はスキップ
+        If lineStr = "" Then GoTo NextGroupLine
+
+        ' unit=行からユニット名を取得
+        If InStr(lineStr, "unit=") > 0 Then
+            ' unit=名前,,...; から名前を抽出
+            Dim parts() As String
+            Dim unitPart As String
+            unitPart = Mid(lineStr, InStr(lineStr, "unit=") + 5)
+            parts = Split(unitPart, ",")
+            If UBound(parts) >= 0 Then
+                pendingUnitName = Trim(parts(0))
+                ' 末尾のセミコロンを除去
+                If Right(pendingUnitName, 1) = ";" Then
+                    pendingUnitName = Left(pendingUnitName, Len(pendingUnitName) - 1)
+                End If
+            End If
+            GoTo NextGroupLine
+        End If
+
+        ' { でネストレベルを上げる
+        If Left(lineStr, 1) = "{" Then
+            If pendingUnitName <> "" Then
+                stackDepth = stackDepth + 1
+                If stackDepth <= MAX_DEPTH Then
+                    If stackDepth = 1 Then
+                        pathStack(stackDepth) = "/" & pendingUnitName
+                    Else
+                        pathStack(stackDepth) = pathStack(stackDepth - 1) & "/" & pendingUnitName
+                    End If
+                    typeStack(stackDepth) = ""  ' まだタイプ未確定
+                End If
+                pendingUnitName = ""
+            End If
+            GoTo NextGroupLine
+        End If
+
+        ' ty=行でユニットタイプを確認
+        If InStr(lineStr, "ty=") > 0 Then
+            If stackDepth > 0 And stackDepth <= MAX_DEPTH Then
+                ' ty=g;（グループ）の場合、パスリストに追加
+                If InStr(lineStr, "ty=g;") > 0 Then
+                    typeStack(stackDepth) = "g"
+                    groupPaths = groupPaths & "," & pathStack(stackDepth)
+                End If
+            End If
+            GoTo NextGroupLine
+        End If
+
+        ' } でネストレベルを下げる
+        If Left(lineStr, 1) = "}" Then
+            If stackDepth > 0 Then
+                stackDepth = stackDepth - 1
+            End If
+            GoTo NextGroupLine
+        End If
+
+NextGroupLine:
+    Next i
+
+    ParseGroupListResult = groupPaths
+End Function
 
 Private Function BuildGetJobListScript(config As Object) As String
     Dim script As String
@@ -241,7 +550,7 @@ Private Function ParseJobListResult(result As String, rootPath As String) As Boo
     Dim lastRow As Long
     lastRow = ws.Cells(ws.Rows.Count, COL_JOBNET_PATH).End(xlUp).Row
     If lastRow >= ROW_JOBLIST_DATA_START Then
-        ws.Range(ws.Cells(ROW_JOBLIST_DATA_START, COL_ORDER), ws.Cells(lastRow, COL_LOG_PATH)).Clear
+        ws.Range(ws.Cells(ROW_JOBLIST_DATA_START, COL_ORDER), ws.Cells(lastRow, COL_LAST_MESSAGE)).Clear
     End If
 
     ' 結果をパース
@@ -382,7 +691,7 @@ Private Function ParseJobListResult(result As String, rootPath As String) As Boo
                     If isHold Then
                         ws.Cells(currentRow, COL_HOLD).Value = "保留中"
                         ws.Cells(currentRow, COL_HOLD).HorizontalAlignment = xlCenter
-                        ws.Range(ws.Cells(currentRow, COL_ORDER), ws.Cells(currentRow, COL_LOG_PATH)).Interior.Color = RGB(255, 235, 156)
+                        ws.Range(ws.Cells(currentRow, COL_ORDER), ws.Cells(currentRow, COL_LAST_MESSAGE)).Interior.Color = RGB(255, 235, 156)
                         ws.Cells(currentRow, COL_HOLD).Font.Bold = True
                         ws.Cells(currentRow, COL_HOLD).Font.Color = RGB(156, 87, 0)
                     Else
@@ -395,7 +704,7 @@ Private Function ParseJobListResult(result As String, rootPath As String) As Boo
                     End With
 
                     ' 罫線
-                    ws.Range(ws.Cells(currentRow, COL_ORDER), ws.Cells(currentRow, COL_LOG_PATH)).Borders.LineStyle = xlContinuous
+                    ws.Range(ws.Cells(currentRow, COL_ORDER), ws.Cells(currentRow, COL_LAST_MESSAGE)).Borders.LineStyle = xlContinuous
                 End If
 
                 ' スタックをクリアしてポップ
@@ -834,6 +1143,14 @@ Public Sub ExecuteCheckedJobs()
         Exit Sub
     End If
 
+    ' 順序のバリデーション
+    Dim validationError As String
+    validationError = ValidateJobOrder(jobs)
+    If validationError <> "" Then
+        MsgBox validationError, vbExclamation, "順序指定エラー"
+        Exit Sub
+    End If
+
     ' 保留中のジョブ数をカウント
     Dim holdCount As Long
     holdCount = 0
@@ -879,7 +1196,7 @@ Public Sub ExecuteCheckedJobs()
     Set wsLog = Worksheets(SHEET_LOG)
     Dim logRow As Long
     logRow = wsLog.Cells(wsLog.Rows.Count, 1).End(xlUp).Row + 1
-    If logRow < 4 Then logRow = 4
+    If logRow < 5 Then logRow = 5
 
     Dim success As Boolean
     success = True
@@ -896,13 +1213,26 @@ Public Sub ExecuteCheckedJobs()
         wsLog.Cells(logRow, 3).Value = execResult("Status")
         wsLog.Cells(logRow, 4).Value = execResult("StartTime")
         wsLog.Cells(logRow, 5).Value = execResult("EndTime")
-        wsLog.Cells(logRow, 6).Value = execResult("Message")
 
-        ' 色付け
+        ' F列にログパスをハイパーリンク付きで設定
+        If execResult("LogPath") <> "" Then
+            wsLog.Cells(logRow, 6).Value = execResult("LogPath")
+            On Error Resume Next
+            wsLog.Hyperlinks.Add Anchor:=wsLog.Cells(logRow, 6), _
+                                 Address:=execResult("LogPath"), _
+                                 TextToDisplay:=execResult("LogPath")
+            On Error GoTo 0
+        End If
+
+        ' 色付け（ジョブ一覧シートと同じ配色）
         If execResult("Status") = "正常終了" Then
-            wsLog.Cells(logRow, 3).Interior.Color = RGB(198, 239, 206)
+            wsLog.Cells(logRow, 3).Interior.Color = RGB(198, 239, 206)  ' 緑（正常）
+        ElseIf execResult("Status") = "起動成功" Then
+            wsLog.Cells(logRow, 3).Interior.Color = RGB(255, 235, 156)  ' 黄（起動のみ）
+        ElseIf execResult("Status") = "警告検出終了" Or execResult("Status") = "警告終了" Then
+            wsLog.Cells(logRow, 3).Interior.Color = RGB(255, 192, 0)    ' オレンジ（警告）
         Else
-            wsLog.Cells(logRow, 3).Interior.Color = RGB(255, 199, 206)
+            wsLog.Cells(logRow, 3).Interior.Color = RGB(255, 199, 206)  ' 赤（異常）
         End If
 
         wsLog.Range(wsLog.Cells(logRow, 1), wsLog.Cells(logRow, 6)).Borders.LineStyle = xlContinuous
@@ -912,13 +1242,21 @@ Public Sub ExecuteCheckedJobs()
 
         logRow = logRow + 1
 
-        ' エラー時は停止
+        ' エラー・警告時は停止
         If execResult("Status") <> "正常終了" And execResult("Status") <> "起動成功" Then
             success = False
-            MsgBox "ジョブ「" & j("Path") & "」が失敗しました。" & vbCrLf & _
-                   "処理を中断します。" & vbCrLf & vbCrLf & _
-                   "詳細: " & execResult("Message") & vbCrLf & vbCrLf & _
-                   "実行ログ: " & g_LogFilePath, vbCritical
+            ' 警告検出終了と異常終了で異なるメッセージを表示
+            If execResult("Status") = "警告検出終了" Or execResult("Status") = "警告終了" Then
+                MsgBox "ジョブ「" & j("Path") & "」で警告が検出されました。" & vbCrLf & _
+                       "処理を中断します。" & vbCrLf & vbCrLf & _
+                       "詳細: " & execResult("Message") & vbCrLf & vbCrLf & _
+                       "実行ログ: " & g_LogFilePath, vbExclamation, "警告検出"
+            Else
+                MsgBox "ジョブ「" & j("Path") & "」が失敗しました。" & vbCrLf & _
+                       "処理を中断します。" & vbCrLf & vbCrLf & _
+                       "詳細: " & execResult("Message") & vbCrLf & vbCrLf & _
+                       "実行ログ: " & g_LogFilePath, vbCritical, "異常終了"
+            End If
             Exit For
         End If
     Next j
@@ -1004,6 +1342,71 @@ Private Function GetOrderedJobs() As Collection
     Set GetOrderedJobs = jobs
 End Function
 
+Private Function ValidateJobOrder(jobs As Collection) As String
+    ' 順序指定のバリデーション
+    ' 戻り値: エラーメッセージ（正常な場合は空文字）
+
+    If jobs.Count = 0 Then
+        ValidateJobOrder = ""
+        Exit Function
+    End If
+
+    ' 順序番号を配列に収集
+    Dim orders() As Long
+    ReDim orders(1 To jobs.Count)
+    Dim i As Long
+    i = 0
+    Dim j As Variant
+    For Each j In jobs
+        i = i + 1
+        orders(i) = j("Order")
+    Next j
+
+    ' 重複チェック
+    Dim k As Long
+    For i = 1 To UBound(orders) - 1
+        For k = i + 1 To UBound(orders)
+            If orders(i) = orders(k) Then
+                ValidateJobOrder = "順序番号 " & orders(i) & " が重複しています。" & vbCrLf & _
+                                   "各ジョブには異なる順序番号を指定してください。"
+                Exit Function
+            End If
+        Next k
+    Next i
+
+    ' 連続性チェック（1から始まって連続しているか）
+    ' まずソート
+    Dim temp As Long
+    For i = 1 To UBound(orders) - 1
+        For k = i + 1 To UBound(orders)
+            If orders(i) > orders(k) Then
+                temp = orders(i)
+                orders(i) = orders(k)
+                orders(k) = temp
+            End If
+        Next k
+    Next i
+
+    ' 1から始まっているか
+    If orders(1) <> 1 Then
+        ValidateJobOrder = "順序番号は 1 から開始してください。" & vbCrLf & _
+                           "現在の最小値: " & orders(1)
+        Exit Function
+    End If
+
+    ' 連続しているか
+    For i = 2 To UBound(orders)
+        If orders(i) <> orders(i - 1) + 1 Then
+            ValidateJobOrder = "順序番号が連続していません。" & vbCrLf & _
+                               orders(i - 1) & " の次は " & (orders(i - 1) + 1) & " を指定してください。" & vbCrLf & _
+                               "（現在: " & orders(i) & "）"
+            Exit Function
+        End If
+    Next i
+
+    ValidateJobOrder = ""
+End Function
+
 Private Function ExecuteSingleJob(ByVal config As Object, ByVal jobnetPath As String, ByVal isHold As Boolean, ByVal logFilePath As String) As Object
     Dim result As Object
     Set result = CreateObject("Scripting.Dictionary")
@@ -1069,10 +1472,15 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
     script = script & vbCrLf
 
     ' ログ出力関数を定義
+    script = script & "# デバッグモードフラグ" & vbCrLf
+    script = script & "$debugMode = $" & IIf(DEBUG_MODE, "true", "false") & vbCrLf
+    script = script & vbCrLf
     script = script & "# ログ出力関数（ファイルとコンソール両方に出力）" & vbCrLf
     script = script & "$logFile = '" & Replace(logFilePath, "'", "''") & "'" & vbCrLf
     script = script & "function Write-Log {" & vbCrLf
     script = script & "  param([string]$Message)" & vbCrLf
+    script = script & "  # DEBUGログはデバッグモード時のみ出力" & vbCrLf
+    script = script & "  if ($Message -match '^\[DEBUG-' -and -not $debugMode) { return }" & vbCrLf
     script = script & "  $timestamp = Get-Date -Format 'yyyy/MM/dd HH:mm:ss'" & vbCrLf
     script = script & "  $logLine = ""[$timestamp] $Message""" & vbCrLf
     script = script & "  Write-Host $logLine" & vbCrLf
@@ -1210,97 +1618,114 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
             script = script & "    $jpqjobgetPath = $null" & vbCrLf
             script = script & "    $jpqSearchPaths = @('C:\Program Files\HITACHI\JP1AJS3\bin\jpqjobget.exe','C:\Program Files (x86)\HITACHI\JP1AJS3\bin\jpqjobget.exe','C:\Program Files\Hitachi\JP1AJS2\bin\jpqjobget.exe','C:\Program Files (x86)\Hitachi\JP1AJS2\bin\jpqjobget.exe')" & vbCrLf
             script = script & "    foreach ($p in $jpqSearchPaths) { if (Test-Path $p) { $jpqjobgetPath = $p; break } }" & vbCrLf
-            script = script & "    Write-Log ""[DEBUG] jpqjobgetPath: $jpqjobgetPath""" & vbCrLf
+            script = script & "    Write-Log ""[DEBUG-01] jpqjobgetPath: $jpqjobgetPath""" & vbCrLf
             script = script & vbCrLf
-            script = script & "    # ajsshow -g 1 -f で異常終了したユニットを取得（フォーマット: ジョブ名 種別 状態 戻り値）" & vbCrLf
-            script = script & "    Write-Log ""[DEBUG] 実行コマンド: $ajsshowPath -F '" & config("SchedulerService") & "' -g 1 -f '%J %T %C %R' '" & jobnetPath & "'""" & vbCrLf
-            script = script & "    $failedJobsResult = & $ajsshowPath -F '" & config("SchedulerService") & "' -g 1 -f '%J %T %C %R' '" & jobnetPath & "' 2>&1" & vbCrLf
+            script = script & "    # ajsshow -R -f で配下すべてのユニットを取得（フォーマット: ジョブ名 種別 状態 戻り値）" & vbCrLf
+            script = script & "    Write-Log ""[DEBUG-02] 実行コマンド: $ajsshowPath -F '" & config("SchedulerService") & "' -R -f '%J %T %C %R' '" & jobnetPath & "'""" & vbCrLf
+            script = script & "    $failedJobsResult = & $ajsshowPath -F '" & config("SchedulerService") & "' -R -f '%J %T %C %R' '" & jobnetPath & "' 2>&1" & vbCrLf
             script = script & "    $failedJobsStr = $failedJobsResult -join ""`n""" & vbCrLf
-            script = script & "    Write-Log ""[DEBUG] ajsshow -g 1 -f 結果:""" & vbCrLf
+            script = script & "    Write-Log ""[DEBUG-03] ajsshow -R -f 結果:""" & vbCrLf
             script = script & "    Write-Log $failedJobsStr" & vbCrLf
             script = script & vbCrLf
             script = script & "    # 異常終了したジョブを特定（出力形式: /パス/ジョブ名 種別 状態 戻り値）" & vbCrLf
             script = script & "    $failedJobPath = ''" & vbCrLf
-            script = script & "    Write-Log ""[DEBUG] 結果行数: $($failedJobsResult.Count)""" & vbCrLf
+            script = script & "    $nonZeroReturnJobPath = ''" & vbCrLf
+            script = script & "    Write-Log ""[DEBUG-04] 結果行数: $($failedJobsResult.Count)""" & vbCrLf
             script = script & "    $lineNum = 0" & vbCrLf
             script = script & "    foreach ($line in $failedJobsResult) {" & vbCrLf
             script = script & "      $lineNum++" & vbCrLf
-            script = script & "      Write-Log ""[DEBUG] 行$lineNum : $line""" & vbCrLf
-            script = script & "      # 種別がj(ジョブ)またはpj,qj等で、状態が異常終了または警告終了の行を探す" & vbCrLf
-            script = script & "      if ($line -match '^(/[^\s]+)\s+(j|pj|qj|cj|cpj|fxj)\s+(異常終了|警告終了|Abnormal|Warning|ended abnormally|ended with warning)') {" & vbCrLf
+            script = script & "      Write-Log ""[DEBUG-05] 行$lineNum : $line""" & vbCrLf
+            script = script & "      # 種別がジョブ系（job/jbで終わる）で、状態が異常終了/警告終了/警告検出終了の行を探す" & vbCrLf
+            script = script & "      if ($line -match '^(/[^\s]+)\s+(\w*job|\w*jb)\s+(異常終了|警告終了|警告検出終了|Abnormal|Warning|ended abnormally|ended with warning)') {" & vbCrLf
             script = script & "        $failedJobPath = $matches[1]" & vbCrLf
-            script = script & "        Write-Log ""[DEBUG] 異常終了/警告終了ジョブを検出: $failedJobPath""" & vbCrLf
+            script = script & "        Write-Log ""[DEBUG-06] 異常終了/警告終了/警告検出終了ジョブを検出: $failedJobPath (種別: $($matches[2]))""" & vbCrLf
             script = script & "        break" & vbCrLf
             script = script & "      }" & vbCrLf
+            script = script & "      # 戻り値が0以外のジョブも記録（フォールバック用）" & vbCrLf
+            script = script & "      if (-not $nonZeroReturnJobPath -and $line -match '^(/[^\s]+)\s+(\w*job|\w*jb)\s+\S+\s+([1-9]\d*|-\d+)') {" & vbCrLf
+            script = script & "        $nonZeroReturnJobPath = $matches[1]" & vbCrLf
+            script = script & "        Write-Log ""[DEBUG-07] 戻り値が0以外のジョブを検出: $nonZeroReturnJobPath (戻り値: $($matches[3]))""" & vbCrLf
+            script = script & "      }" & vbCrLf
+            script = script & "    }" & vbCrLf
+            script = script & "    # 異常終了/警告終了ジョブが見つからない場合、戻り値が0以外のジョブを使用" & vbCrLf
+            script = script & "    if (-not $failedJobPath -and $nonZeroReturnJobPath) {" & vbCrLf
+            script = script & "      $failedJobPath = $nonZeroReturnJobPath" & vbCrLf
+            script = script & "      Write-Log ""[DEBUG-08] 戻り値が0以外のジョブを使用: $failedJobPath""" & vbCrLf
             script = script & "    }" & vbCrLf
             script = script & vbCrLf
             script = script & "    if ($failedJobPath) {" & vbCrLf
-            script = script & "      Write-Log ""[DEBUG] failedJobPath が見つかりました: $failedJobPath""" & vbCrLf
+            script = script & "      Write-Log ""[DEBUG-09] failedJobPath が見つかりました: $failedJobPath""" & vbCrLf
             script = script & "      # 失敗したジョブの詳細を取得（実行ID、実行登録番号、標準エラー出力ファイル名、ジョブ番号）" & vbCrLf
-            script = script & "      Write-Log ""[DEBUG] 実行コマンド: $ajsshowPath -F '" & config("SchedulerService") & "' -g 1 -i '%## %ll %rr %I' $failedJobPath""" & vbCrLf
+            script = script & "      Write-Log ""[DEBUG-10] 実行コマンド: $ajsshowPath -F '" & config("SchedulerService") & "' -g 1 -i '%## %ll %rr %I' $failedJobPath""" & vbCrLf
             script = script & "      $detailResult = & $ajsshowPath -F '" & config("SchedulerService") & "' -g 1 -i '%## %ll %rr %I' $failedJobPath 2>&1" & vbCrLf
             script = script & "      $detailStr = $detailResult -join ""`n""" & vbCrLf
-            script = script & "      Write-Log ""[DEBUG] ajsshow -g 1 -i 結果:""" & vbCrLf
+            script = script & "      Write-Log ""[DEBUG-11] ajsshow -g 1 -i 結果:""" & vbCrLf
             script = script & "      Write-Log $detailStr" & vbCrLf
             script = script & vbCrLf
             script = script & "      # 実行ID（%#）を抽出" & vbCrLf
             script = script & "      $execId = ''" & vbCrLf
             script = script & "      if ($detailStr -match '@[A-Z0-9]+') { $execId = $matches[0] }" & vbCrLf
-            script = script & "      Write-Log ""[DEBUG] 抽出した実行ID: $execId""" & vbCrLf
+            script = script & "      Write-Log ""[DEBUG-12] 抽出した実行ID: $execId""" & vbCrLf
             script = script & vbCrLf
             script = script & "      # 実行登録番号（%l）を抽出" & vbCrLf
             script = script & "      $execNo = ''" & vbCrLf
             script = script & "      if ($detailStr -match '\d{11,}') { $execNo = $matches[0] }" & vbCrLf
-            script = script & "      Write-Log ""[DEBUG] 抽出した実行登録番号: $execNo""" & vbCrLf
+            script = script & "      Write-Log ""[DEBUG-13] 抽出した実行登録番号: $execNo""" & vbCrLf
             script = script & vbCrLf
-            script = script & "      # 標準エラー出力ファイル名（%r）を抽出" & vbCrLf
+            script = script & "      # 標準エラー出力ファイル名（%r）を抽出（空白を含むパスに対応）" & vbCrLf
             script = script & "      $logPath = ''" & vbCrLf
-            script = script & "      if ($detailStr -match '/[^\s]+\.err') { $logPath = $matches[0] }" & vbCrLf
-            script = script & "      elseif ($detailStr -match '[A-Za-z]:\\[^\s]+') { $logPath = $matches[0] }" & vbCrLf
-            script = script & "      Write-Log ""[DEBUG] 抽出したログパス: $logPath""" & vbCrLf
+            script = script & "      if ($detailStr -match '/[^\r\n]+\.err') { $logPath = $matches[0] }" & vbCrLf
+            script = script & "      elseif ($detailStr -match '[A-Za-z]:[^\r\n]+\.err') { $logPath = $matches[0] }" & vbCrLf
+            script = script & "      Write-Log ""[DEBUG-14] 抽出したログパス: $logPath""" & vbCrLf
             script = script & "      if ($logPath) {" & vbCrLf
-            script = script & "        Write-Output ""RESULT_LOGPATH:$logPath""" & vbCrLf
+            script = script & "        Write-Output ""RESULT_LOGPATH:$logFile""" & vbCrLf
             script = script & "      }" & vbCrLf
             script = script & vbCrLf
-            script = script & "      # ジョブ番号（%I）を抽出（ajsshow出力の最後の数値）" & vbCrLf
-            script = script & "      $jobNo = ''" & vbCrLf
-            script = script & "      # ajsshow出力をスペースで分割し、最後の純粋な数値を取得" & vbCrLf
-            script = script & "      $parts = ($detailStr -split '\s+') | Where-Object { $_ -match '^\d+$' }" & vbCrLf
-            script = script & "      if ($parts) { $jobNo = @($parts)[-1] }" & vbCrLf
-            script = script & "      Write-Log ""[DEBUG] 抽出したジョブ番号: $jobNo""" & vbCrLf
+            script = script & "      # まず標準エラーファイルを直接読み取る（ローカルモード）" & vbCrLf
+            script = script & "      $logContent = $null" & vbCrLf
+            script = script & "      if ($logPath -and (Test-Path $logPath)) {" & vbCrLf
+            script = script & "        Write-Log ""[DEBUG-15] 標準エラーファイルを直接読み取り: $logPath""" & vbCrLf
+            script = script & "        $logContent = Get-Content $logPath -Encoding Default -ErrorAction SilentlyContinue" & vbCrLf
+            script = script & "      }" & vbCrLf
             script = script & vbCrLf
-            script = script & "      # jpqjobgetでログを取得（マネージャ経由でエージェントのログを取得）" & vbCrLf
-            script = script & "      if ($jpqjobgetPath -and $jobNo) {" & vbCrLf
-            script = script & "        $tempDir = $env:TEMP" & vbCrLf
-            script = script & "        $stderrFile = Join-Path $tempDir ""jp1_stderr_$jobNo.tmp""" & vbCrLf
-            script = script & "        $stdoutFile = Join-Path $tempDir ""jp1_stdout_$jobNo.tmp""" & vbCrLf
-            script = script & "        Write-Log ""[DEBUG] jpqjobget実行: -j $jobNo -ose $stderrFile""" & vbCrLf
-            script = script & "        # 標準エラーを取得" & vbCrLf
-            script = script & "        $jpqResult = & $jpqjobgetPath -j $jobNo -ose $stderrFile 2>&1" & vbCrLf
-            script = script & "        Write-Log ""[DEBUG] jpqjobget -ose 結果: $($jpqResult -join ' ')""" & vbCrLf
-            script = script & "        $logContent = $null" & vbCrLf
-            script = script & "        if (Test-Path $stderrFile) {" & vbCrLf
-            script = script & "          $logContent = Get-Content $stderrFile -Encoding UTF8 -ErrorAction SilentlyContinue" & vbCrLf
-            script = script & "          Remove-Item $stderrFile -Force -ErrorAction SilentlyContinue" & vbCrLf
-            script = script & "        }" & vbCrLf
-            script = script & "        if (-not $logContent) {" & vbCrLf
-            script = script & "          Write-Log ""[DEBUG] 標準エラー取得失敗、標準出力を試行""" & vbCrLf
-            script = script & "          $jpqResult = & $jpqjobgetPath -j $jobNo -oso $stdoutFile 2>&1" & vbCrLf
-            script = script & "          Write-Log ""[DEBUG] jpqjobget -oso 結果: $($jpqResult -join ' ')""" & vbCrLf
-            script = script & "          if (Test-Path $stdoutFile) {" & vbCrLf
-            script = script & "            $logContent = Get-Content $stdoutFile -Encoding UTF8 -ErrorAction SilentlyContinue" & vbCrLf
-            script = script & "            Remove-Item $stdoutFile -Force -ErrorAction SilentlyContinue" & vbCrLf
+            script = script & "      # ファイルが読めなかった場合、jpqjobgetを試行" & vbCrLf
+            script = script & "      if (-not $logContent -and $jpqjobgetPath) {" & vbCrLf
+            script = script & "        # ジョブ番号（%I）を抽出（ajsshow出力の最後の数値）" & vbCrLf
+            script = script & "        $jobNo = ''" & vbCrLf
+            script = script & "        $parts = ($detailStr -split '\s+') | Where-Object { $_ -match '^\d+$' }" & vbCrLf
+            script = script & "        if ($parts) { $jobNo = @($parts)[-1] }" & vbCrLf
+            script = script & "        Write-Log ""[DEBUG-16] 抽出したジョブ番号: $jobNo""" & vbCrLf
+            script = script & vbCrLf
+            script = script & "        if ($jobNo) {" & vbCrLf
+            script = script & "          $tempDir = $env:TEMP" & vbCrLf
+            script = script & "          $stderrFile = Join-Path $tempDir ""jp1_stderr_$jobNo.tmp""" & vbCrLf
+            script = script & "          $stdoutFile = Join-Path $tempDir ""jp1_stdout_$jobNo.tmp""" & vbCrLf
+            script = script & "          Write-Log ""[DEBUG-17] jpqjobget実行: -j $jobNo -ose $stderrFile""" & vbCrLf
+            script = script & "          $jpqResult = & $jpqjobgetPath -j $jobNo -ose $stderrFile 2>&1" & vbCrLf
+            script = script & "          Write-Log ""[DEBUG-18] jpqjobget -ose 結果: $($jpqResult -join ' ')""" & vbCrLf
+            script = script & "          if (Test-Path $stderrFile) {" & vbCrLf
+            script = script & "            $logContent = Get-Content $stderrFile -Encoding Default -ErrorAction SilentlyContinue" & vbCrLf
+            script = script & "            Remove-Item $stderrFile -Force -ErrorAction SilentlyContinue" & vbCrLf
             script = script & "          }" & vbCrLf
+            script = script & "          if (-not $logContent) {" & vbCrLf
+            script = script & "            Write-Log ""[DEBUG-19] 標準エラー取得失敗、標準出力を試行""" & vbCrLf
+            script = script & "            $jpqResult = & $jpqjobgetPath -j $jobNo -oso $stdoutFile 2>&1" & vbCrLf
+            script = script & "            Write-Log ""[DEBUG-20] jpqjobget -oso 結果: $($jpqResult -join ' ')""" & vbCrLf
+            script = script & "            if (Test-Path $stdoutFile) {" & vbCrLf
+            script = script & "              $logContent = Get-Content $stdoutFile -Encoding Default -ErrorAction SilentlyContinue" & vbCrLf
+            script = script & "              Remove-Item $stdoutFile -Force -ErrorAction SilentlyContinue" & vbCrLf
+            script = script & "            }" & vbCrLf
+            script = script & "          }" & vbCrLf
+            script = script & "        } else {" & vbCrLf
+            script = script & "          Write-Log 'ジョブ番号が取得できませんでした'" & vbCrLf
             script = script & "        }" & vbCrLf
-            script = script & "        if ($logContent) {" & vbCrLf
-            script = script & "          $logStr = $logContent -join ' '" & vbCrLf
-            script = script & "          # 改行を半角スペースに置換、長すぎる場合は切り詰め" & vbCrLf
-            script = script & "          $logStr = $logStr -replace '[\r\n]+', ' ' -replace '\s+', ' '" & vbCrLf
-            script = script & "          if ($logStr.Length -gt 500) { $logStr = $logStr.Substring(0, 500) + '...' }" & vbCrLf
-            script = script & "          Write-Output ""RESULT_DETAIL:$logStr""" & vbCrLf
-            script = script & "        }" & vbCrLf
+            script = script & "      }" & vbCrLf
+            script = script & vbCrLf
+            script = script & "      if ($logContent) {" & vbCrLf
+            script = script & "        Write-Log '[詳細] 標準エラーログ:'" & vbCrLf
+            script = script & "        foreach ($line in $logContent) { Write-Log ""  $line"" }" & vbCrLf
             script = script & "      } else {" & vbCrLf
-            script = script & "        Write-Log 'jpqjobgetが見つからないか、ジョブ番号が取得できませんでした'" & vbCrLf
+            script = script & "        Write-Log '標準エラーログを取得できませんでした'" & vbCrLf
             script = script & "      }" & vbCrLf
             script = script & "    } else {" & vbCrLf
             script = script & "      Write-Log '異常終了したジョブが見つかりませんでした'" & vbCrLf
@@ -1494,42 +1919,53 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
             script = script & "  if ($lastStatusStr -match '警告検出終了|異常終了|異常検出終了|ended abnormally|ended with warning') {" & vbCrLf
             script = script & "    Write-Log '[詳細取得] 異常終了したジョブを検索中...'" & vbCrLf
             script = script & vbCrLf
-            script = script & "    # ajsshow -g 1 -f で異常終了したユニットを取得（リモート）" & vbCrLf
+            script = script & "    # ajsshow -R -f で配下すべてのユニットを取得（リモート）" & vbCrLf
             script = script & "    # フォーマット: %J=完全名, %T=種別, %C=状態, %R=戻り値" & vbCrLf
-            script = script & "    Write-Log ""[DEBUG] 実行コマンド(リモート): ajsshow -F '" & config("SchedulerService") & "' -g 1 -f '%J %T %C %R' '" & jobnetPath & "'""" & vbCrLf
+            script = script & "    Write-Log ""[DEBUG-21] 実行コマンド(リモート): ajsshow -F '" & config("SchedulerService") & "' -R -f '%J %T %C %R' '" & jobnetPath & "'""" & vbCrLf
             script = script & "    $failedJobsResult = Invoke-Command -Session $session -ScriptBlock {" & vbCrLf
             script = script & "      param($schedulerService, $jobnetPath)" & vbCrLf
             script = script & "      $ajsshowPath = $null" & vbCrLf
             script = script & "      $searchPaths = @('C:\Program Files\HITACHI\JP1AJS3\bin\ajsshow.exe','C:\Program Files (x86)\HITACHI\JP1AJS3\bin\ajsshow.exe','C:\Program Files\Hitachi\JP1AJS2\bin\ajsshow.exe','C:\Program Files (x86)\Hitachi\JP1AJS2\bin\ajsshow.exe')" & vbCrLf
             script = script & "      foreach ($p in $searchPaths) { if (Test-Path $p) { $ajsshowPath = $p; break } }" & vbCrLf
             script = script & "      if (-not $ajsshowPath) { return 'ERROR: ajsshow.exe not found' }" & vbCrLf
-            script = script & "      & $ajsshowPath '-F' $schedulerService '-g' '1' '-f' '%J %T %C %R' $jobnetPath 2>&1" & vbCrLf
+            script = script & "      & $ajsshowPath '-F' $schedulerService '-R' '-f' '%J %T %C %R' $jobnetPath 2>&1" & vbCrLf
             script = script & "    } -ArgumentList '" & config("SchedulerService") & "', '" & jobnetPath & "'" & vbCrLf
             script = script & "    $failedJobsStr = $failedJobsResult -join ""`n""" & vbCrLf
-            script = script & "    Write-Log ""[DEBUG] ajsshow -g 1 -f 結果(リモート):""" & vbCrLf
+            script = script & "    Write-Log ""[DEBUG-22] ajsshow -R -f 結果(リモート):""" & vbCrLf
             script = script & "    Write-Log $failedJobsStr" & vbCrLf
             script = script & vbCrLf
             script = script & "    # 異常終了したジョブを特定（-f '%J %T %C %R'の出力形式: /path/job j 異常終了 1）" & vbCrLf
             script = script & "    $failedJobPath = ''" & vbCrLf
-            script = script & "    Write-Log ""[DEBUG] 結果行数: $($failedJobsResult.Count)""" & vbCrLf
+            script = script & "    $nonZeroReturnJobPath = ''" & vbCrLf
+            script = script & "    Write-Log ""[DEBUG-23] 結果行数: $($failedJobsResult.Count)""" & vbCrLf
             script = script & "    $lineNum = 0" & vbCrLf
             script = script & "    foreach ($line in $failedJobsResult) {" & vbCrLf
             script = script & "      $lineNum++" & vbCrLf
-            script = script & "      Write-Log ""[DEBUG] 行$lineNum : $line""" & vbCrLf
-            script = script & "      # フォーマット: /path/job j 異常終了/警告終了 戻り値" & vbCrLf
-            script = script & "      # 種別がj,pj,qj,cj,cpj,fxj(ジョブ系)で、状態が異常終了または警告終了の行を探す" & vbCrLf
-            script = script & "      if ($line -match '^(/[^\s]+)\s+(j|pj|qj|cj|cpj|fxj)\s+(異常終了|警告終了|Abnormal|Warning|ended abnormally|ended with warning)') {" & vbCrLf
+            script = script & "      Write-Log ""[DEBUG-24] 行$lineNum : $line""" & vbCrLf
+            script = script & "      # フォーマット: /path/job job 警告検出終了 戻り値" & vbCrLf
+            script = script & "      # 種別がジョブ系（job/jbで終わる）で、状態が異常終了/警告終了/警告検出終了の行を探す" & vbCrLf
+            script = script & "      if ($line -match '^(/[^\s]+)\s+(\w*job|\w*jb)\s+(異常終了|警告終了|警告検出終了|Abnormal|Warning|ended abnormally|ended with warning)') {" & vbCrLf
             script = script & "        $failedJobPath = $matches[1]" & vbCrLf
-            script = script & "        Write-Log ""[DEBUG] 異常終了/警告終了ジョブ検出: $failedJobPath""" & vbCrLf
+            script = script & "        Write-Log ""[DEBUG-25] 異常終了/警告終了/警告検出終了ジョブ検出: $failedJobPath (種別: $($matches[2]))""" & vbCrLf
             script = script & "        break" & vbCrLf
             script = script & "      }" & vbCrLf
+            script = script & "      # 戻り値が0以外のジョブも記録（フォールバック用）" & vbCrLf
+            script = script & "      if (-not $nonZeroReturnJobPath -and $line -match '^(/[^\s]+)\s+(\w*job|\w*jb)\s+\S+\s+([1-9]\d*|-\d+)') {" & vbCrLf
+            script = script & "        $nonZeroReturnJobPath = $matches[1]" & vbCrLf
+            script = script & "        Write-Log ""[DEBUG-26] 戻り値が0以外のジョブを検出: $nonZeroReturnJobPath (戻り値: $($matches[3]))""" & vbCrLf
+            script = script & "      }" & vbCrLf
+            script = script & "    }" & vbCrLf
+            script = script & "    # 異常終了/警告終了ジョブが見つからない場合、戻り値が0以外のジョブを使用" & vbCrLf
+            script = script & "    if (-not $failedJobPath -and $nonZeroReturnJobPath) {" & vbCrLf
+            script = script & "      $failedJobPath = $nonZeroReturnJobPath" & vbCrLf
+            script = script & "      Write-Log ""[DEBUG-27] 戻り値が0以外のジョブを使用: $failedJobPath""" & vbCrLf
             script = script & "    }" & vbCrLf
             script = script & vbCrLf
             script = script & "    if ($failedJobPath) {" & vbCrLf
-            script = script & "      Write-Log ""[DEBUG] failedJobPath が見つかりました(リモート): $failedJobPath""" & vbCrLf
+            script = script & "      Write-Log ""[DEBUG-28] failedJobPath が見つかりました(リモート): $failedJobPath""" & vbCrLf
             script = script & "      # 失敗したジョブの詳細を取得（実行ID、実行登録番号、標準エラーファイル）" & vbCrLf
             script = script & "      # -i '%## %ll %rr': %#=実行ID, %l=実行登録番号, %r=標準エラーファイル名" & vbCrLf
-            script = script & "      Write-Log ""[DEBUG] 実行コマンド(リモート): ajsshow -F '" & config("SchedulerService") & "' -g 1 -i '%## %ll %rr' $failedJobPath""" & vbCrLf
+            script = script & "      Write-Log ""[DEBUG-29] 実行コマンド(リモート): ajsshow -F '" & config("SchedulerService") & "' -g 1 -i '%## %ll %rr' $failedJobPath""" & vbCrLf
             script = script & "      $detailResult = Invoke-Command -Session $session -ScriptBlock {" & vbCrLf
             script = script & "        param($schedulerService, $jobPath)" & vbCrLf
             script = script & "        $ajsshowPath = $null" & vbCrLf
@@ -1539,38 +1975,45 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
             script = script & "        & $ajsshowPath '-F' $schedulerService '-g' '1' '-i' '%## %ll %rr' $jobPath 2>&1" & vbCrLf
             script = script & "      } -ArgumentList '" & config("SchedulerService") & "', $failedJobPath" & vbCrLf
             script = script & "      $detailStr = $detailResult -join ""`n""" & vbCrLf
-            script = script & "      Write-Log ""[DEBUG] ajsshow -g 1 -i 結果(リモート):""" & vbCrLf
+            script = script & "      Write-Log ""[DEBUG-30] ajsshow -g 1 -i 結果(リモート):""" & vbCrLf
             script = script & "      Write-Log $detailStr" & vbCrLf
             script = script & vbCrLf
-            script = script & "      # 出力形式: 実行ID 実行登録番号 標準エラーファイル（スペース区切り）" & vbCrLf
+            script = script & "      # 出力形式: @実行ID 実行登録番号 標準エラーファイル" & vbCrLf
             script = script & "      $execId = ''" & vbCrLf
             script = script & "      $execRegNo = ''" & vbCrLf
             script = script & "      $stderrFile = ''" & vbCrLf
-            script = script & "      foreach ($line in $detailResult) {" & vbCrLf
-            script = script & "        if ($line -match '^@') { continue }" & vbCrLf
-            script = script & "        if ($line -match 'KAVS' -or $line -match 'ERROR') { continue }" & vbCrLf
-            script = script & "        $parts = $line -split '\s+'" & vbCrLf
-            script = script & "        if ($parts.Count -ge 1) { $execId = $parts[0] }" & vbCrLf
-            script = script & "        if ($parts.Count -ge 2) { $execRegNo = $parts[1] }" & vbCrLf
-            script = script & "        if ($parts.Count -ge 3) { $stderrFile = $parts[2] }" & vbCrLf
-            script = script & "        if ($execId) { break }" & vbCrLf
-            script = script & "      }" & vbCrLf
-            script = script & "      Write-Log ""[DEBUG] 実行ID: $execId, 実行登録番号: $execRegNo, 標準エラー: $stderrFile""" & vbCrLf
+            script = script & "      # 正規表現で各要素を抽出" & vbCrLf
+            script = script & "      if ($detailStr -match '@[A-Z0-9]+') { $execId = $matches[0] }" & vbCrLf
+            script = script & "      if ($detailStr -match '\d{11,}') { $execRegNo = $matches[0] }" & vbCrLf
+            script = script & "      if ($detailStr -match '[A-Za-z]:[^\r\n]+\.err') { $stderrFile = $matches[0] }" & vbCrLf
+            script = script & "      Write-Log ""[DEBUG-31] 実行ID: $execId, 実行登録番号: $execRegNo, 標準エラー: $stderrFile""" & vbCrLf
             script = script & vbCrLf
             script = script & "      # 標準エラーファイルパスを出力（表示用）" & vbCrLf
             script = script & "      if ($stderrFile) {" & vbCrLf
-            script = script & "        Write-Output ""RESULT_LOGPATH:$stderrFile""" & vbCrLf
+            script = script & "        Write-Output ""RESULT_LOGPATH:$logFile""" & vbCrLf
             script = script & "      }" & vbCrLf
             script = script & vbCrLf
-            script = script & "      # jpqjobgetでログを取得（実行登録番号を使用）" & vbCrLf
-            script = script & "      if ($execRegNo) {" & vbCrLf
-            script = script & "        Write-Log ""[DEBUG] jpqjobget実行(リモート): -F '" & config("SchedulerService") & "' -n $execRegNo -e $failedJobPath""" & vbCrLf
+            script = script & "      # まず標準エラーファイルを直接読み取る（リモート）" & vbCrLf
+            script = script & "      $logContent = $null" & vbCrLf
+            script = script & "      if ($stderrFile) {" & vbCrLf
+            script = script & "        Write-Log ""[DEBUG-32] 標準エラーファイルを直接読み取り(リモート): $stderrFile""" & vbCrLf
+            script = script & "        $logContent = Invoke-Command -Session $session -ScriptBlock {" & vbCrLf
+            script = script & "          param($filePath)" & vbCrLf
+            script = script & "          if (Test-Path $filePath) {" & vbCrLf
+            script = script & "            Get-Content $filePath -Encoding Default -ErrorAction SilentlyContinue" & vbCrLf
+            script = script & "          }" & vbCrLf
+            script = script & "        } -ArgumentList $stderrFile" & vbCrLf
+            script = script & "      }" & vbCrLf
+            script = script & vbCrLf
+            script = script & "      # ファイルが読めなかった場合、jpqjobgetを試行" & vbCrLf
+            script = script & "      if (-not $logContent -and $execRegNo) {" & vbCrLf
+            script = script & "        Write-Log ""[DEBUG-33] jpqjobget実行(リモート): -F '" & config("SchedulerService") & "' -n $execRegNo -e $failedJobPath""" & vbCrLf
             script = script & "        $logContent = Invoke-Command -Session $session -ScriptBlock {" & vbCrLf
             script = script & "          param($schedulerService, $execRegNo, $jobPath)" & vbCrLf
             script = script & "          $jpqPath = $null" & vbCrLf
             script = script & "          $searchPaths = @('C:\Program Files\HITACHI\JP1AJS3\bin\jpqjobget.exe','C:\Program Files (x86)\HITACHI\JP1AJS3\bin\jpqjobget.exe','C:\Program Files\Hitachi\JP1AJS2\bin\jpqjobget.exe','C:\Program Files (x86)\Hitachi\JP1AJS2\bin\jpqjobget.exe')" & vbCrLf
             script = script & "          foreach ($p in $searchPaths) { if (Test-Path $p) { $jpqPath = $p; break } }" & vbCrLf
-            script = script & "          if (-not $jpqPath) { return 'ERROR: jpqjobget.exe not found' }" & vbCrLf
+            script = script & "          if (-not $jpqPath) { return $null }" & vbCrLf
             script = script & "          # 標準エラーを取得" & vbCrLf
             script = script & "          $result = & $jpqPath '-F' $schedulerService '-n' $execRegNo '-e' $jobPath 2>&1" & vbCrLf
             script = script & "          if (-not $result -or $result -match 'KAVS') {" & vbCrLf
@@ -1579,16 +2022,13 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
             script = script & "          }" & vbCrLf
             script = script & "          $result" & vbCrLf
             script = script & "        } -ArgumentList '" & config("SchedulerService") & "', $execRegNo, $failedJobPath" & vbCrLf
-            script = script & "        $logStr = $logContent -join ' '" & vbCrLf
-            script = script & "        Write-Log ""[DEBUG] jpqjobget結果(リモート): $logStr""" & vbCrLf
-            script = script & "        if ($logStr -and $logStr -notmatch 'KAVS' -and $logStr -notmatch 'ERROR:') {" & vbCrLf
-            script = script & "          # 改行を半角スペースに置換、長すぎる場合は切り詰め" & vbCrLf
-            script = script & "          $logStr = $logStr -replace '[\r\n]+', ' ' -replace '\s+', ' '" & vbCrLf
-            script = script & "          if ($logStr.Length -gt 500) { $logStr = $logStr.Substring(0, 500) + '...' }" & vbCrLf
-            script = script & "          Write-Output ""RESULT_DETAIL:$logStr""" & vbCrLf
-            script = script & "        }" & vbCrLf
+            script = script & "      }" & vbCrLf
+            script = script & vbCrLf
+            script = script & "      if ($logContent) {" & vbCrLf
+            script = script & "        Write-Log '[詳細] 標準エラーログ:'" & vbCrLf
+            script = script & "        foreach ($line in $logContent) { Write-Log ""  $line"" }" & vbCrLf
             script = script & "      } else {" & vbCrLf
-            script = script & "        Write-Log '実行番号が取得できませんでした'" & vbCrLf
+            script = script & "        Write-Log '標準エラーログを取得できませんでした'" & vbCrLf
             script = script & "      }" & vbCrLf
             script = script & "    } else {" & vbCrLf
             script = script & "      Write-Log '異常終了したジョブが見つかりませんでした'" & vbCrLf
@@ -1633,28 +2073,14 @@ Private Sub UpdateJobListStatus(ByVal row As Long, ByVal result As Object)
     ws.Cells(row, COL_LAST_EXEC_TIME).Value = result("StartTime")
     ws.Cells(row, COL_LAST_END_TIME).Value = result("EndTime")
 
-    ' 詳細メッセージを記録（詳細情報があれば追加）
-    Dim msgText As String
-    msgText = ""
-    If result("Detail") <> "" Then
-        msgText = result("Detail")
-    End If
-    If result("Message") <> "" Then
-        If msgText <> "" Then msgText = msgText & " | "
-        msgText = msgText & result("Message")
-    End If
-    If msgText <> "" Then
-        ws.Cells(row, COL_LAST_MESSAGE).Value = msgText
-    End If
-
-    ' ログパスを記録（ハイパーリンク設定）
+    ' ログパスを記録（N列にハイパーリンク設定）
     If result("LogPath") <> "" Then
         Dim logPath As String
         logPath = result("LogPath")
-        ws.Cells(row, COL_LOG_PATH).Value = logPath
+        ws.Cells(row, COL_LAST_MESSAGE).Value = logPath
         ' ファイルパスの場合はハイパーリンクを設定
         On Error Resume Next
-        ws.Hyperlinks.Add Anchor:=ws.Cells(row, COL_LOG_PATH), _
+        ws.Hyperlinks.Add Anchor:=ws.Cells(row, COL_LAST_MESSAGE), _
                           Address:=logPath, _
                           TextToDisplay:=logPath
         On Error GoTo 0
@@ -1667,7 +2093,7 @@ Private Sub UpdateJobListStatus(ByVal row As Long, ByVal result As Object)
             ws.Cells(row, COL_HOLD).Font.Bold = False
             ws.Cells(row, COL_HOLD).Font.Color = RGB(0, 0, 0)
             ' 行のハイライトを解除
-            ws.Range(ws.Cells(row, COL_ORDER), ws.Cells(row, COL_LOG_PATH)).Interior.ColorIndex = xlNone
+            ws.Range(ws.Cells(row, COL_ORDER), ws.Cells(row, COL_LAST_MESSAGE)).Interior.ColorIndex = xlNone
         End If
     End If
 
@@ -1701,11 +2127,11 @@ Public Sub ClearJobList()
         ws.Range(ws.Cells(ROW_JOBLIST_DATA_START, COL_ORDER), ws.Cells(lastRow, COL_ORDER)).ClearContents
 
         ' J〜O列（実行結果・ログパス）をクリア
-        ws.Range(ws.Cells(ROW_JOBLIST_DATA_START, COL_LAST_STATUS), ws.Cells(lastRow, COL_LOG_PATH)).ClearContents
+        ws.Range(ws.Cells(ROW_JOBLIST_DATA_START, COL_LAST_STATUS), ws.Cells(lastRow, COL_LAST_MESSAGE)).ClearContents
 
-        ' ハイパーリンクも削除
+        ' ハイパーリンクも削除（N列）
         On Error Resume Next
-        ws.Range(ws.Cells(ROW_JOBLIST_DATA_START, COL_LOG_PATH), ws.Cells(lastRow, COL_LOG_PATH)).Hyperlinks.Delete
+        ws.Range(ws.Cells(ROW_JOBLIST_DATA_START, COL_LAST_MESSAGE), ws.Cells(lastRow, COL_LAST_MESSAGE)).Hyperlinks.Delete
         On Error GoTo 0
 
         ' 背景色を初期状態に戻す
@@ -1713,12 +2139,12 @@ Public Sub ClearJobList()
         For row = ROW_JOBLIST_DATA_START To lastRow
             If ws.Cells(row, COL_HOLD).Value = "保留中" Then
                 ' 保留行は黄色ハイライトを再適用
-                ws.Range(ws.Cells(row, COL_ORDER), ws.Cells(row, COL_LOG_PATH)).Interior.Color = RGB(255, 235, 156)
+                ws.Range(ws.Cells(row, COL_ORDER), ws.Cells(row, COL_LAST_MESSAGE)).Interior.Color = RGB(255, 235, 156)
                 ws.Cells(row, COL_HOLD).Font.Bold = True
                 ws.Cells(row, COL_HOLD).Font.Color = RGB(156, 87, 0)
             Else
                 ' 保留中でない行の背景色をクリア
-                ws.Range(ws.Cells(row, COL_ORDER), ws.Cells(row, COL_LOG_PATH)).Interior.ColorIndex = xlNone
+                ws.Range(ws.Cells(row, COL_ORDER), ws.Cells(row, COL_LAST_MESSAGE)).Interior.ColorIndex = xlNone
             End If
         Next row
 
@@ -1726,11 +2152,43 @@ Public Sub ClearJobList()
         If ws.AutoFilterMode Then
             ws.AutoFilterMode = False
         End If
-        ws.Range(ws.Cells(ROW_JOBLIST_HEADER, COL_ORDER), ws.Cells(lastRow, COL_LOG_PATH)).AutoFilter _
+        ws.Range(ws.Cells(ROW_JOBLIST_HEADER, COL_ORDER), ws.Cells(lastRow, COL_LAST_MESSAGE)).AutoFilter _
             Field:=COL_UNIT_TYPE, Criteria1:="ジョブネット"
     End If
 
     MsgBox "実行結果をクリアしました。", vbInformation
+End Sub
+
+'==============================================================================
+' 実行ログ履歴クリア
+'==============================================================================
+Public Sub ClearLogHistory()
+    If MsgBox("実行ログの履歴をすべて削除しますか？", vbYesNo + vbQuestion) = vbNo Then Exit Sub
+
+    Dim ws As Worksheet
+    Set ws = Worksheets(SHEET_LOG)
+
+    Dim lastRow As Long
+    lastRow = ws.Cells(ws.Rows.Count, 1).End(xlUp).Row
+
+    ' データ行がある場合のみ削除（5行目以降がデータ）
+    If lastRow >= 5 Then
+        ' データ行を削除
+        ws.Range(ws.Cells(5, 1), ws.Cells(lastRow, 6)).ClearContents
+
+        ' ハイパーリンクも削除（F列）
+        On Error Resume Next
+        ws.Range(ws.Cells(5, 6), ws.Cells(lastRow, 6)).Hyperlinks.Delete
+        On Error GoTo 0
+
+        ' 背景色もクリア
+        ws.Range(ws.Cells(5, 1), ws.Cells(lastRow, 6)).Interior.ColorIndex = xlNone
+
+        ' 罫線もクリア
+        ws.Range(ws.Cells(5, 1), ws.Cells(lastRow, 6)).Borders.LineStyle = xlNone
+    End If
+
+    MsgBox "実行ログの履歴を削除しました。", vbInformation
 End Sub
 
 '==============================================================================

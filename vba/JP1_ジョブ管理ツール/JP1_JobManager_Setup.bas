@@ -32,16 +32,14 @@ Public Const COL_UNIT_TYPE As Long = 2      ' 種別（グループ/ジョブネ
 Public Const COL_JOBNET_PATH As Long = 3
 Public Const COL_JOBNET_NAME As Long = 4
 Public Const COL_COMMENT As Long = 5
-Public Const COL_SCRIPT As Long = 6         ' スクリプトファイル名 (sc)
-Public Const COL_PARAMETER As Long = 7      ' パラメーター (prm)
-Public Const COL_WORK_PATH As Long = 8      ' ワークパス (wkp)
+Public Const COL_SCRIPT As Long = 6         ' スクリプトファイル名 (sc) ※非表示列
+Public Const COL_PARAMETER As Long = 7      ' パラメーター (prm) ※非表示列
+Public Const COL_WORK_PATH As Long = 8      ' ワークパス (wkp) ※非表示列
 Public Const COL_HOLD As Long = 9
 Public Const COL_LAST_STATUS As Long = 10
 Public Const COL_LAST_EXEC_TIME As Long = 11
 Public Const COL_LAST_END_TIME As Long = 12
-Public Const COL_LAST_RETURN_CODE As Long = 13
-Public Const COL_LAST_MESSAGE As Long = 14
-Public Const COL_LOG_PATH As Long = 15        ' ログファイルパス
+Public Const COL_LAST_MESSAGE As Long = 13   ' ログファイルパス（最終列）
 Public Const ROW_JOBLIST_HEADER As Long = 4
 Public Const ROW_JOBLIST_DATA_START As Long = 5
 
@@ -118,8 +116,8 @@ Private Sub FormatSettingsSheet()
     ws.Range("A2").Value = "JP1サーバに接続してジョブネット一覧を取得し、選択したジョブを実行します。"
 
     ' ボタン追加（図形ボタン・固定サイズ・色付き）- タイトルの下に配置
-    ' 設定シートには「ジョブ一覧取得」ボタンのみ
-    AddButton ws, 20, 55, 130, 32, "GetJobList", "ジョブ一覧取得", RGB(0, 112, 192)        ' 青
+    AddButton ws, 20, 55, 130, 32, "GetGroupList", "グループ名取得", RGB(91, 155, 213)      ' 薄青（左）
+    AddButton ws, 160, 55, 130, 32, "GetJobList", "ジョブ一覧取得", RGB(0, 112, 192)        ' 青（右）
 
     ' 設定セクション（ボタンの下）
     ws.Range("A6").Value = "■ 接続設定"
@@ -159,8 +157,8 @@ Private Sub FormatSettingsSheet()
     ws.Cells(ROW_SCHEDULER_SERVICE, 4).Font.Color = RGB(128, 128, 128)
 
     ws.Cells(ROW_ROOT_PATH, 1).Value = "取得パス"
-    ws.Cells(ROW_ROOT_PATH, COL_SETTING_VALUE).Value = "/*"
-    ws.Cells(ROW_ROOT_PATH, 4).Value = "※ジョブネットのパス（例: /* または /グループ名/*）"
+    ws.Cells(ROW_ROOT_PATH, COL_SETTING_VALUE).Value = "/"
+    ws.Cells(ROW_ROOT_PATH, 4).Value = "※「グループ名取得」でリスト更新（例: / または /グループ名）"
     ws.Cells(ROW_ROOT_PATH, 4).Font.Color = RGB(128, 128, 128)
 
     ' 実行設定セクション
@@ -178,6 +176,26 @@ Private Sub FormatSettingsSheet()
 
     ws.Cells(ROW_POLLING_INTERVAL, 1).Value = "状態確認間隔（秒）"
     ws.Cells(ROW_POLLING_INTERVAL, COL_SETTING_VALUE).Value = 10
+
+    ' 使い方セクション
+    ws.Range("A21").Value = "■ 使い方"
+    ws.Range("A21").Font.Bold = True
+
+    ws.Range("A22").Value = "1. 上記の接続設定・実行設定を入力します"
+    ws.Range("A23").Value = "2. 「グループ名取得」で取得パスのリストを更新できます（任意）"
+    ws.Range("A24").Value = "3. 「ジョブ一覧取得」ボタンをクリックしてジョブネット一覧を取得します"
+    ws.Range("A25").Value = "4. ジョブ一覧シートで実行するジョブの「順序」列に数字（1, 2, 3...）を入力します"
+    ws.Range("A26").Value = "5. 「選択ジョブ実行」ボタンをクリックしてジョブを順番に実行します"
+    ws.Range("A27").Value = "6. 実行結果は実行ログシートに記録されます"
+
+    ws.Range("A29").Value = "■ 動作説明"
+    ws.Range("A29").Font.Bold = True
+
+    ws.Range("A30").Value = "・ジョブが保留中の場合、実行時に自動で保留解除されます"
+    ws.Range("A31").Value = "・完了待ち「はい」の場合、ジョブ終了まで待機して結果を取得します"
+    ws.Range("A32").Value = "・異常終了または警告終了した場合、後続のジョブは実行されません"
+    ws.Range("A33").Value = "・実行ログにはジョブごとの開始・終了時刻、結果、ログパスが記録されます"
+    ws.Range("A34").Value = "・警告・異常終了時はJP1サーバ上の標準エラーログも取得されます"
 
     ' 列幅調整
     ws.Columns("A").ColumnWidth = 20
@@ -208,8 +226,8 @@ Private Sub FormatJobListSheet()
 
     ws.Cells.Clear
 
-    ' タイトル
-    With ws.Range("A1:J1")
+    ' タイトル（A1:M1 = COL_LAST_MESSAGE列まで）
+    With ws.Range("A1:M1")
         .Merge
         .Value = "ジョブネット一覧"
         .Font.Size = 14
@@ -243,11 +261,9 @@ Private Sub FormatJobListSheet()
     ws.Cells(ROW_JOBLIST_HEADER, COL_LAST_STATUS).Value = "最終実行結果"
     ws.Cells(ROW_JOBLIST_HEADER, COL_LAST_EXEC_TIME).Value = "開始時刻"
     ws.Cells(ROW_JOBLIST_HEADER, COL_LAST_END_TIME).Value = "終了時刻"
-    ws.Cells(ROW_JOBLIST_HEADER, COL_LAST_RETURN_CODE).Value = "戻り値"
-    ws.Cells(ROW_JOBLIST_HEADER, COL_LAST_MESSAGE).Value = "詳細メッセージ"
-    ws.Cells(ROW_JOBLIST_HEADER, COL_LOG_PATH).Value = "ログパス"
+    ws.Cells(ROW_JOBLIST_HEADER, COL_LAST_MESSAGE).Value = "ログパス"
 
-    With ws.Range(ws.Cells(ROW_JOBLIST_HEADER, COL_ORDER), ws.Cells(ROW_JOBLIST_HEADER, COL_LOG_PATH))
+    With ws.Range(ws.Cells(ROW_JOBLIST_HEADER, COL_ORDER), ws.Cells(ROW_JOBLIST_HEADER, COL_LAST_MESSAGE))
         .Font.Bold = True
         .Interior.Color = RGB(79, 129, 189)
         .Font.Color = RGB(255, 255, 255)
@@ -260,7 +276,7 @@ Private Sub FormatJobListSheet()
     ws.Columns(COL_UNIT_TYPE).ColumnWidth = 12
     ws.Columns(COL_JOBNET_PATH).ColumnWidth = 50
     ws.Columns(COL_JOBNET_NAME).ColumnWidth = 25
-    ws.Columns(COL_COMMENT).ColumnWidth = 30
+    ws.Columns(COL_COMMENT).ColumnWidth = 80
     ws.Columns(COL_SCRIPT).ColumnWidth = 40
     ws.Columns(COL_PARAMETER).ColumnWidth = 30
     ws.Columns(COL_WORK_PATH).ColumnWidth = 30
@@ -268,12 +284,23 @@ Private Sub FormatJobListSheet()
     ws.Columns(COL_LAST_STATUS).ColumnWidth = 15
     ws.Columns(COL_LAST_EXEC_TIME).ColumnWidth = 18
     ws.Columns(COL_LAST_END_TIME).ColumnWidth = 18
-    ws.Columns(COL_LAST_RETURN_CODE).ColumnWidth = 8
-    ws.Columns(COL_LAST_MESSAGE).ColumnWidth = 50
-    ws.Columns(COL_LOG_PATH).ColumnWidth = 60
+    ws.Columns(COL_LAST_MESSAGE).ColumnWidth = 60
+
+    ' F〜H列（スクリプト、パラメーター、ワークパス）をグループ化
+    ws.Columns("F:H").Group
+    ' 初期状態は折りたたみ
+    ws.Outline.ShowLevels ColumnLevels:=1
 
     ' フィルター設定
-    ws.Range(ws.Cells(ROW_JOBLIST_HEADER, COL_ORDER), ws.Cells(ROW_JOBLIST_HEADER, COL_LOG_PATH)).AutoFilter
+    ws.Range(ws.Cells(ROW_JOBLIST_HEADER, COL_ORDER), ws.Cells(ROW_JOBLIST_HEADER, COL_LAST_MESSAGE)).AutoFilter
+
+    ' ウィンドウ枠の固定（ヘッダー行の下で固定、列固定なし）
+    ws.Activate
+    ' 既存の固定を解除
+    ActiveWindow.FreezePanes = False
+    ' A5セル（5行目1列目）を選択して行のみ固定（1-4行目が固定される）
+    ws.Cells(ROW_JOBLIST_DATA_START, 1).Select
+    ActiveWindow.FreezePanes = True
 End Sub
 
 '==============================================================================
@@ -297,15 +324,22 @@ Private Sub FormatLogSheet()
         .RowHeight = 25
     End With
 
-    ' ヘッダー
-    ws.Cells(3, 1).Value = "実行日時"
-    ws.Cells(3, 2).Value = "ジョブネットパス"
-    ws.Cells(3, 3).Value = "結果"
-    ws.Cells(3, 4).Value = "開始時刻"
-    ws.Cells(3, 5).Value = "終了時刻"
-    ws.Cells(3, 6).Value = "詳細メッセージ"
+    ' ボタン追加（2行目）
+    AddButton ws, 20, 30, 100, 28, "ClearLogHistory", "履歴クリア", RGB(192, 80, 77)
+    ws.Rows(2).RowHeight = 35
 
-    With ws.Range("A3:F3")
+    ' 説明（3行目）
+    ws.Range("A3").Value = "ジョブ実行の履歴ログです。"
+
+    ' ヘッダー（4行目）
+    ws.Cells(4, 1).Value = "実行日時"
+    ws.Cells(4, 2).Value = "ジョブネットパス"
+    ws.Cells(4, 3).Value = "結果"
+    ws.Cells(4, 4).Value = "開始時刻"
+    ws.Cells(4, 5).Value = "終了時刻"
+    ws.Cells(4, 6).Value = "ログパス"
+
+    With ws.Range("A4:F4")
         .Font.Bold = True
         .Interior.Color = RGB(192, 80, 77)
         .Font.Color = RGB(255, 255, 255)
@@ -319,6 +353,14 @@ Private Sub FormatLogSheet()
     ws.Columns("D").ColumnWidth = 18
     ws.Columns("E").ColumnWidth = 18
     ws.Columns("F").ColumnWidth = 60
+
+    ' ウィンドウ枠の固定（ヘッダー行の下で固定、列固定なし）
+    ws.Activate
+    ' 既存の固定を解除
+    ActiveWindow.FreezePanes = False
+    ' A5セル（5行目1列目）を選択して行のみ固定（1-4行目が固定される）
+    ws.Cells(5, 1).Select
+    ActiveWindow.FreezePanes = True
 End Sub
 
 '==============================================================================
