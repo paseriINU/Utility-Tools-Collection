@@ -1156,7 +1156,7 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
             script = script & "    Write-Log ""[ポーリング $pollCount] ステータス: $statusStr""" & vbCrLf
             script = script & vbCrLf
             script = script & "    # 日本語・英語両方のステータスに対応" & vbCrLf
-            script = script & "    if ($statusStr -match '異常終了|ended abnormally|abnormal end|abend|killed|failed|キャンセル|中止') {" & vbCrLf
+            script = script & "    if ($statusStr -match '異常終了|異常検出終了|ended abnormally|abnormal end|abend|killed|failed|キャンセル|中止') {" & vbCrLf
             script = script & "      Write-Log '[完了] 異常終了'" & vbCrLf
             script = script & "      Write-Output ""RESULT_STATUS:異常終了""" & vbCrLf
             script = script & "      $isRunning = $false" & vbCrLf
@@ -1339,7 +1339,7 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
             script = script & "    $lastStatusStr = $statusStr" & vbCrLf
             script = script & "    Write-Log ""[ポーリング $pollCount] ステータス: $statusStr""" & vbCrLf
             script = script & "    # 日本語・英語両方のステータスに対応" & vbCrLf
-            script = script & "    if ($statusStr -match '異常終了|ended abnormally|abnormal end|abend|killed|failed|キャンセル|中止') {" & vbCrLf
+            script = script & "    if ($statusStr -match '異常終了|異常検出終了|ended abnormally|abnormal end|abend|killed|failed|キャンセル|中止') {" & vbCrLf
             script = script & "      Write-Log '[完了] 異常終了'" & vbCrLf
             script = script & "      Write-Output ""RESULT_STATUS:異常終了""" & vbCrLf
             script = script & "      $isRunning = $false" & vbCrLf
