@@ -1236,9 +1236,9 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
             script = script & vbCrLf
             script = script & "    if ($failedJobPath) {" & vbCrLf
             script = script & "      Write-Log ""[DEBUG] failedJobPath が見つかりました: $failedJobPath""" & vbCrLf
-            script = script & "      # 失敗したジョブの詳細を取得（実行ID、実行登録番号、標準エラー出力ファイル名）" & vbCrLf
-            script = script & "      Write-Log ""[DEBUG] 実行コマンド: $ajsshowPath -F '" & config("SchedulerService") & "' -g 1 -i '%## %ll %rr' $failedJobPath""" & vbCrLf
-            script = script & "      $detailResult = & $ajsshowPath -F '" & config("SchedulerService") & "' -g 1 -i '%## %ll %rr' $failedJobPath 2>&1" & vbCrLf
+            script = script & "      # 失敗したジョブの詳細を取得（実行ID、実行登録番号、標準エラー出力ファイル名、ジョブ番号）" & vbCrLf
+            script = script & "      Write-Log ""[DEBUG] 実行コマンド: $ajsshowPath -F '" & config("SchedulerService") & "' -g 1 -i '%## %ll %rr %I' $failedJobPath""" & vbCrLf
+            script = script & "      $detailResult = & $ajsshowPath -F '" & config("SchedulerService") & "' -g 1 -i '%## %ll %rr %I' $failedJobPath 2>&1" & vbCrLf
             script = script & "      $detailStr = $detailResult -join ""`n""" & vbCrLf
             script = script & "      Write-Log ""[DEBUG] ajsshow -g 1 -i 結果:""" & vbCrLf
             script = script & "      Write-Log $detailStr" & vbCrLf
@@ -1262,27 +1262,45 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
             script = script & "        Write-Output ""RESULT_LOGPATH:$logPath""" & vbCrLf
             script = script & "      }" & vbCrLf
             script = script & vbCrLf
+            script = script & "      # ジョブ番号（%I）を抽出（ajsshow出力の最後の数値）" & vbCrLf
+            script = script & "      $jobNo = ''" & vbCrLf
+            script = script & "      # ajsshow出力をスペースで分割し、最後の純粋な数値を取得" & vbCrLf
+            script = script & "      $parts = ($detailStr -split '\s+') | Where-Object { $_ -match '^\d+$' }" & vbCrLf
+            script = script & "      if ($parts) { $jobNo = @($parts)[-1] }" & vbCrLf
+            script = script & "      Write-Log ""[DEBUG] 抽出したジョブ番号: $jobNo""" & vbCrLf
+            script = script & vbCrLf
             script = script & "      # jpqjobgetでログを取得（マネージャ経由でエージェントのログを取得）" & vbCrLf
-            script = script & "      if ($jpqjobgetPath -and $execNo) {" & vbCrLf
-            script = script & "        Write-Log ""[DEBUG] jpqjobget実行: -F '" & config("SchedulerService") & "' -n $execNo -e $failedJobPath""" & vbCrLf
+            script = script & "      if ($jpqjobgetPath -and $jobNo) {" & vbCrLf
+            script = script & "        $tempDir = $env:TEMP" & vbCrLf
+            script = script & "        $stderrFile = Join-Path $tempDir ""jp1_stderr_$jobNo.tmp""" & vbCrLf
+            script = script & "        $stdoutFile = Join-Path $tempDir ""jp1_stdout_$jobNo.tmp""" & vbCrLf
+            script = script & "        Write-Log ""[DEBUG] jpqjobget実行: -j $jobNo -ose $stderrFile""" & vbCrLf
             script = script & "        # 標準エラーを取得" & vbCrLf
-            script = script & "        $logContent = & $jpqjobgetPath -F '" & config("SchedulerService") & "' -n $execNo -e $failedJobPath 2>&1" & vbCrLf
-            script = script & "        Write-Log ""[DEBUG] jpqjobget -e 結果: $($logContent -join ' ')""" & vbCrLf
-            script = script & "        if (-not $logContent -or $logContent -match 'KAVS') {" & vbCrLf
-            script = script & "          Write-Log ""[DEBUG] 標準エラー取得失敗、標準出力を試行""" & vbCrLf
-            script = script & "          # 標準エラーがなければ標準出力を取得" & vbCrLf
-            script = script & "          $logContent = & $jpqjobgetPath -F '" & config("SchedulerService") & "' -n $execNo -s $failedJobPath 2>&1" & vbCrLf
-            script = script & "          Write-Log ""[DEBUG] jpqjobget -s 結果: $($logContent -join ' ')""" & vbCrLf
+            script = script & "        $jpqResult = & $jpqjobgetPath -j $jobNo -ose $stderrFile 2>&1" & vbCrLf
+            script = script & "        Write-Log ""[DEBUG] jpqjobget -ose 結果: $($jpqResult -join ' ')""" & vbCrLf
+            script = script & "        $logContent = $null" & vbCrLf
+            script = script & "        if (Test-Path $stderrFile) {" & vbCrLf
+            script = script & "          $logContent = Get-Content $stderrFile -Encoding UTF8 -ErrorAction SilentlyContinue" & vbCrLf
+            script = script & "          Remove-Item $stderrFile -Force -ErrorAction SilentlyContinue" & vbCrLf
             script = script & "        }" & vbCrLf
-            script = script & "        $logStr = $logContent -join ' '" & vbCrLf
-            script = script & "        if ($logStr -and $logStr -notmatch 'KAVS') {" & vbCrLf
+            script = script & "        if (-not $logContent) {" & vbCrLf
+            script = script & "          Write-Log ""[DEBUG] 標準エラー取得失敗、標準出力を試行""" & vbCrLf
+            script = script & "          $jpqResult = & $jpqjobgetPath -j $jobNo -oso $stdoutFile 2>&1" & vbCrLf
+            script = script & "          Write-Log ""[DEBUG] jpqjobget -oso 結果: $($jpqResult -join ' ')""" & vbCrLf
+            script = script & "          if (Test-Path $stdoutFile) {" & vbCrLf
+            script = script & "            $logContent = Get-Content $stdoutFile -Encoding UTF8 -ErrorAction SilentlyContinue" & vbCrLf
+            script = script & "            Remove-Item $stdoutFile -Force -ErrorAction SilentlyContinue" & vbCrLf
+            script = script & "          }" & vbCrLf
+            script = script & "        }" & vbCrLf
+            script = script & "        if ($logContent) {" & vbCrLf
+            script = script & "          $logStr = $logContent -join ' '" & vbCrLf
             script = script & "          # 改行を半角スペースに置換、長すぎる場合は切り詰め" & vbCrLf
             script = script & "          $logStr = $logStr -replace '[\r\n]+', ' ' -replace '\s+', ' '" & vbCrLf
             script = script & "          if ($logStr.Length -gt 500) { $logStr = $logStr.Substring(0, 500) + '...' }" & vbCrLf
             script = script & "          Write-Output ""RESULT_DETAIL:$logStr""" & vbCrLf
             script = script & "        }" & vbCrLf
             script = script & "      } else {" & vbCrLf
-            script = script & "        Write-Log 'jpqjobgetが見つからないか、実行登録番号が取得できませんでした'" & vbCrLf
+            script = script & "        Write-Log 'jpqjobgetが見つからないか、ジョブ番号が取得できませんでした'" & vbCrLf
             script = script & "      }" & vbCrLf
             script = script & "    } else {" & vbCrLf
             script = script & "      Write-Log '異常終了したジョブが見つかりませんでした'" & vbCrLf
