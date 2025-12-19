@@ -988,6 +988,7 @@ Private Function ExecuteSingleJob(ByVal config As Object, ByVal jobnetPath As St
     lines = Split(output, vbCrLf)
 
     Dim line As String
+    Dim i As Long
     For i = LBound(lines) To UBound(lines)
         line = lines(i)
         If InStr(line, "RESULT_STATUS:") > 0 Then
