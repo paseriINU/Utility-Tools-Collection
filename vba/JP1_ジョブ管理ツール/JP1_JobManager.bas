@@ -966,7 +966,7 @@ Private Function GetOrderedJobs() As Collection
     Set GetOrderedJobs = jobs
 End Function
 
-Private Function ExecuteSingleJob(config As Object, jobnetPath As String, isHold As Boolean, logFilePath As String) As Object
+Private Function ExecuteSingleJob(ByVal config As Object, ByVal jobnetPath As String, ByVal isHold As Boolean, ByVal logFilePath As String) As Object
     Dim result As Object
     Set result = CreateObject("Scripting.Dictionary")
     result("Status") = ""
@@ -1012,7 +1012,7 @@ Private Function ExecuteSingleJob(config As Object, jobnetPath As String, isHold
     Set ExecuteSingleJob = result
 End Function
 
-Private Function BuildExecuteJobScript(config As Object, jobnetPath As String, waitCompletion As Boolean, isHold As Boolean, logFilePath As String) As String
+Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath As String, ByVal waitCompletion As Boolean, ByVal isHold As Boolean, ByVal logFilePath As String) As String
     Dim script As String
 
     script = "$ErrorActionPreference = 'Stop'" & vbCrLf
@@ -1328,7 +1328,7 @@ Private Function BuildExecuteJobScript(config As Object, jobnetPath As String, w
     BuildExecuteJobScript = script
 End Function
 
-Private Sub UpdateJobListStatus(row As Long, result As Object)
+Private Sub UpdateJobListStatus(ByVal row As Long, ByVal result As Object)
     Dim ws As Worksheet
     Set ws = Worksheets(SHEET_JOBLIST)
 
