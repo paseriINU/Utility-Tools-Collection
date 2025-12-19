@@ -887,13 +887,19 @@
             const bytes = new Uint8Array(arrayBuffer);
 
             // バイナリをLatin-1文字列に変換（PDF内部の検索用）
-            const content = latin1Decode(bytes);
+            let content = latin1Decode(bytes);
 
             // PDFファイルかどうかを確認
             // startsWith(): 文字列が指定した文字列で始まるかチェック
             if (!content.startsWith('%PDF-')) {
                 // throw: エラーを発生させる
                 throw new Error('有効なPDFファイルではありません。');
+            }
+
+            // 圧縮されたストリームを解凍して追加コンテンツを取得
+            const decompressedContent = decompressAllStreams(content, bytes);
+            if (decompressedContent) {
+                content = content + '\n' + decompressedContent;
             }
 
             // しおり（Outlines）の存在確認
@@ -914,6 +920,354 @@
             }
 
             return bookmarks;
+        }
+
+        /*
+        ======================================================================
+          FlateDecode（Deflate圧縮）されたストリームをすべて解凍
+
+          PDFでは多くの場合、オブジェクトの内容がDeflate圧縮されています。
+          この関数はすべての圧縮ストリームを検出し、解凍を試みます。
+        ======================================================================
+        */
+        function decompressAllStreams(content, bytes) {
+            let decompressedParts = [];
+
+            // FlateDecodeフィルタを持つストリームを検索
+            // /Filter /FlateDecode または /Filter[/FlateDecode] の形式
+            const streamPattern = /(\d+)\s+\d+\s+obj[\s\S]*?\/Filter\s*(?:\/FlateDecode|\[\s*\/FlateDecode\s*\])[\s\S]*?\/Length\s+(\d+)[\s\S]*?stream\r?\n/g;
+
+            let match;
+            while ((match = streamPattern.exec(content)) !== null) {
+                const streamStart = match.index + match[0].length;
+                const length = parseInt(match[2]);
+
+                // ストリームデータを抽出
+                const streamData = bytes.slice(streamStart, streamStart + length);
+
+                try {
+                    // Deflate解凍を実行
+                    const decompressed = inflateRaw(streamData);
+                    if (decompressed && decompressed.length > 0) {
+                        // 解凍されたデータを文字列に変換
+                        const decompressedStr = latin1Decode(decompressed);
+                        decompressedParts.push(decompressedStr);
+                    }
+                } catch (e) {
+                    // 解凍に失敗した場合は無視して続行
+                    // console.log('Stream decompression failed:', e);
+                }
+            }
+
+            // オブジェクトストリーム（PDF 1.5+）も検索
+            // /Type /ObjStm を持つ圧縮オブジェクト
+            const objStmPattern = /(\d+)\s+\d+\s+obj[\s\S]*?\/Type\s*\/ObjStm[\s\S]*?\/Filter\s*(?:\/FlateDecode|\[\s*\/FlateDecode\s*\])[\s\S]*?\/Length\s+(\d+)[\s\S]*?stream\r?\n/g;
+
+            while ((match = objStmPattern.exec(content)) !== null) {
+                const streamStart = match.index + match[0].length;
+                const length = parseInt(match[2]);
+                const streamData = bytes.slice(streamStart, streamStart + length);
+
+                try {
+                    const decompressed = inflateRaw(streamData);
+                    if (decompressed && decompressed.length > 0) {
+                        const decompressedStr = latin1Decode(decompressed);
+                        decompressedParts.push(decompressedStr);
+                    }
+                } catch (e) {
+                    // 解凍失敗は無視
+                }
+            }
+
+            return decompressedParts.join('\n');
+        }
+
+        /*
+        ======================================================================
+          Deflate解凍（inflate）の純粋JavaScript実装
+
+          RFC 1951に準拠したDeflate解凍アルゴリズム
+          外部ライブラリを使用せず、ブラウザ標準機能のみで動作
+
+          【Deflateの仕組み】
+          1. ハフマン符号化: 頻出文字を短いビット列で表現
+          2. LZ77圧縮: 繰り返しパターンを「距離と長さ」で表現
+        ======================================================================
+        */
+
+        // ビットリーダークラス: バイト配列からビット単位でデータを読み取る
+        class BitReader {
+            constructor(data) {
+                this.data = data;      // 入力バイト配列
+                this.bytePos = 0;      // 現在のバイト位置
+                this.bitPos = 0;       // 現在のビット位置（0-7）
+            }
+
+            // 指定ビット数を読み取る（最下位ビットから）
+            readBits(n) {
+                let result = 0;
+                let bitsRead = 0;
+
+                while (bitsRead < n) {
+                    if (this.bytePos >= this.data.length) {
+                        throw new Error('Unexpected end of data');
+                    }
+
+                    // 現在のバイトから読み取れるビット数
+                    const bitsAvailable = 8 - this.bitPos;
+                    const bitsToRead = Math.min(n - bitsRead, bitsAvailable);
+
+                    // ビットを抽出
+                    const mask = (1 << bitsToRead) - 1;
+                    const bits = (this.data[this.bytePos] >> this.bitPos) & mask;
+
+                    result |= bits << bitsRead;
+                    bitsRead += bitsToRead;
+                    this.bitPos += bitsToRead;
+
+                    // 次のバイトへ
+                    if (this.bitPos >= 8) {
+                        this.bitPos = 0;
+                        this.bytePos++;
+                    }
+                }
+
+                return result;
+            }
+
+            // バイト境界まで進める
+            alignToByte() {
+                if (this.bitPos > 0) {
+                    this.bitPos = 0;
+                    this.bytePos++;
+                }
+            }
+        }
+
+        // ハフマンテーブルを構築
+        function buildHuffmanTable(codeLengths) {
+            const maxLen = Math.max(...codeLengths.filter(l => l > 0));
+            if (maxLen === 0) return null;
+
+            // 各コード長の出現回数をカウント
+            const blCount = new Array(maxLen + 1).fill(0);
+            for (const len of codeLengths) {
+                if (len > 0) blCount[len]++;
+            }
+
+            // 各コード長の開始コードを計算
+            const nextCode = new Array(maxLen + 1).fill(0);
+            let code = 0;
+            for (let bits = 1; bits <= maxLen; bits++) {
+                code = (code + blCount[bits - 1]) << 1;
+                nextCode[bits] = code;
+            }
+
+            // シンボルにコードを割り当て
+            const table = {};
+            for (let symbol = 0; symbol < codeLengths.length; symbol++) {
+                const len = codeLengths[symbol];
+                if (len > 0) {
+                    const huffCode = nextCode[len]++;
+                    // コードを逆順ビット列に変換（Deflateはビット逆順）
+                    let reversed = 0;
+                    for (let i = 0; i < len; i++) {
+                        reversed = (reversed << 1) | ((huffCode >> i) & 1);
+                    }
+                    table[`${reversed}_${len}`] = symbol;
+                }
+            }
+
+            return { table, maxLen };
+        }
+
+        // ハフマンテーブルからシンボルを読み取る
+        function readHuffmanSymbol(reader, huffTable) {
+            let code = 0;
+            for (let len = 1; len <= huffTable.maxLen; len++) {
+                code = (code << 1) | reader.readBits(1);
+                const key = `${code}_${len}`;
+                if (key in huffTable.table) {
+                    return huffTable.table[key];
+                }
+            }
+            throw new Error('Invalid Huffman code');
+        }
+
+        // 固定ハフマンテーブル（Deflate規格で定義）
+        function getFixedLitLenTable() {
+            const lengths = new Array(288);
+            for (let i = 0; i <= 143; i++) lengths[i] = 8;
+            for (let i = 144; i <= 255; i++) lengths[i] = 9;
+            for (let i = 256; i <= 279; i++) lengths[i] = 7;
+            for (let i = 280; i <= 287; i++) lengths[i] = 8;
+            return buildHuffmanTable(lengths);
+        }
+
+        function getFixedDistTable() {
+            const lengths = new Array(32).fill(5);
+            return buildHuffmanTable(lengths);
+        }
+
+        // Deflate解凍メイン関数
+        function inflateRaw(data) {
+            // zlibヘッダーのスキップ（0x78で始まる場合）
+            let startOffset = 0;
+            if (data.length >= 2 && data[0] === 0x78) {
+                startOffset = 2;  // CMF + FLG をスキップ
+            }
+
+            const reader = new BitReader(data.subarray(startOffset));
+            const output = [];
+
+            let finalBlock = false;
+
+            while (!finalBlock) {
+                // ブロックヘッダーを読み取る
+                finalBlock = reader.readBits(1) === 1;  // BFINAL
+                const blockType = reader.readBits(2);    // BTYPE
+
+                if (blockType === 0) {
+                    // 非圧縮ブロック
+                    reader.alignToByte();
+                    const len = reader.readBits(8) | (reader.readBits(8) << 8);
+                    reader.readBits(16);  // NLEN（補数）をスキップ
+
+                    for (let i = 0; i < len; i++) {
+                        output.push(reader.readBits(8));
+                    }
+                } else if (blockType === 1 || blockType === 2) {
+                    // 圧縮ブロック（固定または動的ハフマン）
+                    let litLenTable, distTable;
+
+                    if (blockType === 1) {
+                        // 固定ハフマンコード
+                        litLenTable = getFixedLitLenTable();
+                        distTable = getFixedDistTable();
+                    } else {
+                        // 動的ハフマンコード
+                        const tables = readDynamicTables(reader);
+                        litLenTable = tables.litLen;
+                        distTable = tables.dist;
+                    }
+
+                    // ブロックデータを解凍
+                    while (true) {
+                        const symbol = readHuffmanSymbol(reader, litLenTable);
+
+                        if (symbol < 256) {
+                            // リテラルバイト
+                            output.push(symbol);
+                        } else if (symbol === 256) {
+                            // ブロック終了
+                            break;
+                        } else {
+                            // 長さ・距離ペア（LZ77）
+                            const length = readLength(reader, symbol);
+                            const distSymbol = readHuffmanSymbol(reader, distTable);
+                            const distance = readDistance(reader, distSymbol);
+
+                            // 過去のデータをコピー
+                            const startPos = output.length - distance;
+                            for (let i = 0; i < length; i++) {
+                                output.push(output[startPos + i]);
+                            }
+                        }
+                    }
+                } else {
+                    throw new Error('Invalid block type');
+                }
+            }
+
+            return new Uint8Array(output);
+        }
+
+        // 動的ハフマンテーブルを読み取る
+        function readDynamicTables(reader) {
+            const hlit = reader.readBits(5) + 257;   // リテラル/長さコードの数
+            const hdist = reader.readBits(5) + 1;    // 距離コードの数
+            const hclen = reader.readBits(4) + 4;    // コード長コードの数
+
+            // コード長コードの順序（Deflate規格）
+            const codeLenOrder = [16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15];
+
+            // コード長のコード長を読み取る
+            const codeLenLengths = new Array(19).fill(0);
+            for (let i = 0; i < hclen; i++) {
+                codeLenLengths[codeLenOrder[i]] = reader.readBits(3);
+            }
+
+            const codeLenTable = buildHuffmanTable(codeLenLengths);
+
+            // リテラル/長さと距離のコード長を読み取る
+            const allLengths = [];
+            while (allLengths.length < hlit + hdist) {
+                const symbol = readHuffmanSymbol(reader, codeLenTable);
+
+                if (symbol < 16) {
+                    allLengths.push(symbol);
+                } else if (symbol === 16) {
+                    // 直前の値を繰り返す
+                    const repeat = reader.readBits(2) + 3;
+                    const lastVal = allLengths[allLengths.length - 1] || 0;
+                    for (let i = 0; i < repeat; i++) {
+                        allLengths.push(lastVal);
+                    }
+                } else if (symbol === 17) {
+                    // 0を繰り返す（3-10回）
+                    const repeat = reader.readBits(3) + 3;
+                    for (let i = 0; i < repeat; i++) {
+                        allLengths.push(0);
+                    }
+                } else if (symbol === 18) {
+                    // 0を繰り返す（11-138回）
+                    const repeat = reader.readBits(7) + 11;
+                    for (let i = 0; i < repeat; i++) {
+                        allLengths.push(0);
+                    }
+                }
+            }
+
+            return {
+                litLen: buildHuffmanTable(allLengths.slice(0, hlit)),
+                dist: buildHuffmanTable(allLengths.slice(hlit, hlit + hdist))
+            };
+        }
+
+        // 長さコードから実際の長さを取得
+        function readLength(reader, symbol) {
+            // RFC 1951 の長さテーブル
+            const baseLengths = [3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 19, 23, 27, 31,
+                                 35, 43, 51, 59, 67, 83, 99, 115, 131, 163, 195, 227, 258];
+            const extraBits = [0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2,
+                               3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 0];
+
+            const index = symbol - 257;
+            if (index < 0 || index >= baseLengths.length) {
+                return 3;  // デフォルト
+            }
+
+            const base = baseLengths[index];
+            const extra = extraBits[index];
+            return base + (extra > 0 ? reader.readBits(extra) : 0);
+        }
+
+        // 距離コードから実際の距離を取得
+        function readDistance(reader, symbol) {
+            // RFC 1951 の距離テーブル
+            const baseDistances = [1, 2, 3, 4, 5, 7, 9, 13, 17, 25, 33, 49, 65, 97, 129, 193,
+                                   257, 385, 513, 769, 1025, 1537, 2049, 3073, 4097, 6145,
+                                   8193, 12289, 16385, 24577];
+            const extraBits = [0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6,
+                               7, 7, 8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 13, 13];
+
+            if (symbol < 0 || symbol >= baseDistances.length) {
+                return 1;  // デフォルト
+            }
+
+            const base = baseDistances[symbol];
+            const extra = extraBits[symbol];
+            return base + (extra > 0 ? reader.readBits(extra) : 0);
         }
 
         /*
