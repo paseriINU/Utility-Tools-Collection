@@ -225,8 +225,8 @@ Private Sub FormatJobListSheet()
 
     ws.Cells.Clear
 
-    ' タイトル
-    With ws.Range("A1:J1")
+    ' タイトル（A1:M1 = COL_LAST_MESSAGE列まで）
+    With ws.Range("A1:M1")
         .Merge
         .Value = "ジョブネット一覧"
         .Font.Size = 14
@@ -293,8 +293,11 @@ Private Sub FormatJobListSheet()
     ' フィルター設定
     ws.Range(ws.Cells(ROW_JOBLIST_HEADER, COL_ORDER), ws.Cells(ROW_JOBLIST_HEADER, COL_LAST_MESSAGE)).AutoFilter
 
-    ' ウィンドウ枠の固定（ヘッダー行の下で固定）
+    ' ウィンドウ枠の固定（ヘッダー行の下で固定、列固定なし）
     ws.Activate
+    ' 既存の固定を解除
+    ActiveWindow.FreezePanes = False
+    ' A5セル（5行目1列目）を選択して行のみ固定（1-4行目が固定される）
     ws.Cells(ROW_JOBLIST_DATA_START, 1).Select
     ActiveWindow.FreezePanes = True
 End Sub
@@ -350,8 +353,11 @@ Private Sub FormatLogSheet()
     ws.Columns("E").ColumnWidth = 18
     ws.Columns("F").ColumnWidth = 60
 
-    ' ウィンドウ枠の固定（ヘッダー行の下で固定）
+    ' ウィンドウ枠の固定（ヘッダー行の下で固定、列固定なし）
     ws.Activate
+    ' 既存の固定を解除
+    ActiveWindow.FreezePanes = False
+    ' A5セル（5行目1列目）を選択して行のみ固定（1-4行目が固定される）
     ws.Cells(5, 1).Select
     ActiveWindow.FreezePanes = True
 End Sub
