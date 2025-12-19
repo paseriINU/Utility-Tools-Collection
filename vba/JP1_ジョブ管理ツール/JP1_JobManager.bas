@@ -1270,7 +1270,7 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
             script = script & "      elseif ($detailStr -match '[A-Za-z]:[^\r\n]+\.err') { $logPath = $matches[0] }" & vbCrLf
             script = script & "      Write-Log ""[DEBUG-14] 抽出したログパス: $logPath""" & vbCrLf
             script = script & "      if ($logPath) {" & vbCrLf
-            script = script & "        Write-Output ""RESULT_LOGPATH:$logPath""" & vbCrLf
+            script = script & "        Write-Output ""RESULT_LOGPATH:$logFile""" & vbCrLf
             script = script & "      }" & vbCrLf
             script = script & vbCrLf
             script = script & "      # まず標準エラーファイルを直接読み取る（ローカルモード）" & vbCrLf
@@ -1314,10 +1314,9 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
             script = script & "      }" & vbCrLf
             script = script & vbCrLf
             script = script & "      if ($logContent) {" & vbCrLf
-            script = script & "        $logStr = $logContent -join ' '" & vbCrLf
-            script = script & "        # 改行を半角スペースに置換、長すぎる場合は切り詰め" & vbCrLf
-            script = script & "        $logStr = $logStr -replace '[\r\n]+', ' ' -replace '\s+', ' '" & vbCrLf
-            script = script & "        if ($logStr.Length -gt 500) { $logStr = $logStr.Substring(0, 500) + '...' }" & vbCrLf
+            script = script & "        $logStr = $logContent -join ""`n""" & vbCrLf
+            script = script & "        # 長すぎる場合は切り詰め" & vbCrLf
+            script = script & "        if ($logStr.Length -gt 1000) { $logStr = $logStr.Substring(0, 1000) + '...' }" & vbCrLf
             script = script & "        Write-Output ""RESULT_DETAIL:$logStr""" & vbCrLf
             script = script & "      } else {" & vbCrLf
             script = script & "        Write-Log '標準エラーログを取得できませんでした'" & vbCrLf
@@ -1585,7 +1584,7 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
             script = script & vbCrLf
             script = script & "      # 標準エラーファイルパスを出力（表示用）" & vbCrLf
             script = script & "      if ($stderrFile) {" & vbCrLf
-            script = script & "        Write-Output ""RESULT_LOGPATH:$stderrFile""" & vbCrLf
+            script = script & "        Write-Output ""RESULT_LOGPATH:$logFile""" & vbCrLf
             script = script & "      }" & vbCrLf
             script = script & vbCrLf
             script = script & "      # まず標準エラーファイルを直接読み取る（リモート）" & vbCrLf
@@ -1620,12 +1619,11 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
             script = script & "      }" & vbCrLf
             script = script & vbCrLf
             script = script & "      if ($logContent) {" & vbCrLf
-            script = script & "        $logStr = $logContent -join ' '" & vbCrLf
+            script = script & "        $logStr = $logContent -join ""`n""" & vbCrLf
             script = script & "        Write-Log ""[DEBUG-34] ログ取得結果(リモート): $logStr""" & vbCrLf
             script = script & "        if ($logStr -and $logStr -notmatch 'KAVS' -and $logStr -notmatch 'ERROR:') {" & vbCrLf
-            script = script & "          # 改行を半角スペースに置換、長すぎる場合は切り詰め" & vbCrLf
-            script = script & "          $logStr = $logStr -replace '[\r\n]+', ' ' -replace '\s+', ' '" & vbCrLf
-            script = script & "          if ($logStr.Length -gt 500) { $logStr = $logStr.Substring(0, 500) + '...' }" & vbCrLf
+            script = script & "          # 長すぎる場合は切り詰め" & vbCrLf
+            script = script & "          if ($logStr.Length -gt 1000) { $logStr = $logStr.Substring(0, 1000) + '...' }" & vbCrLf
             script = script & "          Write-Output ""RESULT_DETAIL:$logStr""" & vbCrLf
             script = script & "        }" & vbCrLf
             script = script & "      } else {" & vbCrLf
