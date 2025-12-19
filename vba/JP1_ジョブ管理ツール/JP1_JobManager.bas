@@ -1446,11 +1446,16 @@ Public Sub ClearJobList()
         ' J〜N列（実行結果）をクリア
         ws.Range(ws.Cells(ROW_JOBLIST_DATA_START, COL_LAST_STATUS), ws.Cells(lastRow, COL_LAST_MESSAGE)).ClearContents
 
-        ' 背景色をクリア（保留行のハイライトは保持）
+        ' 背景色を初期状態に戻す
         Dim row As Long
         For row = ROW_JOBLIST_DATA_START To lastRow
-            ' 保留中でない行の背景色をクリア
-            If ws.Cells(row, COL_HOLD).Value <> "保留中" Then
+            If ws.Cells(row, COL_HOLD).Value = "保留中" Then
+                ' 保留行は黄色ハイライトを再適用
+                ws.Range(ws.Cells(row, COL_ORDER), ws.Cells(row, COL_LAST_MESSAGE)).Interior.Color = RGB(255, 235, 156)
+                ws.Cells(row, COL_HOLD).Font.Bold = True
+                ws.Cells(row, COL_HOLD).Font.Color = RGB(156, 87, 0)
+            Else
+                ' 保留中でない行の背景色をクリア
                 ws.Range(ws.Cells(row, COL_ORDER), ws.Cells(row, COL_LAST_MESSAGE)).Interior.ColorIndex = xlNone
             End If
         Next row
