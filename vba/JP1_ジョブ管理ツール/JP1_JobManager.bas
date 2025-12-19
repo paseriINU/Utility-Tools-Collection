@@ -1665,14 +1665,14 @@ Private Sub UpdateJobListStatus(ByVal row As Long, ByVal result As Object)
     ws.Cells(row, COL_LAST_EXEC_TIME).Value = result("StartTime")
     ws.Cells(row, COL_LAST_END_TIME).Value = result("EndTime")
 
-    ' ログパスを記録（ハイパーリンク設定）
+    ' ログパスを記録（N列にハイパーリンク設定）
     If result("LogPath") <> "" Then
         Dim logPath As String
         logPath = result("LogPath")
-        ws.Cells(row, COL_LOG_PATH).Value = logPath
+        ws.Cells(row, COL_LAST_MESSAGE).Value = logPath
         ' ファイルパスの場合はハイパーリンクを設定
         On Error Resume Next
-        ws.Hyperlinks.Add Anchor:=ws.Cells(row, COL_LOG_PATH), _
+        ws.Hyperlinks.Add Anchor:=ws.Cells(row, COL_LAST_MESSAGE), _
                           Address:=logPath, _
                           TextToDisplay:=logPath
         On Error GoTo 0
@@ -1721,9 +1721,9 @@ Public Sub ClearJobList()
         ' J〜O列（実行結果・ログパス）をクリア
         ws.Range(ws.Cells(ROW_JOBLIST_DATA_START, COL_LAST_STATUS), ws.Cells(lastRow, COL_LOG_PATH)).ClearContents
 
-        ' ハイパーリンクも削除
+        ' ハイパーリンクも削除（N列）
         On Error Resume Next
-        ws.Range(ws.Cells(ROW_JOBLIST_DATA_START, COL_LOG_PATH), ws.Cells(lastRow, COL_LOG_PATH)).Hyperlinks.Delete
+        ws.Range(ws.Cells(ROW_JOBLIST_DATA_START, COL_LAST_MESSAGE), ws.Cells(lastRow, COL_LAST_MESSAGE)).Hyperlinks.Delete
         On Error GoTo 0
 
         ' 背景色を初期状態に戻す
