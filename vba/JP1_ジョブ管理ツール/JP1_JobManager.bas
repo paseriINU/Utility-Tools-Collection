@@ -1212,15 +1212,16 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
             script = script & "    foreach ($p in $jpqSearchPaths) { if (Test-Path $p) { $jpqjobgetPath = $p; break } }" & vbCrLf
             script = script & "    Write-Log ""[DEBUG] jpqjobgetPath: $jpqjobgetPath""" & vbCrLf
             script = script & vbCrLf
-            script = script & "    # ajsshow -g 1 -f で異常終了したユニットを取得（フォーマット: ジョブ名 種別 状態 戻り値）" & vbCrLf
-            script = script & "    Write-Log ""[DEBUG] 実行コマンド: $ajsshowPath -F '" & config("SchedulerService") & "' -g 1 -f '%J %T %C %R' '" & jobnetPath & "'""" & vbCrLf
-            script = script & "    $failedJobsResult = & $ajsshowPath -F '" & config("SchedulerService") & "' -g 1 -f '%J %T %C %R' '" & jobnetPath & "' 2>&1" & vbCrLf
+            script = script & "    # ajsshow -R -f で配下すべてのユニットを取得（フォーマット: ジョブ名 種別 状態 戻り値）" & vbCrLf
+            script = script & "    Write-Log ""[DEBUG] 実行コマンド: $ajsshowPath -F '" & config("SchedulerService") & "' -R -f '%J %T %C %R' '" & jobnetPath & "'""" & vbCrLf
+            script = script & "    $failedJobsResult = & $ajsshowPath -F '" & config("SchedulerService") & "' -R -f '%J %T %C %R' '" & jobnetPath & "' 2>&1" & vbCrLf
             script = script & "    $failedJobsStr = $failedJobsResult -join ""`n""" & vbCrLf
-            script = script & "    Write-Log ""[DEBUG] ajsshow -g 1 -f 結果:""" & vbCrLf
+            script = script & "    Write-Log ""[DEBUG] ajsshow -R -f 結果:""" & vbCrLf
             script = script & "    Write-Log $failedJobsStr" & vbCrLf
             script = script & vbCrLf
             script = script & "    # 異常終了したジョブを特定（出力形式: /パス/ジョブ名 種別 状態 戻り値）" & vbCrLf
             script = script & "    $failedJobPath = ''" & vbCrLf
+            script = script & "    $nonZeroReturnJobPath = ''" & vbCrLf
             script = script & "    Write-Log ""[DEBUG] 結果行数: $($failedJobsResult.Count)""" & vbCrLf
             script = script & "    $lineNum = 0" & vbCrLf
             script = script & "    foreach ($line in $failedJobsResult) {" & vbCrLf
@@ -1232,6 +1233,16 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
             script = script & "        Write-Log ""[DEBUG] 異常終了/警告終了ジョブを検出: $failedJobPath""" & vbCrLf
             script = script & "        break" & vbCrLf
             script = script & "      }" & vbCrLf
+            script = script & "      # 戻り値が0以外のジョブも記録（警告検出終了の場合に使用）" & vbCrLf
+            script = script & "      if (-not $nonZeroReturnJobPath -and $line -match '^(/[^\s]+)\s+(j|pj|qj|cj|cpj|fxj)\s+\S+\s+([1-9]\d*|-\d+)') {" & vbCrLf
+            script = script & "        $nonZeroReturnJobPath = $matches[1]" & vbCrLf
+            script = script & "        Write-Log ""[DEBUG] 戻り値が0以外のジョブを検出: $nonZeroReturnJobPath (戻り値: $($matches[3]))""" & vbCrLf
+            script = script & "      }" & vbCrLf
+            script = script & "    }" & vbCrLf
+            script = script & "    # 異常終了/警告終了ジョブが見つからない場合、戻り値が0以外のジョブを使用" & vbCrLf
+            script = script & "    if (-not $failedJobPath -and $nonZeroReturnJobPath) {" & vbCrLf
+            script = script & "      $failedJobPath = $nonZeroReturnJobPath" & vbCrLf
+            script = script & "      Write-Log ""[DEBUG] 戻り値が0以外のジョブを使用: $failedJobPath""" & vbCrLf
             script = script & "    }" & vbCrLf
             script = script & vbCrLf
             script = script & "    if ($failedJobPath) {" & vbCrLf
@@ -1494,23 +1505,24 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
             script = script & "  if ($lastStatusStr -match '警告検出終了|異常終了|異常検出終了|ended abnormally|ended with warning') {" & vbCrLf
             script = script & "    Write-Log '[詳細取得] 異常終了したジョブを検索中...'" & vbCrLf
             script = script & vbCrLf
-            script = script & "    # ajsshow -g 1 -f で異常終了したユニットを取得（リモート）" & vbCrLf
+            script = script & "    # ajsshow -R -f で配下すべてのユニットを取得（リモート）" & vbCrLf
             script = script & "    # フォーマット: %J=完全名, %T=種別, %C=状態, %R=戻り値" & vbCrLf
-            script = script & "    Write-Log ""[DEBUG] 実行コマンド(リモート): ajsshow -F '" & config("SchedulerService") & "' -g 1 -f '%J %T %C %R' '" & jobnetPath & "'""" & vbCrLf
+            script = script & "    Write-Log ""[DEBUG] 実行コマンド(リモート): ajsshow -F '" & config("SchedulerService") & "' -R -f '%J %T %C %R' '" & jobnetPath & "'""" & vbCrLf
             script = script & "    $failedJobsResult = Invoke-Command -Session $session -ScriptBlock {" & vbCrLf
             script = script & "      param($schedulerService, $jobnetPath)" & vbCrLf
             script = script & "      $ajsshowPath = $null" & vbCrLf
             script = script & "      $searchPaths = @('C:\Program Files\HITACHI\JP1AJS3\bin\ajsshow.exe','C:\Program Files (x86)\HITACHI\JP1AJS3\bin\ajsshow.exe','C:\Program Files\Hitachi\JP1AJS2\bin\ajsshow.exe','C:\Program Files (x86)\Hitachi\JP1AJS2\bin\ajsshow.exe')" & vbCrLf
             script = script & "      foreach ($p in $searchPaths) { if (Test-Path $p) { $ajsshowPath = $p; break } }" & vbCrLf
             script = script & "      if (-not $ajsshowPath) { return 'ERROR: ajsshow.exe not found' }" & vbCrLf
-            script = script & "      & $ajsshowPath '-F' $schedulerService '-g' '1' '-f' '%J %T %C %R' $jobnetPath 2>&1" & vbCrLf
+            script = script & "      & $ajsshowPath '-F' $schedulerService '-R' '-f' '%J %T %C %R' $jobnetPath 2>&1" & vbCrLf
             script = script & "    } -ArgumentList '" & config("SchedulerService") & "', '" & jobnetPath & "'" & vbCrLf
             script = script & "    $failedJobsStr = $failedJobsResult -join ""`n""" & vbCrLf
-            script = script & "    Write-Log ""[DEBUG] ajsshow -g 1 -f 結果(リモート):""" & vbCrLf
+            script = script & "    Write-Log ""[DEBUG] ajsshow -R -f 結果(リモート):""" & vbCrLf
             script = script & "    Write-Log $failedJobsStr" & vbCrLf
             script = script & vbCrLf
             script = script & "    # 異常終了したジョブを特定（-f '%J %T %C %R'の出力形式: /path/job j 異常終了 1）" & vbCrLf
             script = script & "    $failedJobPath = ''" & vbCrLf
+            script = script & "    $nonZeroReturnJobPath = ''" & vbCrLf
             script = script & "    Write-Log ""[DEBUG] 結果行数: $($failedJobsResult.Count)""" & vbCrLf
             script = script & "    $lineNum = 0" & vbCrLf
             script = script & "    foreach ($line in $failedJobsResult) {" & vbCrLf
@@ -1523,6 +1535,16 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
             script = script & "        Write-Log ""[DEBUG] 異常終了/警告終了ジョブ検出: $failedJobPath""" & vbCrLf
             script = script & "        break" & vbCrLf
             script = script & "      }" & vbCrLf
+            script = script & "      # 戻り値が0以外のジョブも記録（警告検出終了の場合に使用）" & vbCrLf
+            script = script & "      if (-not $nonZeroReturnJobPath -and $line -match '^(/[^\s]+)\s+(j|pj|qj|cj|cpj|fxj)\s+\S+\s+([1-9]\d*|-\d+)') {" & vbCrLf
+            script = script & "        $nonZeroReturnJobPath = $matches[1]" & vbCrLf
+            script = script & "        Write-Log ""[DEBUG] 戻り値が0以外のジョブを検出: $nonZeroReturnJobPath (戻り値: $($matches[3]))""" & vbCrLf
+            script = script & "      }" & vbCrLf
+            script = script & "    }" & vbCrLf
+            script = script & "    # 異常終了/警告終了ジョブが見つからない場合、戻り値が0以外のジョブを使用" & vbCrLf
+            script = script & "    if (-not $failedJobPath -and $nonZeroReturnJobPath) {" & vbCrLf
+            script = script & "      $failedJobPath = $nonZeroReturnJobPath" & vbCrLf
+            script = script & "      Write-Log ""[DEBUG] 戻り値が0以外のジョブを使用: $failedJobPath""" & vbCrLf
             script = script & "    }" & vbCrLf
             script = script & vbCrLf
             script = script & "    if ($failedJobPath) {" & vbCrLf
