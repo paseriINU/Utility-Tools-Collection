@@ -879,7 +879,7 @@ Public Sub ExecuteCheckedJobs()
     Set wsLog = Worksheets(SHEET_LOG)
     Dim logRow As Long
     logRow = wsLog.Cells(wsLog.Rows.Count, 1).End(xlUp).Row + 1
-    If logRow < 4 Then logRow = 4
+    If logRow < 5 Then logRow = 5
 
     Dim success As Boolean
     success = True
@@ -1771,18 +1771,18 @@ Public Sub ClearLogHistory()
     Dim lastRow As Long
     lastRow = ws.Cells(ws.Rows.Count, 1).End(xlUp).Row
 
-    ' データ行がある場合のみ削除（4行目以降がデータ）
-    If lastRow >= 4 Then
+    ' データ行がある場合のみ削除（5行目以降がデータ）
+    If lastRow >= 5 Then
         ' データ行を削除
-        ws.Range(ws.Cells(4, 1), ws.Cells(lastRow, 6)).ClearContents
+        ws.Range(ws.Cells(5, 1), ws.Cells(lastRow, 6)).ClearContents
 
         ' ハイパーリンクも削除（F列）
         On Error Resume Next
-        ws.Range(ws.Cells(4, 6), ws.Cells(lastRow, 6)).Hyperlinks.Delete
+        ws.Range(ws.Cells(5, 6), ws.Cells(lastRow, 6)).Hyperlinks.Delete
         On Error GoTo 0
 
         ' 背景色もクリア
-        ws.Range(ws.Cells(4, 1), ws.Cells(lastRow, 6)).Interior.ColorIndex = xlNone
+        ws.Range(ws.Cells(5, 1), ws.Cells(lastRow, 6)).Interior.ColorIndex = xlNone
     End If
 
     MsgBox "実行ログの履歴を削除しました。", vbInformation

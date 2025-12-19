@@ -177,6 +177,25 @@ Private Sub FormatSettingsSheet()
     ws.Cells(ROW_POLLING_INTERVAL, 1).Value = "状態確認間隔（秒）"
     ws.Cells(ROW_POLLING_INTERVAL, COL_SETTING_VALUE).Value = 10
 
+    ' 使い方セクション
+    ws.Range("A21").Value = "■ 使い方"
+    ws.Range("A21").Font.Bold = True
+
+    ws.Range("A22").Value = "1. 上記の接続設定・実行設定を入力します"
+    ws.Range("A23").Value = "2. 「ジョブ一覧取得」ボタンをクリックしてジョブネット一覧を取得します"
+    ws.Range("A24").Value = "3. ジョブ一覧シートで実行するジョブの「順序」列に数字（1, 2, 3...）を入力します"
+    ws.Range("A25").Value = "4. 「選択ジョブ実行」ボタンをクリックしてジョブを順番に実行します"
+    ws.Range("A26").Value = "5. 実行結果は実行ログシートに記録されます"
+
+    ws.Range("A28").Value = "■ 動作説明"
+    ws.Range("A28").Font.Bold = True
+
+    ws.Range("A29").Value = "・ジョブが保留中の場合、実行時に自動で保留解除されます"
+    ws.Range("A30").Value = "・完了待ち「はい」の場合、ジョブ終了まで待機して結果を取得します"
+    ws.Range("A31").Value = "・異常終了または警告終了した場合、後続のジョブは実行されません"
+    ws.Range("A32").Value = "・実行ログにはジョブごとの開始・終了時刻、結果、ログパスが記録されます"
+    ws.Range("A33").Value = "・警告・異常終了時はJP1サーバ上の標準エラーログも取得されます"
+
     ' 列幅調整
     ws.Columns("A").ColumnWidth = 20
     ws.Columns("B").ColumnWidth = 5
@@ -305,15 +324,18 @@ Private Sub FormatLogSheet()
     AddButton ws, 20, 30, 100, 28, "ClearLogHistory", "履歴クリア", RGB(192, 80, 77)
     ws.Rows(2).RowHeight = 35
 
-    ' ヘッダー
-    ws.Cells(3, 1).Value = "実行日時"
-    ws.Cells(3, 2).Value = "ジョブネットパス"
-    ws.Cells(3, 3).Value = "結果"
-    ws.Cells(3, 4).Value = "開始時刻"
-    ws.Cells(3, 5).Value = "終了時刻"
-    ws.Cells(3, 6).Value = "ログパス"
+    ' 説明（3行目）
+    ws.Range("A3").Value = "ジョブ実行の履歴ログです。"
 
-    With ws.Range("A3:F3")
+    ' ヘッダー（4行目）
+    ws.Cells(4, 1).Value = "実行日時"
+    ws.Cells(4, 2).Value = "ジョブネットパス"
+    ws.Cells(4, 3).Value = "結果"
+    ws.Cells(4, 4).Value = "開始時刻"
+    ws.Cells(4, 5).Value = "終了時刻"
+    ws.Cells(4, 6).Value = "ログパス"
+
+    With ws.Range("A4:F4")
         .Font.Bold = True
         .Interior.Color = RGB(192, 80, 77)
         .Font.Color = RGB(255, 255, 255)
@@ -330,7 +352,7 @@ Private Sub FormatLogSheet()
 
     ' ウィンドウ枠の固定（ヘッダー行の下で固定）
     ws.Activate
-    ws.Cells(4, 1).Select
+    ws.Cells(5, 1).Select
     ActiveWindow.FreezePanes = True
 End Sub
 
