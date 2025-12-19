@@ -1573,19 +1573,14 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
             script = script & "      Write-Log ""[DEBUG] ajsshow -g 1 -i 結果(リモート):""" & vbCrLf
             script = script & "      Write-Log $detailStr" & vbCrLf
             script = script & vbCrLf
-            script = script & "      # 出力形式: 実行ID 実行登録番号 標準エラーファイル（スペース区切り）" & vbCrLf
+            script = script & "      # 出力形式: @実行ID 実行登録番号 標準エラーファイル" & vbCrLf
             script = script & "      $execId = ''" & vbCrLf
             script = script & "      $execRegNo = ''" & vbCrLf
             script = script & "      $stderrFile = ''" & vbCrLf
-            script = script & "      foreach ($line in $detailResult) {" & vbCrLf
-            script = script & "        if ($line -match '^@') { continue }" & vbCrLf
-            script = script & "        if ($line -match 'KAVS' -or $line -match 'ERROR') { continue }" & vbCrLf
-            script = script & "        $parts = $line -split '\s+'" & vbCrLf
-            script = script & "        if ($parts.Count -ge 1) { $execId = $parts[0] }" & vbCrLf
-            script = script & "        if ($parts.Count -ge 2) { $execRegNo = $parts[1] }" & vbCrLf
-            script = script & "        if ($parts.Count -ge 3) { $stderrFile = $parts[2] }" & vbCrLf
-            script = script & "        if ($execId) { break }" & vbCrLf
-            script = script & "      }" & vbCrLf
+            script = script & "      # 正規表現で各要素を抽出" & vbCrLf
+            script = script & "      if ($detailStr -match '@[A-Z0-9]+') { $execId = $matches[0] }" & vbCrLf
+            script = script & "      if ($detailStr -match '\d{11,}') { $execRegNo = $matches[0] }" & vbCrLf
+            script = script & "      if ($detailStr -match '[A-Za-z]:[^\r\n]+\.err') { $stderrFile = $matches[0] }" & vbCrLf
             script = script & "      Write-Log ""[DEBUG] 実行ID: $execId, 実行登録番号: $execRegNo, 標準エラー: $stderrFile""" & vbCrLf
             script = script & vbCrLf
             script = script & "      # 標準エラーファイルパスを出力（表示用）" & vbCrLf
