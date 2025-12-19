@@ -157,8 +157,8 @@ Private Sub FormatSettingsSheet()
     ws.Cells(ROW_SCHEDULER_SERVICE, 4).Font.Color = RGB(128, 128, 128)
 
     ws.Cells(ROW_ROOT_PATH, 1).Value = "取得パス"
-    ws.Cells(ROW_ROOT_PATH, COL_SETTING_VALUE).Value = "/*"
-    ws.Cells(ROW_ROOT_PATH, 4).Value = "※「グループ名取得」ボタンでリストを更新可能"
+    ws.Cells(ROW_ROOT_PATH, COL_SETTING_VALUE).Value = "/"
+    ws.Cells(ROW_ROOT_PATH, 4).Value = "※「グループ名取得」でリスト更新（例: / または /グループ名）"
     ws.Cells(ROW_ROOT_PATH, 4).Font.Color = RGB(128, 128, 128)
 
     ' 実行設定セクション

@@ -294,7 +294,8 @@ End Function
 
 Private Function ParseGroupListResult(result As String) As String
     ' グループ名を抽出してドロップダウン用のリストを作成（ネスト対応）
-    ' 戻り値: カンマ区切りのパスリスト（例: /*,/グループA/*,/グループA/サブグループ/*）
+    ' 戻り値: カンマ区切りのパスリスト（例: /,/グループA,/グループA/サブグループ）
+    ' ※アスタリスクなしで保存（ジョブ一覧取得時に-Rオプションで再帰取得）
 
     ' エラーチェック
     If InStr(result, "ERROR:") > 0 Then
@@ -306,7 +307,7 @@ Private Function ParseGroupListResult(result As String) As String
     lines = Split(result, vbCrLf)
 
     Dim groupPaths As String
-    groupPaths = "/*"  ' デフォルトで全件取得オプションを追加
+    groupPaths = "/"  ' デフォルトで全件取得オプションを追加（ルート）
 
     ' ネスト対応のためスタック構造を使用
     Const MAX_DEPTH As Long = 20
@@ -366,7 +367,7 @@ Private Function ParseGroupListResult(result As String) As String
                 ' ty=g;（グループ）の場合、パスリストに追加
                 If InStr(lineStr, "ty=g;") > 0 Then
                     typeStack(stackDepth) = "g"
-                    groupPaths = groupPaths & "," & pathStack(stackDepth) & "/*"
+                    groupPaths = groupPaths & "," & pathStack(stackDepth)
                 End If
             End If
             GoTo NextGroupLine
