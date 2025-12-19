@@ -1119,6 +1119,7 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
             script = script & "    $ajsshowPath = ""$jp1BinPath\ajsshow.exe""" & vbCrLf
             script = script & "    $statusResult = & $ajsshowPath -F " & config("SchedulerService") & " '" & jobnetPath & "' 2>&1" & vbCrLf
             script = script & "    $statusStr = $statusResult -join ' '" & vbCrLf
+            script = script & "    $lastStatusStr = $statusStr" & vbCrLf
             script = script & "    Write-Log ""[ポーリング $pollCount] ステータス: $statusStr""" & vbCrLf
             script = script & vbCrLf
             script = script & "    # 日本語・英語両方のステータスに対応" & vbCrLf
@@ -1140,14 +1141,9 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
             script = script & "  }" & vbCrLf
             script = script & vbCrLf
 
-            ' 詳細取得（-b: 実行結果、開始時刻・終了時刻を含む）
-            script = script & "  Write-Log '[実行] ajsshow -b - 実行結果取得'" & vbCrLf
-            script = script & "  $ajsshowPath = ""$jp1BinPath\ajsshow.exe""" & vbCrLf
-            script = script & "  if (Test-Path $ajsshowPath) {" & vbCrLf
-            script = script & "    $showResult = & $ajsshowPath -F " & config("SchedulerService") & " '" & jobnetPath & "' -b 2>&1" & vbCrLf
-            script = script & "    Write-Log ""実行結果: $($showResult -join [Environment]::NewLine)""" & vbCrLf
-            script = script & "    Write-Output ""RESULT_MESSAGE:$($showResult -join ' ')""" & vbCrLf
-            script = script & "  }" & vbCrLf
+            ' 最後のステータス情報をメッセージとして出力
+            script = script & "  Write-Log ""最終ステータス: $lastStatusStr""" & vbCrLf
+            script = script & "  Write-Output ""RESULT_MESSAGE:$lastStatusStr""" & vbCrLf
         Else
             script = script & "  Write-Log '[完了] 起動成功（完了待ちなし）'" & vbCrLf
             script = script & "  Write-Output ""RESULT_STATUS:起動成功""" & vbCrLf
@@ -1286,6 +1282,7 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
             script = script & "    } -ArgumentList '" & config("SchedulerService") & "', '" & jobnetPath & "'" & vbCrLf
             script = script & vbCrLf
             script = script & "    $statusStr = $statusResult -join ' '" & vbCrLf
+            script = script & "    $lastStatusStr = $statusStr" & vbCrLf
             script = script & "    Write-Log ""[ポーリング $pollCount] ステータス: $statusStr""" & vbCrLf
             script = script & "    # 日本語・英語両方のステータスに対応" & vbCrLf
             script = script & "    if ($statusStr -match '異常終了|ended abnormally|abnormal end|abend|killed|failed|キャンセル|中止') {" & vbCrLf
@@ -1306,17 +1303,9 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
             script = script & "  }" & vbCrLf
             script = script & vbCrLf
 
-            ' 詳細取得（-b: 実行結果、開始時刻・終了時刻を含む）
-            script = script & "  Write-Log '[実行] ajsshow -b - 実行結果取得（リモート）'" & vbCrLf
-            script = script & "  $showResult = Invoke-Command -Session $session -ScriptBlock {" & vbCrLf
-            script = script & "    param($schedulerService, $jobnetPath)" & vbCrLf
-            script = script & "    $ajsshowPath = $null" & vbCrLf
-            script = script & "    $searchPaths = @('C:\Program Files\HITACHI\JP1AJS3\bin\ajsshow.exe','C:\Program Files (x86)\HITACHI\JP1AJS3\bin\ajsshow.exe','C:\Program Files\Hitachi\JP1AJS2\bin\ajsshow.exe','C:\Program Files (x86)\Hitachi\JP1AJS2\bin\ajsshow.exe')" & vbCrLf
-            script = script & "    foreach ($p in $searchPaths) { if (Test-Path $p) { $ajsshowPath = $p; break } }" & vbCrLf
-            script = script & "    if ($ajsshowPath) { & $ajsshowPath '-F' $schedulerService $jobnetPath '-b' 2>&1 }" & vbCrLf
-            script = script & "  } -ArgumentList '" & config("SchedulerService") & "', '" & jobnetPath & "'" & vbCrLf
-            script = script & "  Write-Log ""実行結果: $($showResult -join [Environment]::NewLine)""" & vbCrLf
-            script = script & "  Write-Output ""RESULT_MESSAGE:$($showResult -join ' ')""" & vbCrLf
+            ' 最後のステータス情報をメッセージとして出力
+            script = script & "  Write-Log ""最終ステータス: $lastStatusStr""" & vbCrLf
+            script = script & "  Write-Output ""RESULT_MESSAGE:$lastStatusStr""" & vbCrLf
         Else
             script = script & "  Write-Log '[完了] 起動成功（完了待ちなし）'" & vbCrLf
             script = script & "  Write-Output ""RESULT_STATUS:起動成功""" & vbCrLf
