@@ -890,22 +890,26 @@
             let content = latin1Decode(bytes);
 
             // PDFファイルかどうかを確認
-            // startsWith(): 文字列が指定した文字列で始まるかチェック
             if (!content.startsWith('%PDF-')) {
-                // throw: エラーを発生させる
                 throw new Error('有効なPDFファイルではありません。');
             }
 
             // 圧縮されたストリームを解凍して追加コンテンツを取得
-            const decompressedContent = decompressAllStreams(content, bytes);
-            if (decompressedContent) {
-                content = content + '\n' + decompressedContent;
+            try {
+                const decompressedContent = decompressAllStreams(content, bytes);
+                if (decompressedContent) {
+                    content = content + '\n' + decompressedContent;
+                }
+            } catch (e) {
+                // 解凍に失敗しても続行（非圧縮部分からしおりを探す）
             }
 
             // しおり（Outlines）の存在確認
-            // match(): 正規表現でパターンマッチング
-            // \s: 空白文字、\d: 数字
-            if (!content.match(/\/Outlines\s+\d+\s+\d+\s+R/) && !content.match(/\/Type\s*\/Outlines/)) {
+            const hasOutlines = content.match(/\/Outlines\s+\d+\s+\d+\s+R/) ||
+                               content.match(/\/Type\s*\/Outlines/) ||
+                               content.match(/\/Title\s*[\(<]/);
+
+            if (!hasOutlines) {
                 throw new Error('このPDFにはしおりがありません。');
             }
 
@@ -916,7 +920,8 @@
             const bookmarks = extractBookmarks(content, bytes, pageObjects);
 
             if (bookmarks.length === 0) {
-                throw new Error('しおりを取得できませんでした。PDFが暗号化されているか、特殊な形式の可能性があります。');
+                // しおりの構造は見つかったが抽出できなかった場合
+                throw new Error('しおりの抽出に失敗しました。PDFが暗号化されているか、サポートされていない形式の可能性があります。');
             }
 
             return bookmarks;
@@ -934,41 +939,38 @@
             let decompressedParts = [];
 
             // 方法1: stream/endstream を直接検索して解凍を試みる
-            // より柔軟なアプローチ - /Length が間接参照でも対応可能
             const streamMarkerPattern = /stream\r?\n/g;
             let match;
 
             while ((match = streamMarkerPattern.exec(content)) !== null) {
-                const streamStart = match.index + match[0].length;
-
-                // このstreamの前にある辞書を確認（FlateDecodeかどうか）
-                const beforeStream = content.substring(Math.max(0, match.index - 500), match.index);
-
-                // FlateDecodeフィルタがあるか確認
-                if (!beforeStream.match(/\/Filter\s*(?:\/FlateDecode|\[\s*\/FlateDecode)/)) {
-                    continue;
-                }
-
-                // endstream を探してストリームの終端を見つける
-                const endstreamPos = content.indexOf('endstream', streamStart);
-                if (endstreamPos === -1) continue;
-
-                // ストリームデータを抽出（末尾の改行を除去）
-                let streamEnd = endstreamPos;
-                // 末尾の \r\n または \n を除去
-                if (content.charCodeAt(streamEnd - 1) === 10) streamEnd--; // \n
-                if (content.charCodeAt(streamEnd - 1) === 13) streamEnd--; // \r
-
-                const streamLength = streamEnd - streamStart;
-                if (streamLength <= 0 || streamLength > 10000000) continue; // サイズチェック
-
-                const streamData = bytes.slice(streamStart, streamEnd);
-
                 try {
+                    const streamStart = match.index + match[0].length;
+
+                    // このstreamの前にある辞書を確認（FlateDecodeかどうか）
+                    const beforeStream = content.substring(Math.max(0, match.index - 500), match.index);
+
+                    // FlateDecodeフィルタがあるか確認
+                    if (!beforeStream.match(/\/Filter\s*(?:\/FlateDecode|\[\s*\/FlateDecode)/)) {
+                        continue;
+                    }
+
+                    // endstream を探してストリームの終端を見つける
+                    const endstreamPos = content.indexOf('endstream', streamStart);
+                    if (endstreamPos === -1) continue;
+
+                    // ストリームデータを抽出（末尾の改行を除去）
+                    let streamEnd = endstreamPos;
+                    if (content.charCodeAt(streamEnd - 1) === 10) streamEnd--;
+                    if (content.charCodeAt(streamEnd - 1) === 13) streamEnd--;
+
+                    const streamLength = streamEnd - streamStart;
+                    if (streamLength <= 0 || streamLength > 10000000) continue;
+
+                    const streamData = bytes.slice(streamStart, streamEnd);
+
                     // Deflate解凍を実行
                     const decompressed = inflateRaw(streamData);
                     if (decompressed && decompressed.length > 0) {
-                        // 解凍されたデータを文字列に変換
                         const decompressedStr = latin1Decode(decompressed);
                         // しおり関連の情報を含む場合のみ追加
                         if (decompressedStr.includes('/Title') ||
@@ -1398,7 +1400,7 @@
                 rawStr += String.fromCharCode(titleBytes[i]);
             }
 
-            // PDFエスケープシーケンスをデコード
+            // PDFエスケープシーケンスをデコード（8進数エスケープ等）
             const decodedStr = decodePDFString(rawStr);
 
             // デコード後のバイト配列を取得
@@ -1407,48 +1409,54 @@
                 processedBytes[i] = decodedStr.charCodeAt(i) & 0xFF;
             }
 
-            // UTF-8として解釈を試みる（BOMチェック）
+            // 全てASCII範囲内ならそのまま返す
+            if (/^[\x20-\x7E\t\n\r]+$/.test(decodedStr)) {
+                return decodedStr;
+            }
+
+            // UTF-8 BOMチェック
             if (processedBytes.length >= 3 &&
                 processedBytes[0] === 0xEF &&
                 processedBytes[1] === 0xBB &&
                 processedBytes[2] === 0xBF) {
-                // UTF-8 BOMあり
                 try {
                     const utf8Str = new TextDecoder('utf-8').decode(processedBytes.slice(3));
                     if (utf8Str && utf8Str.trim()) return utf8Str;
                 } catch (e) { }
             }
 
+            // UTF-16BE BOMチェック（バイナリで格納されている場合）
+            if (processedBytes.length >= 2 &&
+                processedBytes[0] === 0xFE &&
+                processedBytes[1] === 0xFF) {
+                try {
+                    const utf16Str = new TextDecoder('utf-16be').decode(processedBytes);
+                    if (utf16Str && utf16Str.trim()) return utf16Str;
+                } catch (e) { }
+            }
+
             // UTF-8として解釈を試みる
             try {
                 const utf8Str = new TextDecoder('utf-8', { fatal: true }).decode(processedBytes);
-                // 日本語文字が含まれているか、または全てASCII範囲内かチェック
-                if (!utf8Str.includes('\uFFFD')) {
-                    // 日本語を含む場合、または有効なASCII文字列の場合
-                    if (/[\u3000-\u9FFF\u4E00-\u9FFF]/.test(utf8Str) || /^[\x20-\x7E]+$/.test(utf8Str)) {
-                        return utf8Str;
-                    }
+                // 有効なUTF-8文字列かチェック（制御文字が多すぎないか）
+                const controlChars = (utf8Str.match(/[\x00-\x1F]/g) || []).length;
+                if (controlChars < utf8Str.length * 0.1) {
+                    return utf8Str;
                 }
             } catch (e) {
                 // UTF-8でデコードできない場合は次を試す
             }
 
             // Shift_JIS (Windows-31J) として解釈を試みる
-            // ブラウザの組み込みデコーダーを使用
             try {
                 const shiftJisStr = new TextDecoder('shift_jis', { fatal: false }).decode(processedBytes);
-                if (shiftJisStr && !shiftJisStr.includes('\uFFFD') &&
-                    /[\u3000-\u9FFF\u4E00-\u9FFF\u30A0-\u30FF\u3040-\u309F]/.test(shiftJisStr)) {
+                // 置換文字が少なければ有効とみなす
+                const replacementChars = (shiftJisStr.match(/\uFFFD/g) || []).length;
+                if (replacementChars < shiftJisStr.length * 0.2) {
                     return shiftJisStr;
                 }
             } catch (e) {
-                // Shift_JISデコーダーが利用できない場合は自作デコーダーを試す
-                try {
-                    const shiftJisStr = decodeShiftJIS(processedBytes);
-                    if (shiftJisStr && /[\u3000-\u9FFF\u4E00-\u9FFF]/.test(shiftJisStr)) {
-                        return shiftJisStr;
-                    }
-                } catch (e2) { }
+                // Shift_JISデコーダーが利用できない場合
             }
 
             // 最終手段: PDFエスケープをデコードした文字列をそのまま返す
