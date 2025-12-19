@@ -1474,6 +1474,20 @@
                 } catch (e) { }
             }
 
+            // UTF-16LE BOMチェック（FF FEで始まる）- Acrobat JavaScript生成のしおり対応
+            if (processedBytes.length >= 2 &&
+                processedBytes[0] === 0xFF &&
+                processedBytes[1] === 0xFE) {
+                try {
+                    // BOMを含めてデコード
+                    const utf16Str = new TextDecoder('utf-16le').decode(processedBytes);
+                    if (utf16Str && utf16Str.trim()) {
+                        // BOMを除去して返す
+                        return utf16Str.replace(/^\uFEFF/, '');
+                    }
+                } catch (e) { }
+            }
+
             // UTF-8 BOMチェック
             if (processedBytes.length >= 3 &&
                 processedBytes[0] === 0xEF &&
@@ -1483,6 +1497,60 @@
                     const utf8Str = new TextDecoder('utf-8').decode(processedBytes.slice(3));
                     if (utf8Str && utf8Str.trim()) return utf8Str;
                 } catch (e) { }
+            }
+
+            // UTF-16LEパターン検出（BOMなし）- Acrobat JavaScript生成のしおり対応
+            // 特徴: 偶数バイト、ASCII文字は低バイトがASCII値で高バイトが0x00
+            if (processedBytes.length >= 2 && processedBytes.length % 2 === 0) {
+                let utf16leScore = 0;
+                let totalPairs = processedBytes.length / 2;
+                let nullHighByteCount = 0;
+                let japaneseCount = 0;
+
+                for (let i = 0; i < processedBytes.length; i += 2) {
+                    const low = processedBytes[i];
+                    const high = processedBytes[i + 1];
+                    const charCode = (high << 8) | low;
+
+                    // NULLバイトペアはスキップ
+                    if (charCode === 0) {
+                        continue;
+                    }
+
+                    // ASCII範囲の文字（高バイトが0、低バイトが印刷可能）- LE形式
+                    if (high === 0x00 && ((low >= 0x20 && low <= 0x7E) || low === 0x09 || low === 0x0A || low === 0x0D)) {
+                        nullHighByteCount++;
+                        utf16leScore += 2;
+                        continue;
+                    }
+
+                    // 日本語（ひらがな、カタカナ、漢字）
+                    if ((charCode >= 0x3040 && charCode <= 0x309F) ||  // ひらがな
+                        (charCode >= 0x30A0 && charCode <= 0x30FF) ||  // カタカナ
+                        (charCode >= 0x4E00 && charCode <= 0x9FFF) ||  // CJK統合漢字
+                        (charCode >= 0x3000 && charCode <= 0x303F) ||  // CJK記号・句読点
+                        (charCode >= 0xFF00 && charCode <= 0xFFEF)) {  // 全角英数・半角カナ
+                        japaneseCount++;
+                        utf16leScore += 3;
+                        continue;
+                    }
+                }
+
+                // UTF-16LEとして判定
+                const isLikelyUtf16Le = (japaneseCount > 0 && utf16leScore > 0) ||
+                                        (nullHighByteCount > 0 && nullHighByteCount >= totalPairs * 0.3);
+
+                if (isLikelyUtf16Le) {
+                    try {
+                        const utf16Str = new TextDecoder('utf-16le').decode(processedBytes);
+                        if (utf16Str && utf16Str.trim() && !/\uFFFD/.test(utf16Str)) {
+                            const controlChars = (utf16Str.match(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g) || []).length;
+                            if (controlChars < utf16Str.length * 0.1) {
+                                return utf16Str;
+                            }
+                        }
+                    } catch (e) { }
+                }
             }
 
             // UTF-16BEパターン検出（BOMなし）- Acrobat JavaScript生成のしおり向け強化版
@@ -1807,6 +1875,17 @@
                         const charCode = parseInt(dataHex.substring(i, i + 4), 16);
                         if (charCode > 0) title += String.fromCharCode(charCode);
                     }
+                }
+                // UTF-16LE (FFFEで始まる) の場合 - Acrobat JavaScript対応
+                else if (hexStr.toUpperCase().startsWith('FFFE')) {
+                    const dataHex = hexStr.substring(4);
+                    // 4桁ずつ処理（UTF-16LEはバイト順が逆）
+                    for (let i = 0; i + 4 <= dataHex.length; i += 4) {
+                        const low = parseInt(dataHex.substring(i, i + 2), 16);
+                        const high = parseInt(dataHex.substring(i + 2, i + 4), 16);
+                        const charCode = (high << 8) | low;
+                        if (charCode > 0) title += String.fromCharCode(charCode);
+                    }
                 } else {
                     // BOMなしの場合でもUTF-16BEをチェック
                     // 偶数桁で、00XX（ASCIIのUTF-16BE表現）パターンが多い場合
@@ -1887,9 +1966,19 @@
                         // 16進数形式
                         const hexStr = match[2].replace(/\s+/g, '');
                         if (hexStr.toUpperCase().startsWith('FEFF')) {
+                            // UTF-16BE BOM
                             const dataHex = hexStr.substring(4);
                             for (let i = 0; i + 4 <= dataHex.length; i += 4) {
                                 const charCode = parseInt(dataHex.substring(i, i + 4), 16);
+                                if (charCode > 0) title += String.fromCharCode(charCode);
+                            }
+                        } else if (hexStr.toUpperCase().startsWith('FFFE')) {
+                            // UTF-16LE BOM - Acrobat JavaScript対応
+                            const dataHex = hexStr.substring(4);
+                            for (let i = 0; i + 4 <= dataHex.length; i += 4) {
+                                const low = parseInt(dataHex.substring(i, i + 2), 16);
+                                const high = parseInt(dataHex.substring(i + 2, i + 4), 16);
+                                const charCode = (high << 8) | low;
                                 if (charCode > 0) title += String.fromCharCode(charCode);
                             }
                         } else if (hexStr.length >= 2) {
@@ -1935,9 +2024,19 @@
                         } else if (titleMatch[2] !== undefined) {
                             const hexStr = titleMatch[2].replace(/\s+/g, '');
                             if (hexStr.toUpperCase().startsWith('FEFF')) {
+                                // UTF-16BE BOM
                                 const dataHex = hexStr.substring(4);
                                 for (let i = 0; i + 4 <= dataHex.length; i += 4) {
                                     const charCode = parseInt(dataHex.substring(i, i + 4), 16);
+                                    if (charCode > 0) title += String.fromCharCode(charCode);
+                                }
+                            } else if (hexStr.toUpperCase().startsWith('FFFE')) {
+                                // UTF-16LE BOM - Acrobat JavaScript対応
+                                const dataHex = hexStr.substring(4);
+                                for (let i = 0; i + 4 <= dataHex.length; i += 4) {
+                                    const low = parseInt(dataHex.substring(i, i + 2), 16);
+                                    const high = parseInt(dataHex.substring(i + 2, i + 4), 16);
+                                    const charCode = (high << 8) | low;
                                     if (charCode > 0) title += String.fromCharCode(charCode);
                                 }
                             } else if (hexStr.length >= 2) {
@@ -1983,6 +2082,38 @@
                             const titleBytes = bytes.slice(i, endPos);
                             try {
                                 const title = new TextDecoder('utf-16be').decode(titleBytes);
+                                if (title && title.trim().length >= 2 && !bookmarks.some(b => b.title === title.trim())) {
+                                    // 有効な文字列かチェック（制御文字が少ない）
+                                    const controlChars = (title.match(/[\x00-\x1F]/g) || []).length;
+                                    if (controlChars < title.length * 0.1) {
+                                        bookmarks.push({ title: title.trim(), page: '', level: 1 });
+                                    }
+                                }
+                            } catch (e) {
+                                // デコードエラーは無視
+                            }
+                        }
+                    }
+                    // UTF-16LE BOM (FFFE) を探してしおり名を抽出 - Acrobat JavaScript対応
+                    else if (bytes[i] === 0xFF && bytes[i + 1] === 0xFE) {
+                        // UTF-16LE文字列の開始を検出
+                        let endPos = i + 2;
+                        // 終端を探す（NULLまたは非UTF-16文字）
+                        while (endPos < bytes.length - 1 && endPos < i + 512) {
+                            const low = bytes[endPos];
+                            const high = bytes[endPos + 1];
+                            // 印刷可能なUnicode範囲内かチェック（LE形式）
+                            const charCode = (high << 8) | low;
+                            if (charCode === 0 || (high === 0 && low < 0x20 && low !== 0x09 && low !== 0x0A && low !== 0x0D)) {
+                                break;
+                            }
+                            endPos += 2;
+                        }
+
+                        if (endPos > i + 4) {
+                            const titleBytes = bytes.slice(i, endPos);
+                            try {
+                                const title = new TextDecoder('utf-16le').decode(titleBytes);
                                 if (title && title.trim().length >= 2 && !bookmarks.some(b => b.title === title.trim())) {
                                     // 有効な文字列かチェック（制御文字が少ない）
                                     const controlChars = (title.match(/[\x00-\x1F]/g) || []).length;
