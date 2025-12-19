@@ -1216,11 +1216,22 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
             script = script & "    $failedJobsStr = $failedJobsResult -join ""`n""" & vbCrLf
             script = script & "    Write-Log ""異常終了ジョブ検索結果: $failedJobsStr""" & vbCrLf
             script = script & vbCrLf
-            script = script & "    # ジョブパスを抽出（最初の異常終了ジョブ）" & vbCrLf
+            script = script & "    # 異常終了したジョブを特定（種別=j の行で状態が異常終了のもの）" & vbCrLf
             script = script & "    $failedJobPath = ''" & vbCrLf
-            script = script & "    if ($failedJobsStr -match '(/[^\s;]+)') {" & vbCrLf
-            script = script & "      $failedJobPath = $matches[1]" & vbCrLf
-            script = script & "      Write-Log ""異常終了ジョブ: $failedJobPath""" & vbCrLf
+            script = script & "    $failedJobName = ''" & vbCrLf
+            script = script & "    foreach ($line in $failedJobsResult) {" & vbCrLf
+            script = script & "      # 種別がj(ジョブ)で、状態が異常終了の行を探す" & vbCrLf
+            script = script & "      if ($line -match '\s+j\s+.*(異常終了|Abnormal|ended abnormally)') {" & vbCrLf
+            script = script & "        # 名称を抽出（行の先頭の数字の後のフィールド）" & vbCrLf
+            script = script & "        if ($line -match '^\s*\d+\s+(\S+)\s+j\s+') {" & vbCrLf
+            script = script & "          $failedJobName = $matches[1]" & vbCrLf
+            script = script & "          # ジョブネットパスとジョブ名を結合してフルパスを作成" & vbCrLf
+            script = script & "          $failedJobPath = '" & jobnetPath & "' + '/' + $failedJobName" & vbCrLf
+            script = script & "          Write-Log ""異常終了ジョブ名: $failedJobName""" & vbCrLf
+            script = script & "          Write-Log ""異常終了ジョブパス: $failedJobPath""" & vbCrLf
+            script = script & "          break" & vbCrLf
+            script = script & "        }" & vbCrLf
+            script = script & "      }" & vbCrLf
             script = script & "    }" & vbCrLf
             script = script & vbCrLf
             script = script & "    if ($failedJobPath) {" & vbCrLf
@@ -1467,11 +1478,23 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
             script = script & "    $failedJobsStr = $failedJobsResult -join ""`n""" & vbCrLf
             script = script & "    Write-Log ""異常終了ジョブ検索結果: $failedJobsStr""" & vbCrLf
             script = script & vbCrLf
-            script = script & "    # ジョブパスを抽出（最初の異常終了ジョブ）" & vbCrLf
+            script = script & "    # 異常終了したジョブを特定（種別=j の行で状態が異常終了のもの）" & vbCrLf
             script = script & "    $failedJobPath = ''" & vbCrLf
-            script = script & "    if ($failedJobsStr -match '(/[^\s;]+)') {" & vbCrLf
-            script = script & "      $failedJobPath = $matches[1]" & vbCrLf
-            script = script & "      Write-Log ""異常終了ジョブ: $failedJobPath""" & vbCrLf
+            script = script & "    $failedJobName = ''" & vbCrLf
+            script = script & "    $jobnetBasePath = '" & jobnetPath & "'" & vbCrLf
+            script = script & "    foreach ($line in $failedJobsResult) {" & vbCrLf
+            script = script & "      # 種別がj(ジョブ)で、状態が異常終了の行を探す" & vbCrLf
+            script = script & "      if ($line -match '\s+j\s+.*(異常終了|Abnormal|ended abnormally)') {" & vbCrLf
+            script = script & "        # 名称を抽出（行の先頭の数字の後のフィールド）" & vbCrLf
+            script = script & "        if ($line -match '^\s*\d+\s+(\S+)\s+j\s+') {" & vbCrLf
+            script = script & "          $failedJobName = $matches[1]" & vbCrLf
+            script = script & "          # ジョブネットパスとジョブ名を結合してフルパスを作成" & vbCrLf
+            script = script & "          $failedJobPath = $jobnetBasePath + '/' + $failedJobName" & vbCrLf
+            script = script & "          Write-Log ""異常終了ジョブ名: $failedJobName""" & vbCrLf
+            script = script & "          Write-Log ""異常終了ジョブパス: $failedJobPath""" & vbCrLf
+            script = script & "          break" & vbCrLf
+            script = script & "        }" & vbCrLf
+            script = script & "      }" & vbCrLf
             script = script & "    }" & vbCrLf
             script = script & vbCrLf
             script = script & "    if ($failedJobPath) {" & vbCrLf
