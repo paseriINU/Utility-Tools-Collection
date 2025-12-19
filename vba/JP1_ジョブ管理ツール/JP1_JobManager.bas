@@ -220,13 +220,15 @@ Private Function ParseJobListResult(result As String) As Boolean
     row = ROW_JOBLIST_DATA_START
 
     Dim i As Long
-    Dim currentJobnet As String
-    Dim jobnetName As String
-    Dim jobnetComment As String
+    Dim unitBuffer As String
+    unitBuffer = ""
 
     For i = LBound(lines) To UBound(lines)
         Dim line As String
         line = Trim(lines(i))
+
+        ' 空行はスキップ
+        If line = "" Then GoTo NextLine
 
         ' エラーチェック
         If InStr(line, "ERROR:") > 0 Then
@@ -234,46 +236,61 @@ Private Function ParseJobListResult(result As String) As Boolean
             Exit Function
         End If
 
-        ' ジョブネット定義の行を検出（unit=で始まる行）
+        ' unit= で始まる行から新しいユニット定義を開始
         If InStr(line, "unit=") > 0 Then
-            ' unit=/path/to/jobnet,name,ty=n; 形式
-            Dim unitMatch As String
-            unitMatch = ExtractUnitPath(line)
-
-            If unitMatch <> "" And InStr(line, ",ty=n") > 0 Then
-                ' ジョブネット（ty=n）のみ追加
-                ws.Cells(row, COL_ORDER).Value = ""
-                ws.Cells(row, COL_JOBNET_PATH).Value = unitMatch
-                ws.Cells(row, COL_JOBNET_NAME).Value = ExtractJobName(line)
-                ws.Cells(row, COL_COMMENT).Value = ExtractComment(line)
-
-                ' 保留状態を解析
-                Dim isHold As Boolean
-                isHold = ExtractHoldStatus(line)
-
-                If isHold Then
-                    ws.Cells(row, COL_HOLD).Value = "保留中"
-                    ws.Cells(row, COL_HOLD).HorizontalAlignment = xlCenter
-
-                    ' 保留中のジョブは行全体をハイライト（オレンジ系）
-                    ws.Range(ws.Cells(row, COL_ORDER), ws.Cells(row, COL_LAST_MESSAGE)).Interior.Color = RGB(255, 235, 156)
-                    ws.Cells(row, COL_HOLD).Font.Bold = True
-                    ws.Cells(row, COL_HOLD).Font.Color = RGB(156, 87, 0)
-                Else
-                    ws.Cells(row, COL_HOLD).Value = ""
-                End If
-
-                ' 順序列の書式
-                With ws.Cells(row, COL_ORDER)
-                    .HorizontalAlignment = xlCenter
-                End With
-
-                ' 罫線
-                ws.Range(ws.Cells(row, COL_ORDER), ws.Cells(row, COL_LAST_MESSAGE)).Borders.LineStyle = xlContinuous
-
-                row = row + 1
-            End If
+            ' 前のバッファがあれば破棄（不完全なデータ）
+            unitBuffer = line
+        ElseIf unitBuffer <> "" Then
+            ' 継続行をバッファに追加（インデントを除去してスペースで結合）
+            unitBuffer = unitBuffer & " " & line
         End If
+
+        ' セミコロンで終わればユニット定義完了
+        If unitBuffer <> "" And Right(Trim(unitBuffer), 1) = ";" Then
+            ' ジョブネット定義を処理
+            If InStr(unitBuffer, ",ty=n") > 0 Then
+                ' ジョブネット（ty=n）のみ追加
+                Dim unitMatch As String
+                unitMatch = ExtractUnitPath(unitBuffer)
+
+                If unitMatch <> "" Then
+                    ws.Cells(row, COL_ORDER).Value = ""
+                    ws.Cells(row, COL_JOBNET_PATH).Value = unitMatch
+                    ws.Cells(row, COL_JOBNET_NAME).Value = ExtractJobName(unitBuffer)
+                    ws.Cells(row, COL_COMMENT).Value = ExtractComment(unitBuffer)
+
+                    ' 保留状態を解析
+                    Dim isHold As Boolean
+                    isHold = ExtractHoldStatus(unitBuffer)
+
+                    If isHold Then
+                        ws.Cells(row, COL_HOLD).Value = "保留中"
+                        ws.Cells(row, COL_HOLD).HorizontalAlignment = xlCenter
+
+                        ' 保留中のジョブは行全体をハイライト（オレンジ系）
+                        ws.Range(ws.Cells(row, COL_ORDER), ws.Cells(row, COL_LAST_MESSAGE)).Interior.Color = RGB(255, 235, 156)
+                        ws.Cells(row, COL_HOLD).Font.Bold = True
+                        ws.Cells(row, COL_HOLD).Font.Color = RGB(156, 87, 0)
+                    Else
+                        ws.Cells(row, COL_HOLD).Value = ""
+                    End If
+
+                    ' 順序列の書式
+                    With ws.Cells(row, COL_ORDER)
+                        .HorizontalAlignment = xlCenter
+                    End With
+
+                    ' 罫線
+                    ws.Range(ws.Cells(row, COL_ORDER), ws.Cells(row, COL_LAST_MESSAGE)).Borders.LineStyle = xlContinuous
+
+                    row = row + 1
+                End If
+            End If
+
+            ' バッファをクリア
+            unitBuffer = ""
+        End If
+NextLine:
     Next i
 
     ' データがない場合
