@@ -1115,16 +1115,21 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
             script = script & "    }" & vbCrLf
             script = script & vbCrLf
             script = script & "    $statusResult = & ""$jp1BinPath\ajsstatus.exe"" -F " & config("SchedulerService") & " '" & jobnetPath & "' 2>&1" & vbCrLf
-            script = script & "    $statusStr = ($statusResult -join ' ').ToLower()" & vbCrLf
-            script = script & "    Write-Log ""[ポーリング $pollCount] ステータス: $($statusResult -join ' ')""" & vbCrLf
+            script = script & "    $statusStr = $statusResult -join ' '" & vbCrLf
+            script = script & "    Write-Log ""[ポーリング $pollCount] ステータス: $statusStr""" & vbCrLf
             script = script & vbCrLf
-            script = script & "    if ($statusStr -match 'ended abnormally|abnormal end|abend|killed|failed') {" & vbCrLf
+            script = script & "    # 日本語・英語両方のステータスに対応" & vbCrLf
+            script = script & "    if ($statusStr -match '異常終了|ended abnormally|abnormal end|abend|killed|failed|キャンセル|中止') {" & vbCrLf
             script = script & "      Write-Log '[完了] 異常終了'" & vbCrLf
             script = script & "      Write-Output ""RESULT_STATUS:異常終了""" & vbCrLf
             script = script & "      $isRunning = $false" & vbCrLf
-            script = script & "    } elseif ($statusStr -match 'end normally|ended normally|normal end|completed') {" & vbCrLf
+            script = script & "    } elseif ($statusStr -match '正常終了|ended normally|normal end|completed|end:') {" & vbCrLf
             script = script & "      Write-Log '[完了] 正常終了'" & vbCrLf
             script = script & "      Write-Output ""RESULT_STATUS:正常終了""" & vbCrLf
+            script = script & "      $isRunning = $false" & vbCrLf
+            script = script & "    } elseif ($statusStr -match '未実行|未登録|not registered|not found|KAVS0161') {" & vbCrLf
+            script = script & "      Write-Log '[エラー] ユニットが見つかりません'" & vbCrLf
+            script = script & "      Write-Output ""RESULT_STATUS:エラー""" & vbCrLf
             script = script & "      $isRunning = $false" & vbCrLf
             script = script & "    } else {" & vbCrLf
             script = script & "      Start-Sleep -Seconds $interval" & vbCrLf
@@ -1276,15 +1281,20 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
             script = script & "      & $ajsstatusPath '-F' $schedulerService $jobnetPath 2>&1" & vbCrLf
             script = script & "    } -ArgumentList '" & config("SchedulerService") & "', '" & jobnetPath & "'" & vbCrLf
             script = script & vbCrLf
-            script = script & "    $statusStr = ($statusResult -join ' ').ToLower()" & vbCrLf
-            script = script & "    Write-Log ""[ポーリング $pollCount] ステータス: $($statusResult -join ' ')""" & vbCrLf
-            script = script & "    if ($statusStr -match 'ended abnormally|abnormal end|abend|killed|failed') {" & vbCrLf
+            script = script & "    $statusStr = $statusResult -join ' '" & vbCrLf
+            script = script & "    Write-Log ""[ポーリング $pollCount] ステータス: $statusStr""" & vbCrLf
+            script = script & "    # 日本語・英語両方のステータスに対応" & vbCrLf
+            script = script & "    if ($statusStr -match '異常終了|ended abnormally|abnormal end|abend|killed|failed|キャンセル|中止') {" & vbCrLf
             script = script & "      Write-Log '[完了] 異常終了'" & vbCrLf
             script = script & "      Write-Output ""RESULT_STATUS:異常終了""" & vbCrLf
             script = script & "      $isRunning = $false" & vbCrLf
-            script = script & "    } elseif ($statusStr -match 'end normally|ended normally|normal end|completed') {" & vbCrLf
+            script = script & "    } elseif ($statusStr -match '正常終了|ended normally|normal end|completed|end:') {" & vbCrLf
             script = script & "      Write-Log '[完了] 正常終了'" & vbCrLf
             script = script & "      Write-Output ""RESULT_STATUS:正常終了""" & vbCrLf
+            script = script & "      $isRunning = $false" & vbCrLf
+            script = script & "    } elseif ($statusStr -match '未実行|未登録|not registered|not found|KAVS0161') {" & vbCrLf
+            script = script & "      Write-Log '[エラー] ユニットが見つかりません'" & vbCrLf
+            script = script & "      Write-Output ""RESULT_STATUS:エラー""" & vbCrLf
             script = script & "      $isRunning = $false" & vbCrLf
             script = script & "    } else {" & vbCrLf
             script = script & "      Start-Sleep -Seconds $interval" & vbCrLf
