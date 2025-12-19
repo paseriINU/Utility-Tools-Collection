@@ -107,6 +107,219 @@ ErrorHandler:
            "発生場所: GetJobList", vbCritical, "VBAエラー"
 End Sub
 
+'==============================================================================
+' グループ名取得（取得パスのドロップダウンリスト更新）
+'==============================================================================
+Public Sub GetGroupList()
+    On Error GoTo ErrorHandler
+
+    Dim config As Object
+    Set config = GetConfig()
+
+    If config Is Nothing Then Exit Sub
+
+    ' リモートモードの場合、管理者権限をチェック
+    If Not EnsureAdminForRemoteMode(config) Then Exit Sub
+
+    Application.StatusBar = "グループ名を取得中..."
+    Application.ScreenUpdating = False
+
+    ' PowerShellスクリプト生成・実行（ルート直下のみ取得、-Rなし）
+    Dim psScript As String
+    psScript = BuildGetGroupListScript(config)
+
+    Dim result As String
+    result = ExecutePowerShell(psScript)
+
+    ' 結果をパースしてグループ名リストを作成
+    Dim groupList As String
+    groupList = ParseGroupListResult(result)
+
+    If groupList = "" Then
+        Application.StatusBar = False
+        Application.ScreenUpdating = True
+        MsgBox "グループが見つかりませんでした。" & vbCrLf & _
+               "接続設定を確認してください。", vbExclamation, "グループ名取得"
+        Exit Sub
+    End If
+
+    ' 取得パス欄（C15）にドロップダウンリストを設定
+    Dim ws As Worksheet
+    Set ws = Worksheets(SHEET_SETTINGS)
+
+    With ws.Cells(ROW_ROOT_PATH, COL_SETTING_VALUE).Validation
+        .Delete
+        .Add Type:=xlValidateList, AlertStyle:=xlValidAlertStop, Formula1:=groupList
+        .IgnoreBlank = True
+        .InCellDropdown = True
+    End With
+
+    Application.StatusBar = False
+    Application.ScreenUpdating = True
+
+    MsgBox "グループ名を取得しました。" & vbCrLf & _
+           "取得パス欄のドロップダウンから選択できます。", vbInformation, "グループ名取得"
+    Exit Sub
+
+ErrorHandler:
+    Application.StatusBar = False
+    Application.ScreenUpdating = True
+    MsgBox "エラーが発生しました。" & vbCrLf & vbCrLf & _
+           "エラー番号: " & Err.Number & vbCrLf & _
+           "エラー内容: " & Err.Description & vbCrLf & _
+           "発生場所: GetGroupList", vbCritical, "VBAエラー"
+End Sub
+
+Private Function BuildGetGroupListScript(config As Object) As String
+    Dim script As String
+
+    script = "$ErrorActionPreference = 'Stop'" & vbCrLf
+    script = script & vbCrLf
+
+    ' UTF-8エンコーディング設定（日本語パス対応）
+    script = script & "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8" & vbCrLf
+    script = script & "$OutputEncoding = [System.Text.Encoding]::UTF8" & vbCrLf
+    script = script & "chcp 65001 | Out-Null" & vbCrLf
+    script = script & vbCrLf
+
+    ' ローカルモードとリモートモードで処理を分岐
+    If config("ExecMode") = "ローカル" Then
+        ' ローカル実行モード
+        script = script & "try {" & vbCrLf
+        script = script & "  $ajsprintPath = $null" & vbCrLf
+        script = script & "  $searchPaths = @(" & vbCrLf
+        script = script & "    'C:\Program Files\HITACHI\JP1AJS3\bin\ajsprint.exe'," & vbCrLf
+        script = script & "    'C:\Program Files (x86)\HITACHI\JP1AJS3\bin\ajsprint.exe'," & vbCrLf
+        script = script & "    'C:\Program Files\Hitachi\JP1AJS2\bin\ajsprint.exe'," & vbCrLf
+        script = script & "    'C:\Program Files (x86)\Hitachi\JP1AJS2\bin\ajsprint.exe'" & vbCrLf
+        script = script & "  )" & vbCrLf
+        script = script & "  foreach ($path in $searchPaths) {" & vbCrLf
+        script = script & "    if (Test-Path $path) { $ajsprintPath = $path; break }" & vbCrLf
+        script = script & "  }" & vbCrLf
+        script = script & "  if (-not $ajsprintPath) {" & vbCrLf
+        script = script & "    Write-Output 'ERROR: JP1コマンド(ajsprint.exe)が見つかりません。'" & vbCrLf
+        script = script & "    exit 1" & vbCrLf
+        script = script & "  }" & vbCrLf
+        script = script & vbCrLf
+        script = script & "  # ルート直下のみ取得（-Rなし）" & vbCrLf
+        script = script & "  $result = & $ajsprintPath -F " & config("SchedulerService") & " '/*' 2>&1" & vbCrLf
+        script = script & "  $result | ForEach-Object { Write-Output $_ }" & vbCrLf
+        script = script & "} catch {" & vbCrLf
+        script = script & "  Write-Output ""ERROR: $($_.Exception.Message)""" & vbCrLf
+        script = script & "}" & vbCrLf
+    Else
+        ' リモート実行モード（WinRM使用）
+        script = script & "$securePass = ConvertTo-SecureString '" & EscapePSString(config("RemotePassword")) & "' -AsPlainText -Force" & vbCrLf
+        script = script & "$cred = New-Object System.Management.Automation.PSCredential('" & config("RemoteUser") & "', $securePass)" & vbCrLf
+        script = script & vbCrLf
+
+        ' WinRM設定の保存と自動設定
+        script = script & "$originalTrustedHosts = $null" & vbCrLf
+        script = script & "$winrmConfigChanged = $false" & vbCrLf
+        script = script & "$winrmServiceWasStarted = $false" & vbCrLf
+        script = script & vbCrLf
+
+        script = script & "try {" & vbCrLf
+        script = script & "  $winrmService = Get-Service -Name WinRM -ErrorAction SilentlyContinue" & vbCrLf
+        script = script & "  if ($winrmService.Status -ne 'Running') {" & vbCrLf
+        script = script & "    Start-Service -Name WinRM -ErrorAction Stop" & vbCrLf
+        script = script & "    $winrmServiceWasStarted = $true" & vbCrLf
+        script = script & "  }" & vbCrLf
+        script = script & vbCrLf
+        script = script & "  $originalTrustedHosts = (Get-Item WSMan:\localhost\Client\TrustedHosts -ErrorAction SilentlyContinue).Value" & vbCrLf
+        script = script & vbCrLf
+        script = script & "  if ($originalTrustedHosts -notmatch '" & config("JP1Server") & "') {" & vbCrLf
+        script = script & "    if ($originalTrustedHosts) {" & vbCrLf
+        script = script & "      Set-Item WSMan:\localhost\Client\TrustedHosts -Value ""$originalTrustedHosts," & config("JP1Server") & """ -Force" & vbCrLf
+        script = script & "    } else {" & vbCrLf
+        script = script & "      Set-Item WSMan:\localhost\Client\TrustedHosts -Value '" & config("JP1Server") & "' -Force" & vbCrLf
+        script = script & "    }" & vbCrLf
+        script = script & "    $winrmConfigChanged = $true" & vbCrLf
+        script = script & "  }" & vbCrLf
+        script = script & vbCrLf
+
+        ' リモート実行
+        script = script & "  $session = New-PSSession -ComputerName '" & config("JP1Server") & "' -Credential $cred -ErrorAction Stop" & vbCrLf
+        script = script & vbCrLf
+        script = script & "  $result = Invoke-Command -Session $session -ScriptBlock {" & vbCrLf
+        script = script & "    param($schedulerService)" & vbCrLf
+        script = script & "    $ajsprintPath = $null" & vbCrLf
+        script = script & "    $searchPaths = @('C:\Program Files\HITACHI\JP1AJS3\bin\ajsprint.exe','C:\Program Files (x86)\HITACHI\JP1AJS3\bin\ajsprint.exe','C:\Program Files\Hitachi\JP1AJS2\bin\ajsprint.exe','C:\Program Files (x86)\Hitachi\JP1AJS2\bin\ajsprint.exe')" & vbCrLf
+        script = script & "    foreach ($p in $searchPaths) { if (Test-Path $p) { $ajsprintPath = $p; break } }" & vbCrLf
+        script = script & "    if (-not $ajsprintPath) { Write-Output 'ERROR: ajsprint.exe not found'; return }" & vbCrLf
+        script = script & "    # ルート直下のみ取得（-Rなし）" & vbCrLf
+        script = script & "    $output = & $ajsprintPath '-F' $schedulerService '/*' 2>&1" & vbCrLf
+        script = script & "    $output | Where-Object { $_ -notmatch '^KAVS\d+-I' }" & vbCrLf
+        script = script & "  } -ArgumentList '" & config("SchedulerService") & "'" & vbCrLf
+        script = script & vbCrLf
+        script = script & "  Remove-PSSession $session" & vbCrLf
+        script = script & vbCrLf
+        script = script & "  $result | ForEach-Object { Write-Output $_ }" & vbCrLf
+        script = script & "} catch {" & vbCrLf
+        script = script & "  Write-Output ""ERROR: $($_.Exception.Message)""" & vbCrLf
+        script = script & "} finally {" & vbCrLf
+        script = script & "  if ($winrmConfigChanged) {" & vbCrLf
+        script = script & "    if ($originalTrustedHosts) {" & vbCrLf
+        script = script & "      Set-Item WSMan:\localhost\Client\TrustedHosts -Value $originalTrustedHosts -Force -ErrorAction SilentlyContinue" & vbCrLf
+        script = script & "    } else {" & vbCrLf
+        script = script & "      Clear-Item WSMan:\localhost\Client\TrustedHosts -Force -ErrorAction SilentlyContinue" & vbCrLf
+        script = script & "    }" & vbCrLf
+        script = script & "  }" & vbCrLf
+        script = script & "  if ($winrmServiceWasStarted) {" & vbCrLf
+        script = script & "    Stop-Service -Name WinRM -Force -ErrorAction SilentlyContinue" & vbCrLf
+        script = script & "  }" & vbCrLf
+        script = script & "}" & vbCrLf
+    End If
+
+    BuildGetGroupListScript = script
+End Function
+
+Private Function ParseGroupListResult(result As String) As String
+    ' グループ名を抽出してドロップダウン用のリストを作成
+    ' 戻り値: カンマ区切りのパスリスト（例: /*,/グループA/*,/グループB/*）
+
+    ' エラーチェック
+    If InStr(result, "ERROR:") > 0 Then
+        ParseGroupListResult = ""
+        Exit Function
+    End If
+
+    Dim lines() As String
+    lines = Split(result, vbCrLf)
+
+    Dim groupPaths As String
+    groupPaths = "/*"  ' デフォルトで全件取得オプションを追加
+
+    Dim line As Variant
+    Dim unitName As String
+    Dim unitType As String
+
+    For Each line In lines
+        Dim lineStr As String
+        lineStr = Trim(CStr(line))
+
+        ' unit=行からユニット名を取得
+        If Left(lineStr, 5) = "unit=" Then
+            ' unit=名前,,...; から名前を抽出
+            Dim parts() As String
+            parts = Split(Mid(lineStr, 6), ",")
+            If UBound(parts) >= 0 Then
+                unitName = Trim(parts(0))
+            End If
+        End If
+
+        ' ty=g の場合（グループ）
+        If InStr(lineStr, "ty=g;") > 0 Then
+            If unitName <> "" Then
+                groupPaths = groupPaths & ",/" & unitName & "/*"
+                unitName = ""
+            End If
+        End If
+    Next line
+
+    ParseGroupListResult = groupPaths
+End Function
+
 Private Function BuildGetJobListScript(config As Object) As String
     Dim script As String
 

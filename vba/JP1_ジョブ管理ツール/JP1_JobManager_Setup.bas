@@ -116,8 +116,8 @@ Private Sub FormatSettingsSheet()
     ws.Range("A2").Value = "JP1サーバに接続してジョブネット一覧を取得し、選択したジョブを実行します。"
 
     ' ボタン追加（図形ボタン・固定サイズ・色付き）- タイトルの下に配置
-    ' 設定シートには「ジョブ一覧取得」ボタンのみ
-    AddButton ws, 20, 55, 130, 32, "GetJobList", "ジョブ一覧取得", RGB(0, 112, 192)        ' 青
+    AddButton ws, 20, 55, 130, 32, "GetGroupList", "グループ名取得", RGB(91, 155, 213)      ' 薄青（左）
+    AddButton ws, 160, 55, 130, 32, "GetJobList", "ジョブ一覧取得", RGB(0, 112, 192)        ' 青（右）
 
     ' 設定セクション（ボタンの下）
     ws.Range("A6").Value = "■ 接続設定"
@@ -158,7 +158,7 @@ Private Sub FormatSettingsSheet()
 
     ws.Cells(ROW_ROOT_PATH, 1).Value = "取得パス"
     ws.Cells(ROW_ROOT_PATH, COL_SETTING_VALUE).Value = "/*"
-    ws.Cells(ROW_ROOT_PATH, 4).Value = "※ジョブネットのパス（例: /* または /グループ名/*）"
+    ws.Cells(ROW_ROOT_PATH, 4).Value = "※「グループ名取得」ボタンでリストを更新可能"
     ws.Cells(ROW_ROOT_PATH, 4).Font.Color = RGB(128, 128, 128)
 
     ' 実行設定セクション
@@ -182,19 +182,20 @@ Private Sub FormatSettingsSheet()
     ws.Range("A21").Font.Bold = True
 
     ws.Range("A22").Value = "1. 上記の接続設定・実行設定を入力します"
-    ws.Range("A23").Value = "2. 「ジョブ一覧取得」ボタンをクリックしてジョブネット一覧を取得します"
-    ws.Range("A24").Value = "3. ジョブ一覧シートで実行するジョブの「順序」列に数字（1, 2, 3...）を入力します"
-    ws.Range("A25").Value = "4. 「選択ジョブ実行」ボタンをクリックしてジョブを順番に実行します"
-    ws.Range("A26").Value = "5. 実行結果は実行ログシートに記録されます"
+    ws.Range("A23").Value = "2. 「グループ名取得」で取得パスのリストを更新できます（任意）"
+    ws.Range("A24").Value = "3. 「ジョブ一覧取得」ボタンをクリックしてジョブネット一覧を取得します"
+    ws.Range("A25").Value = "4. ジョブ一覧シートで実行するジョブの「順序」列に数字（1, 2, 3...）を入力します"
+    ws.Range("A26").Value = "5. 「選択ジョブ実行」ボタンをクリックしてジョブを順番に実行します"
+    ws.Range("A27").Value = "6. 実行結果は実行ログシートに記録されます"
 
-    ws.Range("A28").Value = "■ 動作説明"
-    ws.Range("A28").Font.Bold = True
+    ws.Range("A29").Value = "■ 動作説明"
+    ws.Range("A29").Font.Bold = True
 
-    ws.Range("A29").Value = "・ジョブが保留中の場合、実行時に自動で保留解除されます"
-    ws.Range("A30").Value = "・完了待ち「はい」の場合、ジョブ終了まで待機して結果を取得します"
-    ws.Range("A31").Value = "・異常終了または警告終了した場合、後続のジョブは実行されません"
-    ws.Range("A32").Value = "・実行ログにはジョブごとの開始・終了時刻、結果、ログパスが記録されます"
-    ws.Range("A33").Value = "・警告・異常終了時はJP1サーバ上の標準エラーログも取得されます"
+    ws.Range("A30").Value = "・ジョブが保留中の場合、実行時に自動で保留解除されます"
+    ws.Range("A31").Value = "・完了待ち「はい」の場合、ジョブ終了まで待機して結果を取得します"
+    ws.Range("A32").Value = "・異常終了または警告終了した場合、後続のジョブは実行されません"
+    ws.Range("A33").Value = "・実行ログにはジョブごとの開始・終了時刻、結果、ログパスが記録されます"
+    ws.Range("A34").Value = "・警告・異常終了時はJP1サーバ上の標準エラーログも取得されます"
 
     ' 列幅調整
     ws.Columns("A").ColumnWidth = 20
