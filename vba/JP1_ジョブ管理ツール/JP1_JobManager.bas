@@ -912,13 +912,21 @@ Public Sub ExecuteCheckedJobs()
 
         logRow = logRow + 1
 
-        ' エラー時は停止
+        ' エラー・警告時は停止
         If execResult("Status") <> "正常終了" And execResult("Status") <> "起動成功" Then
             success = False
-            MsgBox "ジョブ「" & j("Path") & "」が失敗しました。" & vbCrLf & _
-                   "処理を中断します。" & vbCrLf & vbCrLf & _
-                   "詳細: " & execResult("Message") & vbCrLf & vbCrLf & _
-                   "実行ログ: " & g_LogFilePath, vbCritical
+            ' 警告検出終了と異常終了で異なるメッセージを表示
+            If execResult("Status") = "警告検出終了" Or execResult("Status") = "警告終了" Then
+                MsgBox "ジョブ「" & j("Path") & "」で警告が検出されました。" & vbCrLf & _
+                       "処理を中断します。" & vbCrLf & vbCrLf & _
+                       "詳細: " & execResult("Message") & vbCrLf & vbCrLf & _
+                       "実行ログ: " & g_LogFilePath, vbExclamation, "警告検出"
+            Else
+                MsgBox "ジョブ「" & j("Path") & "」が失敗しました。" & vbCrLf & _
+                       "処理を中断します。" & vbCrLf & vbCrLf & _
+                       "詳細: " & execResult("Message") & vbCrLf & vbCrLf & _
+                       "実行ログ: " & g_LogFilePath, vbCritical, "異常終了"
+            End If
             Exit For
         End If
     Next j
