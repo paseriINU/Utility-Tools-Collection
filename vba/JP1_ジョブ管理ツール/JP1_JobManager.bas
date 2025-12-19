@@ -1114,7 +1114,9 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
             script = script & "      break" & vbCrLf
             script = script & "    }" & vbCrLf
             script = script & vbCrLf
-            script = script & "    $statusResult = & ""$jp1BinPath\ajsstatus.exe"" -F " & config("SchedulerService") & " '" & jobnetPath & "' 2>&1" & vbCrLf
+            script = script & "    # ajsshowでジョブネットの実行状態を取得" & vbCrLf
+            script = script & "    $ajsshowPath = ""$jp1BinPath\ajsshow.exe""" & vbCrLf
+            script = script & "    $statusResult = & $ajsshowPath -F " & config("SchedulerService") & " '" & jobnetPath & "' 2>&1" & vbCrLf
             script = script & "    $statusStr = $statusResult -join ' '" & vbCrLf
             script = script & "    Write-Log ""[ポーリング $pollCount] ステータス: $statusStr""" & vbCrLf
             script = script & vbCrLf
@@ -1272,13 +1274,14 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
             script = script & "      break" & vbCrLf
             script = script & "    }" & vbCrLf
             script = script & vbCrLf
+            script = script & "    # ajsshowでジョブネットの実行状態を取得（リモート）" & vbCrLf
             script = script & "    $statusResult = Invoke-Command -Session $session -ScriptBlock {" & vbCrLf
             script = script & "      param($schedulerService, $jobnetPath)" & vbCrLf
-            script = script & "      $ajsstatusPath = $null" & vbCrLf
-            script = script & "      $searchPaths = @('C:\Program Files\HITACHI\JP1AJS3\bin\ajsstatus.exe','C:\Program Files (x86)\HITACHI\JP1AJS3\bin\ajsstatus.exe','C:\Program Files\Hitachi\JP1AJS2\bin\ajsstatus.exe','C:\Program Files (x86)\Hitachi\JP1AJS2\bin\ajsstatus.exe')" & vbCrLf
-            script = script & "      foreach ($p in $searchPaths) { if (Test-Path $p) { $ajsstatusPath = $p; break } }" & vbCrLf
-            script = script & "      if (-not $ajsstatusPath) { return 'ERROR: ajsstatus.exe not found' }" & vbCrLf
-            script = script & "      & $ajsstatusPath '-F' $schedulerService $jobnetPath 2>&1" & vbCrLf
+            script = script & "      $ajsshowPath = $null" & vbCrLf
+            script = script & "      $searchPaths = @('C:\Program Files\HITACHI\JP1AJS3\bin\ajsshow.exe','C:\Program Files (x86)\HITACHI\JP1AJS3\bin\ajsshow.exe','C:\Program Files\Hitachi\JP1AJS2\bin\ajsshow.exe','C:\Program Files (x86)\Hitachi\JP1AJS2\bin\ajsshow.exe')" & vbCrLf
+            script = script & "      foreach ($p in $searchPaths) { if (Test-Path $p) { $ajsshowPath = $p; break } }" & vbCrLf
+            script = script & "      if (-not $ajsshowPath) { return 'ERROR: ajsshow.exe not found' }" & vbCrLf
+            script = script & "      & $ajsshowPath '-F' $schedulerService $jobnetPath 2>&1" & vbCrLf
             script = script & "    } -ArgumentList '" & config("SchedulerService") & "', '" & jobnetPath & "'" & vbCrLf
             script = script & vbCrLf
             script = script & "    $statusStr = $statusResult -join ' '" & vbCrLf
