@@ -1227,14 +1227,14 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
             script = script & "    foreach ($line in $failedJobsResult) {" & vbCrLf
             script = script & "      $lineNum++" & vbCrLf
             script = script & "      Write-Log ""[DEBUG] 行$lineNum : $line""" & vbCrLf
-            script = script & "      # 種別がjob/j(ジョブ)等で、状態が異常終了/警告終了/警告検出終了の行を探す" & vbCrLf
-            script = script & "      if ($line -match '^(/[^\s]+)\s+(j|job|pj|qj|cj|cpj|fxj)\s+(異常終了|警告終了|警告検出終了|Abnormal|Warning|ended abnormally|ended with warning)') {" & vbCrLf
+            script = script & "      # 種別がジョブ系（job/jbで終わる）で、状態が異常終了/警告終了/警告検出終了の行を探す" & vbCrLf
+            script = script & "      if ($line -match '^(/[^\s]+)\s+(\w*job|\w*jb)\s+(異常終了|警告終了|警告検出終了|Abnormal|Warning|ended abnormally|ended with warning)') {" & vbCrLf
             script = script & "        $failedJobPath = $matches[1]" & vbCrLf
-            script = script & "        Write-Log ""[DEBUG] 異常終了/警告終了/警告検出終了ジョブを検出: $failedJobPath""" & vbCrLf
+            script = script & "        Write-Log ""[DEBUG] 異常終了/警告終了/警告検出終了ジョブを検出: $failedJobPath (種別: $($matches[2]))""" & vbCrLf
             script = script & "        break" & vbCrLf
             script = script & "      }" & vbCrLf
             script = script & "      # 戻り値が0以外のジョブも記録（フォールバック用）" & vbCrLf
-            script = script & "      if (-not $nonZeroReturnJobPath -and $line -match '^(/[^\s]+)\s+(j|job|pj|qj|cj|cpj|fxj)\s+\S+\s+([1-9]\d*|-\d+)') {" & vbCrLf
+            script = script & "      if (-not $nonZeroReturnJobPath -and $line -match '^(/[^\s]+)\s+(\w*job|\w*jb)\s+\S+\s+([1-9]\d*|-\d+)') {" & vbCrLf
             script = script & "        $nonZeroReturnJobPath = $matches[1]" & vbCrLf
             script = script & "        Write-Log ""[DEBUG] 戻り値が0以外のジョブを検出: $nonZeroReturnJobPath (戻り値: $($matches[3]))""" & vbCrLf
             script = script & "      }" & vbCrLf
@@ -1529,14 +1529,14 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
             script = script & "      $lineNum++" & vbCrLf
             script = script & "      Write-Log ""[DEBUG] 行$lineNum : $line""" & vbCrLf
             script = script & "      # フォーマット: /path/job job 警告検出終了 戻り値" & vbCrLf
-            script = script & "      # 種別がjob/j(ジョブ)等で、状態が異常終了/警告終了/警告検出終了の行を探す" & vbCrLf
-            script = script & "      if ($line -match '^(/[^\s]+)\s+(j|job|pj|qj|cj|cpj|fxj)\s+(異常終了|警告終了|警告検出終了|Abnormal|Warning|ended abnormally|ended with warning)') {" & vbCrLf
+            script = script & "      # 種別がジョブ系（job/jbで終わる）で、状態が異常終了/警告終了/警告検出終了の行を探す" & vbCrLf
+            script = script & "      if ($line -match '^(/[^\s]+)\s+(\w*job|\w*jb)\s+(異常終了|警告終了|警告検出終了|Abnormal|Warning|ended abnormally|ended with warning)') {" & vbCrLf
             script = script & "        $failedJobPath = $matches[1]" & vbCrLf
-            script = script & "        Write-Log ""[DEBUG] 異常終了/警告終了/警告検出終了ジョブ検出: $failedJobPath""" & vbCrLf
+            script = script & "        Write-Log ""[DEBUG] 異常終了/警告終了/警告検出終了ジョブ検出: $failedJobPath (種別: $($matches[2]))""" & vbCrLf
             script = script & "        break" & vbCrLf
             script = script & "      }" & vbCrLf
             script = script & "      # 戻り値が0以外のジョブも記録（フォールバック用）" & vbCrLf
-            script = script & "      if (-not $nonZeroReturnJobPath -and $line -match '^(/[^\s]+)\s+(j|job|pj|qj|cj|cpj|fxj)\s+\S+\s+([1-9]\d*|-\d+)') {" & vbCrLf
+            script = script & "      if (-not $nonZeroReturnJobPath -and $line -match '^(/[^\s]+)\s+(\w*job|\w*jb)\s+\S+\s+([1-9]\d*|-\d+)') {" & vbCrLf
             script = script & "        $nonZeroReturnJobPath = $matches[1]" & vbCrLf
             script = script & "        Write-Log ""[DEBUG] 戻り値が0以外のジョブを検出: $nonZeroReturnJobPath (戻り値: $($matches[3]))""" & vbCrLf
             script = script & "      }" & vbCrLf
