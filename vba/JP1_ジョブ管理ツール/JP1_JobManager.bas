@@ -92,6 +92,13 @@ Private Function BuildGetJobListScript(config As Object) As String
     script = "$ErrorActionPreference = 'Stop'" & vbCrLf
     script = script & vbCrLf
 
+    ' UTF-8エンコーディング設定（日本語パス対応）
+    script = script & "# UTF-8エンコーディング設定" & vbCrLf
+    script = script & "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8" & vbCrLf
+    script = script & "$OutputEncoding = [System.Text.Encoding]::UTF8" & vbCrLf
+    script = script & "chcp 65001 | Out-Null" & vbCrLf
+    script = script & vbCrLf
+
     ' ローカルモードとリモートモードで処理を分岐
     If config("ExecMode") = "ローカル" Then
         ' ローカル実行モード（WinRM不使用）
@@ -621,6 +628,13 @@ Private Function BuildExecuteJobScript(config As Object, jobnetPath As String, w
     script = "$ErrorActionPreference = 'Stop'" & vbCrLf
     script = script & vbCrLf
 
+    ' UTF-8エンコーディング設定（日本語パス対応）
+    script = script & "# UTF-8エンコーディング設定" & vbCrLf
+    script = script & "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8" & vbCrLf
+    script = script & "$OutputEncoding = [System.Text.Encoding]::UTF8" & vbCrLf
+    script = script & "chcp 65001 | Out-Null" & vbCrLf
+    script = script & vbCrLf
+
     ' ログ出力関数を定義
     script = script & "# ログ出力関数" & vbCrLf
     script = script & "$logFile = '" & Replace(logFilePath, "'", "''") & "'" & vbCrLf
@@ -1074,9 +1088,11 @@ Private Function ExecutePowerShell(script As String) As String
 
     Dim cmd As String
     ' PowerShellウィンドウを表示して実行、結果を一時ファイルに出力
-    cmd = "powershell -NoProfile -ExecutionPolicy Bypass -Command ""& {" & _
+    ' chcp 65001 でUTF-8コードページに設定してからPowerShellを起動
+    cmd = "cmd /c ""chcp 65001 >nul && powershell -NoProfile -ExecutionPolicy Bypass -Command ""& {" & _
+          "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; " & _
           "& '" & scriptPath & "' 2>&1 | Tee-Object -FilePath '" & outputPath & "'" & _
-          "}"""
+          "}""""
 
     ' 1 = vbNormalFocus（通常表示）、True で完了まで待機
     shell.Run cmd, 1, True
