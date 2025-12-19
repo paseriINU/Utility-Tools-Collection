@@ -165,15 +165,14 @@ Private Function BuildGetJobListScript(config As Object) As String
         script = script & vbCrLf
         script = script & "  $result = Invoke-Command -Session $session -ScriptBlock {" & vbCrLf
         script = script & "    param($schedulerService, $rootPath)" & vbCrLf
-        script = script & "    Write-Output ""DEBUG: schedulerService=[$schedulerService], rootPath=[$rootPath]""" & vbCrLf
         script = script & "    if ([string]::IsNullOrWhiteSpace($rootPath)) { Write-Output 'ERROR: rootPath is empty'; return }" & vbCrLf
         script = script & "    $ajsprintPath = $null" & vbCrLf
         script = script & "    $searchPaths = @('C:\Program Files\HITACHI\JP1AJS3\bin\ajsprint.exe','C:\Program Files (x86)\HITACHI\JP1AJS3\bin\ajsprint.exe','C:\Program Files\Hitachi\JP1AJS2\bin\ajsprint.exe','C:\Program Files (x86)\Hitachi\JP1AJS2\bin\ajsprint.exe')" & vbCrLf
         script = script & "    foreach ($p in $searchPaths) { if (Test-Path $p) { $ajsprintPath = $p; break } }" & vbCrLf
         script = script & "    if (-not $ajsprintPath) { Write-Output 'ERROR: ajsprint.exe not found'; return }" & vbCrLf
-        script = script & "    Write-Output ""DEBUG: Executing ajsprint with -F $schedulerService $rootPath -R""" & vbCrLf
         script = script & "    $output = & $ajsprintPath '-F' $schedulerService $rootPath '-R' 2>&1" & vbCrLf
-        script = script & "    $output" & vbCrLf
+        script = script & "    # KAVS情報メッセージ（-I）を除外、unit=行のみ出力" & vbCrLf
+        script = script & "    $output | Where-Object { $_ -notmatch '^KAVS\d+-I' }" & vbCrLf
         script = script & "  } -ArgumentList '" & config("SchedulerService") & "', '" & config("RootPath") & "'" & vbCrLf
         script = script & vbCrLf
         script = script & "  Remove-PSSession $session" & vbCrLf
