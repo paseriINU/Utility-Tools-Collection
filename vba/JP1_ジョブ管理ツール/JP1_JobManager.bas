@@ -1760,6 +1760,35 @@ Public Sub ClearJobList()
 End Sub
 
 '==============================================================================
+' 実行ログ履歴クリア
+'==============================================================================
+Public Sub ClearLogHistory()
+    If MsgBox("実行ログの履歴をすべて削除しますか？", vbYesNo + vbQuestion) = vbNo Then Exit Sub
+
+    Dim ws As Worksheet
+    Set ws = Worksheets(SHEET_LOG)
+
+    Dim lastRow As Long
+    lastRow = ws.Cells(ws.Rows.Count, 1).End(xlUp).Row
+
+    ' データ行がある場合のみ削除（4行目以降がデータ）
+    If lastRow >= 4 Then
+        ' データ行を削除
+        ws.Range(ws.Cells(4, 1), ws.Cells(lastRow, 6)).ClearContents
+
+        ' ハイパーリンクも削除（F列）
+        On Error Resume Next
+        ws.Range(ws.Cells(4, 6), ws.Cells(lastRow, 6)).Hyperlinks.Delete
+        On Error GoTo 0
+
+        ' 背景色もクリア
+        ws.Range(ws.Cells(4, 1), ws.Cells(lastRow, 6)).Interior.ColorIndex = xlNone
+    End If
+
+    MsgBox "実行ログの履歴を削除しました。", vbInformation
+End Sub
+
+'==============================================================================
 ' ユーティリティ
 '==============================================================================
 Private Function GetConfig() As Object

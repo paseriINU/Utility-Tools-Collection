@@ -301,6 +301,10 @@ Private Sub FormatLogSheet()
         .RowHeight = 25
     End With
 
+    ' ボタン追加（2行目）
+    AddButton ws, 20, 30, 100, 28, "ClearLogHistory", "履歴クリア", RGB(192, 80, 77)
+    ws.Rows(2).RowHeight = 35
+
     ' ヘッダー
     ws.Cells(3, 1).Value = "実行日時"
     ws.Cells(3, 2).Value = "ジョブネットパス"
