@@ -933,17 +933,36 @@
         function decompressAllStreams(content, bytes) {
             let decompressedParts = [];
 
-            // FlateDecodeフィルタを持つストリームを検索
-            // /Filter /FlateDecode または /Filter[/FlateDecode] の形式
-            const streamPattern = /(\d+)\s+\d+\s+obj[\s\S]*?\/Filter\s*(?:\/FlateDecode|\[\s*\/FlateDecode\s*\])[\s\S]*?\/Length\s+(\d+)[\s\S]*?stream\r?\n/g;
-
+            // 方法1: stream/endstream を直接検索して解凍を試みる
+            // より柔軟なアプローチ - /Length が間接参照でも対応可能
+            const streamMarkerPattern = /stream\r?\n/g;
             let match;
-            while ((match = streamPattern.exec(content)) !== null) {
-                const streamStart = match.index + match[0].length;
-                const length = parseInt(match[2]);
 
-                // ストリームデータを抽出
-                const streamData = bytes.slice(streamStart, streamStart + length);
+            while ((match = streamMarkerPattern.exec(content)) !== null) {
+                const streamStart = match.index + match[0].length;
+
+                // このstreamの前にある辞書を確認（FlateDecodeかどうか）
+                const beforeStream = content.substring(Math.max(0, match.index - 500), match.index);
+
+                // FlateDecodeフィルタがあるか確認
+                if (!beforeStream.match(/\/Filter\s*(?:\/FlateDecode|\[\s*\/FlateDecode)/)) {
+                    continue;
+                }
+
+                // endstream を探してストリームの終端を見つける
+                const endstreamPos = content.indexOf('endstream', streamStart);
+                if (endstreamPos === -1) continue;
+
+                // ストリームデータを抽出（末尾の改行を除去）
+                let streamEnd = endstreamPos;
+                // 末尾の \r\n または \n を除去
+                if (content.charCodeAt(streamEnd - 1) === 10) streamEnd--; // \n
+                if (content.charCodeAt(streamEnd - 1) === 13) streamEnd--; // \r
+
+                const streamLength = streamEnd - streamStart;
+                if (streamLength <= 0 || streamLength > 10000000) continue; // サイズチェック
+
+                const streamData = bytes.slice(streamStart, streamEnd);
 
                 try {
                     // Deflate解凍を実行
@@ -951,31 +970,17 @@
                     if (decompressed && decompressed.length > 0) {
                         // 解凍されたデータを文字列に変換
                         const decompressedStr = latin1Decode(decompressed);
-                        decompressedParts.push(decompressedStr);
+                        // しおり関連の情報を含む場合のみ追加
+                        if (decompressedStr.includes('/Title') ||
+                            decompressedStr.includes('/Outlines') ||
+                            decompressedStr.includes('/First') ||
+                            decompressedStr.includes('/Last')) {
+                            decompressedParts.push(decompressedStr);
+                        }
                     }
                 } catch (e) {
                     // 解凍に失敗した場合は無視して続行
-                    // console.log('Stream decompression failed:', e);
-                }
-            }
-
-            // オブジェクトストリーム（PDF 1.5+）も検索
-            // /Type /ObjStm を持つ圧縮オブジェクト
-            const objStmPattern = /(\d+)\s+\d+\s+obj[\s\S]*?\/Type\s*\/ObjStm[\s\S]*?\/Filter\s*(?:\/FlateDecode|\[\s*\/FlateDecode\s*\])[\s\S]*?\/Length\s+(\d+)[\s\S]*?stream\r?\n/g;
-
-            while ((match = objStmPattern.exec(content)) !== null) {
-                const streamStart = match.index + match[0].length;
-                const length = parseInt(match[2]);
-                const streamData = bytes.slice(streamStart, streamStart + length);
-
-                try {
-                    const decompressed = inflateRaw(streamData);
-                    if (decompressed && decompressed.length > 0) {
-                        const decompressedStr = latin1Decode(decompressed);
-                        decompressedParts.push(decompressedStr);
-                    }
-                } catch (e) {
-                    // 解凍失敗は無視
+                    // console.log('Stream decompression failed:', e.message);
                 }
             }
 
