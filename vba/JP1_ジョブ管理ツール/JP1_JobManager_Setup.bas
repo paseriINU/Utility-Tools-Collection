@@ -32,15 +32,14 @@ Public Const COL_UNIT_TYPE As Long = 2      ' 種別（グループ/ジョブネ
 Public Const COL_JOBNET_PATH As Long = 3
 Public Const COL_JOBNET_NAME As Long = 4
 Public Const COL_COMMENT As Long = 5
-Public Const COL_SCRIPT As Long = 6         ' スクリプトファイル名 (sc)
-Public Const COL_PARAMETER As Long = 7      ' パラメーター (prm)
-Public Const COL_WORK_PATH As Long = 8      ' ワークパス (wkp)
+Public Const COL_SCRIPT As Long = 6         ' スクリプトファイル名 (sc) ※非表示列
+Public Const COL_PARAMETER As Long = 7      ' パラメーター (prm) ※非表示列
+Public Const COL_WORK_PATH As Long = 8      ' ワークパス (wkp) ※非表示列
 Public Const COL_HOLD As Long = 9
 Public Const COL_LAST_STATUS As Long = 10
 Public Const COL_LAST_EXEC_TIME As Long = 11
 Public Const COL_LAST_END_TIME As Long = 12
-Public Const COL_LAST_RETURN_CODE As Long = 13
-Public Const COL_LAST_MESSAGE As Long = 14   ' ログファイルパス（最終列）
+Public Const COL_LAST_MESSAGE As Long = 13   ' ログファイルパス（最終列）
 Public Const ROW_JOBLIST_HEADER As Long = 4
 Public Const ROW_JOBLIST_DATA_START As Long = 5
 
@@ -242,7 +241,6 @@ Private Sub FormatJobListSheet()
     ws.Cells(ROW_JOBLIST_HEADER, COL_LAST_STATUS).Value = "最終実行結果"
     ws.Cells(ROW_JOBLIST_HEADER, COL_LAST_EXEC_TIME).Value = "開始時刻"
     ws.Cells(ROW_JOBLIST_HEADER, COL_LAST_END_TIME).Value = "終了時刻"
-    ws.Cells(ROW_JOBLIST_HEADER, COL_LAST_RETURN_CODE).Value = "戻り値"
     ws.Cells(ROW_JOBLIST_HEADER, COL_LAST_MESSAGE).Value = "ログパス"
 
     With ws.Range(ws.Cells(ROW_JOBLIST_HEADER, COL_ORDER), ws.Cells(ROW_JOBLIST_HEADER, COL_LAST_MESSAGE))
@@ -258,7 +256,7 @@ Private Sub FormatJobListSheet()
     ws.Columns(COL_UNIT_TYPE).ColumnWidth = 12
     ws.Columns(COL_JOBNET_PATH).ColumnWidth = 50
     ws.Columns(COL_JOBNET_NAME).ColumnWidth = 25
-    ws.Columns(COL_COMMENT).ColumnWidth = 50
+    ws.Columns(COL_COMMENT).ColumnWidth = 80
     ws.Columns(COL_SCRIPT).ColumnWidth = 40
     ws.Columns(COL_PARAMETER).ColumnWidth = 30
     ws.Columns(COL_WORK_PATH).ColumnWidth = 30
@@ -266,11 +264,20 @@ Private Sub FormatJobListSheet()
     ws.Columns(COL_LAST_STATUS).ColumnWidth = 15
     ws.Columns(COL_LAST_EXEC_TIME).ColumnWidth = 18
     ws.Columns(COL_LAST_END_TIME).ColumnWidth = 18
-    ws.Columns(COL_LAST_RETURN_CODE).ColumnWidth = 8
     ws.Columns(COL_LAST_MESSAGE).ColumnWidth = 60
+
+    ' F〜H列（スクリプト、パラメーター、ワークパス）をグループ化
+    ws.Columns("F:H").Group
+    ' 初期状態は折りたたみ
+    ws.Outline.ShowLevels ColumnLevels:=1
 
     ' フィルター設定
     ws.Range(ws.Cells(ROW_JOBLIST_HEADER, COL_ORDER), ws.Cells(ROW_JOBLIST_HEADER, COL_LAST_MESSAGE)).AutoFilter
+
+    ' ウィンドウ枠の固定（ヘッダー行の下で固定）
+    ws.Activate
+    ws.Cells(ROW_JOBLIST_DATA_START, 1).Select
+    ActiveWindow.FreezePanes = True
 End Sub
 
 '==============================================================================
