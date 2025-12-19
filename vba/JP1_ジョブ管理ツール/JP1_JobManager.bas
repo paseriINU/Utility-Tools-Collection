@@ -1277,7 +1277,7 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
             script = script & "      $logContent = $null" & vbCrLf
             script = script & "      if ($logPath -and (Test-Path $logPath)) {" & vbCrLf
             script = script & "        Write-Log ""[DEBUG-15] 標準エラーファイルを直接読み取り: $logPath""" & vbCrLf
-            script = script & "        $logContent = Get-Content $logPath -Encoding UTF8 -ErrorAction SilentlyContinue" & vbCrLf
+            script = script & "        $logContent = Get-Content $logPath -Encoding Default -ErrorAction SilentlyContinue" & vbCrLf
             script = script & "      }" & vbCrLf
             script = script & vbCrLf
             script = script & "      # ファイルが読めなかった場合、jpqjobgetを試行" & vbCrLf
@@ -1296,7 +1296,7 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
             script = script & "          $jpqResult = & $jpqjobgetPath -j $jobNo -ose $stderrFile 2>&1" & vbCrLf
             script = script & "          Write-Log ""[DEBUG-18] jpqjobget -ose 結果: $($jpqResult -join ' ')""" & vbCrLf
             script = script & "          if (Test-Path $stderrFile) {" & vbCrLf
-            script = script & "            $logContent = Get-Content $stderrFile -Encoding UTF8 -ErrorAction SilentlyContinue" & vbCrLf
+            script = script & "            $logContent = Get-Content $stderrFile -Encoding Default -ErrorAction SilentlyContinue" & vbCrLf
             script = script & "            Remove-Item $stderrFile -Force -ErrorAction SilentlyContinue" & vbCrLf
             script = script & "          }" & vbCrLf
             script = script & "          if (-not $logContent) {" & vbCrLf
@@ -1304,7 +1304,7 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
             script = script & "            $jpqResult = & $jpqjobgetPath -j $jobNo -oso $stdoutFile 2>&1" & vbCrLf
             script = script & "            Write-Log ""[DEBUG-20] jpqjobget -oso 結果: $($jpqResult -join ' ')""" & vbCrLf
             script = script & "            if (Test-Path $stdoutFile) {" & vbCrLf
-            script = script & "              $logContent = Get-Content $stdoutFile -Encoding UTF8 -ErrorAction SilentlyContinue" & vbCrLf
+            script = script & "              $logContent = Get-Content $stdoutFile -Encoding Default -ErrorAction SilentlyContinue" & vbCrLf
             script = script & "              Remove-Item $stdoutFile -Force -ErrorAction SilentlyContinue" & vbCrLf
             script = script & "            }" & vbCrLf
             script = script & "          }" & vbCrLf
@@ -1595,7 +1595,7 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
             script = script & "        $logContent = Invoke-Command -Session $session -ScriptBlock {" & vbCrLf
             script = script & "          param($filePath)" & vbCrLf
             script = script & "          if (Test-Path $filePath) {" & vbCrLf
-            script = script & "            Get-Content $filePath -Encoding UTF8 -ErrorAction SilentlyContinue" & vbCrLf
+            script = script & "            Get-Content $filePath -Encoding Default -ErrorAction SilentlyContinue" & vbCrLf
             script = script & "          }" & vbCrLf
             script = script & "        } -ArgumentList $stderrFile" & vbCrLf
             script = script & "      }" & vbCrLf
