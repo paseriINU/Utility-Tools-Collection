@@ -1139,12 +1139,12 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
             script = script & "  }" & vbCrLf
             script = script & vbCrLf
 
-            ' 詳細取得
-            script = script & "  Write-Log '[実行] ajsshow - 詳細取得'" & vbCrLf
+            ' 詳細取得（-b: 実行結果、開始時刻・終了時刻を含む）
+            script = script & "  Write-Log '[実行] ajsshow -b - 実行結果取得'" & vbCrLf
             script = script & "  $ajsshowPath = ""$jp1BinPath\ajsshow.exe""" & vbCrLf
             script = script & "  if (Test-Path $ajsshowPath) {" & vbCrLf
-            script = script & "    $showResult = & $ajsshowPath -F " & config("SchedulerService") & " '" & jobnetPath & "' -E 2>&1" & vbCrLf
-            script = script & "    Write-Log ""詳細: $($showResult -join ' ')""" & vbCrLf
+            script = script & "    $showResult = & $ajsshowPath -F " & config("SchedulerService") & " '" & jobnetPath & "' -b 2>&1" & vbCrLf
+            script = script & "    Write-Log ""実行結果: $($showResult -join [Environment]::NewLine)""" & vbCrLf
             script = script & "    Write-Output ""RESULT_MESSAGE:$($showResult -join ' ')""" & vbCrLf
             script = script & "  }" & vbCrLf
         Else
@@ -1305,16 +1305,16 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
             script = script & "  }" & vbCrLf
             script = script & vbCrLf
 
-            ' 詳細取得
-            script = script & "  Write-Log '[実行] ajsshow - 詳細取得（リモート）'" & vbCrLf
+            ' 詳細取得（-b: 実行結果、開始時刻・終了時刻を含む）
+            script = script & "  Write-Log '[実行] ajsshow -b - 実行結果取得（リモート）'" & vbCrLf
             script = script & "  $showResult = Invoke-Command -Session $session -ScriptBlock {" & vbCrLf
             script = script & "    param($schedulerService, $jobnetPath)" & vbCrLf
             script = script & "    $ajsshowPath = $null" & vbCrLf
             script = script & "    $searchPaths = @('C:\Program Files\HITACHI\JP1AJS3\bin\ajsshow.exe','C:\Program Files (x86)\HITACHI\JP1AJS3\bin\ajsshow.exe','C:\Program Files\Hitachi\JP1AJS2\bin\ajsshow.exe','C:\Program Files (x86)\Hitachi\JP1AJS2\bin\ajsshow.exe')" & vbCrLf
             script = script & "    foreach ($p in $searchPaths) { if (Test-Path $p) { $ajsshowPath = $p; break } }" & vbCrLf
-            script = script & "    if ($ajsshowPath) { & $ajsshowPath '-F' $schedulerService $jobnetPath '-E' 2>&1 }" & vbCrLf
+            script = script & "    if ($ajsshowPath) { & $ajsshowPath '-F' $schedulerService $jobnetPath '-b' 2>&1 }" & vbCrLf
             script = script & "  } -ArgumentList '" & config("SchedulerService") & "', '" & jobnetPath & "'" & vbCrLf
-            script = script & "  Write-Log ""詳細: $($showResult -join ' ')""" & vbCrLf
+            script = script & "  Write-Log ""実行結果: $($showResult -join [Environment]::NewLine)""" & vbCrLf
             script = script & "  Write-Output ""RESULT_MESSAGE:$($showResult -join ' ')""" & vbCrLf
         Else
             script = script & "  Write-Log '[完了] 起動成功（完了待ちなし）'" & vbCrLf
