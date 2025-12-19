@@ -258,7 +258,7 @@ Private Sub FormatJobListSheet()
     ws.Columns(COL_UNIT_TYPE).ColumnWidth = 12
     ws.Columns(COL_JOBNET_PATH).ColumnWidth = 50
     ws.Columns(COL_JOBNET_NAME).ColumnWidth = 25
-    ws.Columns(COL_COMMENT).ColumnWidth = 30
+    ws.Columns(COL_COMMENT).ColumnWidth = 50
     ws.Columns(COL_SCRIPT).ColumnWidth = 40
     ws.Columns(COL_PARAMETER).ColumnWidth = 30
     ws.Columns(COL_WORK_PATH).ColumnWidth = 30
