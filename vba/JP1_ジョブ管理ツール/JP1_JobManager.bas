@@ -1212,7 +1212,7 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
             script = script & "    foreach ($p in $jpqSearchPaths) { if (Test-Path $p) { $jpqjobgetPath = $p; break } }" & vbCrLf
             script = script & vbCrLf
             script = script & "    # ajsshow -g a で全世代の実行結果を取得（異常終了ジョブを特定）" & vbCrLf
-            script = script & "    $failedJobsResult = & $ajsshowPath -F '" & config("SchedulerService") & "' -g a '" & jobnetPath & "' 2>&1" & vbCrLf
+            script = script & "    $failedJobsResult = & $ajsshowPath -F '" & config("SchedulerService") & "' '-g' 'a' '" & jobnetPath & "' 2>&1" & vbCrLf
             script = script & "    $failedJobsStr = $failedJobsResult -join ""`n""" & vbCrLf
             script = script & "    Write-Log ""異常終了ジョブ検索結果: $failedJobsStr""" & vbCrLf
             script = script & vbCrLf
