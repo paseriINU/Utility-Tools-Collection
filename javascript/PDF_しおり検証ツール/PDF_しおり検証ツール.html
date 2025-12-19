@@ -794,8 +794,8 @@
         ======================================================================
         */
         function showError(message) {
-            // textContent: 要素のテキスト内容を設定
-            errorMessage.textContent = message;
+            // 改行を<br>に変換してHTMLとして設定（複数行エラー対応）
+            errorMessage.innerHTML = message.replace(/\n/g, '<br>');
             errorContainer.classList.remove('hidden');  // 表示
             resultContainer.classList.add('hidden');    // 結果は非表示
         }
@@ -905,9 +905,14 @@
             }
 
             // しおり（Outlines）の存在確認
+            // Acrobat生成のPDFでは様々な形式でしおりが格納される
             const hasOutlines = content.match(/\/Outlines\s+\d+\s+\d+\s+R/) ||
                                content.match(/\/Type\s*\/Outlines/) ||
-                               content.match(/\/Title\s*[\(<]/);
+                               content.match(/\/Title\s*[\(<]/) ||
+                               content.match(/\/Names\s*<</) ||
+                               content.match(/\/Dests\s+\d+\s+\d+\s+R/) ||
+                               content.match(/\/OpenAction/) ||
+                               content.match(/\/First\s+\d+\s+\d+\s+R/);
 
             if (!hasOutlines) {
                 throw new Error('このPDFにはしおりがありません。');
@@ -921,7 +926,16 @@
 
             if (bookmarks.length === 0) {
                 // しおりの構造は見つかったが抽出できなかった場合
-                throw new Error('しおりの抽出に失敗しました。PDFが暗号化されているか、サポートされていない形式の可能性があります。');
+                // 考えられる原因を詳細に説明
+                let errorDetails = 'しおりの抽出に失敗しました。\n\n';
+                errorDetails += '【考えられる原因】\n';
+                errorDetails += '・PDFが暗号化またはパスワード保護されている\n';
+                errorDetails += '・しおりがオブジェクトストリーム内に格納されている\n';
+                errorDetails += '・Acrobat固有の形式で保存されている\n\n';
+                errorDetails += '【対処方法】\n';
+                errorDetails += '・Adobe Acrobatで「名前を付けて保存」→「最適化されたPDF」で再保存\n';
+                errorDetails += '・PDFの暗号化を解除してから再度読み込み';
+                throw new Error(errorDetails);
             }
 
             return bookmarks;
@@ -949,40 +963,72 @@
                     // このstreamの前にある辞書を確認（FlateDecodeかどうか）
                     const beforeStream = content.substring(Math.max(0, match.index - 500), match.index);
 
-                    // FlateDecodeフィルタがあるか確認
-                    if (!beforeStream.match(/\/Filter\s*(?:\/FlateDecode|\[\s*\/FlateDecode)/)) {
+                    // FlateDecodeフィルタがあるか確認（ASCIIHexDecodeとの組み合わせも含む）
+                    const hasFlate = beforeStream.match(/\/Filter\s*(?:\/FlateDecode|\[\s*(?:\/[A-Za-z]+Decode\s+)*\/FlateDecode)/);
+                    if (!hasFlate) {
                         continue;
                     }
 
-                    // endstream を探してストリームの終端を見つける
-                    const endstreamPos = content.indexOf('endstream', streamStart);
-                    if (endstreamPos === -1) continue;
+                    // /Length を取得してストリーム長を確定
+                    const lengthMatch = beforeStream.match(/\/Length\s+(\d+)/);
+                    let streamEnd;
 
-                    // ストリームデータを抽出（末尾の改行を除去）
-                    let streamEnd = endstreamPos;
-                    if (content.charCodeAt(streamEnd - 1) === 10) streamEnd--;
-                    if (content.charCodeAt(streamEnd - 1) === 13) streamEnd--;
+                    if (lengthMatch) {
+                        const declaredLength = parseInt(lengthMatch[1]);
+                        streamEnd = streamStart + declaredLength;
+                    } else {
+                        // endstream を探してストリームの終端を見つける
+                        const endstreamPos = content.indexOf('endstream', streamStart);
+                        if (endstreamPos === -1) continue;
+
+                        // ストリームデータを抽出（末尾の改行を除去）
+                        streamEnd = endstreamPos;
+                        if (content.charCodeAt(streamEnd - 1) === 10) streamEnd--;
+                        if (content.charCodeAt(streamEnd - 1) === 13) streamEnd--;
+                    }
 
                     const streamLength = streamEnd - streamStart;
                     if (streamLength <= 0 || streamLength > 10000000) continue;
 
                     const streamData = bytes.slice(streamStart, streamEnd);
 
-                    // Deflate解凍を実行
-                    const decompressed = inflateRaw(streamData);
+                    // Deflate解凍を複数の方法で試行
+                    let decompressed = null;
+
+                    // 試行1: 標準のinflateRaw
+                    try {
+                        decompressed = inflateRaw(streamData);
+                    } catch (e1) {
+                        // 試行2: zlibヘッダーをスキップしない
+                        try {
+                            decompressed = inflateRaw(streamData.slice(0));
+                        } catch (e2) {
+                            // 試行3: 先頭バイトをスキップ
+                            try {
+                                if (streamData.length > 2) {
+                                    decompressed = inflateRaw(streamData.slice(2));
+                                }
+                            } catch (e3) {
+                                // すべて失敗
+                            }
+                        }
+                    }
+
                     if (decompressed && decompressed.length > 0) {
                         const decompressedStr = latin1Decode(decompressed);
                         // しおり関連の情報を含む場合のみ追加
                         if (decompressedStr.includes('/Title') ||
                             decompressedStr.includes('/Outlines') ||
                             decompressedStr.includes('/First') ||
-                            decompressedStr.includes('/Last')) {
+                            decompressedStr.includes('/Last') ||
+                            decompressedStr.includes('/Dest') ||
+                            decompressedStr.includes('/A ') ||
+                            decompressedStr.includes('/Names')) {
                             decompressedParts.push(decompressedStr);
                         }
                     }
                 } catch (e) {
                     // 解凍に失敗した場合は無視して続行
-                    // console.log('Stream decompression failed:', e.message);
                 }
             }
 
@@ -1634,25 +1680,38 @@
 
             /*
             --------------------------------------------------------------
-              方法2: UTF-16BEエンコードされたタイトルを検索
-              /Title <FEFF0041...> の形式（日本語など）
-              FEFF: UTF-16BEのBOM（バイトオーダーマーク）
+              方法2: 16進数形式のタイトルを検索
+              /Title <FEFF0041...> または /Title <48656C6C6F> の形式
+              PDFでは16進数文字列内に空白や改行が含まれることがある
             --------------------------------------------------------------
             */
             let match;
-            const hexPattern = /\/Title\s*<(FEFF[0-9A-Fa-f]+)>/gi;
+            // 16進数形式を検索（空白を含む可能性があるため柔軟なパターン）
+            const hexPattern = /\/Title\s*<([0-9A-Fa-f\s]+)>/gi;
             while ((match = hexPattern.exec(content)) !== null) {
-                // FEFFをスキップして実際の文字データを取得
-                const hexStr = match[1].substring(4);
+                // 空白を除去して純粋な16進数文字列を取得
+                const hexStr = match[1].replace(/\s+/g, '');
+                if (hexStr.length < 2) continue;
+
                 let title = '';
-                // 4桁ずつ処理（UTF-16は2バイト=4桁の16進数）
-                for (let i = 0; i < hexStr.length; i += 4) {
-                    if (i + 4 <= hexStr.length) {
-                        // parseInt(文字列, 16): 16進数文字列を数値に変換
-                        const charCode = parseInt(hexStr.substring(i, i + 4), 16);
-                        title += String.fromCharCode(charCode);
+
+                // UTF-16BE (FEFFで始まる) の場合
+                if (hexStr.toUpperCase().startsWith('FEFF')) {
+                    const dataHex = hexStr.substring(4);
+                    // 4桁ずつ処理（UTF-16は2バイト=4桁の16進数）
+                    for (let i = 0; i + 4 <= dataHex.length; i += 4) {
+                        const charCode = parseInt(dataHex.substring(i, i + 4), 16);
+                        if (charCode > 0) title += String.fromCharCode(charCode);
                     }
+                } else {
+                    // その他の16進数形式（UTF-8またはShift_JIS）
+                    const titleBytes = new Uint8Array(hexStr.length / 2);
+                    for (let i = 0; i + 2 <= hexStr.length; i += 2) {
+                        titleBytes[i / 2] = parseInt(hexStr.substring(i, i + 2), 16);
+                    }
+                    title = decodeTitle(titleBytes);
                 }
+
                 if (title && title.trim()) {
                     // 重複チェック
                     if (!bookmarks.some(b => b.title === title.trim())) {
@@ -1663,26 +1722,122 @@
 
             /*
             --------------------------------------------------------------
-              方法3: 通常の16進数タイトル
-              /Title <48656C6C6F> の形式
-              Shift_JISまたはUTF-8としてデコードを試みる
+              方法3: フォールバック - より柔軟なパターンで検索
+              上記の方法で見つからない場合の最終手段
             --------------------------------------------------------------
             */
-            const hexPattern2 = /\/Title\s*<([0-9A-Fa-f]+)>/gi;
-            while ((match = hexPattern2.exec(content)) !== null) {
-                // UTF-16BEは既に処理済みなのでスキップ
-                if (match[1].toUpperCase().startsWith('FEFF')) continue;
-                const hexStr = match[1];
-                // 16進数をバイト配列に変換
-                const titleBytes = new Uint8Array(hexStr.length / 2);
-                for (let i = 0; i < hexStr.length; i += 2) {
-                    titleBytes[i / 2] = parseInt(hexStr.substring(i, i + 2), 16);
-                }
-                const title = decodeTitle(titleBytes);
-                if (title && title.trim()) {
-                    // 重複チェック
-                    if (!bookmarks.some(b => b.title === title.trim())) {
+            if (bookmarks.length === 0) {
+                // /Title に続く任意の文字列を抽出（括弧または<>）
+                const fallbackPattern = /\/Title\s*(?:\(([^)]*)\)|<([^>]+)>)/gi;
+                while ((match = fallbackPattern.exec(content)) !== null) {
+                    let title = '';
+                    if (match[1] !== undefined) {
+                        // 括弧形式
+                        title = decodePDFString(match[1]);
+                    } else if (match[2] !== undefined) {
+                        // 16進数形式
+                        const hexStr = match[2].replace(/\s+/g, '');
+                        if (hexStr.toUpperCase().startsWith('FEFF')) {
+                            const dataHex = hexStr.substring(4);
+                            for (let i = 0; i + 4 <= dataHex.length; i += 4) {
+                                const charCode = parseInt(dataHex.substring(i, i + 4), 16);
+                                if (charCode > 0) title += String.fromCharCode(charCode);
+                            }
+                        } else if (hexStr.length >= 2) {
+                            const bytes = new Uint8Array(hexStr.length / 2);
+                            for (let i = 0; i + 2 <= hexStr.length; i += 2) {
+                                bytes[i / 2] = parseInt(hexStr.substring(i, i + 2), 16);
+                            }
+                            title = decodeTitle(bytes);
+                        }
+                    }
+                    if (title && title.trim() && !bookmarks.some(b => b.title === title.trim())) {
                         bookmarks.push({ title: title.trim(), page: '', level: 1 });
+                    }
+                }
+            }
+
+            /*
+            --------------------------------------------------------------
+              方法4: Acrobat JavaScript生成のしおりを検索
+              /S /JavaScript や /JS を含むアクションからしおり名を抽出
+              Acrobatはしおり名をUTF-16BEで格納することが多い
+            --------------------------------------------------------------
+            */
+            if (bookmarks.length === 0) {
+                // オブジェクト全体を走査してしおり関連のコンテンツを探す
+                const objPattern = /(\d+)\s+\d+\s+obj\s*([\s\S]*?)\s*endobj/g;
+                while ((match = objPattern.exec(content)) !== null) {
+                    const objContent = match[2];
+
+                    // /Title を含むオブジェクトを探す
+                    const titleMatch = objContent.match(/\/Title\s*(?:\(([^)]*(?:\([^)]*\)[^)]*)*)\)|<([0-9A-Fa-f\s]+)>)/);
+                    if (titleMatch) {
+                        let title = '';
+                        if (titleMatch[1] !== undefined) {
+                            title = decodePDFString(titleMatch[1]);
+                        } else if (titleMatch[2] !== undefined) {
+                            const hexStr = titleMatch[2].replace(/\s+/g, '');
+                            if (hexStr.toUpperCase().startsWith('FEFF')) {
+                                const dataHex = hexStr.substring(4);
+                                for (let i = 0; i + 4 <= dataHex.length; i += 4) {
+                                    const charCode = parseInt(dataHex.substring(i, i + 4), 16);
+                                    if (charCode > 0) title += String.fromCharCode(charCode);
+                                }
+                            } else if (hexStr.length >= 2) {
+                                const hexBytes = new Uint8Array(hexStr.length / 2);
+                                for (let i = 0; i + 2 <= hexStr.length; i += 2) {
+                                    hexBytes[i / 2] = parseInt(hexStr.substring(i, i + 2), 16);
+                                }
+                                title = decodeTitle(hexBytes);
+                            }
+                        }
+                        if (title && title.trim() && !bookmarks.some(b => b.title === title.trim())) {
+                            bookmarks.push({ title: title.trim(), page: '', level: 1 });
+                        }
+                    }
+                }
+            }
+
+            /*
+            --------------------------------------------------------------
+              方法5: バイナリ直接検索（最終手段）
+              圧縮されていないバイナリデータから直接しおりを探す
+            --------------------------------------------------------------
+            */
+            if (bookmarks.length === 0) {
+                // UTF-16BE BOM (FEFF) を探してしおり名を抽出
+                for (let i = 0; i < bytes.length - 4; i++) {
+                    if (bytes[i] === 0xFE && bytes[i + 1] === 0xFF) {
+                        // UTF-16BE文字列の開始を検出
+                        let endPos = i + 2;
+                        // 終端を探す（NULLまたは非UTF-16文字）
+                        while (endPos < bytes.length - 1 && endPos < i + 512) {
+                            const high = bytes[endPos];
+                            const low = bytes[endPos + 1];
+                            // 印刷可能なUnicode範囲内かチェック
+                            const charCode = (high << 8) | low;
+                            if (charCode === 0 || (high === 0 && low < 0x20 && low !== 0x09 && low !== 0x0A && low !== 0x0D)) {
+                                break;
+                            }
+                            endPos += 2;
+                        }
+
+                        if (endPos > i + 4) {
+                            const titleBytes = bytes.slice(i, endPos);
+                            try {
+                                const title = new TextDecoder('utf-16be').decode(titleBytes);
+                                if (title && title.trim().length >= 2 && !bookmarks.some(b => b.title === title.trim())) {
+                                    // 有効な文字列かチェック（制御文字が少ない）
+                                    const controlChars = (title.match(/[\x00-\x1F]/g) || []).length;
+                                    if (controlChars < title.length * 0.1) {
+                                        bookmarks.push({ title: title.trim(), page: '', level: 1 });
+                                    }
+                                }
+                            } catch (e) {
+                                // デコードエラーは無視
+                            }
+                        }
                     }
                 }
             }
