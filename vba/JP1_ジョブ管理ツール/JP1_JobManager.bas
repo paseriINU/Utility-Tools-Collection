@@ -1079,10 +1079,11 @@ Private Function ExecutePowerShell(script As String) As String
     Dim cmd As String
     ' PowerShellウィンドウを直接表示して実行、結果を一時ファイルに出力
     ' Tee-ObjectはエンコーディングをサポートしないためOut-Fileを使用
+    ' -Width 4096 で行の折り返しを防止
     cmd = "powershell -NoProfile -ExecutionPolicy Bypass -Command ""& {" & _
           "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; " & _
           "$result = & '" & scriptPath & "' 2>&1; " & _
-          "$result | Out-File -FilePath '" & outputPath & "' -Encoding UTF8; " & _
+          "$result | Out-File -FilePath '" & outputPath & "' -Encoding UTF8 -Width 4096; " & _
           "$result" & _
           "}"""
 
