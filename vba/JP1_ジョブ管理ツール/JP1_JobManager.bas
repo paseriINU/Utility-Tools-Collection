@@ -1144,38 +1144,44 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
             ' 最後のステータス情報から開始時間・終了時間を抽出
             script = script & "  Write-Log ""最終ステータス: $lastStatusStr""" & vbCrLf
             script = script & vbCrLf
-            script = script & "  # ajsshow結果から指定ジョブネットの行だけを抽出" & vbCrLf
-            script = script & "  $jobnetLine = ''" & vbCrLf
-            script = script & "  $lines = $lastStatusStr -split '\s+'" & vbCrLf
-            script = script & "  # ステータス情報を1行ずつ確認" & vbCrLf
-            script = script & "  foreach ($line in ($statusResult)) {" & vbCrLf
-            script = script & "    $lineStr = $line.ToString()" & vbCrLf
-            script = script & "    # 指定したジョブネットパスで始まる行を探す" & vbCrLf
-            script = script & "    if ($lineStr -match '^" & Replace(jobnetPath, "/", "\/") & "\s') {" & vbCrLf
-            script = script & "      $jobnetLine = $lineStr" & vbCrLf
-            script = script & "      break" & vbCrLf
-            script = script & "    }" & vbCrLf
+            script = script & "  # ajsshow結果から時間を抽出（複数の日時パターンに対応）" & vbCrLf
+            script = script & "  # パターン1: YYYY/MM/DD HH:MM:SS" & vbCrLf
+            script = script & "  # パターン2: YYYY-MM-DD HH:MM:SS" & vbCrLf
+            script = script & "  # パターン3: MM/DD HH:MM（年なし）" & vbCrLf
+            script = script & "  $timePattern1 = '\d{4}[/-]\d{2}[/-]\d{2}\s+\d{2}:\d{2}:\d{2}'" & vbCrLf
+            script = script & "  $timePattern2 = '\d{4}[/-]\d{2}[/-]\d{2}\s+\d{2}:\d{2}'" & vbCrLf
+            script = script & "  $timePattern3 = '\d{2}[/-]\d{2}\s+\d{2}:\d{2}'" & vbCrLf
+            script = script & vbCrLf
+            script = script & "  # statusResultの各行をログ出力（デバッグ用）" & vbCrLf
+            script = script & "  Write-Log ""[DEBUG] statusResult件数: $($statusResult.Count)""" & vbCrLf
+            script = script & "  $lineNum = 0" & vbCrLf
+            script = script & "  foreach ($line in $statusResult) {" & vbCrLf
+            script = script & "    $lineNum++" & vbCrLf
+            script = script & "    Write-Log ""[DEBUG] 行$lineNum : $line""" & vbCrLf
             script = script & "  }" & vbCrLf
             script = script & vbCrLf
-            script = script & "  # ジョブネット行から時間を抽出" & vbCrLf
-            script = script & "  if ($jobnetLine) {" & vbCrLf
-            script = script & "    Write-Log ""ジョブネット行: $jobnetLine""" & vbCrLf
-            script = script & "    $allTimes = [regex]::Matches($jobnetLine, '\d{4}/\d{2}/\d{2}\s+\d{2}:\d{2}:\d{2}')" & vbCrLf
-            script = script & "    if ($allTimes.Count -ge 1) {" & vbCrLf
-            script = script & "      Write-Output ""RESULT_START:$($allTimes[0].Value)""" & vbCrLf
-            script = script & "      Write-Log ""開始時間: $($allTimes[0].Value)""" & vbCrLf
-            script = script & "    }" & vbCrLf
-            script = script & "    if ($allTimes.Count -ge 2) {" & vbCrLf
-            script = script & "      Write-Output ""RESULT_END:$($allTimes[1].Value)""" & vbCrLf
-            script = script & "      Write-Log ""終了時間: $($allTimes[1].Value)""" & vbCrLf
-            script = script & "    }" & vbCrLf
-            script = script & "    # エラーメッセージを除いたメッセージを出力" & vbCrLf
-            script = script & "    Write-Output ""RESULT_MESSAGE:$jobnetLine""" & vbCrLf
-            script = script & "  } else {" & vbCrLf
-            script = script & "    # ジョブネット行が見つからない場合はステータスのみ" & vbCrLf
-            script = script & "    $cleanMsg = $lastStatusStr -replace 'KAVS\d+-[IEW][^\r\n]*', '' -replace '\s+', ' '" & vbCrLf
-            script = script & "    Write-Output ""RESULT_MESSAGE:$cleanMsg""" & vbCrLf
+            script = script & "  # 全体から時間を抽出" & vbCrLf
+            script = script & "  $allTimes = [regex]::Matches($lastStatusStr, $timePattern1)" & vbCrLf
+            script = script & "  if ($allTimes.Count -eq 0) {" & vbCrLf
+            script = script & "    $allTimes = [regex]::Matches($lastStatusStr, $timePattern2)" & vbCrLf
             script = script & "  }" & vbCrLf
+            script = script & "  if ($allTimes.Count -eq 0) {" & vbCrLf
+            script = script & "    $allTimes = [regex]::Matches($lastStatusStr, $timePattern3)" & vbCrLf
+            script = script & "  }" & vbCrLf
+            script = script & vbCrLf
+            script = script & "  Write-Log ""[DEBUG] 検出した時間数: $($allTimes.Count)""" & vbCrLf
+            script = script & "  if ($allTimes.Count -ge 1) {" & vbCrLf
+            script = script & "    Write-Output ""RESULT_START:$($allTimes[0].Value)""" & vbCrLf
+            script = script & "    Write-Log ""開始時間: $($allTimes[0].Value)""" & vbCrLf
+            script = script & "  }" & vbCrLf
+            script = script & "  if ($allTimes.Count -ge 2) {" & vbCrLf
+            script = script & "    Write-Output ""RESULT_END:$($allTimes[1].Value)""" & vbCrLf
+            script = script & "    Write-Log ""終了時間: $($allTimes[1].Value)""" & vbCrLf
+            script = script & "  }" & vbCrLf
+            script = script & vbCrLf
+            script = script & "  # エラーメッセージを除いたメッセージを出力" & vbCrLf
+            script = script & "  $cleanMsg = $lastStatusStr -replace 'KAVS\d+-[IEW][^\r\n]*', '' -replace '\s+', ' '" & vbCrLf
+            script = script & "  Write-Output ""RESULT_MESSAGE:$cleanMsg""" & vbCrLf
         Else
             script = script & "  Write-Log '[完了] 起動成功（完了待ちなし）'" & vbCrLf
             script = script & "  Write-Output ""RESULT_STATUS:起動成功""" & vbCrLf
@@ -1339,37 +1345,44 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
             ' 最後のステータス情報から開始時間・終了時間を抽出
             script = script & "  Write-Log ""最終ステータス: $lastStatusStr""" & vbCrLf
             script = script & vbCrLf
-            script = script & "  # ajsshow結果から指定ジョブネットの行だけを抽出" & vbCrLf
-            script = script & "  $jobnetLine = ''" & vbCrLf
-            script = script & "  # ステータス情報を1行ずつ確認" & vbCrLf
-            script = script & "  foreach ($line in ($statusResult)) {" & vbCrLf
-            script = script & "    $lineStr = $line.ToString()" & vbCrLf
-            script = script & "    # 指定したジョブネットパスで始まる行を探す" & vbCrLf
-            script = script & "    if ($lineStr -match '^" & Replace(jobnetPath, "/", "\/") & "\s') {" & vbCrLf
-            script = script & "      $jobnetLine = $lineStr" & vbCrLf
-            script = script & "      break" & vbCrLf
-            script = script & "    }" & vbCrLf
+            script = script & "  # ajsshow結果から時間を抽出（複数の日時パターンに対応）" & vbCrLf
+            script = script & "  # パターン1: YYYY/MM/DD HH:MM:SS" & vbCrLf
+            script = script & "  # パターン2: YYYY-MM-DD HH:MM:SS" & vbCrLf
+            script = script & "  # パターン3: MM/DD HH:MM（年なし）" & vbCrLf
+            script = script & "  $timePattern1 = '\d{4}[/-]\d{2}[/-]\d{2}\s+\d{2}:\d{2}:\d{2}'" & vbCrLf
+            script = script & "  $timePattern2 = '\d{4}[/-]\d{2}[/-]\d{2}\s+\d{2}:\d{2}'" & vbCrLf
+            script = script & "  $timePattern3 = '\d{2}[/-]\d{2}\s+\d{2}:\d{2}'" & vbCrLf
+            script = script & vbCrLf
+            script = script & "  # statusResultの各行をログ出力（デバッグ用）" & vbCrLf
+            script = script & "  Write-Log ""[DEBUG] statusResult件数: $($statusResult.Count)""" & vbCrLf
+            script = script & "  $lineNum = 0" & vbCrLf
+            script = script & "  foreach ($line in $statusResult) {" & vbCrLf
+            script = script & "    $lineNum++" & vbCrLf
+            script = script & "    Write-Log ""[DEBUG] 行$lineNum : $line""" & vbCrLf
             script = script & "  }" & vbCrLf
             script = script & vbCrLf
-            script = script & "  # ジョブネット行から時間を抽出" & vbCrLf
-            script = script & "  if ($jobnetLine) {" & vbCrLf
-            script = script & "    Write-Log ""ジョブネット行: $jobnetLine""" & vbCrLf
-            script = script & "    $allTimes = [regex]::Matches($jobnetLine, '\d{4}/\d{2}/\d{2}\s+\d{2}:\d{2}:\d{2}')" & vbCrLf
-            script = script & "    if ($allTimes.Count -ge 1) {" & vbCrLf
-            script = script & "      Write-Output ""RESULT_START:$($allTimes[0].Value)""" & vbCrLf
-            script = script & "      Write-Log ""開始時間: $($allTimes[0].Value)""" & vbCrLf
-            script = script & "    }" & vbCrLf
-            script = script & "    if ($allTimes.Count -ge 2) {" & vbCrLf
-            script = script & "      Write-Output ""RESULT_END:$($allTimes[1].Value)""" & vbCrLf
-            script = script & "      Write-Log ""終了時間: $($allTimes[1].Value)""" & vbCrLf
-            script = script & "    }" & vbCrLf
-            script = script & "    # エラーメッセージを除いたメッセージを出力" & vbCrLf
-            script = script & "    Write-Output ""RESULT_MESSAGE:$jobnetLine""" & vbCrLf
-            script = script & "  } else {" & vbCrLf
-            script = script & "    # ジョブネット行が見つからない場合はステータスのみ" & vbCrLf
-            script = script & "    $cleanMsg = $lastStatusStr -replace 'KAVS\d+-[IEW][^\r\n]*', '' -replace '\s+', ' '" & vbCrLf
-            script = script & "    Write-Output ""RESULT_MESSAGE:$cleanMsg""" & vbCrLf
+            script = script & "  # 全体から時間を抽出" & vbCrLf
+            script = script & "  $allTimes = [regex]::Matches($lastStatusStr, $timePattern1)" & vbCrLf
+            script = script & "  if ($allTimes.Count -eq 0) {" & vbCrLf
+            script = script & "    $allTimes = [regex]::Matches($lastStatusStr, $timePattern2)" & vbCrLf
             script = script & "  }" & vbCrLf
+            script = script & "  if ($allTimes.Count -eq 0) {" & vbCrLf
+            script = script & "    $allTimes = [regex]::Matches($lastStatusStr, $timePattern3)" & vbCrLf
+            script = script & "  }" & vbCrLf
+            script = script & vbCrLf
+            script = script & "  Write-Log ""[DEBUG] 検出した時間数: $($allTimes.Count)""" & vbCrLf
+            script = script & "  if ($allTimes.Count -ge 1) {" & vbCrLf
+            script = script & "    Write-Output ""RESULT_START:$($allTimes[0].Value)""" & vbCrLf
+            script = script & "    Write-Log ""開始時間: $($allTimes[0].Value)""" & vbCrLf
+            script = script & "  }" & vbCrLf
+            script = script & "  if ($allTimes.Count -ge 2) {" & vbCrLf
+            script = script & "    Write-Output ""RESULT_END:$($allTimes[1].Value)""" & vbCrLf
+            script = script & "    Write-Log ""終了時間: $($allTimes[1].Value)""" & vbCrLf
+            script = script & "  }" & vbCrLf
+            script = script & vbCrLf
+            script = script & "  # エラーメッセージを除いたメッセージを出力" & vbCrLf
+            script = script & "  $cleanMsg = $lastStatusStr -replace 'KAVS\d+-[IEW][^\r\n]*', '' -replace '\s+', ' '" & vbCrLf
+            script = script & "  Write-Output ""RESULT_MESSAGE:$cleanMsg""" & vbCrLf
         Else
             script = script & "  Write-Log '[完了] 起動成功（完了待ちなし）'" & vbCrLf
             script = script & "  Write-Output ""RESULT_STATUS:起動成功""" & vbCrLf
