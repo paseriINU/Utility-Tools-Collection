@@ -200,12 +200,16 @@ End Function
 
 Private Function ParseJobListResult(result As String) As Boolean
     ' 戻り値: True=成功, False=エラー
-    ' JP1 ajsprint出力形式:
+    ' JP1 ajsprint出力形式（ネスト対応）:
     '   unit=パス,名前,admin,グループ;
     '   {
     '       ty=n;
     '       cm="コメント";
-    '       ...
+    '       unit=子パス,子名前,admin,グループ;  ← ネストされたユニット
+    '       {
+    '           ty=n;
+    '           ...
+    '       }
     '   }
     ParseJobListResult = False
 
@@ -227,19 +231,20 @@ Private Function ParseJobListResult(result As String) As Boolean
     row = ROW_JOBLIST_DATA_START
 
     Dim i As Long
-    Dim unitHeader As String    ' unit=...行
-    Dim blockContent As String  ' {...}内のコンテンツ
-    Dim inBlock As Boolean      ' ブロック内かどうか
-    Dim braceDepth As Long      ' 波括弧のネスト深度
 
-    unitHeader = ""
-    blockContent = ""
-    inBlock = False
-    braceDepth = 0
+    ' ネスト対応のためスタック構造を使用
+    ' 配列でスタックをシミュレート（最大ネスト深度10）
+    Const MAX_DEPTH As Long = 10
+    Dim unitStack(1 To MAX_DEPTH) As String   ' unit=...ヘッダーのスタック
+    Dim blockStack(1 To MAX_DEPTH) As String  ' ブロック内容のスタック
+    Dim stackDepth As Long                     ' 現在のスタック深度
+
+    stackDepth = 0
 
     For i = LBound(lines) To UBound(lines)
         Dim line As String
-        line = Trim(lines(i))
+        ' Trim()はスペースのみ除去するため、TAB文字も明示的に除去
+        line = Trim(Replace(lines(i), vbTab, ""))
 
         ' 空行はスキップ
         If line = "" Then GoTo NextLine
@@ -250,85 +255,111 @@ Private Function ParseJobListResult(result As String) As Boolean
             Exit Function
         End If
 
-        ' unit= で始まる行（ヘッダー）
-        If InStr(line, "unit=") > 0 And Not inBlock Then
-            unitHeader = line
-            blockContent = ""
+        ' unit= で始まる行（ヘッダー）- ブロック内外問わず検出
+        If InStr(line, "unit=") > 0 Then
+            ' 次の行が{かどうかを先読み
+            Dim nextIdx As Long
+            nextIdx = i + 1
+            If nextIdx <= UBound(lines) Then
+                Dim nextLine As String
+                nextLine = Trim(Replace(lines(nextIdx), vbTab, ""))
+                If Left(nextLine, 1) = "{" Then
+                    ' 新しいユニット定義開始 - スタックにプッシュ
+                    stackDepth = stackDepth + 1
+                    If stackDepth <= MAX_DEPTH Then
+                        unitStack(stackDepth) = line
+                        blockStack(stackDepth) = ""
+                    End If
+                End If
+            End If
             GoTo NextLine
         End If
 
         ' ブロック開始 {
-        If line = "{" Or Left(line, 1) = "{" Then
-            inBlock = True
-            braceDepth = braceDepth + 1
+        If Left(line, 1) = "{" Then
             ' {の後に内容がある場合
-            If Len(line) > 1 Then
-                blockContent = blockContent & " " & Mid(line, 2)
+            If Len(line) > 1 And stackDepth > 0 Then
+                blockStack(stackDepth) = blockStack(stackDepth) & " " & Mid(line, 2)
             End If
             GoTo NextLine
         End If
 
         ' ブロック終了 }
         If Right(line, 1) = "}" Or line = "}" Then
-            braceDepth = braceDepth - 1
             ' }の前に内容がある場合
-            If Len(line) > 1 Then
-                blockContent = blockContent & " " & Left(line, Len(line) - 1)
+            If Len(line) > 1 And stackDepth > 0 Then
+                blockStack(stackDepth) = blockStack(stackDepth) & " " & Left(line, Len(line) - 1)
             End If
 
-            If braceDepth <= 0 Then
-                inBlock = False
+            ' スタックからポップして処理
+            If stackDepth > 0 Then
+                Dim currentHeader As String
+                Dim currentBlock As String
+                currentHeader = unitStack(stackDepth)
+                currentBlock = blockStack(stackDepth)
 
-                ' ユニット定義が完了、処理する
-                If unitHeader <> "" Then
-                    ' ty=n（ジョブネット）かチェック
-                    If InStr(blockContent, "ty=n") > 0 Then
-                        Dim unitMatch As String
-                        unitMatch = ExtractUnitPath(unitHeader)
+                ' ty=n（ジョブネット）かチェック
+                If InStr(currentBlock, "ty=n") > 0 Then
+                    Dim unitMatch As String
+                    unitMatch = ExtractUnitPath(currentHeader)
 
-                        If unitMatch <> "" Then
-                            ws.Cells(row, COL_ORDER).Value = ""
-                            ws.Cells(row, COL_JOBNET_PATH).Value = unitMatch
-                            ws.Cells(row, COL_JOBNET_NAME).Value = ExtractJobNameFromHeader(unitHeader)
-                            ws.Cells(row, COL_COMMENT).Value = ExtractCommentFromBlock(blockContent)
+                    If unitMatch <> "" Then
+                        ws.Cells(row, COL_ORDER).Value = ""
+                        ws.Cells(row, COL_JOBNET_PATH).Value = unitMatch
+                        ws.Cells(row, COL_JOBNET_NAME).Value = ExtractJobNameFromHeader(currentHeader)
+                        ws.Cells(row, COL_COMMENT).Value = ExtractCommentFromBlock(currentBlock)
 
-                            ' 保留状態を解析
-                            Dim isHold As Boolean
-                            isHold = (InStr(blockContent, "hd=h") > 0) Or (InStr(blockContent, "hd=H") > 0)
+                        ' 保留状態を解析
+                        Dim isHold As Boolean
+                        isHold = (InStr(currentBlock, "hd=h") > 0) Or (InStr(currentBlock, "hd=H") > 0)
 
-                            If isHold Then
-                                ws.Cells(row, COL_HOLD).Value = "保留中"
-                                ws.Cells(row, COL_HOLD).HorizontalAlignment = xlCenter
-                                ws.Range(ws.Cells(row, COL_ORDER), ws.Cells(row, COL_LAST_MESSAGE)).Interior.Color = RGB(255, 235, 156)
-                                ws.Cells(row, COL_HOLD).Font.Bold = True
-                                ws.Cells(row, COL_HOLD).Font.Color = RGB(156, 87, 0)
-                            Else
-                                ws.Cells(row, COL_HOLD).Value = ""
-                            End If
-
-                            ' 順序列の書式
-                            With ws.Cells(row, COL_ORDER)
-                                .HorizontalAlignment = xlCenter
-                            End With
-
-                            ' 罫線
-                            ws.Range(ws.Cells(row, COL_ORDER), ws.Cells(row, COL_LAST_MESSAGE)).Borders.LineStyle = xlContinuous
-
-                            row = row + 1
+                        If isHold Then
+                            ws.Cells(row, COL_HOLD).Value = "保留中"
+                            ws.Cells(row, COL_HOLD).HorizontalAlignment = xlCenter
+                            ws.Range(ws.Cells(row, COL_ORDER), ws.Cells(row, COL_LAST_MESSAGE)).Interior.Color = RGB(255, 235, 156)
+                            ws.Cells(row, COL_HOLD).Font.Bold = True
+                            ws.Cells(row, COL_HOLD).Font.Color = RGB(156, 87, 0)
+                        Else
+                            ws.Cells(row, COL_HOLD).Value = ""
                         End If
+
+                        ' 順序列の書式
+                        With ws.Cells(row, COL_ORDER)
+                            .HorizontalAlignment = xlCenter
+                        End With
+
+                        ' 罫線
+                        ws.Range(ws.Cells(row, COL_ORDER), ws.Cells(row, COL_LAST_MESSAGE)).Borders.LineStyle = xlContinuous
+
+                        row = row + 1
                     End If
                 End If
 
-                ' リセット
-                unitHeader = ""
-                blockContent = ""
+                ' スタックをクリアしてポップ
+                unitStack(stackDepth) = ""
+                blockStack(stackDepth) = ""
+                stackDepth = stackDepth - 1
             End If
             GoTo NextLine
         End If
 
-        ' ブロック内のコンテンツを収集
-        If inBlock Then
-            blockContent = blockContent & " " & line
+        ' ブロック内のコンテンツを収集（ただし、次のunit=行の前まで）
+        If stackDepth > 0 Then
+            ' 次の行がunit=かチェック
+            Dim isNextUnit As Boolean
+            isNextUnit = False
+            If i + 1 <= UBound(lines) Then
+                Dim checkLine As String
+                checkLine = Trim(Replace(lines(i + 1), vbTab, ""))
+                If InStr(checkLine, "unit=") > 0 Then
+                    isNextUnit = True
+                End If
+            End If
+
+            ' unit=の直前でなければブロック内容に追加
+            If Not isNextUnit Then
+                blockStack(stackDepth) = blockStack(stackDepth) & " " & line
+            End If
         End If
 
 NextLine:
