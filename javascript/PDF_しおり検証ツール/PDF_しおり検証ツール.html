@@ -1384,6 +1384,7 @@
 
           バイト配列を適切なエンコーディングでデコード
           UTF-8、Shift_JIS、Latin-1を試行
+          ブラウザの組み込みTextDecoderを使用
         ======================================================================
         */
         function decodeTitle(titleBytes) {
@@ -1406,25 +1407,48 @@
                 processedBytes[i] = decodedStr.charCodeAt(i) & 0xFF;
             }
 
+            // UTF-8として解釈を試みる（BOMチェック）
+            if (processedBytes.length >= 3 &&
+                processedBytes[0] === 0xEF &&
+                processedBytes[1] === 0xBB &&
+                processedBytes[2] === 0xBF) {
+                // UTF-8 BOMあり
+                try {
+                    const utf8Str = new TextDecoder('utf-8').decode(processedBytes.slice(3));
+                    if (utf8Str && utf8Str.trim()) return utf8Str;
+                } catch (e) { }
+            }
+
             // UTF-8として解釈を試みる
             try {
                 const utf8Str = new TextDecoder('utf-8', { fatal: true }).decode(processedBytes);
-                // 制御文字や不正な文字がないかチェック
-                if (!utf8Str.includes('\uFFFD') && /[\u3000-\u9FFF\u4E00-\u9FFF]/.test(utf8Str)) {
-                    return utf8Str;
+                // 日本語文字が含まれているか、または全てASCII範囲内かチェック
+                if (!utf8Str.includes('\uFFFD')) {
+                    // 日本語を含む場合、または有効なASCII文字列の場合
+                    if (/[\u3000-\u9FFF\u4E00-\u9FFF]/.test(utf8Str) || /^[\x20-\x7E]+$/.test(utf8Str)) {
+                        return utf8Str;
+                    }
                 }
             } catch (e) {
                 // UTF-8でデコードできない場合は次を試す
             }
 
-            // Shift_JISとして解釈を試みる
+            // Shift_JIS (Windows-31J) として解釈を試みる
+            // ブラウザの組み込みデコーダーを使用
             try {
-                const shiftJisStr = decodeShiftJIS(processedBytes);
-                if (shiftJisStr && /[\u3000-\u9FFF\u4E00-\u9FFF]/.test(shiftJisStr)) {
+                const shiftJisStr = new TextDecoder('shift_jis', { fatal: false }).decode(processedBytes);
+                if (shiftJisStr && !shiftJisStr.includes('\uFFFD') &&
+                    /[\u3000-\u9FFF\u4E00-\u9FFF\u30A0-\u30FF\u3040-\u309F]/.test(shiftJisStr)) {
                     return shiftJisStr;
                 }
             } catch (e) {
-                // Shift_JISでもデコードできない場合
+                // Shift_JISデコーダーが利用できない場合は自作デコーダーを試す
+                try {
+                    const shiftJisStr = decodeShiftJIS(processedBytes);
+                    if (shiftJisStr && /[\u3000-\u9FFF\u4E00-\u9FFF]/.test(shiftJisStr)) {
+                        return shiftJisStr;
+                    }
+                } catch (e2) { }
             }
 
             // 最終手段: PDFエスケープをデコードした文字列をそのまま返す
@@ -1563,6 +1587,7 @@
         */
         function extractBookmarks(content, bytes, pageObjects) {
             const bookmarks = [];
+            const originalContentLength = bytes.length;
 
             /*
             --------------------------------------------------------------
@@ -1575,10 +1600,25 @@
             const titlePositions = findTitlePositions(content);
 
             for (const pos of titlePositions) {
-                const titleBytes = extractTitleBytes(bytes, pos.start, pos.end);
-                if (titleBytes && titleBytes.length > 0) {
-                    const title = decodeTitle(titleBytes);
-                    if (title && title.trim()) {
+                let title = '';
+
+                // 元のバイト配列の範囲内かチェック
+                if (pos.start < originalContentLength && pos.end <= originalContentLength) {
+                    // 元のPDFデータから抽出
+                    const titleBytes = extractTitleBytes(bytes, pos.start, pos.end);
+                    if (titleBytes && titleBytes.length > 0) {
+                        title = decodeTitle(titleBytes);
+                    }
+                } else {
+                    // 解凍されたコンテンツから抽出（文字列として処理）
+                    const titleStr = content.substring(pos.start, pos.end);
+                    // 8進数エスケープ等をデコード
+                    title = decodePDFString(titleStr);
+                }
+
+                if (title && title.trim()) {
+                    // 重複チェック
+                    if (!bookmarks.some(b => b.title === title.trim())) {
                         bookmarks.push({ title: title.trim(), page: '', level: 1 });
                     }
                 }
