@@ -121,6 +121,17 @@ Public Sub GetGroupList()
     ' リモートモードの場合、管理者権限をチェック
     If Not EnsureAdminForRemoteMode(config) Then Exit Sub
 
+    ' パスワード入力（リモートモードの場合のみリモートパスワードが必要）
+    If config("ExecMode") <> "ローカル" Then
+        If config("RemotePassword") = "" Then
+            config("RemotePassword") = InputBox("リモートサーバのパスワードを入力してください:", "パスワード入力")
+            If config("RemotePassword") = "" Then
+                MsgBox "パスワードが入力されませんでした。", vbExclamation
+                Exit Sub
+            End If
+        End If
+    End If
+
     Application.StatusBar = "グループ名を取得中..."
     Application.ScreenUpdating = False
 
