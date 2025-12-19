@@ -356,8 +356,9 @@ Private Function ParseJobListResult(result As String, rootPath As String) As Boo
                 unitType = ExtractUnitType(currentBlock)
                 unitTypeDisplay = GetUnitTypeDisplayName(unitType)
 
-                ' ty=が存在する場合に一覧に追加
-                If unitType <> "" And currentFullPath <> "" Then
+                ' ty=が存在し、グループ以外の場合に一覧に追加
+                ' グループ(g, mg)は実行できないため除外
+                If unitType <> "" And currentFullPath <> "" And unitType <> "g" And unitType <> "mg" Then
                     ws.Cells(currentRow, COL_ORDER).Value = ""
                     ' 種別を設定
                     ws.Cells(currentRow, COL_UNIT_TYPE).Value = unitTypeDisplay
@@ -429,10 +430,20 @@ Private Function ParseJobListResult(result As String, rootPath As String) As Boo
 NextLine:
     Next i
 
-    ' データがない場合
-    If row = ROW_JOBLIST_DATA_START Then
-        MsgBox "ユニットが見つかりませんでした。" & vbCrLf & _
-               "取得パスを確認してください。", vbExclamation
+    ' グループ除外により空になった行を削除（下から上に削除）
+    Dim deleteRow As Long
+    For deleteRow = row - 1 To ROW_JOBLIST_DATA_START Step -1
+        If ws.Cells(deleteRow, COL_JOBNET_PATH).Value = "" Then
+            ws.Rows(deleteRow).Delete
+        End If
+    Next deleteRow
+
+    ' データがない場合（空行削除後に再チェック）
+    Dim actualLastRow As Long
+    actualLastRow = ws.Cells(ws.Rows.Count, COL_JOBNET_PATH).End(xlUp).row
+    If actualLastRow < ROW_JOBLIST_DATA_START Then
+        MsgBox "実行可能なユニットが見つかりませんでした。" & vbCrLf & _
+               "（グループは除外されます）", vbExclamation
         Exit Function
     End If
 
