@@ -219,8 +219,8 @@ Private Function BuildGetGroupListScript(config As Object) As String
         script = script & "    exit 1" & vbCrLf
         script = script & "  }" & vbCrLf
         script = script & vbCrLf
-        script = script & "  # ルート直下のみ取得（-Rなし）" & vbCrLf
-        script = script & "  $result = & $ajsprintPath -F " & config("SchedulerService") & " '/*' 2>&1" & vbCrLf
+        script = script & "  # 全グループを再帰的に取得（-Rあり）" & vbCrLf
+        script = script & "  $result = & $ajsprintPath -F " & config("SchedulerService") & " '/*' -R 2>&1" & vbCrLf
         script = script & "  $result | ForEach-Object { Write-Output $_ }" & vbCrLf
         script = script & "} catch {" & vbCrLf
         script = script & "  Write-Output ""ERROR: $($_.Exception.Message)""" & vbCrLf
@@ -265,8 +265,8 @@ Private Function BuildGetGroupListScript(config As Object) As String
         script = script & "    $searchPaths = @('C:\Program Files\HITACHI\JP1AJS3\bin\ajsprint.exe','C:\Program Files (x86)\HITACHI\JP1AJS3\bin\ajsprint.exe','C:\Program Files\Hitachi\JP1AJS2\bin\ajsprint.exe','C:\Program Files (x86)\Hitachi\JP1AJS2\bin\ajsprint.exe')" & vbCrLf
         script = script & "    foreach ($p in $searchPaths) { if (Test-Path $p) { $ajsprintPath = $p; break } }" & vbCrLf
         script = script & "    if (-not $ajsprintPath) { Write-Output 'ERROR: ajsprint.exe not found'; return }" & vbCrLf
-        script = script & "    # ルート直下のみ取得（-Rなし）" & vbCrLf
-        script = script & "    $output = & $ajsprintPath '-F' $schedulerService '/*' 2>&1" & vbCrLf
+        script = script & "    # 全グループを再帰的に取得（-Rあり）" & vbCrLf
+        script = script & "    $output = & $ajsprintPath '-F' $schedulerService '/*' '-R' 2>&1" & vbCrLf
         script = script & "    $output | Where-Object { $_ -notmatch '^KAVS\d+-I' }" & vbCrLf
         script = script & "  } -ArgumentList '" & config("SchedulerService") & "'" & vbCrLf
         script = script & vbCrLf
@@ -293,8 +293,8 @@ Private Function BuildGetGroupListScript(config As Object) As String
 End Function
 
 Private Function ParseGroupListResult(result As String) As String
-    ' グループ名を抽出してドロップダウン用のリストを作成
-    ' 戻り値: カンマ区切りのパスリスト（例: /*,/グループA/*,/グループB/*）
+    ' グループ名を抽出してドロップダウン用のリストを作成（ネスト対応）
+    ' 戻り値: カンマ区切りのパスリスト（例: /*,/グループA/*,/グループA/サブグループ/*）
 
     ' エラーチェック
     If InStr(result, "ERROR:") > 0 Then
@@ -308,32 +308,80 @@ Private Function ParseGroupListResult(result As String) As String
     Dim groupPaths As String
     groupPaths = "/*"  ' デフォルトで全件取得オプションを追加
 
-    Dim line As Variant
-    Dim unitName As String
-    Dim unitType As String
+    ' ネスト対応のためスタック構造を使用
+    Const MAX_DEPTH As Long = 20
+    Dim pathStack(1 To MAX_DEPTH) As String   ' パスのスタック
+    Dim typeStack(1 To MAX_DEPTH) As String   ' ユニットタイプのスタック
+    Dim stackDepth As Long
+    stackDepth = 0
 
-    For Each line In lines
+    Dim i As Long
+    Dim pendingUnitName As String
+    pendingUnitName = ""
+
+    For i = LBound(lines) To UBound(lines)
         Dim lineStr As String
-        lineStr = Trim(CStr(line))
+        lineStr = Trim(Replace(lines(i), vbTab, ""))
+
+        ' 空行はスキップ
+        If lineStr = "" Then GoTo NextGroupLine
 
         ' unit=行からユニット名を取得
-        If Left(lineStr, 5) = "unit=" Then
+        If InStr(lineStr, "unit=") > 0 Then
             ' unit=名前,,...; から名前を抽出
             Dim parts() As String
-            parts = Split(Mid(lineStr, 6), ",")
+            Dim unitPart As String
+            unitPart = Mid(lineStr, InStr(lineStr, "unit=") + 5)
+            parts = Split(unitPart, ",")
             If UBound(parts) >= 0 Then
-                unitName = Trim(parts(0))
+                pendingUnitName = Trim(parts(0))
+                ' 末尾のセミコロンを除去
+                If Right(pendingUnitName, 1) = ";" Then
+                    pendingUnitName = Left(pendingUnitName, Len(pendingUnitName) - 1)
+                End If
             End If
+            GoTo NextGroupLine
         End If
 
-        ' ty=g の場合（グループ）
-        If InStr(lineStr, "ty=g;") > 0 Then
-            If unitName <> "" Then
-                groupPaths = groupPaths & ",/" & unitName & "/*"
-                unitName = ""
+        ' { でネストレベルを上げる
+        If Left(lineStr, 1) = "{" Then
+            If pendingUnitName <> "" Then
+                stackDepth = stackDepth + 1
+                If stackDepth <= MAX_DEPTH Then
+                    If stackDepth = 1 Then
+                        pathStack(stackDepth) = "/" & pendingUnitName
+                    Else
+                        pathStack(stackDepth) = pathStack(stackDepth - 1) & "/" & pendingUnitName
+                    End If
+                    typeStack(stackDepth) = ""  ' まだタイプ未確定
+                End If
+                pendingUnitName = ""
             End If
+            GoTo NextGroupLine
         End If
-    Next line
+
+        ' ty=行でユニットタイプを確認
+        If InStr(lineStr, "ty=") > 0 Then
+            If stackDepth > 0 And stackDepth <= MAX_DEPTH Then
+                ' ty=g;（グループ）の場合、パスリストに追加
+                If InStr(lineStr, "ty=g;") > 0 Then
+                    typeStack(stackDepth) = "g"
+                    groupPaths = groupPaths & "," & pathStack(stackDepth) & "/*"
+                End If
+            End If
+            GoTo NextGroupLine
+        End If
+
+        ' } でネストレベルを下げる
+        If Left(lineStr, 1) = "}" Then
+            If stackDepth > 0 Then
+                stackDepth = stackDepth - 1
+            End If
+            GoTo NextGroupLine
+        End If
+
+NextGroupLine:
+    Next i
 
     ParseGroupListResult = groupPaths
 End Function
