@@ -1520,11 +1520,13 @@ Private Sub UpdateJobListStatus(ByVal row As Long, ByVal result As Object)
 
     ' 色付け
     If result("Status") = "正常終了" Then
-        ws.Cells(row, COL_LAST_STATUS).Interior.Color = RGB(198, 239, 206)
+        ws.Cells(row, COL_LAST_STATUS).Interior.Color = RGB(198, 239, 206)  ' 緑（正常）
     ElseIf result("Status") = "起動成功" Then
-        ws.Cells(row, COL_LAST_STATUS).Interior.Color = RGB(255, 235, 156)
+        ws.Cells(row, COL_LAST_STATUS).Interior.Color = RGB(255, 235, 156)  ' 黄（起動のみ）
+    ElseIf result("Status") = "警告検出終了" Then
+        ws.Cells(row, COL_LAST_STATUS).Interior.Color = RGB(255, 192, 0)    ' オレンジ（警告）
     Else
-        ws.Cells(row, COL_LAST_STATUS).Interior.Color = RGB(255, 199, 206)
+        ws.Cells(row, COL_LAST_STATUS).Interior.Color = RGB(255, 199, 206)  ' 赤（異常）
     End If
 End Sub
 
