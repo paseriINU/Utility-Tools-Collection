@@ -300,7 +300,7 @@ Private Sub FormatLogSheet()
     ws.Cells(3, 3).Value = "結果"
     ws.Cells(3, 4).Value = "開始時刻"
     ws.Cells(3, 5).Value = "終了時刻"
-    ws.Cells(3, 6).Value = "詳細メッセージ"
+    ws.Cells(3, 6).Value = "ログパス"
 
     With ws.Range("A3:F3")
         .Font.Bold = True
