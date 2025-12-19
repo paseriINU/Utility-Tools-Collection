@@ -1160,6 +1160,10 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
             script = script & "      Write-Log '[完了] 異常終了'" & vbCrLf
             script = script & "      Write-Output ""RESULT_STATUS:異常終了""" & vbCrLf
             script = script & "      $isRunning = $false" & vbCrLf
+            script = script & "    } elseif ($statusStr -match '警告検出終了|ended with warning|warning end') {" & vbCrLf
+            script = script & "      Write-Log '[完了] 警告検出終了'" & vbCrLf
+            script = script & "      Write-Output ""RESULT_STATUS:警告検出終了""" & vbCrLf
+            script = script & "      $isRunning = $false" & vbCrLf
             script = script & "    } elseif ($statusStr -match '正常終了|ended normally|normal end|completed|end:') {" & vbCrLf
             script = script & "      Write-Log '[完了] 正常終了'" & vbCrLf
             script = script & "      Write-Output ""RESULT_STATUS:正常終了""" & vbCrLf
@@ -1338,6 +1342,10 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
             script = script & "    if ($statusStr -match '異常終了|ended abnormally|abnormal end|abend|killed|failed|キャンセル|中止') {" & vbCrLf
             script = script & "      Write-Log '[完了] 異常終了'" & vbCrLf
             script = script & "      Write-Output ""RESULT_STATUS:異常終了""" & vbCrLf
+            script = script & "      $isRunning = $false" & vbCrLf
+            script = script & "    } elseif ($statusStr -match '警告検出終了|ended with warning|warning end') {" & vbCrLf
+            script = script & "      Write-Log '[完了] 警告検出終了'" & vbCrLf
+            script = script & "      Write-Output ""RESULT_STATUS:警告検出終了""" & vbCrLf
             script = script & "      $isRunning = $false" & vbCrLf
             script = script & "    } elseif ($statusStr -match '正常終了|ended normally|normal end|completed|end:') {" & vbCrLf
             script = script & "      Write-Log '[完了] 正常終了'" & vbCrLf
