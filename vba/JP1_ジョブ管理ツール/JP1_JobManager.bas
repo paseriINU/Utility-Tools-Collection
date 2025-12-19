@@ -9,6 +9,9 @@ Option Explicit
 '       定数はSetupモジュールで Public として定義されています
 '==============================================================================
 
+' デバッグモード（Trueにすると[DEBUG-XX]ログが出力されます）
+Private Const DEBUG_MODE As Boolean = False
+
 ' 管理者権限状態を保持
 Private g_AdminChecked As Boolean
 Private g_IsAdmin As Boolean
@@ -1077,10 +1080,15 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
     script = script & vbCrLf
 
     ' ログ出力関数を定義
+    script = script & "# デバッグモードフラグ" & vbCrLf
+    script = script & "$debugMode = $" & IIf(DEBUG_MODE, "true", "false") & vbCrLf
+    script = script & vbCrLf
     script = script & "# ログ出力関数（ファイルとコンソール両方に出力）" & vbCrLf
     script = script & "$logFile = '" & Replace(logFilePath, "'", "''") & "'" & vbCrLf
     script = script & "function Write-Log {" & vbCrLf
     script = script & "  param([string]$Message)" & vbCrLf
+    script = script & "  # DEBUGログはデバッグモード時のみ出力" & vbCrLf
+    script = script & "  if ($Message -match '^\[DEBUG-' -and -not $debugMode) { return }" & vbCrLf
     script = script & "  $timestamp = Get-Date -Format 'yyyy/MM/dd HH:mm:ss'" & vbCrLf
     script = script & "  $logLine = ""[$timestamp] $Message""" & vbCrLf
     script = script & "  Write-Host $logLine" & vbCrLf
