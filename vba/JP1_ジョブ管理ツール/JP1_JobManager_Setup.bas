@@ -323,6 +323,11 @@ Private Sub FormatLogSheet()
     ws.Columns("D").ColumnWidth = 18
     ws.Columns("E").ColumnWidth = 18
     ws.Columns("F").ColumnWidth = 60
+
+    ' ウィンドウ枠の固定（ヘッダー行の下で固定）
+    ws.Activate
+    ws.Cells(4, 1).Select
+    ActiveWindow.FreezePanes = True
 End Sub
 
 '==============================================================================
