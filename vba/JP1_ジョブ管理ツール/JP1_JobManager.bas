@@ -1465,19 +1465,17 @@ Private Function ExecutePowerShell(script As String) As String
     utfStream.Close
     Set utfStream = Nothing
 
-    ' PowerShell実行（表示・結果をファイルに出力）
+    ' PowerShell実行（リアルタイム表示・結果をファイルに出力）
     Dim shell As Object
     Set shell = CreateObject("WScript.Shell")
 
     Dim cmd As String
-    ' PowerShellウィンドウを直接表示して実行、結果を一時ファイルに出力
-    ' Tee-ObjectはエンコーディングをサポートしないためOut-Fileを使用
-    ' -Width 4096 で行の折り返しを防止
+    ' PowerShellウィンドウを直接表示して実行
+    ' Start-Transcriptでログを取りながらリアルタイム表示
     cmd = "powershell -NoProfile -ExecutionPolicy Bypass -Command ""& {" & _
           "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; " & _
-          "$result = & '" & scriptPath & "' 2>&1; " & _
-          "$result | Out-File -FilePath '" & outputPath & "' -Encoding UTF8 -Width 4096; " & _
-          "$result" & _
+          "Start-Transcript -Path '" & outputPath & "' -Force | Out-Null; " & _
+          "try { & '" & scriptPath & "' } finally { Stop-Transcript | Out-Null }" & _
           "}"""
 
     ' 1 = vbNormalFocus（通常表示）、True で完了まで待機
