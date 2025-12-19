@@ -322,24 +322,13 @@ Private Function ParseJobListResult(result As String, rootPath As String) As Boo
                 currentBlock = blockStack(stackDepth)
                 currentFullPath = pathStack(stackDepth)
 
-                ' ユニットタイプを判定（ty=g:グループ, ty=n:ジョブネット, ty=j:ジョブ）
+                ' ユニットタイプを抽出（ty=xxx; から xxx を取得）
                 Dim unitType As String
                 Dim unitTypeDisplay As String
-                unitType = ""
-                unitTypeDisplay = ""
+                unitType = ExtractUnitType(currentBlock)
+                unitTypeDisplay = GetUnitTypeDisplayName(unitType)
 
-                If InStr(currentBlock, "ty=g") > 0 Then
-                    unitType = "g"
-                    unitTypeDisplay = "グループ"
-                ElseIf InStr(currentBlock, "ty=n") > 0 Then
-                    unitType = "n"
-                    unitTypeDisplay = "ジョブネット"
-                ElseIf InStr(currentBlock, "ty=j") > 0 Then
-                    unitType = "j"
-                    unitTypeDisplay = "ジョブ"
-                End If
-
-                ' ty=g, ty=n, ty=j のいずれかの場合に一覧に追加
+                ' ty=が存在する場合に一覧に追加
                 If unitType <> "" And currentFullPath <> "" Then
                     ws.Cells(row, COL_ORDER).Value = ""
                     ' 種別を設定
@@ -474,6 +463,182 @@ Private Function ExtractUnitName(line As String) As String
     ' unit=ユニット名,,admin,group; からユニット名を抽出
     ' 最初のフィールド（カンマまで）を返す
     ExtractUnitName = ExtractUnitPath(line)
+End Function
+
+Private Function ExtractUnitType(blockContent As String) As String
+    ' ty=xxx; から xxx を抽出
+    ' 例: ty=n; → n, ty=pj; → pj, ty=jdj; → jdj
+    Dim startPos As Long
+    Dim endPos As Long
+    Dim tyValue As String
+
+    ExtractUnitType = ""
+
+    startPos = InStr(blockContent, "ty=")
+    If startPos > 0 Then
+        startPos = startPos + 3
+        ' セミコロンまたはスペースまでを取得
+        endPos = InStr(startPos, blockContent, ";")
+        Dim endPosSpace As Long
+        endPosSpace = InStr(startPos, blockContent, " ")
+
+        If endPos > startPos Then
+            If endPosSpace > startPos And endPosSpace < endPos Then
+                endPos = endPosSpace
+            End If
+            ExtractUnitType = Mid(blockContent, startPos, endPos - startPos)
+        End If
+    End If
+End Function
+
+Private Function GetUnitTypeDisplayName(unitType As String) As String
+    ' ユニットタイプコードを日本語表示名に変換
+    ' JP1/AJS3の全ユニット種別に対応
+    Select Case LCase(unitType)
+        ' グループ系
+        Case "g"
+            GetUnitTypeDisplayName = "グループ"
+        Case "mg"
+            GetUnitTypeDisplayName = "マネージャーグループ"
+
+        ' ジョブネット系
+        Case "n"
+            GetUnitTypeDisplayName = "ジョブネット"
+        Case "rn"
+            GetUnitTypeDisplayName = "リカバリーネット"
+        Case "rm"
+            GetUnitTypeDisplayName = "リモートネット"
+        Case "mn"
+            GetUnitTypeDisplayName = "マネージャーネット"
+
+        ' 標準ジョブ系
+        Case "j"
+            GetUnitTypeDisplayName = "ジョブ"
+        Case "rj"
+            GetUnitTypeDisplayName = "リカバリージョブ"
+        Case "pj"
+            GetUnitTypeDisplayName = "判定ジョブ"
+        Case "rp"
+            GetUnitTypeDisplayName = "リカバリー判定"
+        Case "qj"
+            GetUnitTypeDisplayName = "キュージョブ"
+        Case "rq"
+            GetUnitTypeDisplayName = "リカバリーキュー"
+
+        ' 判定変数系
+        Case "jdj"
+            GetUnitTypeDisplayName = "判定変数参照"
+        Case "rjdj"
+            GetUnitTypeDisplayName = "リカバリー判定変数"
+        Case "orj"
+            GetUnitTypeDisplayName = "OR分岐"
+        Case "rorj"
+            GetUnitTypeDisplayName = "リカバリーOR分岐"
+
+        ' イベント監視系
+        Case "evwj"
+            GetUnitTypeDisplayName = "イベント監視"
+        Case "revwj"
+            GetUnitTypeDisplayName = "リカバリーイベント"
+        Case "flwj"
+            GetUnitTypeDisplayName = "ファイル監視"
+        Case "rflwj"
+            GetUnitTypeDisplayName = "リカバリーファイル監視"
+        Case "mlwj"
+            GetUnitTypeDisplayName = "メール受信監視"
+        Case "rmlwj"
+            GetUnitTypeDisplayName = "リカバリーメール受信"
+        Case "mqwj"
+            GetUnitTypeDisplayName = "MQ受信監視"
+        Case "rmqwj"
+            GetUnitTypeDisplayName = "リカバリーMQ受信"
+        Case "mswj"
+            GetUnitTypeDisplayName = "MSMQメッセージ受信監視"
+        Case "rmswj"
+            GetUnitTypeDisplayName = "リカバリーMSMQ受信"
+        Case "lfwj"
+            GetUnitTypeDisplayName = "ログファイル監視"
+        Case "rlfwj"
+            GetUnitTypeDisplayName = "リカバリーログ監視"
+        Case "ntwj"
+            GetUnitTypeDisplayName = "Windows NT イベントログ監視"
+        Case "rntwj"
+            GetUnitTypeDisplayName = "リカバリー NT イベントログ"
+        Case "tmwj"
+            GetUnitTypeDisplayName = "実行間隔制御"
+        Case "rtmwj"
+            GetUnitTypeDisplayName = "リカバリー実行間隔"
+
+        ' 送信系
+        Case "evsj"
+            GetUnitTypeDisplayName = "イベント送信"
+        Case "revsj"
+            GetUnitTypeDisplayName = "リカバリーイベント送信"
+        Case "mlsj"
+            GetUnitTypeDisplayName = "メール送信"
+        Case "rmlsj"
+            GetUnitTypeDisplayName = "リカバリーメール送信"
+        Case "mqsj"
+            GetUnitTypeDisplayName = "MQ送信"
+        Case "rmqsj"
+            GetUnitTypeDisplayName = "リカバリーMQ送信"
+        Case "mssj"
+            GetUnitTypeDisplayName = "MSMQメッセージ送信"
+        Case "rmssj"
+            GetUnitTypeDisplayName = "リカバリーMSMQ送信"
+        Case "cmsj"
+            GetUnitTypeDisplayName = "JP1イベント送信"
+        Case "rcmsj"
+            GetUnitTypeDisplayName = "リカバリーJP1送信"
+
+        ' PowerShell系
+        Case "pwlj"
+            GetUnitTypeDisplayName = "ローカルPowerShell"
+        Case "rpwlj"
+            GetUnitTypeDisplayName = "リカバリーローカルPS"
+        Case "pwrj"
+            GetUnitTypeDisplayName = "リモートPowerShell"
+        Case "rpwrj"
+            GetUnitTypeDisplayName = "リカバリーリモートPS"
+
+        ' カスタム系
+        Case "cj"
+            GetUnitTypeDisplayName = "カスタムジョブ"
+        Case "rcj"
+            GetUnitTypeDisplayName = "リカバリーカスタム"
+        Case "cpj"
+            GetUnitTypeDisplayName = "カスタムPCジョブ"
+        Case "rcpj"
+            GetUnitTypeDisplayName = "リカバリーカスタムPC"
+
+        ' 外部連携系
+        Case "fxj"
+            GetUnitTypeDisplayName = "ファイル転送"
+        Case "rfxj"
+            GetUnitTypeDisplayName = "リカバリーファイル転送"
+        Case "htpj"
+            GetUnitTypeDisplayName = "HTTP接続"
+        Case "rhtpj"
+            GetUnitTypeDisplayName = "リカバリーHTTP"
+
+        ' その他
+        Case "nc"
+            GetUnitTypeDisplayName = "ネットコネクタ"
+        Case "hln"
+            GetUnitTypeDisplayName = "リンク"
+        Case "rc"
+            GetUnitTypeDisplayName = "リリースコネクタ"
+        Case "rr"
+            GetUnitTypeDisplayName = "ルートジョブネット起動条件"
+
+        ' 未知のタイプはそのまま表示
+        Case Else
+            If unitType <> "" Then
+                GetUnitTypeDisplayName = unitType
+            Else
+                GetUnitTypeDisplayName = ""
+            End If
+    End Select
 End Function
 
 Private Function ExtractJobName(line As String) As String
