@@ -226,10 +226,22 @@ Private Function BuildGetGroupListScript(config As Object) As String
     script = script & "chcp 65001 | Out-Null" & vbCrLf
     script = script & vbCrLf
 
+    ' ログ出力関数を定義（コンソール表示用）
+    script = script & "function Write-Log {" & vbCrLf
+    script = script & "  param([string]$Message)" & vbCrLf
+    script = script & "  $timestamp = Get-Date -Format 'yyyy/MM/dd HH:mm:ss'" & vbCrLf
+    script = script & "  Write-Host ""[$timestamp] $Message""" & vbCrLf
+    script = script & "}" & vbCrLf
+    script = script & vbCrLf
+
     ' ローカルモードとリモートモードで処理を分岐
     If config("ExecMode") = "ローカル" Then
         ' ローカル実行モード
         script = script & "try {" & vbCrLf
+        script = script & "  Write-Log '--------------------------------------------------------------------------------'" & vbCrLf
+        script = script & "  Write-Log 'グループ一覧取得開始'" & vbCrLf
+        script = script & "  Write-Log '--------------------------------------------------------------------------------'" & vbCrLf
+        script = script & vbCrLf
         script = script & "  $ajsprintPath = $null" & vbCrLf
         script = script & "  $searchPaths = @(" & vbCrLf
         script = script & "    'C:\Program Files\HITACHI\JP1AJS3\bin\ajsprint.exe'," & vbCrLf
@@ -241,18 +253,29 @@ Private Function BuildGetGroupListScript(config As Object) As String
         script = script & "    if (Test-Path $path) { $ajsprintPath = $path; break }" & vbCrLf
         script = script & "  }" & vbCrLf
         script = script & "  if (-not $ajsprintPath) {" & vbCrLf
+        script = script & "    Write-Log '[ERROR] JP1コマンド(ajsprint.exe)が見つかりません'" & vbCrLf
         script = script & "    Write-Output 'ERROR: JP1コマンド(ajsprint.exe)が見つかりません。'" & vbCrLf
         script = script & "    exit 1" & vbCrLf
         script = script & "  }" & vbCrLf
+        script = script & "  Write-Log ""JP1コマンドパス: $ajsprintPath""" & vbCrLf
         script = script & vbCrLf
         script = script & "  # 全グループを再帰的に取得（-Rあり）" & vbCrLf
+        script = script & "  Write-Log '[実行] ajsprint - グループ一覧取得'" & vbCrLf
+        script = script & "  Write-Log ""コマンド: ajsprint.exe -F " & config("SchedulerService") & " /* -R""" & vbCrLf
         script = script & "  $result = & $ajsprintPath -F " & config("SchedulerService") & " '/*' -R 2>&1" & vbCrLf
+        script = script & "  Write-Log '[成功] グループ一覧取得完了'" & vbCrLf
         script = script & "  $result | ForEach-Object { Write-Output $_ }" & vbCrLf
         script = script & "} catch {" & vbCrLf
+        script = script & "  Write-Log ""[ERROR] $($_.Exception.Message)""" & vbCrLf
         script = script & "  Write-Output ""ERROR: $($_.Exception.Message)""" & vbCrLf
         script = script & "}" & vbCrLf
     Else
         ' リモート実行モード（WinRM使用）
+        script = script & "Write-Log '--------------------------------------------------------------------------------'" & vbCrLf
+        script = script & "Write-Log 'グループ一覧取得開始（リモート）'" & vbCrLf
+        script = script & "Write-Log '--------------------------------------------------------------------------------'" & vbCrLf
+        script = script & "Write-Log ""接続先: " & config("JP1Server") & """" & vbCrLf
+        script = script & vbCrLf
         script = script & "$securePass = ConvertTo-SecureString '" & EscapePSString(config("RemotePassword")) & "' -AsPlainText -Force" & vbCrLf
         script = script & "$cred = New-Object System.Management.Automation.PSCredential('" & config("RemoteUser") & "', $securePass)" & vbCrLf
         script = script & vbCrLf
@@ -264,6 +287,7 @@ Private Function BuildGetGroupListScript(config As Object) As String
         script = script & vbCrLf
 
         script = script & "try {" & vbCrLf
+        script = script & "  Write-Log '[実行] WinRMサービス確認'" & vbCrLf
         script = script & "  $winrmService = Get-Service -Name WinRM -ErrorAction SilentlyContinue" & vbCrLf
         script = script & "  if ($winrmService.Status -ne 'Running') {" & vbCrLf
         script = script & "    Start-Service -Name WinRM -ErrorAction Stop" & vbCrLf
@@ -283,8 +307,12 @@ Private Function BuildGetGroupListScript(config As Object) As String
         script = script & vbCrLf
 
         ' リモート実行
+        script = script & "  Write-Log '[実行] リモートセッション作成'" & vbCrLf
         script = script & "  $session = New-PSSession -ComputerName '" & config("JP1Server") & "' -Credential $cred -ErrorAction Stop" & vbCrLf
+        script = script & "  Write-Log '[成功] リモートセッション作成完了'" & vbCrLf
         script = script & vbCrLf
+        script = script & "  Write-Log '[実行] ajsprint - グループ一覧取得'" & vbCrLf
+        script = script & "  Write-Log ""コマンド: ajsprint.exe -F " & config("SchedulerService") & " /* -R""" & vbCrLf
         script = script & "  $result = Invoke-Command -Session $session -ScriptBlock {" & vbCrLf
         script = script & "    param($schedulerService)" & vbCrLf
         script = script & "    $ajsprintPath = $null" & vbCrLf
@@ -295,11 +323,13 @@ Private Function BuildGetGroupListScript(config As Object) As String
         script = script & "    $output = & $ajsprintPath '-F' $schedulerService '/*' '-R' 2>&1" & vbCrLf
         script = script & "    $output | Where-Object { $_ -notmatch '^KAVS\d+-I' }" & vbCrLf
         script = script & "  } -ArgumentList '" & config("SchedulerService") & "'" & vbCrLf
+        script = script & "  Write-Log '[成功] グループ一覧取得完了'" & vbCrLf
         script = script & vbCrLf
         script = script & "  Remove-PSSession $session" & vbCrLf
         script = script & vbCrLf
         script = script & "  $result | ForEach-Object { Write-Output $_ }" & vbCrLf
         script = script & "} catch {" & vbCrLf
+        script = script & "  Write-Log ""[ERROR] $($_.Exception.Message)""" & vbCrLf
         script = script & "  Write-Output ""ERROR: $($_.Exception.Message)""" & vbCrLf
         script = script & "} finally {" & vbCrLf
         script = script & "  if ($winrmConfigChanged) {" & vbCrLf
@@ -426,10 +456,23 @@ Private Function BuildGetJobListScript(config As Object) As String
     script = script & "chcp 65001 | Out-Null" & vbCrLf
     script = script & vbCrLf
 
+    ' ログ出力関数を定義（コンソール表示用）
+    script = script & "function Write-Log {" & vbCrLf
+    script = script & "  param([string]$Message)" & vbCrLf
+    script = script & "  $timestamp = Get-Date -Format 'yyyy/MM/dd HH:mm:ss'" & vbCrLf
+    script = script & "  Write-Host ""[$timestamp] $Message""" & vbCrLf
+    script = script & "}" & vbCrLf
+    script = script & vbCrLf
+
     ' ローカルモードとリモートモードで処理を分岐
     If config("ExecMode") = "ローカル" Then
         ' ローカル実行モード（WinRM不使用）
         script = script & "try {" & vbCrLf
+        script = script & "  Write-Log '--------------------------------------------------------------------------------'" & vbCrLf
+        script = script & "  Write-Log 'ジョブ一覧取得開始'" & vbCrLf
+        script = script & "  Write-Log ""対象パス: " & config("RootPath") & """" & vbCrLf
+        script = script & "  Write-Log '--------------------------------------------------------------------------------'" & vbCrLf
+        script = script & vbCrLf
         script = script & "  # JP1コマンドパスの検出" & vbCrLf
         script = script & "  $ajsprintPath = $null" & vbCrLf
         script = script & "  $searchPaths = @(" & vbCrLf
@@ -442,18 +485,30 @@ Private Function BuildGetJobListScript(config As Object) As String
         script = script & "    if (Test-Path $path) { $ajsprintPath = $path; break }" & vbCrLf
         script = script & "  }" & vbCrLf
         script = script & "  if (-not $ajsprintPath) {" & vbCrLf
+        script = script & "    Write-Log '[ERROR] JP1コマンド(ajsprint.exe)が見つかりません'" & vbCrLf
         script = script & "    Write-Output ""ERROR: JP1コマンド(ajsprint.exe)が見つかりません。JP1/AJS3 Managerがインストールされているか確認してください。""" & vbCrLf
         script = script & "    exit 1" & vbCrLf
         script = script & "  }" & vbCrLf
+        script = script & "  Write-Log ""JP1コマンドパス: $ajsprintPath""" & vbCrLf
         script = script & vbCrLf
         script = script & "  # ローカルでajsprintを実行" & vbCrLf
+        script = script & "  Write-Log '[実行] ajsprint - ジョブ一覧取得'" & vbCrLf
+        script = script & "  Write-Log ""コマンド: ajsprint.exe -F " & config("SchedulerService") & " " & config("RootPath") & " -R""" & vbCrLf
         script = script & "  $result = & $ajsprintPath -F " & config("SchedulerService") & " '" & config("RootPath") & "' -R 2>&1" & vbCrLf
+        script = script & "  Write-Log '[成功] ジョブ一覧取得完了'" & vbCrLf
         script = script & "  $result | ForEach-Object { Write-Output $_ }" & vbCrLf
         script = script & "} catch {" & vbCrLf
+        script = script & "  Write-Log ""[ERROR] $($_.Exception.Message)""" & vbCrLf
         script = script & "  Write-Output ""ERROR: $($_.Exception.Message)""" & vbCrLf
         script = script & "}" & vbCrLf
     Else
         ' リモート実行モード（WinRM使用）
+        script = script & "Write-Log '--------------------------------------------------------------------------------'" & vbCrLf
+        script = script & "Write-Log 'ジョブ一覧取得開始（リモート）'" & vbCrLf
+        script = script & "Write-Log ""対象パス: " & config("RootPath") & """" & vbCrLf
+        script = script & "Write-Log ""接続先: " & config("JP1Server") & """" & vbCrLf
+        script = script & "Write-Log '--------------------------------------------------------------------------------'" & vbCrLf
+        script = script & vbCrLf
         ' 認証情報
         script = script & "$securePass = ConvertTo-SecureString '" & EscapePSString(config("RemotePassword")) & "' -AsPlainText -Force" & vbCrLf
         script = script & "$cred = New-Object System.Management.Automation.PSCredential('" & config("RemoteUser") & "', $securePass)" & vbCrLf
@@ -466,6 +521,7 @@ Private Function BuildGetJobListScript(config As Object) As String
         script = script & vbCrLf
 
         script = script & "try {" & vbCrLf
+        script = script & "  Write-Log '[実行] WinRMサービス確認'" & vbCrLf
         script = script & "  # WinRMサービスの起動確認（TrustedHosts取得前に起動が必要）" & vbCrLf
         script = script & "  $winrmService = Get-Service -Name WinRM -ErrorAction SilentlyContinue" & vbCrLf
         script = script & "  if ($winrmService.Status -ne 'Running') {" & vbCrLf
@@ -488,8 +544,12 @@ Private Function BuildGetJobListScript(config As Object) As String
         script = script & vbCrLf
 
         ' リモート実行
+        script = script & "  Write-Log '[実行] リモートセッション作成'" & vbCrLf
         script = script & "  $session = New-PSSession -ComputerName '" & config("JP1Server") & "' -Credential $cred -ErrorAction Stop" & vbCrLf
+        script = script & "  Write-Log '[成功] リモートセッション作成完了'" & vbCrLf
         script = script & vbCrLf
+        script = script & "  Write-Log '[実行] ajsprint - ジョブ一覧取得'" & vbCrLf
+        script = script & "  Write-Log ""コマンド: ajsprint.exe -F " & config("SchedulerService") & " " & config("RootPath") & " -R""" & vbCrLf
         script = script & "  $result = Invoke-Command -Session $session -ScriptBlock {" & vbCrLf
         script = script & "    param($schedulerService, $rootPath)" & vbCrLf
         script = script & "    if ([string]::IsNullOrWhiteSpace($rootPath)) { Write-Output 'ERROR: rootPath is empty'; return }" & vbCrLf
@@ -501,11 +561,13 @@ Private Function BuildGetJobListScript(config As Object) As String
         script = script & "    # KAVS情報メッセージ（-I）を除外、unit=行のみ出力" & vbCrLf
         script = script & "    $output | Where-Object { $_ -notmatch '^KAVS\d+-I' }" & vbCrLf
         script = script & "  } -ArgumentList '" & config("SchedulerService") & "', '" & config("RootPath") & "'" & vbCrLf
+        script = script & "  Write-Log '[成功] ジョブ一覧取得完了'" & vbCrLf
         script = script & vbCrLf
         script = script & "  Remove-PSSession $session" & vbCrLf
         script = script & vbCrLf
         script = script & "  $result | ForEach-Object { Write-Output $_ }" & vbCrLf
         script = script & "} catch {" & vbCrLf
+        script = script & "  Write-Log ""[ERROR] $($_.Exception.Message)""" & vbCrLf
         script = script & "  Write-Output ""ERROR: $($_.Exception.Message)""" & vbCrLf
         script = script & "} finally {" & vbCrLf
         script = script & "  # WinRM設定の復元" & vbCrLf
