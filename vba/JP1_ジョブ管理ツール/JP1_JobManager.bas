@@ -2308,6 +2308,7 @@ Public Sub AddCheckboxesToJobList()
                 .Caption = ""
                 .Value = xlOff
                 .OnAction = "OnCheckboxClick"
+                .Placement = xlMoveAndSize  ' セルに連動して移動・非表示
             End With
         End If
     Next row
