@@ -2312,6 +2312,41 @@ Public Sub AddCheckboxesToJobList()
             End With
         End If
     Next row
+
+    ' チェックボックスの可視状態を更新
+    UpdateCheckboxVisibility
+End Sub
+
+'==============================================================================
+' チェックボックスの可視状態を行の表示状態に同期
+' フィルター適用時に呼び出すことでチェックボックスの重なりを防ぐ
+'==============================================================================
+Public Sub UpdateCheckboxVisibility()
+    On Error Resume Next
+    Dim ws As Worksheet
+    Set ws = Worksheets(SHEET_JOBLIST)
+
+    Dim cb As CheckBox
+    For Each cb In ws.CheckBoxes
+        If Left(cb.Name, 7) = "chkRow_" Then
+            ' チェックボックス名から行番号を取得
+            Dim row As Long
+            row = CLng(Mid(cb.Name, 8))
+
+            ' 行が非表示かどうかをチェック
+            If ws.Rows(row).Hidden Then
+                cb.Visible = False
+            Else
+                cb.Visible = True
+                ' 位置を再調整（フィルター後のずれ対策）
+                Dim cell As Range
+                Set cell = ws.Cells(row, COL_SELECT)
+                cb.Left = cell.Left + (cell.Width - 14) / 2
+                cb.Top = cell.Top + (cell.RowHeight - 14) / 2
+            End If
+        End If
+    Next cb
+    On Error GoTo 0
 End Sub
 
 '==============================================================================
