@@ -1,6 +1,6 @@
 <# :
 @echo off
-chcp 65001 >nul
+chcp 932 >nul
 title JP1 ジョブログ取得ツール
 setlocal
 
@@ -64,7 +64,8 @@ $Config = @{
 # ==============================================================================
 
 $ErrorActionPreference = "Stop"
-[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+# JP1コマンドの出力はShift_JIS（CP932）のためエンコーディングを設定
+[Console]::OutputEncoding = [System.Text.Encoding]::GetEncoding(932)
 
 Write-Host ""
 Write-Host "================================================================" -ForegroundColor Cyan
