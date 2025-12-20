@@ -105,12 +105,13 @@ Processing finished at 2025-12-21 10:35:00
 
 ### ajsshowコマンドのパス
 
-JP1/AJS3のバージョンやインストール場所により異なる場合があります：
+JP1/AJS2・AJS3のバージョンやインストール場所により異なる場合があります：
 
 ```
+C:\Program Files (x86)\HITACHI\JP1AJS2\bin\ajsshow.exe  ← デフォルト
+C:\Program Files\HITACHI\JP1AJS2\bin\ajsshow.exe
 C:\Program Files\HITACHI\JP1AJS3\bin\ajsshow.exe
 C:\Program Files (x86)\HITACHI\JP1AJS3\bin\ajsshow.exe
-C:\Program Files\Hitachi\JP1AJS2\bin\ajsshow.exe
 ```
 
 ## 注意事項

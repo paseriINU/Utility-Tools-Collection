@@ -1,10 +1,9 @@
 <# :
 @echo off
 chcp 932 >nul
-title JP1 ジョブログ取得ツール
 setlocal
 
-powershell -NoProfile -ExecutionPolicy Bypass -Command "iex ((gc '%~f0' -Encoding UTF8) -join \"`n\")"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$host.UI.RawUI.WindowTitle='JP1 ジョブログ取得ツール'; iex ((gc '%~f0' -Encoding UTF8) -join \"`n\")"
 set EXITCODE=%ERRORLEVEL%
 pause
 exit /b %EXITCODE%
@@ -47,7 +46,7 @@ $Config = @{
     JP1Password = ""
 
     # ajsshowコマンドのパス
-    AjsshowPath = "C:\Program Files\HITACHI\JP1AJS3\bin\ajsshow.exe"
+    AjsshowPath = "C:\Program Files (x86)\HITACHI\JP1AJS2\bin\ajsshow.exe"
 
     # 取得するスプールの種類（stdout=標準出力、stderr=標準エラー出力、both=両方）
     SpoolType = "stdout"
@@ -87,9 +86,10 @@ if (-not (Test-Path $Config.AjsshowPath)) {
     Write-Host "  パス: $($Config.AjsshowPath)" -ForegroundColor Red
     Write-Host ""
     Write-Host "以下のパスを確認してください:" -ForegroundColor Yellow
+    Write-Host "  - C:\Program Files (x86)\HITACHI\JP1AJS2\bin\ajsshow.exe" -ForegroundColor Gray
+    Write-Host "  - C:\Program Files\HITACHI\JP1AJS2\bin\ajsshow.exe" -ForegroundColor Gray
     Write-Host "  - C:\Program Files\HITACHI\JP1AJS3\bin\ajsshow.exe" -ForegroundColor Gray
     Write-Host "  - C:\Program Files (x86)\HITACHI\JP1AJS3\bin\ajsshow.exe" -ForegroundColor Gray
-    Write-Host "  - C:\Program Files\Hitachi\JP1AJS2\bin\ajsshow.exe" -ForegroundColor Gray
     exit 1
 }
 #endregion
