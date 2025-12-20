@@ -1671,6 +1671,20 @@
                 // Shift_JISデコーダーが利用できない場合
             }
 
+            // PDFDocEncodingとして解釈を試みる（0x80-0x9F範囲の特殊文字対応）
+            try {
+                const pdfDocStr = decodePDFDocEncoding(processedBytes);
+                // 有効な文字列かチェック
+                if (pdfDocStr && pdfDocStr.trim()) {
+                    const controlChars = (pdfDocStr.match(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g) || []).length;
+                    if (controlChars < pdfDocStr.length * 0.1) {
+                        return pdfDocStr;
+                    }
+                }
+            } catch (e) {
+                // PDFDocEncodingデコードに失敗
+            }
+
             // 最終手段: PDFエスケープをデコードした文字列をそのまま返す
             return decodedStr;
         }
@@ -2165,20 +2179,89 @@
           PDFエスケープシーケンスをデコードする関数
 
           PDF文字列内の特殊文字をデコード
-          例: \n → 改行、\( → (、\\123 → 8進数の文字
+          例: \n → 改行、\( → (、\123 → 8進数の文字、\xNN → 16進数の文字
         ======================================================================
         */
         function decodePDFString(str) {
             // replace(正規表現, 置換文字列): 文字列置換
-            return str
+            // 注意: 置換順序が重要。バックスラッシュの処理は最後に行う
+            let result = str
                 .replace(/\\n/g, '\n')       // 改行
                 .replace(/\\r/g, '\r')       // キャリッジリターン
                 .replace(/\\t/g, '\t')       // タブ
-                .replace(/\\\\/g, '\\')      // バックスラッシュ
+                .replace(/\\b/g, '\b')       // バックスペース
+                .replace(/\\f/g, '\f')       // フォームフィード
                 .replace(/\\\(/g, '(')       // 開き括弧
                 .replace(/\\\)/g, ')')       // 閉じ括弧
-                // 8進数エスケープ: \123 形式
-                .replace(/\\([0-7]{1,3})/g, (_, oct) => String.fromCharCode(parseInt(oct, 8)));
+                // 16進数エスケープ: \xNN 形式（Adobe Acrobat JavaScript対応）
+                .replace(/\\x([0-9A-Fa-f]{2})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
+                // 8進数エスケープ: \NNN 形式（3桁優先でマッチ）
+                .replace(/\\([0-7]{1,3})/g, (_, oct) => String.fromCharCode(parseInt(oct, 8)))
+                // バックスラッシュは最後に処理
+                .replace(/\\\\/g, '\\');
+            return result;
+        }
+
+        /*
+        ======================================================================
+          PDFDocEncodingをUnicodeに変換する関数
+
+          PDFDocEncodingは0x80-0x9F範囲でLatin-1と異なる独自マッピングを持つ
+          Adobe Acrobatで作成されたPDFで使用されることがある
+        ======================================================================
+        */
+        function decodePDFDocEncoding(bytes) {
+            // PDFDocEncoding特殊文字マッピング（0x80-0x9F, 0xAD）
+            const pdfDocEncodingMap = {
+                0x80: 0x2022, // BULLET
+                0x81: 0x2020, // DAGGER
+                0x82: 0x2021, // DOUBLE DAGGER
+                0x83: 0x2026, // HORIZONTAL ELLIPSIS
+                0x84: 0x2014, // EM DASH
+                0x85: 0x2013, // EN DASH
+                0x86: 0x0192, // LATIN SMALL LETTER F WITH HOOK
+                0x87: 0x2044, // FRACTION SLASH
+                0x88: 0x2039, // SINGLE LEFT-POINTING ANGLE QUOTATION MARK
+                0x89: 0x203A, // SINGLE RIGHT-POINTING ANGLE QUOTATION MARK
+                0x8A: 0x2212, // MINUS SIGN
+                0x8B: 0x2030, // PER MILLE SIGN
+                0x8C: 0x201E, // DOUBLE LOW-9 QUOTATION MARK
+                0x8D: 0x201C, // LEFT DOUBLE QUOTATION MARK
+                0x8E: 0x201D, // RIGHT DOUBLE QUOTATION MARK
+                0x8F: 0x2018, // LEFT SINGLE QUOTATION MARK
+                0x90: 0x2019, // RIGHT SINGLE QUOTATION MARK
+                0x91: 0x201A, // SINGLE LOW-9 QUOTATION MARK
+                0x92: 0x2122, // TRADE MARK SIGN
+                0x93: 0xFB01, // LATIN SMALL LIGATURE FI
+                0x94: 0xFB02, // LATIN SMALL LIGATURE FL
+                0x95: 0x0141, // LATIN CAPITAL LETTER L WITH STROKE
+                0x96: 0x0152, // LATIN CAPITAL LIGATURE OE
+                0x97: 0x0160, // LATIN CAPITAL LETTER S WITH CARON
+                0x98: 0x0178, // LATIN CAPITAL LETTER Y WITH DIAERESIS
+                0x99: 0x017D, // LATIN CAPITAL LETTER Z WITH CARON
+                0x9A: 0x0131, // LATIN SMALL LETTER DOTLESS I
+                0x9B: 0x0142, // LATIN SMALL LETTER L WITH STROKE
+                0x9C: 0x0153, // LATIN SMALL LIGATURE OE
+                0x9D: 0x0161, // LATIN SMALL LETTER S WITH CARON
+                0x9E: 0x017E, // LATIN SMALL LETTER Z WITH CARON
+                0x9F: 0xFFFF, // REPLACEMENT CHARACTER (undefined)
+                0xA0: 0x20AC, // EURO SIGN
+                0xAD: 0x00AD  // SOFT HYPHEN (keep as is)
+            };
+
+            let result = '';
+            for (let i = 0; i < bytes.length; i++) {
+                const b = bytes[i];
+                if (pdfDocEncodingMap.hasOwnProperty(b)) {
+                    const mapped = pdfDocEncodingMap[b];
+                    if (mapped !== 0xFFFF) {
+                        result += String.fromCharCode(mapped);
+                    }
+                } else {
+                    result += String.fromCharCode(b);
+                }
+            }
+            return result;
         }
 
         /*
