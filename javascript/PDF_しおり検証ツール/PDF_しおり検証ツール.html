@@ -1499,151 +1499,84 @@
                 } catch (e) { }
             }
 
-            // UTF-16LEパターン検出（BOMなし）- Acrobat JavaScript生成のしおり対応
-            // 特徴: 偶数バイト、ASCII文字は低バイトがASCII値で高バイトが0x00
+            // UTF-16検出（BOMなし）- Acrobat JavaScript生成のしおり対応
+            // 偶数バイトの場合、UTF-16LE/BEの両方を試す
             if (processedBytes.length >= 2 && processedBytes.length % 2 === 0) {
-                let utf16leScore = 0;
+                // UTF-16LEとUTF-16BEの両方をスコアリング
+                let leScore = 0;
+                let beScore = 0;
+                let nullByteCount = 0;  // NULLバイトの数をカウント
                 let totalPairs = processedBytes.length / 2;
-                let nullHighByteCount = 0;
-                let japaneseCount = 0;
 
                 for (let i = 0; i < processedBytes.length; i += 2) {
-                    const low = processedBytes[i];
-                    const high = processedBytes[i + 1];
-                    const charCode = (high << 8) | low;
+                    const byte1 = processedBytes[i];
+                    const byte2 = processedBytes[i + 1];
 
-                    // NULLバイトペアはスキップ
-                    if (charCode === 0) {
-                        continue;
+                    // NULLバイトをカウント（UTF-16の強い指標）
+                    if (byte1 === 0x00) nullByteCount++;
+                    if (byte2 === 0x00) nullByteCount++;
+
+                    // UTF-16LE: 低バイト + 高バイト
+                    const leCharCode = (byte2 << 8) | byte1;
+                    // UTF-16BE: 高バイト + 低バイト
+                    const beCharCode = (byte1 << 8) | byte2;
+
+                    // NULLペアはスキップ
+                    if (leCharCode === 0 && beCharCode === 0) continue;
+
+                    // LE評価: ASCII文字（byte2が0x00、byte1が印刷可能）
+                    if (byte2 === 0x00 && ((byte1 >= 0x20 && byte1 <= 0x7E) || byte1 === 0x09 || byte1 === 0x0A || byte1 === 0x0D)) {
+                        leScore += 3;
+                    }
+                    // LE評価: 日本語文字
+                    if ((leCharCode >= 0x3040 && leCharCode <= 0x309F) ||  // ひらがな
+                        (leCharCode >= 0x30A0 && leCharCode <= 0x30FF) ||  // カタカナ
+                        (leCharCode >= 0x4E00 && leCharCode <= 0x9FFF) ||  // CJK統合漢字
+                        (leCharCode >= 0x3000 && leCharCode <= 0x303F) ||  // CJK記号・句読点
+                        (leCharCode >= 0xFF00 && leCharCode <= 0xFFEF)) {  // 全角英数・半角カナ
+                        leScore += 5;
                     }
 
-                    // ASCII範囲の文字（高バイトが0、低バイトが印刷可能）- LE形式
-                    if (high === 0x00 && ((low >= 0x20 && low <= 0x7E) || low === 0x09 || low === 0x0A || low === 0x0D)) {
-                        nullHighByteCount++;
-                        utf16leScore += 2;
-                        continue;
+                    // BE評価: ASCII文字（byte1が0x00、byte2が印刷可能）
+                    if (byte1 === 0x00 && ((byte2 >= 0x20 && byte2 <= 0x7E) || byte2 === 0x09 || byte2 === 0x0A || byte2 === 0x0D)) {
+                        beScore += 3;
                     }
-
-                    // 日本語（ひらがな、カタカナ、漢字）
-                    if ((charCode >= 0x3040 && charCode <= 0x309F) ||  // ひらがな
-                        (charCode >= 0x30A0 && charCode <= 0x30FF) ||  // カタカナ
-                        (charCode >= 0x4E00 && charCode <= 0x9FFF) ||  // CJK統合漢字
-                        (charCode >= 0x3000 && charCode <= 0x303F) ||  // CJK記号・句読点
-                        (charCode >= 0xFF00 && charCode <= 0xFFEF)) {  // 全角英数・半角カナ
-                        japaneseCount++;
-                        utf16leScore += 3;
-                        continue;
+                    // BE評価: 日本語文字
+                    if ((beCharCode >= 0x3040 && beCharCode <= 0x309F) ||  // ひらがな
+                        (beCharCode >= 0x30A0 && beCharCode <= 0x30FF) ||  // カタカナ
+                        (beCharCode >= 0x4E00 && beCharCode <= 0x9FFF) ||  // CJK統合漢字
+                        (beCharCode >= 0x3000 && beCharCode <= 0x303F) ||  // CJK記号・句読点
+                        (beCharCode >= 0xFF00 && beCharCode <= 0xFFEF)) {  // 全角英数・半角カナ
+                        beScore += 5;
                     }
                 }
 
-                // UTF-16LEとして判定
-                const isLikelyUtf16Le = (japaneseCount > 0 && utf16leScore > 0) ||
-                                        (nullHighByteCount > 0 && nullHighByteCount >= totalPairs * 0.3);
+                // NULLバイトが多い場合はUTF-16の可能性が高い（ASCII文字のUTF-16表現）
+                const hasNullBytePattern = nullByteCount >= totalPairs * 0.3;
 
-                if (isLikelyUtf16Le) {
-                    try {
-                        const utf16Str = new TextDecoder('utf-16le').decode(processedBytes);
-                        if (utf16Str && utf16Str.trim() && !/\uFFFD/.test(utf16Str)) {
-                            const controlChars = (utf16Str.match(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g) || []).length;
-                            if (controlChars < utf16Str.length * 0.1) {
-                                return utf16Str;
+                // スコアが高い方のエンディアンを優先
+                const tryEncodings = leScore >= beScore
+                    ? ['utf-16le', 'utf-16be']
+                    : ['utf-16be', 'utf-16le'];
+
+                // スコアがあるか、NULLバイトパターンがある場合にUTF-16を試す
+                if (leScore > 0 || beScore > 0 || hasNullBytePattern) {
+                    for (const encoding of tryEncodings) {
+                        try {
+                            const utf16Str = new TextDecoder(encoding).decode(processedBytes);
+                            if (utf16Str && utf16Str.trim()) {
+                                // 置換文字と制御文字のチェック
+                                const replacementChars = (utf16Str.match(/\uFFFD/g) || []).length;
+                                const controlChars = (utf16Str.match(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g) || []).length;
+                                const validChars = utf16Str.length - replacementChars - controlChars;
+
+                                // 有効な文字が半分以上あれば採用
+                                if (validChars > utf16Str.length * 0.5 && replacementChars < utf16Str.length * 0.1) {
+                                    return utf16Str;
+                                }
                             }
-                        }
-                    } catch (e) { }
-                }
-            }
-
-            // UTF-16BEパターン検出（BOMなし）- Acrobat JavaScript生成のしおり向け強化版
-            // 特徴: 偶数バイト、ASCII文字は高バイトが0x00、日本語はUnicodeコードポイント
-            if (processedBytes.length >= 2 && processedBytes.length % 2 === 0) {
-                let utf16Score = 0;
-                let totalPairs = processedBytes.length / 2;
-                let nullHighByteCount = 0;
-                let japaneseCount = 0;
-
-                for (let i = 0; i < processedBytes.length; i += 2) {
-                    const high = processedBytes[i];
-                    const low = processedBytes[i + 1];
-                    const charCode = (high << 8) | low;
-
-                    // NULLバイトペアはスキップ
-                    if (charCode === 0) {
-                        continue;
+                        } catch (e) { }
                     }
-
-                    // ASCII範囲の文字（高バイトが0、低バイトが印刷可能またはタブ/改行）
-                    if (high === 0x00 && ((low >= 0x20 && low <= 0x7E) || low === 0x09 || low === 0x0A || low === 0x0D)) {
-                        nullHighByteCount++;
-                        utf16Score += 2;
-                        continue;
-                    }
-
-                    // 日本語（ひらがな、カタカナ、漢字）- Acrobatでよく使われる範囲
-                    if ((charCode >= 0x3040 && charCode <= 0x309F) ||  // ひらがな
-                        (charCode >= 0x30A0 && charCode <= 0x30FF) ||  // カタカナ
-                        (charCode >= 0x4E00 && charCode <= 0x9FFF) ||  // CJK統合漢字
-                        (charCode >= 0x3000 && charCode <= 0x303F) ||  // CJK記号・句読点
-                        (charCode >= 0xFF00 && charCode <= 0xFFEF) ||  // 全角英数・半角カナ
-                        (charCode >= 0x2000 && charCode <= 0x206F) ||  // 一般句読点
-                        (charCode >= 0x2190 && charCode <= 0x21FF) ||  // 矢印
-                        (charCode >= 0x2500 && charCode <= 0x257F) ||  // 罫線素片
-                        (charCode >= 0x25A0 && charCode <= 0x25FF) ||  // 幾何学模様
-                        (charCode >= 0x3200 && charCode <= 0x32FF) ||  // 囲みCJK文字・月
-                        (charCode >= 0x31F0 && charCode <= 0x31FF)) {  // カタカナ拡張
-                        japaneseCount++;
-                        utf16Score += 3;
-                        continue;
-                    }
-
-                    // その他の有効なUnicode範囲（基本多言語面、サロゲートペア以外）
-                    if (charCode >= 0x0080 && charCode < 0xD800) {
-                        utf16Score += 1;
-                        continue;
-                    }
-
-                    // サロゲートペア領域（U+D800-U+DFFF）
-                    if (charCode >= 0xD800 && charCode <= 0xDFFF) {
-                        // 有効なサロゲートペアかチェック
-                        if (i + 2 < processedBytes.length) {
-                            const nextHigh = processedBytes[i + 2];
-                            const nextLow = processedBytes[i + 3];
-                            const nextCharCode = (nextHigh << 8) | nextLow;
-                            if (charCode >= 0xD800 && charCode <= 0xDBFF &&
-                                nextCharCode >= 0xDC00 && nextCharCode <= 0xDFFF) {
-                                utf16Score += 2;
-                                continue;
-                            }
-                        }
-                    }
-
-                    // 私用領域（U+E000-U+F8FF）- 一部のフォントで使用
-                    if (charCode >= 0xE000 && charCode <= 0xF8FF) {
-                        utf16Score += 1;
-                        continue;
-                    }
-
-                    // 無効な文字の場合、スコアを減点
-                    utf16Score -= 2;
-                }
-
-                // UTF-16BEとして判定するスコア閾値
-                // 条件: 日本語が1文字以上あるか、またはASCII文字の高バイトが0x00のパターンが多い
-                const isLikelyUtf16Be = (japaneseCount > 0 && utf16Score > 0) ||
-                                        (nullHighByteCount > 0 && nullHighByteCount >= totalPairs * 0.3) ||
-                                        (utf16Score >= totalPairs);
-
-                if (isLikelyUtf16Be) {
-                    try {
-                        const utf16Str = new TextDecoder('utf-16be').decode(processedBytes);
-                        // 置換文字が含まれていないかチェック
-                        if (utf16Str && utf16Str.trim() && !/\uFFFD/.test(utf16Str)) {
-                            // 制御文字が多すぎないかチェック
-                            const controlChars = (utf16Str.match(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g) || []).length;
-                            if (controlChars < utf16Str.length * 0.1) {
-                                return utf16Str;
-                            }
-                        }
-                    } catch (e) { }
                 }
             }
 
@@ -1901,49 +1834,75 @@
                         if (charCode > 0) title += String.fromCharCode(charCode);
                     }
                 } else {
-                    // BOMなしの場合でもUTF-16BEをチェック
-                    // 偶数桁で、00XX（ASCIIのUTF-16BE表現）パターンが多い場合
+                    // BOMなしの場合、UTF-16BE/LEの両方をチェック
                     const titleBytes = new Uint8Array(hexStr.length / 2);
                     for (let i = 0; i + 2 <= hexStr.length; i += 2) {
                         titleBytes[i / 2] = parseInt(hexStr.substring(i, i + 2), 16);
                     }
 
-                    // BOMなしUTF-16BEの可能性をチェック
+                    // BOMなしUTF-16の可能性をチェック（BE/LE両方）
                     if (hexStr.length % 4 === 0) {
-                        let utf16beScore = 0;
-                        let hasJapanese = false;
-                        for (let i = 0; i < hexStr.length; i += 4) {
-                            const high = parseInt(hexStr.substring(i, i + 2), 16);
-                            const low = parseInt(hexStr.substring(i + 2, i + 4), 16);
-                            const charCode = (high << 8) | low;
+                        let beScore = 0;
+                        let leScore = 0;
 
-                            // ASCII範囲（高バイトが00）
-                            if (high === 0 && low >= 0x20 && low <= 0x7E) {
-                                utf16beScore += 2;
+                        for (let i = 0; i < hexStr.length; i += 4) {
+                            const byte1 = parseInt(hexStr.substring(i, i + 2), 16);
+                            const byte2 = parseInt(hexStr.substring(i + 2, i + 4), 16);
+
+                            // UTF-16BE: byte1=高バイト, byte2=低バイト
+                            const beCharCode = (byte1 << 8) | byte2;
+                            // UTF-16LE: byte1=低バイト, byte2=高バイト
+                            const leCharCode = (byte2 << 8) | byte1;
+
+                            // BE評価: ASCII（高バイト=0）
+                            if (byte1 === 0 && byte2 >= 0x20 && byte2 <= 0x7E) {
+                                beScore += 3;
                             }
-                            // 日本語範囲
-                            else if ((charCode >= 0x3040 && charCode <= 0x309F) ||  // ひらがな
-                                     (charCode >= 0x30A0 && charCode <= 0x30FF) ||  // カタカナ
-                                     (charCode >= 0x4E00 && charCode <= 0x9FFF) ||  // CJK漢字
-                                     (charCode >= 0x3000 && charCode <= 0x303F) ||  // CJK記号
-                                     (charCode >= 0xFF00 && charCode <= 0xFFEF)) {  // 全角
-                                utf16beScore += 3;
-                                hasJapanese = true;
+                            // BE評価: 日本語
+                            if ((beCharCode >= 0x3040 && beCharCode <= 0x309F) ||
+                                (beCharCode >= 0x30A0 && beCharCode <= 0x30FF) ||
+                                (beCharCode >= 0x4E00 && beCharCode <= 0x9FFF) ||
+                                (beCharCode >= 0x3000 && beCharCode <= 0x303F) ||
+                                (beCharCode >= 0xFF00 && beCharCode <= 0xFFEF)) {
+                                beScore += 5;
+                            }
+
+                            // LE評価: ASCII（高バイト=0）
+                            if (byte2 === 0 && byte1 >= 0x20 && byte1 <= 0x7E) {
+                                leScore += 3;
+                            }
+                            // LE評価: 日本語
+                            if ((leCharCode >= 0x3040 && leCharCode <= 0x309F) ||
+                                (leCharCode >= 0x30A0 && leCharCode <= 0x30FF) ||
+                                (leCharCode >= 0x4E00 && leCharCode <= 0x9FFF) ||
+                                (leCharCode >= 0x3000 && leCharCode <= 0x303F) ||
+                                (leCharCode >= 0xFF00 && leCharCode <= 0xFFEF)) {
+                                leScore += 5;
                             }
                         }
 
-                        // UTF-16BEとして解釈
-                        if (hasJapanese || utf16beScore >= (hexStr.length / 4)) {
-                            try {
-                                const utf16Str = new TextDecoder('utf-16be').decode(titleBytes);
-                                if (utf16Str && utf16Str.trim() && !/\uFFFD/.test(utf16Str)) {
-                                    title = utf16Str;
-                                }
-                            } catch (e) { }
+                        // スコアが高い方のエンディアンを優先して試す
+                        const tryEncodings = beScore >= leScore
+                            ? ['utf-16be', 'utf-16le']
+                            : ['utf-16le', 'utf-16be'];
+
+                        if (beScore > 0 || leScore > 0) {
+                            for (const encoding of tryEncodings) {
+                                try {
+                                    const utf16Str = new TextDecoder(encoding).decode(titleBytes);
+                                    if (utf16Str && utf16Str.trim() && !/\uFFFD/.test(utf16Str)) {
+                                        const controlChars = (utf16Str.match(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g) || []).length;
+                                        if (controlChars < utf16Str.length * 0.1) {
+                                            title = utf16Str;
+                                            break;
+                                        }
+                                    }
+                                } catch (e) { }
+                            }
                         }
                     }
 
-                    // UTF-16BEとして解釈できなかった場合は通常のデコード
+                    // UTF-16として解釈できなかった場合は通常のデコード
                     if (!title) {
                         title = decodeTitle(titleBytes);
                     }
