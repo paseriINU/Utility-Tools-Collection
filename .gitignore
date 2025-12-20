@@ -61,5 +61,8 @@ tests/
 credentials.*
 config.local.*
 
+# Claude Code
+.claude/settings.local.json
+
 # C/C++ compiled binaries
 linux/winrm-client/winrm_exec
