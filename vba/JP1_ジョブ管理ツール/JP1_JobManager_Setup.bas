@@ -27,19 +27,20 @@ Public Const ROW_POLLING_INTERVAL As Long = 19
 Public Const COL_SETTING_VALUE As Long = 3
 
 ' ジョブ一覧シートの列位置 - Publicで共有
-Public Const COL_ORDER As Long = 1
-Public Const COL_UNIT_TYPE As Long = 2      ' 種別（グループ/ジョブネット/ジョブ）
-Public Const COL_JOBNET_PATH As Long = 3
-Public Const COL_JOBNET_NAME As Long = 4
-Public Const COL_COMMENT As Long = 5
-Public Const COL_SCRIPT As Long = 6         ' スクリプトファイル名 (sc) ※非表示列
-Public Const COL_PARAMETER As Long = 7      ' パラメーター (prm) ※非表示列
-Public Const COL_WORK_PATH As Long = 8      ' ワークパス (wkp) ※非表示列
-Public Const COL_HOLD As Long = 9
-Public Const COL_LAST_STATUS As Long = 10
-Public Const COL_LAST_EXEC_TIME As Long = 11
-Public Const COL_LAST_END_TIME As Long = 12
-Public Const COL_LAST_MESSAGE As Long = 13   ' ログファイルパス（最終列）
+Public Const COL_SELECT As Long = 1         ' 選択（チェック列）
+Public Const COL_ORDER As Long = 2          ' 順序（自動採番）
+Public Const COL_UNIT_TYPE As Long = 3      ' 種別（グループ/ジョブネット/ジョブ）
+Public Const COL_JOBNET_PATH As Long = 4
+Public Const COL_JOBNET_NAME As Long = 5
+Public Const COL_COMMENT As Long = 6
+Public Const COL_SCRIPT As Long = 7         ' スクリプトファイル名 (sc) ※非表示列
+Public Const COL_PARAMETER As Long = 8      ' パラメーター (prm) ※非表示列
+Public Const COL_WORK_PATH As Long = 9      ' ワークパス (wkp) ※非表示列
+Public Const COL_HOLD As Long = 10
+Public Const COL_LAST_STATUS As Long = 11
+Public Const COL_LAST_EXEC_TIME As Long = 12
+Public Const COL_LAST_END_TIME As Long = 13
+Public Const COL_LAST_MESSAGE As Long = 14   ' ログファイルパス（最終列）
 Public Const ROW_JOBLIST_HEADER As Long = 4
 Public Const ROW_JOBLIST_DATA_START As Long = 5
 
@@ -226,8 +227,8 @@ Private Sub FormatJobListSheet()
 
     ws.Cells.Clear
 
-    ' タイトル（A1:M1 = COL_LAST_MESSAGE列まで）
-    With ws.Range("A1:M1")
+    ' タイトル（A1:N1 = COL_LAST_MESSAGE列まで）
+    With ws.Range("A1:N1")
         .Merge
         .Value = "ジョブネット一覧"
         .Font.Size = 14
@@ -246,9 +247,10 @@ Private Sub FormatJobListSheet()
     ws.Rows(2).RowHeight = 35
 
     ' 説明（3行目）
-    ws.Range("A3").Value = "実行するジョブの「順序」列に数字（1, 2, 3...）を入力してください。順序が入っているジョブを1番から順に実行します。保留中のジョブは実行時に自動で保留解除されます。"
+    ws.Range("A3").Value = "実行するジョブの「選択」列をダブルクリックしてチェックを入れてください。チェックした順番で「順序」列に自動的に番号が振られます。保留中のジョブは実行時に自動で保留解除されます。"
 
     ' ヘッダー
+    ws.Cells(ROW_JOBLIST_HEADER, COL_SELECT).Value = "選択"
     ws.Cells(ROW_JOBLIST_HEADER, COL_ORDER).Value = "順序"
     ws.Cells(ROW_JOBLIST_HEADER, COL_UNIT_TYPE).Value = "種別"
     ws.Cells(ROW_JOBLIST_HEADER, COL_JOBNET_PATH).Value = "ユニットパス"
@@ -263,7 +265,7 @@ Private Sub FormatJobListSheet()
     ws.Cells(ROW_JOBLIST_HEADER, COL_LAST_END_TIME).Value = "終了時刻"
     ws.Cells(ROW_JOBLIST_HEADER, COL_LAST_MESSAGE).Value = "ログパス"
 
-    With ws.Range(ws.Cells(ROW_JOBLIST_HEADER, COL_ORDER), ws.Cells(ROW_JOBLIST_HEADER, COL_LAST_MESSAGE))
+    With ws.Range(ws.Cells(ROW_JOBLIST_HEADER, COL_SELECT), ws.Cells(ROW_JOBLIST_HEADER, COL_LAST_MESSAGE))
         .Font.Bold = True
         .Interior.Color = RGB(79, 129, 189)
         .Font.Color = RGB(255, 255, 255)
@@ -272,6 +274,7 @@ Private Sub FormatJobListSheet()
     End With
 
     ' 列幅調整
+    ws.Columns(COL_SELECT).ColumnWidth = 6
     ws.Columns(COL_ORDER).ColumnWidth = 6
     ws.Columns(COL_UNIT_TYPE).ColumnWidth = 12
     ws.Columns(COL_JOBNET_PATH).ColumnWidth = 50
@@ -286,13 +289,13 @@ Private Sub FormatJobListSheet()
     ws.Columns(COL_LAST_END_TIME).ColumnWidth = 18
     ws.Columns(COL_LAST_MESSAGE).ColumnWidth = 60
 
-    ' F〜H列（スクリプト、パラメーター、ワークパス）をグループ化
-    ws.Columns("F:H").Group
+    ' G〜I列（スクリプト、パラメーター、ワークパス）をグループ化
+    ws.Columns("G:I").Group
     ' 初期状態は折りたたみ
     ws.Outline.ShowLevels ColumnLevels:=1
 
     ' フィルター設定
-    ws.Range(ws.Cells(ROW_JOBLIST_HEADER, COL_ORDER), ws.Cells(ROW_JOBLIST_HEADER, COL_LAST_MESSAGE)).AutoFilter
+    ws.Range(ws.Cells(ROW_JOBLIST_HEADER, COL_SELECT), ws.Cells(ROW_JOBLIST_HEADER, COL_LAST_MESSAGE)).AutoFilter
 
     ' ウィンドウ枠の固定（ヘッダー行の下で固定、列固定なし）
     ws.Activate

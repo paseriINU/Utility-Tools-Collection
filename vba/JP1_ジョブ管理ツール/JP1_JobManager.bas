@@ -88,8 +88,8 @@ Public Sub GetJobList()
     lastDataRow = wsJobList.Cells(wsJobList.Rows.Count, COL_JOBNET_PATH).End(xlUp).row
     If lastDataRow >= ROW_JOBLIST_DATA_START Then
         ' ヘッダー行からデータ最終行までを範囲としてオートフィルタを設定
-        wsJobList.Range(wsJobList.Cells(ROW_JOBLIST_HEADER, COL_ORDER), wsJobList.Cells(lastDataRow, COL_LAST_MESSAGE)).AutoFilter _
-            Field:=COL_UNIT_TYPE, Criteria1:="ジョブネット"
+        wsJobList.Range(wsJobList.Cells(ROW_JOBLIST_HEADER, COL_SELECT), wsJobList.Cells(lastDataRow, COL_LAST_MESSAGE)).AutoFilter _
+            Field:=COL_UNIT_TYPE - COL_SELECT + 1, Criteria1:="ジョブネット"
     End If
 
     MsgBox "ジョブ一覧の取得が完了しました。" & vbCrLf & _
@@ -550,7 +550,7 @@ Private Function ParseJobListResult(result As String, rootPath As String) As Boo
     Dim lastRow As Long
     lastRow = ws.Cells(ws.Rows.Count, COL_JOBNET_PATH).End(xlUp).Row
     If lastRow >= ROW_JOBLIST_DATA_START Then
-        ws.Range(ws.Cells(ROW_JOBLIST_DATA_START, COL_ORDER), ws.Cells(lastRow, COL_LAST_MESSAGE)).Clear
+        ws.Range(ws.Cells(ROW_JOBLIST_DATA_START, COL_SELECT), ws.Cells(lastRow, COL_LAST_MESSAGE)).Clear
     End If
 
     ' 結果をパース
@@ -668,6 +668,7 @@ Private Function ParseJobListResult(result As String, rootPath As String) As Boo
                 ' ty=が存在し、グループ以外の場合に一覧に追加
                 ' グループ(g, mg)は実行できないため除外
                 If unitType <> "" And currentFullPath <> "" And unitType <> "g" And unitType <> "mg" Then
+                    ws.Cells(currentRow, COL_SELECT).Value = ""
                     ws.Cells(currentRow, COL_ORDER).Value = ""
                     ' 種別を設定
                     ws.Cells(currentRow, COL_UNIT_TYPE).Value = unitTypeDisplay
@@ -691,20 +692,23 @@ Private Function ParseJobListResult(result As String, rootPath As String) As Boo
                     If isHold Then
                         ws.Cells(currentRow, COL_HOLD).Value = "保留中"
                         ws.Cells(currentRow, COL_HOLD).HorizontalAlignment = xlCenter
-                        ws.Range(ws.Cells(currentRow, COL_ORDER), ws.Cells(currentRow, COL_LAST_MESSAGE)).Interior.Color = RGB(255, 235, 156)
+                        ws.Range(ws.Cells(currentRow, COL_SELECT), ws.Cells(currentRow, COL_LAST_MESSAGE)).Interior.Color = RGB(255, 235, 156)
                         ws.Cells(currentRow, COL_HOLD).Font.Bold = True
                         ws.Cells(currentRow, COL_HOLD).Font.Color = RGB(156, 87, 0)
                     Else
                         ws.Cells(currentRow, COL_HOLD).Value = ""
                     End If
 
-                    ' 順序列の書式
+                    ' 選択列・順序列の書式
+                    With ws.Cells(currentRow, COL_SELECT)
+                        .HorizontalAlignment = xlCenter
+                    End With
                     With ws.Cells(currentRow, COL_ORDER)
                         .HorizontalAlignment = xlCenter
                     End With
 
                     ' 罫線
-                    ws.Range(ws.Cells(currentRow, COL_ORDER), ws.Cells(currentRow, COL_LAST_MESSAGE)).Borders.LineStyle = xlContinuous
+                    ws.Range(ws.Cells(currentRow, COL_SELECT), ws.Cells(currentRow, COL_LAST_MESSAGE)).Borders.LineStyle = xlContinuous
                 End If
 
                 ' スタックをクリアしてポップ
@@ -2093,7 +2097,7 @@ Private Sub UpdateJobListStatus(ByVal row As Long, ByVal result As Object)
             ws.Cells(row, COL_HOLD).Font.Bold = False
             ws.Cells(row, COL_HOLD).Font.Color = RGB(0, 0, 0)
             ' 行のハイライトを解除
-            ws.Range(ws.Cells(row, COL_ORDER), ws.Cells(row, COL_LAST_MESSAGE)).Interior.ColorIndex = xlNone
+            ws.Range(ws.Cells(row, COL_SELECT), ws.Cells(row, COL_LAST_MESSAGE)).Interior.ColorIndex = xlNone
         End If
     End If
 
@@ -2123,13 +2127,13 @@ Public Sub ClearJobList()
     lastRow = ws.Cells(ws.Rows.Count, COL_JOBNET_PATH).End(xlUp).Row
 
     If lastRow >= ROW_JOBLIST_DATA_START Then
-        ' A列（順序）をクリア
-        ws.Range(ws.Cells(ROW_JOBLIST_DATA_START, COL_ORDER), ws.Cells(lastRow, COL_ORDER)).ClearContents
+        ' A列（選択）とB列（順序）をクリア
+        ws.Range(ws.Cells(ROW_JOBLIST_DATA_START, COL_SELECT), ws.Cells(lastRow, COL_ORDER)).ClearContents
 
-        ' J〜O列（実行結果・ログパス）をクリア
+        ' 実行結果・ログパス列をクリア
         ws.Range(ws.Cells(ROW_JOBLIST_DATA_START, COL_LAST_STATUS), ws.Cells(lastRow, COL_LAST_MESSAGE)).ClearContents
 
-        ' ハイパーリンクも削除（N列）
+        ' ハイパーリンクも削除
         On Error Resume Next
         ws.Range(ws.Cells(ROW_JOBLIST_DATA_START, COL_LAST_MESSAGE), ws.Cells(lastRow, COL_LAST_MESSAGE)).Hyperlinks.Delete
         On Error GoTo 0
@@ -2139,12 +2143,12 @@ Public Sub ClearJobList()
         For row = ROW_JOBLIST_DATA_START To lastRow
             If ws.Cells(row, COL_HOLD).Value = "保留中" Then
                 ' 保留行は黄色ハイライトを再適用
-                ws.Range(ws.Cells(row, COL_ORDER), ws.Cells(row, COL_LAST_MESSAGE)).Interior.Color = RGB(255, 235, 156)
+                ws.Range(ws.Cells(row, COL_SELECT), ws.Cells(row, COL_LAST_MESSAGE)).Interior.Color = RGB(255, 235, 156)
                 ws.Cells(row, COL_HOLD).Font.Bold = True
                 ws.Cells(row, COL_HOLD).Font.Color = RGB(156, 87, 0)
             Else
                 ' 保留中でない行の背景色をクリア
-                ws.Range(ws.Cells(row, COL_ORDER), ws.Cells(row, COL_LAST_MESSAGE)).Interior.ColorIndex = xlNone
+                ws.Range(ws.Cells(row, COL_SELECT), ws.Cells(row, COL_LAST_MESSAGE)).Interior.ColorIndex = xlNone
             End If
         Next row
 
@@ -2152,11 +2156,138 @@ Public Sub ClearJobList()
         If ws.AutoFilterMode Then
             ws.AutoFilterMode = False
         End If
-        ws.Range(ws.Cells(ROW_JOBLIST_HEADER, COL_ORDER), ws.Cells(lastRow, COL_LAST_MESSAGE)).AutoFilter _
-            Field:=COL_UNIT_TYPE, Criteria1:="ジョブネット"
+        ws.Range(ws.Cells(ROW_JOBLIST_HEADER, COL_SELECT), ws.Cells(lastRow, COL_LAST_MESSAGE)).AutoFilter _
+            Field:=COL_UNIT_TYPE - COL_SELECT + 1, Criteria1:="ジョブネット"
     End If
 
     MsgBox "実行結果をクリアしました。", vbInformation
+End Sub
+
+'==============================================================================
+' 選択列のトグル（ダブルクリック用）
+'==============================================================================
+Public Sub ToggleJobSelection()
+    Dim ws As Worksheet
+    Set ws = Worksheets(SHEET_JOBLIST)
+
+    Dim cell As Range
+    Set cell = Selection
+
+    ' 選択列（A列）かつデータ行のみ処理
+    If cell.Column <> COL_SELECT Then Exit Sub
+    If cell.Row < ROW_JOBLIST_DATA_START Then Exit Sub
+
+    ' 複数セル選択の場合は最初のセルのみ処理
+    Set cell = cell.Cells(1, 1)
+
+    ' ジョブパスが空の行は無視
+    If ws.Cells(cell.Row, COL_JOBNET_PATH).Value = "" Then Exit Sub
+
+    Application.EnableEvents = False
+
+    ' チェックのトグル
+    If cell.Value = "" Then
+        ' チェックを入れる
+        cell.Value = ChrW(&H2713)  ' ✓マーク
+        cell.HorizontalAlignment = xlCenter
+        cell.Font.Color = RGB(0, 128, 0)  ' 緑色
+        cell.Font.Bold = True
+
+        ' 順序を自動採番（現在の最大値+1）
+        Dim maxOrder As Long
+        maxOrder = GetMaxOrderNumber()
+        ws.Cells(cell.Row, COL_ORDER).Value = maxOrder + 1
+    Else
+        ' チェックを外す
+        cell.Value = ""
+        ws.Cells(cell.Row, COL_ORDER).Value = ""
+
+        ' 順序を再採番
+        RenumberJobOrder
+    End If
+
+    Application.EnableEvents = True
+End Sub
+
+'==============================================================================
+' 現在の最大順序番号を取得
+'==============================================================================
+Private Function GetMaxOrderNumber() As Long
+    Dim ws As Worksheet
+    Set ws = Worksheets(SHEET_JOBLIST)
+
+    Dim lastRow As Long
+    lastRow = ws.Cells(ws.Rows.Count, COL_JOBNET_PATH).End(xlUp).Row
+
+    Dim maxOrder As Long
+    maxOrder = 0
+
+    Dim row As Long
+    For row = ROW_JOBLIST_DATA_START To lastRow
+        Dim orderValue As Variant
+        orderValue = ws.Cells(row, COL_ORDER).Value
+        If IsNumeric(orderValue) And orderValue <> "" Then
+            If CLng(orderValue) > maxOrder Then
+                maxOrder = CLng(orderValue)
+            End If
+        End If
+    Next row
+
+    GetMaxOrderNumber = maxOrder
+End Function
+
+'==============================================================================
+' 順序番号を再採番（チェックが外された時に呼び出し）
+'==============================================================================
+Private Sub RenumberJobOrder()
+    Dim ws As Worksheet
+    Set ws = Worksheets(SHEET_JOBLIST)
+
+    Dim lastRow As Long
+    lastRow = ws.Cells(ws.Rows.Count, COL_JOBNET_PATH).End(xlUp).Row
+
+    ' 順序が入っている行を収集（順序番号順）
+    Dim orderedRows As New Collection
+    Dim row As Long
+    For row = ROW_JOBLIST_DATA_START To lastRow
+        Dim orderValue As Variant
+        orderValue = ws.Cells(row, COL_ORDER).Value
+        If IsNumeric(orderValue) And orderValue <> "" Then
+            Dim item As Object
+            Set item = CreateObject("Scripting.Dictionary")
+            item("Row") = row
+            item("Order") = CLng(orderValue)
+            orderedRows.Add item
+        End If
+    Next row
+
+    ' 順序番号が無い場合は終了
+    If orderedRows.Count = 0 Then Exit Sub
+
+    ' 順序でソート
+    Dim arr() As Variant
+    ReDim arr(1 To orderedRows.Count)
+    Dim i As Long
+    For i = 1 To orderedRows.Count
+        Set arr(i) = orderedRows(i)
+    Next i
+
+    Dim j As Long
+    Dim temp As Object
+    For i = 1 To UBound(arr) - 1
+        For j = i + 1 To UBound(arr)
+            If arr(i)("Order") > arr(j)("Order") Then
+                Set temp = arr(i)
+                Set arr(i) = arr(j)
+                Set arr(j) = temp
+            End If
+        Next j
+    Next i
+
+    ' 1から連番で再採番
+    For i = 1 To UBound(arr)
+        ws.Cells(arr(i)("Row"), COL_ORDER).Value = i
+    Next i
 End Sub
 
 '==============================================================================
