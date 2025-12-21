@@ -2287,6 +2287,10 @@ Private Sub ToggleCheckMark(row As Long)
 
         ' 行全体に水色の背景色を設定
         ws.Range(ws.Cells(row, COL_SELECT), ws.Cells(row, COL_LAST_MESSAGE)).Interior.Color = RGB(221, 235, 247)
+        ' 保留中の場合は保留列のみ黄色を優先適用
+        If ws.Cells(row, COL_HOLD).Value = "保留中" Then
+            ws.Cells(row, COL_HOLD).Interior.Color = RGB(255, 235, 156)
+        End If
     End If
 
     ' セルの書式を中央揃えに
