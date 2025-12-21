@@ -141,6 +141,7 @@ try {
         $cmdArgs = @(
             "-F", $Config.SchedulerService
             "-B", $type
+            "-g", "001"  # 最新の実行世代を指定
             $Config.JobPath
         )
 
