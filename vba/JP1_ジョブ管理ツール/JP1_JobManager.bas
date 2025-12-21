@@ -2270,6 +2270,13 @@ Private Sub ToggleCheckMark(row As Long)
         ' 順序をクリアして再採番
         ws.Cells(row, COL_ORDER).Value = ""
         RenumberJobOrder
+
+        ' 背景色を元に戻す（保留中の場合は黄色、それ以外はなし）
+        If ws.Cells(row, COL_HOLD).Value = "保留中" Then
+            ws.Range(ws.Cells(row, COL_SELECT), ws.Cells(row, COL_LAST_MESSAGE)).Interior.Color = RGB(255, 235, 156)
+        Else
+            ws.Range(ws.Cells(row, COL_SELECT), ws.Cells(row, COL_LAST_MESSAGE)).Interior.ColorIndex = xlNone
+        End If
     Else
         ' チェックを入れる（☐ または空白）
         ws.Cells(row, COL_SELECT).Value = ChrW(&H2611)  ' ☑
@@ -2277,6 +2284,9 @@ Private Sub ToggleCheckMark(row As Long)
         Dim maxOrder As Long
         maxOrder = GetMaxOrderNumber()
         ws.Cells(row, COL_ORDER).Value = maxOrder + 1
+
+        ' 行全体に水色の背景色を設定
+        ws.Range(ws.Cells(row, COL_SELECT), ws.Cells(row, COL_LAST_MESSAGE)).Interior.Color = RGB(221, 235, 247)
     End If
 
     ' セルの書式を中央揃えに
