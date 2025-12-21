@@ -1,6 +1,6 @@
 <# :
 @echo off
-chcp 932 >nul
+chcp 65001 >nul
 title JP1 ジョブログ取得ツール
 setlocal
 
@@ -157,10 +157,11 @@ Write-Host ""
 try {
     # ajsshow -g 1 -i '%## %I' でジョブ名とジョブ番号を取得
     # %## = ジョブ名、%I = ジョブ番号
+    $formatStr = '%## %I'
     $cmdArgs = @(
         "-F", $Config.SchedulerService
         "-g", "1"
-        "-i", "%## %I"
+        "-i", $formatStr
         $Config.JobPath
     )
 
