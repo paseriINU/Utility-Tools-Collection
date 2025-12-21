@@ -822,9 +822,6 @@ NextLine:
         Exit Function
     End If
 
-    ' チェックボックスを追加
-    AddCheckboxesToJobList
-
     ' 成功
     ParseJobListResult = True
 End Function
@@ -2192,15 +2189,8 @@ Public Sub ClearJobList()
     lastRow = ws.Cells(ws.Rows.Count, COL_JOBNET_PATH).End(xlUp).Row
 
     If lastRow >= ROW_JOBLIST_DATA_START Then
-        ' チェックボックスのチェック状態をリセット
-        Dim cb As CheckBox
-        For Each cb In ws.CheckBoxes
-            If Left(cb.Name, 7) = "chkRow_" Then
-                cb.Value = xlOff
-            End If
-        Next cb
-
-        ' B列（順序）をクリア（A列はチェックボックスなのでクリアしない）
+        ' 選択列（☑/☐）と順序列をクリア
+        ws.Range(ws.Cells(ROW_JOBLIST_DATA_START, COL_SELECT), ws.Cells(lastRow, COL_SELECT)).ClearContents
         ws.Range(ws.Cells(ROW_JOBLIST_DATA_START, COL_ORDER), ws.Cells(lastRow, COL_ORDER)).ClearContents
 
         ' 実行結果・ログパス列をクリア
@@ -2237,192 +2227,69 @@ Public Sub ClearJobList()
 End Sub
 
 '==============================================================================
-' チェックボックスのクリック時処理
+' ジョブ一覧のダブルクリック時処理（シートモジュールから呼び出される）
+' 選択列（COL_SELECT）をダブルクリックすると☑/☐を切り替え
 '==============================================================================
-Public Sub OnCheckboxClick()
-    On Error GoTo ErrorHandler
+Public Sub OnJobListDoubleClick(row As Long, col As Long, ByRef Cancel As Boolean)
+    ' 選択列以外は通常の編集を許可
+    If col <> COL_SELECT Then Exit Sub
 
-    Dim cb As CheckBox
+    ' ヘッダー行以前は無視
+    If row < ROW_JOBLIST_DATA_START Then Exit Sub
+
     Dim ws As Worksheet
     Set ws = Worksheets(SHEET_JOBLIST)
 
-    ' 呼び出し元のチェックボックスを取得
-    Set cb = ws.CheckBoxes(Application.Caller)
+    ' ジョブパスがない行は無視
+    If ws.Cells(row, COL_JOBNET_PATH).Value = "" Then Exit Sub
 
-    ' チェックボックス名から行番号を取得（"chkRow_5" → 5）
-    Dim row As Long
-    row = CLng(Mid(cb.Name, 8))
+    ' セル編集をキャンセル（重要：これがないとセル内編集モードになる）
+    Cancel = True
+
+    ' チェック状態を切り替え
+    ToggleCheckMark row
+End Sub
+
+'==============================================================================
+' チェックマーク（☑/☐）を切り替え
+'==============================================================================
+Private Sub ToggleCheckMark(row As Long)
+    On Error GoTo ErrorHandler
+
+    Dim ws As Worksheet
+    Set ws = Worksheets(SHEET_JOBLIST)
 
     Application.EnableEvents = False
 
-    If cb.Value = xlOn Then
-        ' チェックを入れた場合：順序を自動採番
+    Dim currentValue As String
+    currentValue = CStr(ws.Cells(row, COL_SELECT).Value)
+
+    If currentValue = ChrW(&H2611) Then  ' ☑ → ☐
+        ' チェックを外す
+        ws.Cells(row, COL_SELECT).Value = ChrW(&H2610)  ' ☐
+        ' 順序をクリアして再採番
+        ws.Cells(row, COL_ORDER).Value = ""
+        RenumberJobOrder
+    Else
+        ' チェックを入れる（☐ または空白）
+        ws.Cells(row, COL_SELECT).Value = ChrW(&H2611)  ' ☑
+        ' 順序を自動採番
         Dim maxOrder As Long
         maxOrder = GetMaxOrderNumber()
         ws.Cells(row, COL_ORDER).Value = maxOrder + 1
-    Else
-        ' チェックを外した場合：順序をクリアして再採番
-        ws.Cells(row, COL_ORDER).Value = ""
-        RenumberJobOrder
     End If
+
+    ' セルの書式を中央揃えに
+    With ws.Cells(row, COL_SELECT)
+        .HorizontalAlignment = xlCenter
+        .Font.Size = 14
+    End With
 
     Application.EnableEvents = True
     Exit Sub
 
 ErrorHandler:
     Application.EnableEvents = True
-End Sub
-
-'==============================================================================
-' ジョブ一覧にチェックボックスを追加
-' 表示されている行にのみチェックボックスを作成する
-'==============================================================================
-Public Sub AddCheckboxesToJobList()
-    Dim ws As Worksheet
-    Set ws = Worksheets(SHEET_JOBLIST)
-
-    ' 既存のチェックボックスを削除
-    RemoveCheckboxesFromJobList
-
-    Dim lastRow As Long
-    lastRow = ws.Cells(ws.Rows.Count, COL_JOBNET_PATH).End(xlUp).row
-
-    If lastRow < ROW_JOBLIST_DATA_START Then Exit Sub
-
-    Dim row As Long
-    For row = ROW_JOBLIST_DATA_START To lastRow
-        ' ジョブパスがあり、かつ行が表示されている場合のみチェックボックスを追加
-        If ws.Cells(row, COL_JOBNET_PATH).Value <> "" And Not ws.Rows(row).Hidden Then
-            Dim cell As Range
-            Set cell = ws.Cells(row, COL_SELECT)
-
-            ' セルの中央にチェックボックスを配置
-            Dim cb As CheckBox
-            Set cb = ws.CheckBoxes.Add( _
-                Left:=cell.Left + (cell.Width - 14) / 2, _
-                Top:=cell.Top + (cell.RowHeight - 14) / 2, _
-                Width:=14, _
-                Height:=14)
-
-            With cb
-                .Name = "chkRow_" & row
-                .Caption = ""
-                .Value = xlOff
-                .OnAction = "OnCheckboxClick"
-                .Placement = xlMoveAndSize  ' セルに連動して移動・非表示
-            End With
-        End If
-    Next row
-End Sub
-
-'==============================================================================
-' チェックボックスの可視状態を行の表示状態に同期
-' フィルター適用時に呼び出すことでチェックボックスの重なりを防ぐ
-' チェック状態を保持したまま全チェックボックスを再作成する
-'==============================================================================
-Public Sub UpdateCheckboxVisibility()
-    ' 二重実行防止用の静的変数
-    Static isUpdating As Boolean
-    If isUpdating Then Exit Sub
-    isUpdating = True
-
-    ' イベントを無効化して再帰呼び出しを防止
-    Application.EnableEvents = False
-    Application.ScreenUpdating = False
-
-    On Error GoTo CleanUp
-
-    Dim ws As Worksheet
-    Set ws = Worksheets(SHEET_JOBLIST)
-
-    ' 現在のチェック状態を保存（行番号 -> チェック状態）
-    Dim checkedRows As Object
-    Set checkedRows = CreateObject("Scripting.Dictionary")
-
-    Dim cb As CheckBox
-    For Each cb In ws.CheckBoxes
-        If Left(cb.Name, 7) = "chkRow_" Then
-            Dim savedRow As Long
-            savedRow = CLng(Mid(cb.Name, 8))
-            If cb.Value = xlOn Then
-                checkedRows(savedRow) = True
-            End If
-        End If
-    Next cb
-
-    ' 全チェックボックスを削除
-    RemoveCheckboxesFromJobList
-
-    ' チェックボックスを再作成（可視行のみ）
-    Dim lastRow As Long
-    lastRow = ws.Cells(ws.Rows.Count, COL_JOBNET_PATH).End(xlUp).row
-
-    If lastRow < ROW_JOBLIST_DATA_START Then GoTo CleanUp
-
-    Dim row As Long
-    For row = ROW_JOBLIST_DATA_START To lastRow
-        ' ジョブパスがあり、かつ行が表示されている場合のみ
-        If ws.Cells(row, COL_JOBNET_PATH).Value <> "" And Not ws.Rows(row).Hidden Then
-            Dim cell As Range
-            Set cell = ws.Cells(row, COL_SELECT)
-
-            Set cb = ws.CheckBoxes.Add( _
-                Left:=cell.Left + (cell.Width - 14) / 2, _
-                Top:=cell.Top + (cell.RowHeight - 14) / 2, _
-                Width:=14, _
-                Height:=14)
-
-            With cb
-                .Name = "chkRow_" & row
-                .Caption = ""
-                ' 以前チェックされていた行は再チェック
-                If checkedRows.Exists(row) Then
-                    .Value = xlOn
-                Else
-                    .Value = xlOff
-                End If
-                .OnAction = "OnCheckboxClick"
-                .Placement = xlMoveAndSize
-            End With
-        End If
-    Next row
-
-CleanUp:
-    Application.ScreenUpdating = True
-    Application.EnableEvents = True
-    isUpdating = False
-End Sub
-
-'==============================================================================
-' ジョブ一覧のチェックボックスを削除
-'==============================================================================
-Public Sub RemoveCheckboxesFromJobList()
-    On Error Resume Next
-    Dim ws As Worksheet
-    Set ws = Worksheets(SHEET_JOBLIST)
-
-    ' すべてのchkRow_チェックボックスを削除するまで繰り返す
-    Dim hasCheckbox As Boolean
-    Dim maxRetry As Long
-    maxRetry = 10  ' 無限ループ防止
-
-    Do
-        hasCheckbox = False
-        Dim i As Long
-        For i = ws.CheckBoxes.Count To 1 Step -1
-            If Left(ws.CheckBoxes(i).Name, 7) = "chkRow_" Then
-                ws.CheckBoxes(i).Delete
-                hasCheckbox = True
-            End If
-        Next i
-
-        ' Excelの内部処理を完了させる
-        DoEvents
-
-        maxRetry = maxRetry - 1
-    Loop While hasCheckbox And maxRetry > 0
-
-    On Error GoTo 0
 End Sub
 
 

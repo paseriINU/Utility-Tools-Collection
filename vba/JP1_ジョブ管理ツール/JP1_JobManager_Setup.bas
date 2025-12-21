@@ -247,10 +247,10 @@ Private Sub FormatJobListSheet()
     ws.Rows(2).RowHeight = 35
 
     ' 説明（3行目）
-    ws.Range("A3").Value = "「選択」列のチェックボックスをクリックすると「順序」列に自動採番されます。順序は手動でも変更可能です（1から連番で入力）。保留中のジョブは実行時に自動で保留解除されます。"
+    ws.Range("A3").Value = "「選択」列をダブルクリックすると☑/☐が切り替わり、「順序」列に自動採番されます。順序は手動でも変更可能です（1から連番で入力）。保留中のジョブは実行時に自動で保留解除されます。"
 
-    ' シートモジュールにWorksheet_Calculateイベントを追加（フィルター操作後のチェックボックス自動更新用）
-    AddWorksheetCalculateEvent ws
+    ' シートモジュールにWorksheet_BeforeDoubleClickイベントを追加（セル編集をキャンセルしてチェック切り替え）
+    AddWorksheetDoubleClickEvent ws
 
     ' ヘッダー
     ws.Cells(ROW_JOBLIST_HEADER, COL_SELECT).Value = "選択"
@@ -417,10 +417,10 @@ Private Sub AddButton(ws As Worksheet, left As Double, top As Double, width As D
 End Sub
 
 '==============================================================================
-' シートモジュールにWorksheet_Calculateイベントを追加
-' フィルター操作後にチェックボックスを自動更新
+' シートモジュールにWorksheet_BeforeDoubleClickイベントを追加
+' ダブルクリック時にセル編集をキャンセルしてチェック切り替え
 '==============================================================================
-Private Sub AddWorksheetCalculateEvent(ws As Worksheet)
+Private Sub AddWorksheetDoubleClickEvent(ws As Worksheet)
     On Error Resume Next
 
     ' VBAプロジェクトへのアクセスを確認
@@ -441,19 +441,19 @@ Private Sub AddWorksheetCalculateEvent(ws As Worksheet)
     Dim existingCode As String
     existingCode = sheetModule.Lines(1, sheetModule.CountOfLines)
 
-    If InStr(existingCode, "Private Sub Worksheet_Calculate") > 0 Then
+    If InStr(existingCode, "Private Sub Worksheet_BeforeDoubleClick") > 0 Then
         ' 既に追加済み
         Exit Sub
     End If
 
-    ' Worksheet_Calculateイベントコードを追加
-    ' フィルター操作後に自動的にトリガーされる
+    ' Worksheet_BeforeDoubleClickイベントコードを追加
+    ' ダブルクリック時にセル編集をキャンセルしてチェック切り替え
     Dim eventCode As String
     eventCode = vbCrLf & _
-        "Private Sub Worksheet_Calculate()" & vbCrLf & _
-        "    ' フィルター操作後にチェックボックスを自動更新" & vbCrLf & _
+        "Private Sub Worksheet_BeforeDoubleClick(ByVal Target As Range, Cancel As Boolean)" & vbCrLf & _
+        "    ' 選択列のダブルクリックでチェック切り替え" & vbCrLf & _
         "    On Error Resume Next" & vbCrLf & _
-        "    UpdateCheckboxVisibility" & vbCrLf & _
+        "    OnJobListDoubleClick Target.Row, Target.Column, Cancel" & vbCrLf & _
         "    On Error GoTo 0" & vbCrLf & _
         "End Sub" & vbCrLf
 
