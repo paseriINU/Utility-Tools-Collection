@@ -2275,6 +2275,7 @@ End Sub
 
 '==============================================================================
 ' ジョブ一覧にチェックボックスを追加
+' 表示されている行にのみチェックボックスを作成する
 '==============================================================================
 Public Sub AddCheckboxesToJobList()
     Dim ws As Worksheet
@@ -2290,8 +2291,8 @@ Public Sub AddCheckboxesToJobList()
 
     Dim row As Long
     For row = ROW_JOBLIST_DATA_START To lastRow
-        ' ジョブパスがある行のみチェックボックスを追加
-        If ws.Cells(row, COL_JOBNET_PATH).Value <> "" Then
+        ' ジョブパスがあり、かつ行が表示されている場合のみチェックボックスを追加
+        If ws.Cells(row, COL_JOBNET_PATH).Value <> "" And Not ws.Rows(row).Hidden Then
             Dim cell As Range
             Set cell = ws.Cells(row, COL_SELECT)
 
@@ -2312,9 +2313,6 @@ Public Sub AddCheckboxesToJobList()
             End With
         End If
     Next row
-
-    ' チェックボックスの可視状態を更新
-    UpdateCheckboxVisibility
 End Sub
 
 '==============================================================================
@@ -2403,14 +2401,27 @@ Public Sub RemoveCheckboxesFromJobList()
     Dim ws As Worksheet
     Set ws = Worksheets(SHEET_JOBLIST)
 
-    ' For Eachでループ中にDeleteするとコレクションが変更されて
-    ' すべて削除されない場合があるため、逆順で削除する
-    Dim i As Long
-    For i = ws.CheckBoxes.Count To 1 Step -1
-        If Left(ws.CheckBoxes(i).Name, 7) = "chkRow_" Then
-            ws.CheckBoxes(i).Delete
-        End If
-    Next i
+    ' すべてのchkRow_チェックボックスを削除するまで繰り返す
+    Dim hasCheckbox As Boolean
+    Dim maxRetry As Long
+    maxRetry = 10  ' 無限ループ防止
+
+    Do
+        hasCheckbox = False
+        Dim i As Long
+        For i = ws.CheckBoxes.Count To 1 Step -1
+            If Left(ws.CheckBoxes(i).Name, 7) = "chkRow_" Then
+                ws.CheckBoxes(i).Delete
+                hasCheckbox = True
+            End If
+        Next i
+
+        ' Excelの内部処理を完了させる
+        DoEvents
+
+        maxRetry = maxRetry - 1
+    Loop While hasCheckbox And maxRetry > 0
+
     On Error GoTo 0
 End Sub
 
