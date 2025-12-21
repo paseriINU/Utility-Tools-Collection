@@ -2403,12 +2403,14 @@ Public Sub RemoveCheckboxesFromJobList()
     Dim ws As Worksheet
     Set ws = Worksheets(SHEET_JOBLIST)
 
-    Dim cb As CheckBox
-    For Each cb In ws.CheckBoxes
-        If Left(cb.Name, 7) = "chkRow_" Then
-            cb.Delete
+    ' For Eachでループ中にDeleteするとコレクションが変更されて
+    ' すべて削除されない場合があるため、逆順で削除する
+    Dim i As Long
+    For i = ws.CheckBoxes.Count To 1 Step -1
+        If Left(ws.CheckBoxes(i).Name, 7) = "chkRow_" Then
+            ws.CheckBoxes(i).Delete
         End If
-    Next cb
+    Next i
     On Error GoTo 0
 End Sub
 
