@@ -2320,32 +2320,65 @@ End Sub
 '==============================================================================
 ' チェックボックスの可視状態を行の表示状態に同期
 ' フィルター適用時に呼び出すことでチェックボックスの重なりを防ぐ
+' チェック状態を保持したまま全チェックボックスを再作成する
 '==============================================================================
 Public Sub UpdateCheckboxVisibility()
     On Error Resume Next
     Dim ws As Worksheet
     Set ws = Worksheets(SHEET_JOBLIST)
 
+    ' 現在のチェック状態を保存（行番号 -> チェック状態）
+    Dim checkedRows As Object
+    Set checkedRows = CreateObject("Scripting.Dictionary")
+
     Dim cb As CheckBox
     For Each cb In ws.CheckBoxes
         If Left(cb.Name, 7) = "chkRow_" Then
-            ' チェックボックス名から行番号を取得
-            Dim row As Long
-            row = CLng(Mid(cb.Name, 8))
-
-            ' 行が非表示かどうかをチェック
-            If ws.Rows(row).Hidden Then
-                cb.Visible = False
-            Else
-                cb.Visible = True
-                ' 位置を再調整（フィルター後のずれ対策）
-                Dim cell As Range
-                Set cell = ws.Cells(row, COL_SELECT)
-                cb.Left = cell.Left + (cell.Width - 14) / 2
-                cb.Top = cell.Top + (cell.RowHeight - 14) / 2
+            Dim savedRow As Long
+            savedRow = CLng(Mid(cb.Name, 8))
+            If cb.Value = xlOn Then
+                checkedRows(savedRow) = True
             End If
         End If
     Next cb
+
+    ' 全チェックボックスを削除
+    RemoveCheckboxesFromJobList
+
+    ' チェックボックスを再作成（可視行のみ）
+    Dim lastRow As Long
+    lastRow = ws.Cells(ws.Rows.Count, COL_JOBNET_PATH).End(xlUp).row
+
+    If lastRow < ROW_JOBLIST_DATA_START Then Exit Sub
+
+    Dim row As Long
+    For row = ROW_JOBLIST_DATA_START To lastRow
+        ' ジョブパスがあり、かつ行が表示されている場合のみ
+        If ws.Cells(row, COL_JOBNET_PATH).Value <> "" And Not ws.Rows(row).Hidden Then
+            Dim cell As Range
+            Set cell = ws.Cells(row, COL_SELECT)
+
+            Set cb = ws.CheckBoxes.Add( _
+                Left:=cell.Left + (cell.Width - 14) / 2, _
+                Top:=cell.Top + (cell.RowHeight - 14) / 2, _
+                Width:=14, _
+                Height:=14)
+
+            With cb
+                .Name = "chkRow_" & row
+                .Caption = ""
+                ' 以前チェックされていた行は再チェック
+                If checkedRows.Exists(row) Then
+                    .Value = xlOn
+                Else
+                    .Value = xlOff
+                End If
+                .OnAction = "OnCheckboxClick"
+                .Placement = xlMoveAndSize
+            End With
+        End If
+    Next row
+
     On Error GoTo 0
 End Sub
 
