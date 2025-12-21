@@ -75,10 +75,10 @@ $ajsshowPath = $null
 $jpqjobgetPath = $null
 
 $searchPaths = @(
-    "C:\Program Files\HITACHI\JP1AJS3\bin",
-    "C:\Program Files (x86)\HITACHI\JP1AJS3\bin",
+    "C:\Program Files (x86)\Hitachi\JP1AJS2\bin",
     "C:\Program Files\Hitachi\JP1AJS2\bin",
-    "C:\Program Files (x86)\Hitachi\JP1AJS2\bin"
+    "C:\Program Files (x86)\HITACHI\JP1AJS3\bin",
+    "C:\Program Files\HITACHI\JP1AJS3\bin"
 )
 
 foreach ($basePath in $searchPaths) {
