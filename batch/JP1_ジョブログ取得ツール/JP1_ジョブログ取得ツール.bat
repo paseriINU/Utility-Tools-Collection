@@ -157,20 +157,18 @@ Write-Host ""
 try {
     # ajsshow -g 1 -i '%## %I' でジョブ名とジョブ番号を取得
     # %## = ジョブ名、%I = ジョブ番号
-    $formatStr = '%## %I'
-    $cmdArgs = @(
-        "-F", $Config.SchedulerService
-        "-g", "1"
-        "-i", $formatStr
-        $Config.JobPath
-    )
-
+    # cmd.exe経由で実行（Shift_JIS環境で動作させるため）
+    $authStr = ""
     if ($authParams.Count -gt 0) {
-        $cmdArgs = $authParams + $cmdArgs
+        $authStr = "-u $($Config.JP1User) -p $($Config.JP1Password) "
     }
 
-    Write-Host "実行コマンド: ajsshow $($cmdArgs -join ' ')" -ForegroundColor Gray
-    $result = & $ajsshowPath @cmdArgs 2>&1
+    # cmd.exeでは%を%%にエスケープする必要がある
+    $cmdLine = "`"$ajsshowPath`" $authStr-F $($Config.SchedulerService) -g 1 -i `"%%## %%I`" `"$($Config.JobPath)`""
+    Write-Host "実行コマンド: $cmdLine" -ForegroundColor Gray
+
+    # cmd.exe経由でShift_JIS環境で実行
+    $result = cmd.exe /c "chcp 932 >nul && $cmdLine" 2>&1
     $exitCode = $LASTEXITCODE
 
     Write-Host "ajsshow結果:" -ForegroundColor Gray
