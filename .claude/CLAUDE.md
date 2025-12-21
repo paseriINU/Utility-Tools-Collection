@@ -196,6 +196,36 @@ PR URL: https://github.com/user/repo/pull/123
 - mainブランチへの直接プッシュは禁止
 - 必ずPRを通してマージすること
 
+### PRマージ後のブランチ削除（必須）
+
+**重要**: PRがマージされたら、**不要になったリモートブランチを削除**すること。
+
+1. **リモートブランチの削除**
+   - `git push origin --delete [ブランチ名]`
+
+2. **ローカルブランチの削除**
+   - `git branch -d [ブランチ名]`
+
+3. **mainブランチへ切り替え**
+   - `git checkout main && git pull`
+
+**例**:
+```
+[PRマージ後]
+リモートブランチを削除します...
+
+$ git push origin --delete claude/feature-name-1234567890
+$ git branch -d claude/feature-name-1234567890
+$ git checkout main && git pull
+
+✅ ブランチ削除完了
+```
+
+**理由**:
+- マージ済みブランチが残るとリポジトリが煩雑になる
+- `git branch -a` で不要なブランチが表示されなくなる
+- リポジトリの整理・管理が容易になる
+
 ## Project Overview
 
 このリポジトリは個人の開発効率化・業務自動化のための便利ツール集です。言語・用途別に整理されたスクリプトとマクロを管理しています。
