@@ -730,7 +730,7 @@ Private Function ParseJobListResult(result As String, rootPath As String) As Boo
                 ' ty=が存在し、グループ以外の場合に一覧に追加
                 ' グループ(g, mg)は実行できないため除外
                 If unitType <> "" And currentFullPath <> "" And unitType <> "g" And unitType <> "mg" Then
-                    ws.Cells(currentRow, COL_SELECT).Value = ""
+                    ws.Cells(currentRow, COL_SELECT).Value = ChrW(&H2610)  ' ☐（空のチェックボックス）
                     ws.Cells(currentRow, COL_ORDER).Value = ""
                     ' 種別を設定
                     ws.Cells(currentRow, COL_UNIT_TYPE).Value = unitTypeDisplay
