@@ -16,10 +16,11 @@ exit /b %EXITCODE%
 .DESCRIPTION
     JP1/AJS3の指定されたジョブの標準出力（スプール）を取得し、
     クリップボードにコピーします。
+    jpqjobgetコマンドを使用してスプールを取得します。
 
 .NOTES
     作成日: 2025-12-21
-    バージョン: 1.0
+    バージョン: 2.0
 
     使い方:
     1. 下記の「設定セクション」を編集
@@ -45,9 +46,6 @@ $Config = @{
     # JP1パスワード（空の場合は実行時に入力、JP1Userが空の場合は不要）
     JP1Password = ""
 
-    # ajsshowコマンドのパス
-    AjsshowPath = "C:\Program Files (x86)\HITACHI\JP1AJS2\bin\ajsshow.exe"
-
     # 取得するスプールの種類（stdout=標準出力、stderr=標準エラー出力、both=両方）
     SpoolType = "stdout"
 
@@ -72,26 +70,61 @@ Write-Host "  JP1 ジョブログ取得ツール" -ForegroundColor Cyan
 Write-Host "================================================================" -ForegroundColor Cyan
 Write-Host ""
 
+#region コマンドパス検索
+$ajsshowPath = $null
+$jpqjobgetPath = $null
+
+$searchPaths = @(
+    "C:\Program Files\HITACHI\JP1AJS3\bin",
+    "C:\Program Files (x86)\HITACHI\JP1AJS3\bin",
+    "C:\Program Files\Hitachi\JP1AJS2\bin",
+    "C:\Program Files (x86)\Hitachi\JP1AJS2\bin"
+)
+
+foreach ($basePath in $searchPaths) {
+    $ajsPath = Join-Path $basePath "ajsshow.exe"
+    $jpqPath = Join-Path $basePath "jpqjobget.exe"
+
+    if ((Test-Path $ajsPath) -and (-not $ajsshowPath)) {
+        $ajsshowPath = $ajsPath
+    }
+    if ((Test-Path $jpqPath) -and (-not $jpqjobgetPath)) {
+        $jpqjobgetPath = $jpqPath
+    }
+}
+
+if (-not $ajsshowPath) {
+    Write-Host "[エラー] ajsshowコマンドが見つかりません" -ForegroundColor Red
+    Write-Host ""
+    Write-Host "以下のパスを確認してください:" -ForegroundColor Yellow
+    foreach ($basePath in $searchPaths) {
+        Write-Host "  - $basePath\ajsshow.exe" -ForegroundColor Gray
+    }
+    exit 1
+}
+
+if (-not $jpqjobgetPath) {
+    Write-Host "[エラー] jpqjobgetコマンドが見つかりません" -ForegroundColor Red
+    Write-Host ""
+    Write-Host "以下のパスを確認してください:" -ForegroundColor Yellow
+    foreach ($basePath in $searchPaths) {
+        Write-Host "  - $basePath\jpqjobget.exe" -ForegroundColor Gray
+    }
+    exit 1
+}
+
+Write-Host "コマンドパス:" -ForegroundColor Yellow
+Write-Host "  ajsshow  : $ajsshowPath" -ForegroundColor White
+Write-Host "  jpqjobget: $jpqjobgetPath" -ForegroundColor White
+Write-Host ""
+#endregion
+
 #region 設定確認
 Write-Host "設定内容:" -ForegroundColor Yellow
 Write-Host "  スケジューラーサービス: $($Config.SchedulerService)" -ForegroundColor White
 Write-Host "  ジョブパス            : $($Config.JobPath)" -ForegroundColor White
 Write-Host "  スプール種類          : $($Config.SpoolType)" -ForegroundColor White
 Write-Host ""
-#endregion
-
-#region コマンドパス確認
-if (-not (Test-Path $Config.AjsshowPath)) {
-    Write-Host "[エラー] ajsshowコマンドが見つかりません" -ForegroundColor Red
-    Write-Host "  パス: $($Config.AjsshowPath)" -ForegroundColor Red
-    Write-Host ""
-    Write-Host "以下のパスを確認してください:" -ForegroundColor Yellow
-    Write-Host "  - C:\Program Files (x86)\HITACHI\JP1AJS2\bin\ajsshow.exe" -ForegroundColor Gray
-    Write-Host "  - C:\Program Files\HITACHI\JP1AJS2\bin\ajsshow.exe" -ForegroundColor Gray
-    Write-Host "  - C:\Program Files\HITACHI\JP1AJS3\bin\ajsshow.exe" -ForegroundColor Gray
-    Write-Host "  - C:\Program Files (x86)\HITACHI\JP1AJS3\bin\ajsshow.exe" -ForegroundColor Gray
-    exit 1
-}
 #endregion
 
 #region JP1認証情報の準備
@@ -114,61 +147,125 @@ if (-not [string]::IsNullOrEmpty($Config.JP1User)) {
 }
 #endregion
 
-#region スプール取得
+#region ジョブ情報の取得（ajsshow）
 Write-Host "========================================" -ForegroundColor Yellow
-Write-Host "ジョブのスプールを取得中..." -ForegroundColor Yellow
+Write-Host "ジョブ情報を取得中..." -ForegroundColor Yellow
 Write-Host "========================================" -ForegroundColor Yellow
 Write-Host ""
 
 try {
-    # ajsshow -B オプションでスプールを取得
-    # -B stdout: 標準出力
-    # -B stderr: 標準エラー出力
+    # ajsshow -g 1 -i '%## %I' でジョブ名とジョブ番号を取得
+    # %## = ジョブ名、%I = ジョブ番号
+    $cmdArgs = @(
+        "-F", $Config.SchedulerService
+        "-g", "1"
+        "-i", "%## %I"
+        $Config.JobPath
+    )
+
+    if ($authParams.Count -gt 0) {
+        $cmdArgs = $authParams + $cmdArgs
+    }
+
+    Write-Host "実行コマンド: ajsshow $($cmdArgs -join ' ')" -ForegroundColor Gray
+    $result = & $ajsshowPath @cmdArgs 2>&1
+    $exitCode = $LASTEXITCODE
+
+    Write-Host "ajsshow結果:" -ForegroundColor Gray
+    $result | ForEach-Object { Write-Host "  $_" -ForegroundColor Gray }
+    Write-Host ""
+
+    if ($exitCode -ne 0) {
+        Write-Host "[エラー] ジョブ情報の取得に失敗しました (終了コード: $exitCode)" -ForegroundColor Red
+        Write-Host ""
+        Write-Host "以下を確認してください:" -ForegroundColor Yellow
+        Write-Host "  - ジョブパスが正しいか: $($Config.JobPath)" -ForegroundColor Yellow
+        Write-Host "  - ジョブが実行済みか" -ForegroundColor Yellow
+        Write-Host "  - JP1ユーザーに権限があるか" -ForegroundColor Yellow
+        exit 1
+    }
+
+    # ジョブ番号を抽出（出力形式: "ジョブ名 ジョブ番号"）
+    $output = ($result | Out-String).Trim()
+    $jobNo = $null
+
+    # 各行を解析してジョブ番号を取得
+    foreach ($line in $output -split "`n") {
+        $line = $line.Trim()
+        if ($line -match '\s+(\d+)\s*$') {
+            $jobNo = $matches[1]
+            break
+        }
+    }
+
+    if (-not $jobNo) {
+        Write-Host "[エラー] ジョブ番号を取得できませんでした" -ForegroundColor Red
+        Write-Host "ajsshow出力: $output" -ForegroundColor Gray
+        exit 1
+    }
+
+    Write-Host "[OK] ジョブ番号: $jobNo" -ForegroundColor Green
+    Write-Host ""
+
+} catch {
+    Write-Host "[エラー] ジョブ情報取得中にエラーが発生しました" -ForegroundColor Red
+    Write-Host "エラー詳細: $($_.Exception.Message)" -ForegroundColor Red
+    exit 1
+}
+#endregion
+
+#region スプール取得（jpqjobget）
+Write-Host "========================================" -ForegroundColor Yellow
+Write-Host "スプールを取得中..." -ForegroundColor Yellow
+Write-Host "========================================" -ForegroundColor Yellow
+Write-Host ""
+
+try {
     $spoolContent = ""
     $spoolResults = @()
+    $tempDir = [System.IO.Path]::GetTempPath()
 
     $spoolTypes = @()
     switch ($Config.SpoolType) {
-        "stdout" { $spoolTypes = @("stdout") }
-        "stderr" { $spoolTypes = @("stderr") }
-        "both"   { $spoolTypes = @("stdout", "stderr") }
-        default  { $spoolTypes = @("stdout") }
+        "stdout" { $spoolTypes = @(@{Type="stdout"; Option="-oso"}) }
+        "stderr" { $spoolTypes = @(@{Type="stderr"; Option="-ose"}) }
+        "both"   { $spoolTypes = @(@{Type="stderr"; Option="-ose"}, @{Type="stdout"; Option="-oso"}) }
+        default  { $spoolTypes = @(@{Type="stdout"; Option="-oso"}) }
     }
 
-    foreach ($type in $spoolTypes) {
-        Write-Host "  取得中: $type ..." -ForegroundColor Cyan
+    foreach ($spool in $spoolTypes) {
+        Write-Host "  取得中: $($spool.Type) ..." -ForegroundColor Cyan
+
+        # 一時ファイルを作成
+        $tempFile = Join-Path $tempDir "jp1_spool_$($spool.Type)_$(Get-Date -Format 'yyyyMMddHHmmss').txt"
 
         $cmdArgs = @(
-            "-F", $Config.SchedulerService
-            "-B", $type
-            "-g", "001"  # 最新の実行世代を指定
-            $Config.JobPath
+            "-j", $jobNo
+            $spool.Option, $tempFile
         )
 
-        if ($authParams.Count -gt 0) {
-            $cmdArgs = $authParams + $cmdArgs
-        }
-
-        $result = & $Config.AjsshowPath @cmdArgs 2>&1
+        Write-Host "  実行コマンド: jpqjobget $($cmdArgs -join ' ')" -ForegroundColor Gray
+        $result = & $jpqjobgetPath @cmdArgs 2>&1
         $exitCode = $LASTEXITCODE
 
-        if ($exitCode -eq 0) {
-            $output = ($result | Out-String).Trim()
-            if (-not [string]::IsNullOrEmpty($output)) {
+        if ($exitCode -eq 0 -and (Test-Path $tempFile)) {
+            $content = Get-Content -Path $tempFile -Raw -Encoding Default
+            if (-not [string]::IsNullOrEmpty($content)) {
                 $spoolResults += @{
-                    Type = $type
-                    Content = $output
+                    Type = $spool.Type
+                    Content = $content.Trim()
                 }
-                Write-Host "  [OK] $type を取得しました" -ForegroundColor Green
+                Write-Host "  [OK] $($spool.Type) を取得しました" -ForegroundColor Green
             } else {
-                Write-Host "  [情報] $type は空です" -ForegroundColor Gray
+                Write-Host "  [情報] $($spool.Type) は空です" -ForegroundColor Gray
             }
+            # 一時ファイルを削除
+            Remove-Item $tempFile -Force -ErrorAction SilentlyContinue
         } else {
-            Write-Host "  [警告] $type の取得に失敗しました (終了コード: $exitCode)" -ForegroundColor Yellow
-            # エラーメッセージを表示
+            Write-Host "  [警告] $($spool.Type) の取得に失敗しました (終了コード: $exitCode)" -ForegroundColor Yellow
             $errorOutput = ($result | Out-String).Trim()
             if (-not [string]::IsNullOrEmpty($errorOutput)) {
-                Write-Host "  エラー: $errorOutput" -ForegroundColor Red
+                Write-Host "  詳細: $errorOutput" -ForegroundColor Gray
             }
         }
     }
