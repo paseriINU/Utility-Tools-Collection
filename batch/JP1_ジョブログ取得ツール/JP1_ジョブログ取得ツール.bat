@@ -1,9 +1,10 @@
 <# :
 @echo off
 chcp 932 >nul
+title JP1 ジョブログ取得ツール
 setlocal
 
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$host.UI.RawUI.WindowTitle='JP1 ジョブログ取得ツール'; iex ((gc '%~f0' -Encoding UTF8) -join \"`n\")"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "iex ((gc '%~f0' -Encoding UTF8) -join \"`n\")"
 set EXITCODE=%ERRORLEVEL%
 pause
 exit /b %EXITCODE%
