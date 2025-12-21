@@ -2323,7 +2323,17 @@ End Sub
 ' チェック状態を保持したまま全チェックボックスを再作成する
 '==============================================================================
 Public Sub UpdateCheckboxVisibility()
-    On Error Resume Next
+    ' 二重実行防止用の静的変数
+    Static isUpdating As Boolean
+    If isUpdating Then Exit Sub
+    isUpdating = True
+
+    ' イベントを無効化して再帰呼び出しを防止
+    Application.EnableEvents = False
+    Application.ScreenUpdating = False
+
+    On Error GoTo CleanUp
+
     Dim ws As Worksheet
     Set ws = Worksheets(SHEET_JOBLIST)
 
@@ -2349,7 +2359,7 @@ Public Sub UpdateCheckboxVisibility()
     Dim lastRow As Long
     lastRow = ws.Cells(ws.Rows.Count, COL_JOBNET_PATH).End(xlUp).row
 
-    If lastRow < ROW_JOBLIST_DATA_START Then Exit Sub
+    If lastRow < ROW_JOBLIST_DATA_START Then GoTo CleanUp
 
     Dim row As Long
     For row = ROW_JOBLIST_DATA_START To lastRow
@@ -2379,7 +2389,10 @@ Public Sub UpdateCheckboxVisibility()
         End If
     Next row
 
-    On Error GoTo 0
+CleanUp:
+    Application.ScreenUpdating = True
+    Application.EnableEvents = True
+    isUpdating = False
 End Sub
 
 '==============================================================================
