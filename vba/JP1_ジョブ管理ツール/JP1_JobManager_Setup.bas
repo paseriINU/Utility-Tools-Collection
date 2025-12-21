@@ -247,7 +247,7 @@ Private Sub FormatJobListSheet()
     ws.Rows(2).RowHeight = 35
 
     ' 説明（3行目）
-    ws.Range("A3").Value = "「選択」列をダブルクリックすると☑/☐が切り替わり、「順序」列に自動採番されます。順序は手動でも変更可能です（1から連番で入力）。保留中のジョブは実行時に自動で保留解除されます。"
+    ws.Range("A3").Value = "「選択」列をダブルクリックすると" & ChrW(&H2611) & "/" & ChrW(&H2610) & "が切り替わり、「順序」列に自動採番されます。順序は手動でも変更可能です（1から連番で入力）。保留中のジョブは実行時に自動で保留解除されます。"
 
     ' シートモジュールにWorksheet_BeforeDoubleClickイベントを追加（セル編集をキャンセルしてチェック切り替え）
     AddWorksheetDoubleClickEvent ws
