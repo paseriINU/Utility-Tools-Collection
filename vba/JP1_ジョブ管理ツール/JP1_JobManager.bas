@@ -754,7 +754,7 @@ Private Function ParseJobListResult(result As String, rootPath As String) As Boo
                     If isHold Then
                         ws.Cells(currentRow, COL_HOLD).Value = "保留中"
                         ws.Cells(currentRow, COL_HOLD).HorizontalAlignment = xlCenter
-                        ws.Range(ws.Cells(currentRow, COL_SELECT), ws.Cells(currentRow, COL_LAST_MESSAGE)).Interior.Color = RGB(255, 235, 156)
+                        ws.Cells(currentRow, COL_HOLD).Interior.Color = RGB(255, 235, 156)  ' 保留列のみ黄色
                         ws.Cells(currentRow, COL_HOLD).Font.Bold = True
                         ws.Cells(currentRow, COL_HOLD).Font.Color = RGB(156, 87, 0)
                     Else
@@ -2204,14 +2204,13 @@ Public Sub ClearJobList()
         ' 背景色を初期状態に戻す
         Dim row As Long
         For row = ROW_JOBLIST_DATA_START To lastRow
+            ' まず行全体の背景色をクリア
+            ws.Range(ws.Cells(row, COL_SELECT), ws.Cells(row, COL_LAST_MESSAGE)).Interior.ColorIndex = xlNone
+            ' 保留中の場合は保留列のみ黄色を適用
             If ws.Cells(row, COL_HOLD).Value = "保留中" Then
-                ' 保留行は黄色ハイライトを再適用
-                ws.Range(ws.Cells(row, COL_SELECT), ws.Cells(row, COL_LAST_MESSAGE)).Interior.Color = RGB(255, 235, 156)
+                ws.Cells(row, COL_HOLD).Interior.Color = RGB(255, 235, 156)
                 ws.Cells(row, COL_HOLD).Font.Bold = True
                 ws.Cells(row, COL_HOLD).Font.Color = RGB(156, 87, 0)
-            Else
-                ' 保留中でない行の背景色をクリア
-                ws.Range(ws.Cells(row, COL_SELECT), ws.Cells(row, COL_LAST_MESSAGE)).Interior.ColorIndex = xlNone
             End If
         Next row
 
@@ -2271,11 +2270,12 @@ Private Sub ToggleCheckMark(row As Long)
         ws.Cells(row, COL_ORDER).Value = ""
         RenumberJobOrder
 
-        ' 背景色を元に戻す（保留中の場合は黄色、それ以外はなし）
+        ' 背景色を元に戻す
+        ' まず行全体の背景色をクリア
+        ws.Range(ws.Cells(row, COL_SELECT), ws.Cells(row, COL_LAST_MESSAGE)).Interior.ColorIndex = xlNone
+        ' 保留中の場合は保留列のみ黄色を適用
         If ws.Cells(row, COL_HOLD).Value = "保留中" Then
-            ws.Range(ws.Cells(row, COL_SELECT), ws.Cells(row, COL_LAST_MESSAGE)).Interior.Color = RGB(255, 235, 156)
-        Else
-            ws.Range(ws.Cells(row, COL_SELECT), ws.Cells(row, COL_LAST_MESSAGE)).Interior.ColorIndex = xlNone
+            ws.Cells(row, COL_HOLD).Interior.Color = RGB(255, 235, 156)
         End If
     Else
         ' チェックを入れる（☐ または空白）
