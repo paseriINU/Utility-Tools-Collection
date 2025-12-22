@@ -8,24 +8,13 @@ JP1/AJS3の指定されたジョブの標準出力（スプール）を取得し
 - 取得したログをクリップボードに自動コピー
 - 標準出力（stdout）、標準エラー出力（stderr）、または両方を取得可能
 - ローカルのJP1サーバーで直接実行
-
-## バージョン
-
-| ファイル名 | 説明 |
-|-----------|------|
-| `JP1_ジョブログ取得ツール.bat` | PowerShellハイブリッド版（UTF-8対応） |
-| `JP1_ジョブログ取得ツール_batch.bat` | 純粋バッチ版（Shift-JIS専用、文字コード問題が少ない） |
-
-**推奨**: 文字コードの問題が発生する場合は`_batch.bat`版をお使いください。
+- 純粋なバッチファイル（Shift-JIS）で文字コードの問題が少ない
 
 ## 必要な環境
 
 - Windows 10/11 または Windows Server 2016以降
 - JP1/AJS3がインストールされている環境
 - `ajsshow.exe`および`jpqjobget.exe`コマンドへのアクセス権限
-
-### PowerShellハイブリッド版の追加要件
-- PowerShell 5.1以降
 
 ## インストール/セットアップ
 
@@ -34,39 +23,29 @@ JP1/AJS3の指定されたジョブの標準出力（スプール）を取得し
 
 ### 設定項目
 
-```powershell
-$Config = @{
-    # スケジューラーサービス名（デフォルト: AJSROOT1）
-    SchedulerService = "AJSROOT1"
+```batch
+rem スケジューラーサービス名（デフォルト: AJSROOT1）
+set SCHEDULER_SERVICE=AJSROOT1
 
-    # 取得対象のジョブのフルパス
-    JobPath = "/main_unit/jobgroup1/daily_batch/job1"
+rem 取得対象のジョブのフルパス（ジョブネット内のジョブを指定）
+rem 例: /main_unit/jobgroup1/daily_batch/job1
+set JOB_PATH=/main_unit/jobgroup1/daily_batch/job1
 
-    # JP1ユーザー名（空の場合は現在のログインユーザーで実行）
-    JP1User = ""
+rem JP1ユーザー名（空の場合は現在のログインユーザーで実行）
+set JP1_USER=
 
-    # JP1パスワード（空の場合は実行時に入力）
-    JP1Password = ""
+rem JP1パスワード（空の場合は実行時に入力、JP1_USERが空の場合は不要）
+set JP1_PASSWORD=
 
-    # ajsshowコマンドのパス
-    AjsshowPath = "C:\Program Files\HITACHI\JP1AJS3\bin\ajsshow.exe"
-
-    # 取得するスプールの種類（stdout/stderr/both）
-    SpoolType = "stdout"
-
-    # クリップボードにコピーするか
-    CopyToClipboard = $true
-
-    # コンソールにも出力するか
-    ShowInConsole = $true
-}
+rem 取得するスプールの種類（stdout=標準出力、stderr=標準エラー出力、both=両方）
+set SPOOL_TYPE=stdout
 ```
 
 ## 使い方
 
 1. バッチファイル内の設定を編集
-   - `JobPath`: 取得したいジョブのフルパスを指定
-   - `SpoolType`: 取得するログの種類を指定
+   - `JOB_PATH`: 取得したいジョブのフルパスを指定
+   - `SPOOL_TYPE`: 取得するログの種類を指定
 2. `JP1_ジョブログ取得ツール.bat`をダブルクリックで実行
 3. ログが取得され、クリップボードにコピーされます
 
@@ -74,8 +53,12 @@ $Config = @{
 
 ```
 ================================================================
-  JP1 ジョブログ取得ツール
+  JP1 ジョブログ取得ツール（バッチ版）
 ================================================================
+
+コマンドパス:
+  ajsshow  : C:\Program Files\HITACHI\JP1AJS3\bin\ajsshow.exe
+  jpqjobget: C:\Program Files\HITACHI\JP1AJS3\bin\jpqjobget.exe
 
 設定内容:
   スケジューラーサービス: AJSROOT1
@@ -83,7 +66,17 @@ $Config = @{
   スプール種類          : stdout
 
 ========================================
-ジョブのスプールを取得中...
+ジョブ情報を取得中...
+========================================
+
+実行コマンド: ajsshow -F AJSROOT1 -g 1 -R "/main_unit/jobgroup1/daily_batch/job1"
+ajsshow結果:
+...
+
+[OK] 実行ID: 12345
+
+========================================
+スプールを取得中...
 ========================================
 
   取得中: stdout ...
@@ -106,7 +99,7 @@ Processing finished at 2025-12-21 10:35:00
 
 ## 設定オプション
 
-### SpoolType（スプール種類）
+### SPOOL_TYPE（スプール種類）
 
 | 値 | 説明 |
 |---|---|
@@ -114,15 +107,15 @@ Processing finished at 2025-12-21 10:35:00
 | `stderr` | 標準エラー出力のみ取得 |
 | `both` | 標準出力と標準エラー出力の両方を取得 |
 
-### ajsshowコマンドのパス
+### コマンドパスの自動検索
 
-JP1/AJS2・AJS3のバージョンやインストール場所により異なる場合があります：
+以下のパスから自動的にJP1コマンドを検索します：
 
 ```
-C:\Program Files (x86)\HITACHI\JP1AJS2\bin\ajsshow.exe  ← デフォルト
-C:\Program Files\HITACHI\JP1AJS2\bin\ajsshow.exe
-C:\Program Files\HITACHI\JP1AJS3\bin\ajsshow.exe
-C:\Program Files (x86)\HITACHI\JP1AJS3\bin\ajsshow.exe
+C:\Program Files (x86)\Hitachi\JP1AJS2\bin\
+C:\Program Files\Hitachi\JP1AJS2\bin\
+C:\Program Files (x86)\HITACHI\JP1AJS3\bin\
+C:\Program Files\HITACHI\JP1AJS3\bin\
 ```
 
 ## 注意事項
@@ -131,18 +124,30 @@ C:\Program Files (x86)\HITACHI\JP1AJS3\bin\ajsshow.exe
 - スプールの保存期間はJP1/AJS3の設定に依存します
 - JP1ユーザーにジョブのスプール参照権限が必要です
 - 最新の実行結果のスプールが取得されます
+- このファイルはShift-JIS（CP932）で保存されています
 
 ## トラブルシューティング
 
 ### 「ajsshowコマンドが見つかりません」
 
-- `AjsshowPath`の設定を確認してください
 - JP1/AJS3がインストールされているか確認してください
+- コマンドパスが上記の自動検索パスに含まれているか確認してください
+
+### 「ジョブ情報の取得に失敗しました」
+
+- ジョブパスが正しいか確認してください
+- ジョブが実行済みか確認してください（少なくとも1回実行されている必要があります）
+- JP1ユーザーの権限を確認してください
+- スケジューラサービス名が正しいか確認してください
+
+### 「実行ID（ジョブ番号）を取得できませんでした」
+
+- ジョブが一度も実行されていない可能性があります
+- ajsshowの出力形式がサポートされている形式か確認してください
 
 ### 「スプールを取得できませんでした」
 
 - ジョブパスが正しいか確認してください
-- ジョブが実行済みか確認してください
 - スプールが保存されているか確認してください
 - JP1ユーザーの権限を確認してください
 
@@ -152,7 +157,6 @@ C:\Program Files (x86)\HITACHI\JP1AJS3\bin\ajsshow.exe
   - スプールはジョブ単位で保存されます
   - ジョブネットのパスではなく、ジョブネット内の個別ジョブのフルパスを指定してください
   - 例: `/グループ/ジョブネット/ジョブ名`
-- ジョブが一度も実行されていない可能性があります
 - ジョブパスのスペルミスがないか確認してください
 
 ### 「認証に失敗しました」
@@ -164,9 +168,8 @@ C:\Program Files (x86)\HITACHI\JP1AJS3\bin\ajsshow.exe
 
 ```
 JP1_ジョブログ取得ツール/
-├── JP1_ジョブログ取得ツール.bat        # PowerShellハイブリッド版
-├── JP1_ジョブログ取得ツール_batch.bat  # 純粋バッチ版（Shift-JIS）
-└── README.md                           # このファイル
+├── JP1_ジョブログ取得ツール.bat  # メインツール（純粋バッチ版）
+└── README.md                     # このファイル
 ```
 
 ## 関連ツール
@@ -180,3 +183,4 @@ JP1_ジョブログ取得ツール/
 ---
 
 **作成日**: 2025-12-21
+**更新日**: 2025-12-22
