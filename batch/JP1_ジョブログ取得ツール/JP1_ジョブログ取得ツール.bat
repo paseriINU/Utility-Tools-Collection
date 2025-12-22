@@ -47,7 +47,7 @@ echo   ジョブパス            : %JOB_PATH%
 echo.
 
 rem ========================================
-rem ジョブ番号の取得（ajsshow -i %II %rr）
+rem ジョブ番号の取得（ajsshow -i %II）
 rem ========================================
 echo ========================================
 echo ジョブ番号を取得中...
@@ -57,16 +57,16 @@ echo.
 rem 一時ファイル作成
 set TEMP_AJSSHOW=%TEMP%\jp1_ajsshow_%RANDOM%.txt
 
-rem ajsshowコマンド実行（-g 1 -i でジョブ番号と標準エラーファイルパスを取得）
-rem フォーマット: %II %rr → ジョブ番号 標準エラーファイルパス
+rem ajsshowコマンド実行（ジョブ番号を取得）
+rem フォーマット: %II → ジョブ番号（2バイト版）
 rem 公式ドキュメント: https://itpfdoc.hitachi.co.jp/manuals/3021/30213L4920/AJSO0131.HTM
-echo 実行コマンド: ajsshow -F %SCHEDULER_SERVICE% -g 1 -i '%%II %%rr' "%JOB_PATH%"
+echo 実行コマンド: ajsshow -F %SCHEDULER_SERVICE% -g 1 -i '%%II' "%JOB_PATH%"
 echo.
 
-ajsshow -F %SCHEDULER_SERVICE% -g 1 -i '%%II %%rr' "%JOB_PATH%" > "%TEMP_AJSSHOW%" 2>&1
+ajsshow -F %SCHEDULER_SERVICE% -g 1 -i '%%II' "%JOB_PATH%" > "%TEMP_AJSSHOW%" 2>&1
 set AJSSHOW_EXITCODE=%ERRORLEVEL%
 
-echo ajsshow結果:
+echo ajsshow結果（ジョブ番号）:
 type "%TEMP_AJSSHOW%"
 echo.
 
@@ -82,28 +82,48 @@ if not %AJSSHOW_EXITCODE%==0 (
     goto :ERROR_EXIT
 )
 
-rem ジョブ番号とログファイルパスを抽出
+rem ジョブ番号を抽出
 set JOB_NO=
-set LOG_FILE_PATH=
-
-rem 出力を解析（形式: ジョブ番号 ファイルパス）
-for /f "tokens=1,*" %%A in ('type "%TEMP_AJSSHOW%"') do (
-    if not defined JOB_NO (
-        set JOB_NO=%%A
-        set LOG_FILE_PATH=%%B
-    )
+for /f "usebackq" %%A in ("%TEMP_AJSSHOW%") do (
+    if not defined JOB_NO set JOB_NO=%%A
 )
-
 del "%TEMP_AJSSHOW%" 2>nul
 
 echo [情報] ジョブ番号: %JOB_NO%
-echo [情報] ログファイル: %LOG_FILE_PATH%
-echo.
 
 if not defined JOB_NO (
     echo [エラー] ジョブ番号を取得できませんでした
     goto :ERROR_EXIT
 )
+
+rem ========================================
+rem 標準エラーファイルパスの取得（ajsshow -i %rr）
+rem ========================================
+echo.
+echo 標準エラーファイルパスを取得中...
+
+set TEMP_AJSSHOW2=%TEMP%\jp1_ajsshow2_%RANDOM%.txt
+
+rem ajsshowコマンド実行（標準エラーファイルパスを取得）
+rem フォーマット: %rr → 標準エラー出力ファイル名（2バイト版）
+echo 実行コマンド: ajsshow -F %SCHEDULER_SERVICE% -g 1 -i '%%rr' "%JOB_PATH%"
+echo.
+
+ajsshow -F %SCHEDULER_SERVICE% -g 1 -i '%%rr' "%JOB_PATH%" > "%TEMP_AJSSHOW2%" 2>&1
+
+echo ajsshow結果（ファイルパス）:
+type "%TEMP_AJSSHOW2%"
+echo.
+
+rem ログファイルパスを抽出
+set LOG_FILE_PATH=
+for /f "usebackq delims=" %%A in ("%TEMP_AJSSHOW2%") do (
+    if not defined LOG_FILE_PATH set LOG_FILE_PATH=%%A
+)
+del "%TEMP_AJSSHOW2%" 2>nul
+
+echo [情報] ログファイル: %LOG_FILE_PATH%
+echo.
 
 rem ========================================
 rem スプール取得（まずファイル直接読み取りを試行）
