@@ -31,12 +31,6 @@ rem 取得対象のジョブのフルパス（ジョブネット内のジョブ�
 rem 例: /main_unit/jobgroup1/daily_batch/job1
 set JOB_PATH=/main_unit/jobgroup1/daily_batch/job1
 
-rem JP1ユーザー名（必須）
-set JP1_USER=
-
-rem JP1パスワード（必須）
-set JP1_PASSWORD=
-
 rem 取得するスプールの種類（stdout=標準出力、stderr=標準エラー出力、both=両方）
 set SPOOL_TYPE=stdout
 
@@ -48,63 +42,6 @@ echo.
 echo ================================================================
 echo   JP1 ジョブログ取得ツール（バッチ版）
 echo ================================================================
-echo.
-
-rem 必須設定のチェック
-if "%JP1_USER%"=="" (
-    echo [エラー] JP1ユーザー名が設定されていません
-    echo.
-    echo 設定セクションのJP1_USERを設定してください。
-    goto :ERROR_EXIT
-)
-
-if "%JP1_PASSWORD%"=="" (
-    echo [エラー] JP1パスワードが設定されていません
-    echo.
-    echo 設定セクションのJP1_PASSWORDを設定してください。
-    goto :ERROR_EXIT
-)
-
-rem コマンドパス検索
-set AJSSHOW_PATH=
-set JPQJOBGET_PATH=
-
-rem 検索パスリスト
-for %%P in (
-    "C:\Program Files (x86)\Hitachi\JP1AJS2\bin"
-    "C:\Program Files\Hitachi\JP1AJS2\bin"
-    "C:\Program Files (x86)\HITACHI\JP1AJS3\bin"
-    "C:\Program Files\HITACHI\JP1AJS3\bin"
-) do (
-    if exist "%%~P\ajsshow.exe" if not defined AJSSHOW_PATH set "AJSSHOW_PATH=%%~P\ajsshow.exe"
-    if exist "%%~P\jpqjobget.exe" if not defined JPQJOBGET_PATH set "JPQJOBGET_PATH=%%~P\jpqjobget.exe"
-)
-
-if not defined AJSSHOW_PATH (
-    echo [エラー] ajsshowコマンドが見つかりません
-    echo.
-    echo 以下のパスを確認してください:
-    echo   - C:\Program Files ^(x86^)\Hitachi\JP1AJS2\bin\ajsshow.exe
-    echo   - C:\Program Files\Hitachi\JP1AJS2\bin\ajsshow.exe
-    echo   - C:\Program Files ^(x86^)\HITACHI\JP1AJS3\bin\ajsshow.exe
-    echo   - C:\Program Files\HITACHI\JP1AJS3\bin\ajsshow.exe
-    goto :ERROR_EXIT
-)
-
-if not defined JPQJOBGET_PATH (
-    echo [エラー] jpqjobgetコマンドが見つかりません
-    echo.
-    echo 以下のパスを確認してください:
-    echo   - C:\Program Files ^(x86^)\Hitachi\JP1AJS2\bin\jpqjobget.exe
-    echo   - C:\Program Files\Hitachi\JP1AJS2\bin\jpqjobget.exe
-    echo   - C:\Program Files ^(x86^)\HITACHI\JP1AJS3\bin\jpqjobget.exe
-    echo   - C:\Program Files\HITACHI\JP1AJS3\bin\jpqjobget.exe
-    goto :ERROR_EXIT
-)
-
-echo コマンドパス:
-echo   ajsshow  : %AJSSHOW_PATH%
-echo   jpqjobget: %JPQJOBGET_PATH%
 echo.
 
 echo 設定内容:
@@ -125,7 +62,7 @@ rem 一時ファイル作成
 set TEMP_AJSSHOW=%TEMP%\jp1_ajsshow_%RANDOM%.txt
 
 rem ajsshowコマンド実行（-E で実行結果詳細を取得）
-set AJSSHOW_CMD="%AJSSHOW_PATH%" -F %SCHEDULER_SERVICE% -u %JP1_USER% -p %JP1_PASSWORD% -E "%JOB_PATH%"
+set AJSSHOW_CMD=ajsshow -F %SCHEDULER_SERVICE% -E "%JOB_PATH%"
 echo 実行コマンド: %AJSSHOW_CMD%
 echo.
 
@@ -242,7 +179,7 @@ goto :GET_STDOUT
 :GET_STDOUT
 echo   取得中: stdout ...
 set STDOUT_FILE=%TEMP%\jp1_stdout_%RANDOM%.txt
-"%JPQJOBGET_PATH%" -j %JOB_NO% -oso "%STDOUT_FILE%" >nul 2>&1
+jpqjobget -j %JOB_NO% -oso "%STDOUT_FILE%" >nul 2>&1
 set JPQJOBGET_EXITCODE=%ERRORLEVEL%
 
 if %JPQJOBGET_EXITCODE%==0 if exist "%STDOUT_FILE%" (
@@ -256,7 +193,7 @@ goto :SHOW_RESULT
 :GET_STDERR
 echo   取得中: stderr ...
 set STDERR_FILE=%TEMP%\jp1_stderr_%RANDOM%.txt
-"%JPQJOBGET_PATH%" -j %JOB_NO% -ose "%STDERR_FILE%" >nul 2>&1
+jpqjobget -j %JOB_NO% -ose "%STDERR_FILE%" >nul 2>&1
 set JPQJOBGET_EXITCODE=%ERRORLEVEL%
 
 if %JPQJOBGET_EXITCODE%==0 if exist "%STDERR_FILE%" (
@@ -272,7 +209,7 @@ set COMBINED_FILE=%TEMP%\jp1_combined_%RANDOM%.txt
 
 echo   取得中: stderr ...
 set STDERR_FILE=%TEMP%\jp1_stderr_%RANDOM%.txt
-"%JPQJOBGET_PATH%" -j %JOB_NO% -ose "%STDERR_FILE%" >nul 2>&1
+jpqjobget -j %JOB_NO% -ose "%STDERR_FILE%" >nul 2>&1
 if %ERRORLEVEL%==0 if exist "%STDERR_FILE%" (
     echo   [OK] stderr を取得しました
     echo ===== STDERR ===== > "%COMBINED_FILE%"
@@ -285,7 +222,7 @@ if %ERRORLEVEL%==0 if exist "%STDERR_FILE%" (
 
 echo   取得中: stdout ...
 set STDOUT_FILE=%TEMP%\jp1_stdout_%RANDOM%.txt
-"%JPQJOBGET_PATH%" -j %JOB_NO% -oso "%STDOUT_FILE%" >nul 2>&1
+jpqjobget -j %JOB_NO% -oso "%STDOUT_FILE%" >nul 2>&1
 if %ERRORLEVEL%==0 if exist "%STDOUT_FILE%" (
     echo   [OK] stdout を取得しました
     echo ===== STDOUT ===== >> "%COMBINED_FILE%"
