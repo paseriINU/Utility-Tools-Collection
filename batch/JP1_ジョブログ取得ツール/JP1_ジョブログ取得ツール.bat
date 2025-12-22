@@ -120,15 +120,25 @@ echo.
 rem 一時ファイル作成
 set TEMP_AJSSHOW=%TEMP%\jp1_ajsshow_%RANDOM%.txt
 
-rem ajsshowコマンド実行（-g 1で最新世代、-Rで実行結果を詳細表示）
-echo 実行コマンド: ajsshow -F %SCHEDULER_SERVICE% -g 1 -R "%JOB_PATH%"
+rem ajsshowコマンド実行（-E で実行結果詳細を取得）
+echo 実行コマンド: ajsshow -F %SCHEDULER_SERVICE% -E "%JOB_PATH%"
+echo.
 
-if not "%JP1_USER%"=="" (
-    "%AJSSHOW_PATH%" -u %JP1_USER% -p %JP1_PASSWORD% -F %SCHEDULER_SERVICE% -g 1 -R "%JOB_PATH%" > "%TEMP_AJSSHOW%" 2>&1
-) else (
-    "%AJSSHOW_PATH%" -F %SCHEDULER_SERVICE% -g 1 -R "%JOB_PATH%" > "%TEMP_AJSSHOW%" 2>&1
-)
+rem JP1ユーザー指定の有無で分岐
+if not "%JP1_USER%"=="" goto :AJSSHOW_WITH_AUTH
+goto :AJSSHOW_WITHOUT_AUTH
+
+:AJSSHOW_WITH_AUTH
+"%AJSSHOW_PATH%" -F %SCHEDULER_SERVICE% -u %JP1_USER% -p %JP1_PASSWORD% -E "%JOB_PATH%" > "%TEMP_AJSSHOW%" 2>&1
 set AJSSHOW_EXITCODE=%ERRORLEVEL%
+goto :AJSSHOW_DONE
+
+:AJSSHOW_WITHOUT_AUTH
+"%AJSSHOW_PATH%" -F %SCHEDULER_SERVICE% -E "%JOB_PATH%" > "%TEMP_AJSSHOW%" 2>&1
+set AJSSHOW_EXITCODE=%ERRORLEVEL%
+goto :AJSSHOW_DONE
+
+:AJSSHOW_DONE
 
 echo ajsshow結果:
 type "%TEMP_AJSSHOW%"
@@ -147,29 +157,46 @@ if not %AJSSHOW_EXITCODE%==0 (
 )
 
 rem 実行ID（ジョブ番号）を抽出
-rem ajsshow -Rの出力から "JOBNO" または "@"で始まる行から数字を抽出
+rem ajsshow -E の出力から各種形式でジョブ番号を抽出
 set JOB_NO=
-for /f "tokens=*" %%L in ('type "%TEMP_AJSSHOW%"') do (
+
+rem JOBNO または JOB-NO を含む行から抽出
+for /f "tokens=*" %%L in ('type "%TEMP_AJSSHOW%" ^| findstr /i "JOBNO JOB-NO"') do (
     set LINE=%%L
-    rem JOBNO=XXXX の形式から抽出
-    echo !LINE! | findstr /i "JOBNO" >nul
-    if !ERRORLEVEL!==0 (
-        for /f "tokens=2 delims==" %%V in ("!LINE!") do (
-            for /f "tokens=1" %%N in ("%%V") do set JOB_NO=%%N
+    rem : で区切られた形式（JOB-NO : 12345）
+    for /f "tokens=2 delims=:" %%V in ("!LINE!") do (
+        for /f "tokens=1" %%N in ("%%V") do (
+            echo %%N | findstr /r "^[0-9][0-9]*$" >nul
+            if !ERRORLEVEL!==0 set JOB_NO=%%N
         )
     )
-    rem @XXXX の形式から抽出（実行IDが@で始まる場合）
-    echo !LINE! | findstr /r "^@[0-9]" >nul
-    if !ERRORLEVEL!==0 (
+    rem = で区切られた形式（JOBNO=12345）
+    for /f "tokens=2 delims==" %%V in ("!LINE!") do (
+        for /f "tokens=1" %%N in ("%%V") do (
+            echo %%N | findstr /r "^[0-9][0-9]*$" >nul
+            if !ERRORLEVEL!==0 set JOB_NO=%%N
+        )
+    )
+)
+
+rem @XXXX の形式から抽出（実行IDが@で始まる場合）
+if not defined JOB_NO (
+    for /f "tokens=*" %%L in ('type "%TEMP_AJSSHOW%" ^| findstr /r "^@[0-9]"') do (
+        set LINE=%%L
         set JOB_NO=!LINE:@=!
     )
 )
 
-rem 数字のみの行も確認（実行IDが直接出力される場合）
+rem EXEC-ID を含む行から抽出
 if not defined JOB_NO (
-    for /f "tokens=*" %%L in ('type "%TEMP_AJSSHOW%"') do (
-        echo %%L | findstr /r "^[0-9][0-9]*$" >nul
-        if !ERRORLEVEL!==0 set JOB_NO=%%L
+    for /f "tokens=*" %%L in ('type "%TEMP_AJSSHOW%" ^| findstr /i "EXEC-ID"') do (
+        set LINE=%%L
+        for /f "tokens=2 delims=:" %%V in ("!LINE!") do (
+            for /f "tokens=1" %%N in ("%%V") do (
+                echo %%N | findstr /r "^[0-9][0-9]*$" >nul
+                if !ERRORLEVEL!==0 set JOB_NO=%%N
+            )
+        )
     )
 )
 
@@ -180,6 +207,9 @@ if not defined JOB_NO (
     echo.
     echo ajsshowの出力から実行IDを特定できませんでした。
     echo ジョブが実行されていることを確認してください。
+    echo.
+    echo ヒント: ajsshow -E コマンドの出力にJOBNO、JOB-NO、EXEC-IDが
+    echo        含まれていることを確認してください。
     goto :ERROR_EXIT
 )
 
