@@ -133,7 +133,8 @@ goto :GET_STDOUT
 :GET_STDOUT
 echo   取得中: stdout ...
 set STDOUT_FILE=%TEMP%\jp1_stdout_%RANDOM%.txt
-jpqjobget -F %SCHEDULER_SERVICE% -n %EXEC_REG_NO% -e "%JOB_PATH%" -oso "%STDOUT_FILE%" >nul 2>&1
+rem -n モードでは -s でジョブパスを指定、出力は標準出力へ
+jpqjobget -F %SCHEDULER_SERVICE% -n %EXEC_REG_NO% -s "%JOB_PATH%" > "%STDOUT_FILE%" 2>&1
 set JPQJOBGET_EXITCODE=%ERRORLEVEL%
 
 if %JPQJOBGET_EXITCODE%==0 if exist "%STDOUT_FILE%" (
@@ -147,7 +148,8 @@ goto :SHOW_RESULT
 :GET_STDERR
 echo   取得中: stderr ...
 set STDERR_FILE=%TEMP%\jp1_stderr_%RANDOM%.txt
-jpqjobget -F %SCHEDULER_SERVICE% -n %EXEC_REG_NO% -e "%JOB_PATH%" -ose "%STDERR_FILE%" >nul 2>&1
+rem -n モードでは -e でジョブパスを指定、出力は標準出力へ
+jpqjobget -F %SCHEDULER_SERVICE% -n %EXEC_REG_NO% -e "%JOB_PATH%" > "%STDERR_FILE%" 2>&1
 set JPQJOBGET_EXITCODE=%ERRORLEVEL%
 
 if %JPQJOBGET_EXITCODE%==0 if exist "%STDERR_FILE%" (
@@ -163,12 +165,14 @@ set COMBINED_FILE=%TEMP%\jp1_combined_%RANDOM%.txt
 
 echo   取得中: stderr ...
 set STDERR_FILE=%TEMP%\jp1_stderr_%RANDOM%.txt
-jpqjobget -F %SCHEDULER_SERVICE% -n %EXEC_REG_NO% -e "%JOB_PATH%" -ose "%STDERR_FILE%" >nul 2>&1
+jpqjobget -F %SCHEDULER_SERVICE% -n %EXEC_REG_NO% -e "%JOB_PATH%" > "%STDERR_FILE%" 2>&1
 if %ERRORLEVEL%==0 if exist "%STDERR_FILE%" (
-    echo   [OK] stderr を取得しました
-    echo ===== STDERR ===== > "%COMBINED_FILE%"
-    type "%STDERR_FILE%" >> "%COMBINED_FILE%"
-    echo. >> "%COMBINED_FILE%"
+    for %%F in ("%STDERR_FILE%") do if %%~zF GTR 0 (
+        echo   [OK] stderr を取得しました
+        echo ===== STDERR ===== > "%COMBINED_FILE%"
+        type "%STDERR_FILE%" >> "%COMBINED_FILE%"
+        echo. >> "%COMBINED_FILE%"
+    )
     del "%STDERR_FILE%" 2>nul
 ) else (
     echo   [情報] stderr は空です
@@ -176,11 +180,13 @@ if %ERRORLEVEL%==0 if exist "%STDERR_FILE%" (
 
 echo   取得中: stdout ...
 set STDOUT_FILE=%TEMP%\jp1_stdout_%RANDOM%.txt
-jpqjobget -F %SCHEDULER_SERVICE% -n %EXEC_REG_NO% -e "%JOB_PATH%" -oso "%STDOUT_FILE%" >nul 2>&1
+jpqjobget -F %SCHEDULER_SERVICE% -n %EXEC_REG_NO% -s "%JOB_PATH%" > "%STDOUT_FILE%" 2>&1
 if %ERRORLEVEL%==0 if exist "%STDOUT_FILE%" (
-    echo   [OK] stdout を取得しました
-    echo ===== STDOUT ===== >> "%COMBINED_FILE%"
-    type "%STDOUT_FILE%" >> "%COMBINED_FILE%"
+    for %%F in ("%STDOUT_FILE%") do if %%~zF GTR 0 (
+        echo   [OK] stdout を取得しました
+        echo ===== STDOUT ===== >> "%COMBINED_FILE%"
+        type "%STDOUT_FILE%" >> "%COMBINED_FILE%"
+    )
     del "%STDOUT_FILE%" 2>nul
 ) else (
     echo   [情報] stdout は空です
