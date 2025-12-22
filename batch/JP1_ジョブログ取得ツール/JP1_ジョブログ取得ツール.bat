@@ -9,7 +9,7 @@ rem
 rem ■ 説明
 rem    JP1/AJS3の指定されたジョブの標準出力（スプール）を取得し、
 rem    クリップボードにコピーします。
-rem    jpqjobgetコマンドを使用してスプールを取得します。
+rem    まずログファイルを直接読み取り、失敗時はjpqjobgetを使用します。
 rem
 rem ■ 使い方
 rem    1. 下記の「設定セクション」を編集
@@ -47,23 +47,23 @@ echo   ジョブパス            : %JOB_PATH%
 echo.
 
 rem ========================================
-rem 実行登録番号の取得（ajsshow -i）
+rem ジョブ情報の取得（ajsshow -i）
 rem ========================================
 echo ========================================
-echo 実行登録番号を取得中...
+echo ジョブ情報を取得中...
 echo ========================================
 echo.
 
 rem 一時ファイル作成
 set TEMP_AJSSHOW=%TEMP%\jp1_ajsshow_%RANDOM%.txt
 
-rem ajsshowコマンド実行（-g 1 -i で実行登録番号を取得）
-rem フォーマット: %ll（2バイト版）→ 実行登録番号を出力（jpqjobgetの-nオプションで使用）
+rem ajsshowコマンド実行（-g 1 -i で実行登録番号と標準エラーファイルパスを取得）
+rem フォーマット: %ll %rr → 実行登録番号 標準エラーファイルパス
 rem 公式ドキュメント: https://itpfdoc.hitachi.co.jp/manuals/3021/30213L4920/AJSO0131.HTM
-echo 実行コマンド: ajsshow -F %SCHEDULER_SERVICE% -g 1 -i '%%ll' "%JOB_PATH%"
+echo 実行コマンド: ajsshow -F %SCHEDULER_SERVICE% -g 1 -i '%%ll %%rr' "%JOB_PATH%"
 echo.
 
-ajsshow -F %SCHEDULER_SERVICE% -g 1 -i '%%ll' "%JOB_PATH%" > "%TEMP_AJSSHOW%" 2>&1
+ajsshow -F %SCHEDULER_SERVICE% -g 1 -i '%%ll %%rr' "%JOB_PATH%" > "%TEMP_AJSSHOW%" 2>&1
 set AJSSHOW_EXITCODE=%ERRORLEVEL%
 
 echo ajsshow結果:
@@ -82,24 +82,31 @@ if not %AJSSHOW_EXITCODE%==0 (
     goto :ERROR_EXIT
 )
 
-rem 実行登録番号を抽出（出力をそのまま取得）
-set /p EXEC_REG_NO=<"%TEMP_AJSSHOW%"
+rem 実行登録番号とログファイルパスを抽出
+set EXEC_REG_NO=
+set LOG_FILE_PATH=
+
+rem 出力を解析（形式: 実行登録番号 ファイルパス）
+for /f "tokens=1,*" %%A in ('type "%TEMP_AJSSHOW%"') do (
+    if not defined EXEC_REG_NO (
+        set EXEC_REG_NO=%%A
+        set LOG_FILE_PATH=%%B
+    )
+)
 
 del "%TEMP_AJSSHOW%" 2>nul
 
+echo [情報] 実行登録番号: %EXEC_REG_NO%
+echo [情報] ログファイル: %LOG_FILE_PATH%
+echo.
+
 if not defined EXEC_REG_NO (
     echo [エラー] 実行登録番号を取得できませんでした
-    echo.
-    echo ajsshow -i の出力から実行登録番号を特定できませんでした。
-    echo ジョブが実行されていることを確認してください。
     goto :ERROR_EXIT
 )
 
-echo [OK] 実行登録番号: %EXEC_REG_NO%
-echo.
-
 rem ========================================
-rem スプール取得（jpqjobget -s: 標準出力）
+rem スプール取得（まずファイル直接読み取りを試行）
 rem ========================================
 echo ========================================
 echo スプールを取得中...
@@ -107,26 +114,58 @@ echo ========================================
 echo.
 
 set SPOOL_FILE=%TEMP%\jp1_spool_%RANDOM%.txt
+set LOG_CONTENT_FOUND=0
 
-echo 実行コマンド: jpqjobget -F %SCHEDULER_SERVICE% -n %EXEC_REG_NO% -s "%JOB_PATH%"
-jpqjobget -F %SCHEDULER_SERVICE% -n %EXEC_REG_NO% -s "%JOB_PATH%" > "%SPOOL_FILE%" 2>&1
-set JPQJOBGET_EXITCODE=%ERRORLEVEL%
+rem 方法1: ログファイルを直接読み取る
+if defined LOG_FILE_PATH (
+    echo [試行1] ログファイルを直接読み取り: %LOG_FILE_PATH%
+    if exist "%LOG_FILE_PATH%" (
+        copy "%LOG_FILE_PATH%" "%SPOOL_FILE%" >nul 2>&1
+        if exist "%SPOOL_FILE%" (
+            for %%F in ("%SPOOL_FILE%") do (
+                if %%~zF GTR 0 (
+                    echo [OK] ログファイルを直接読み取りました
+                    set LOG_CONTENT_FOUND=1
+                )
+            )
+        )
+    ) else (
+        echo [情報] ファイルが存在しません
+    )
+)
 
-echo jpqjobget終了コード: %JPQJOBGET_EXITCODE%
+rem 方法2: ファイルが読めなかった場合、jpqjobgetを試行
+if !LOG_CONTENT_FOUND!==0 (
+    echo [試行2] jpqjobgetでスプールを取得...
+    echo 実行コマンド: jpqjobget -F %SCHEDULER_SERVICE% -n %EXEC_REG_NO% -s "%JOB_PATH%"
+    jpqjobget -F %SCHEDULER_SERVICE% -n %EXEC_REG_NO% -s "%JOB_PATH%" > "%SPOOL_FILE%" 2>&1
+    set JPQJOBGET_EXITCODE=!ERRORLEVEL!
+    echo jpqjobget終了コード: !JPQJOBGET_EXITCODE!
 
-:SHOW_RESULT
+    rem エラーチェック
+    findstr /i "無効 KAVS エラー" "%SPOOL_FILE%" >nul 2>&1
+    if !ERRORLEVEL!==0 (
+        echo.
+        echo [警告] jpqjobgetでエラーが発生しました
+        type "%SPOOL_FILE%"
+        del "%SPOOL_FILE%" 2>nul
+    ) else (
+        for %%F in ("%SPOOL_FILE%") do (
+            if %%~zF GTR 0 (
+                echo [OK] jpqjobgetでスプールを取得しました
+                set LOG_CONTENT_FOUND=1
+            )
+        )
+    )
+)
+
 echo.
 
+rem 結果確認
 if not exist "%SPOOL_FILE%" (
     echo ========================================
     echo [エラー] スプールを取得できませんでした
     echo ========================================
-    echo.
-    echo 以下を確認してください:
-    echo   - ジョブパスが正しいか: %JOB_PATH%
-    echo   - ジョブが実行済みか
-    echo   - JP1ユーザーに権限があるか
-    echo   - スプールが保存されているか
     goto :ERROR_EXIT
 )
 
