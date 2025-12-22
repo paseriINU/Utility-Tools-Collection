@@ -121,17 +121,24 @@ rem 一時ファイル作成
 set TEMP_AJSSHOW=%TEMP%\jp1_ajsshow_%RANDOM%.txt
 
 rem ajsshowコマンド実行（-E で実行結果詳細を取得）
-rem 注意: -R オプションは ajsshow には存在しない。-E を使用。
-echo 実行コマンド: ajsshow -F %SCHEDULER_SERVICE% -E %JOB_PATH%
+echo 実行コマンド: ajsshow -F %SCHEDULER_SERVICE% -E "%JOB_PATH%"
 echo.
 
-rem コマンド実行（call を使用して確実に実行）
-if not "%JP1_USER%"=="" (
-    call "%AJSSHOW_PATH%" -F %SCHEDULER_SERVICE% -u %JP1_USER% -p %JP1_PASSWORD% -E "%JOB_PATH%" > "%TEMP_AJSSHOW%" 2>&1
-) else (
-    call "%AJSSHOW_PATH%" -F %SCHEDULER_SERVICE% -E "%JOB_PATH%" > "%TEMP_AJSSHOW%" 2>&1
-)
+rem JP1ユーザー指定の有無で分岐
+if not "%JP1_USER%"=="" goto :AJSSHOW_WITH_AUTH
+goto :AJSSHOW_WITHOUT_AUTH
+
+:AJSSHOW_WITH_AUTH
+"%AJSSHOW_PATH%" -F %SCHEDULER_SERVICE% -u %JP1_USER% -p %JP1_PASSWORD% -E "%JOB_PATH%" > "%TEMP_AJSSHOW%" 2>&1
 set AJSSHOW_EXITCODE=%ERRORLEVEL%
+goto :AJSSHOW_DONE
+
+:AJSSHOW_WITHOUT_AUTH
+"%AJSSHOW_PATH%" -F %SCHEDULER_SERVICE% -E "%JOB_PATH%" > "%TEMP_AJSSHOW%" 2>&1
+set AJSSHOW_EXITCODE=%ERRORLEVEL%
+goto :AJSSHOW_DONE
+
+:AJSSHOW_DONE
 
 echo ajsshow結果:
 type "%TEMP_AJSSHOW%"
