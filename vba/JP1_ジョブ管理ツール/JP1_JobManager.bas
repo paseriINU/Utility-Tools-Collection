@@ -1721,9 +1721,9 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
             script = script & vbCrLf
             script = script & "    if ($failedJobPath) {" & vbCrLf
             script = script & "      Write-Log ""[DEBUG-09] failedJobPath が見つかりました: $failedJobPath""" & vbCrLf
-            script = script & "      # 失敗したジョブの詳細を取得（実行ID、実行登録番号、標準エラー出力ファイル名、ジョブ番号）" & vbCrLf
-            script = script & "      Write-Log ""[DEBUG-10] 実行コマンド: $ajsshowPath -F '" & config("SchedulerService") & "' -g 1 -i '%## %ll %rr %II' $failedJobPath""" & vbCrLf
-            script = script & "      $detailResult = & $ajsshowPath -F '" & config("SchedulerService") & "' -g 1 -i '%## %ll %rr %II' $failedJobPath 2>&1" & vbCrLf
+            script = script & "      # 失敗したジョブの詳細を取得（実行ID、実行登録番号、標準エラー出力ファイル名）" & vbCrLf
+            script = script & "      Write-Log ""[DEBUG-10] 実行コマンド: $ajsshowPath -F '" & config("SchedulerService") & "' -g 1 -i '%## %ll %rr' $failedJobPath""" & vbCrLf
+            script = script & "      $detailResult = & $ajsshowPath -F '" & config("SchedulerService") & "' -g 1 -i '%## %ll %rr' $failedJobPath 2>&1" & vbCrLf
             script = script & "      $detailStr = $detailResult -join ""`n""" & vbCrLf
             script = script & "      Write-Log ""[DEBUG-11] ajsshow -g 1 -i 結果:""" & vbCrLf
             script = script & "      Write-Log $detailStr" & vbCrLf
@@ -1734,24 +1734,24 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
             script = script & "      Write-Log ""[DEBUG-12] 抽出した実行ID: $execId""" & vbCrLf
             script = script & vbCrLf
             script = script & "      # 実行登録番号（%l）を抽出" & vbCrLf
-            script = script & "      $execNo = ''" & vbCrLf
-            script = script & "      if ($detailStr -match '\d{11,}') { $execNo = $matches[0] }" & vbCrLf
-            script = script & "      Write-Log ""[DEBUG-13] 抽出した実行登録番号: $execNo""" & vbCrLf
+            script = script & "      $execRegNo = ''" & vbCrLf
+            script = script & "      if ($detailStr -match '\d{11,}') { $execRegNo = $matches[0] }" & vbCrLf
+            script = script & "      Write-Log ""[DEBUG-13] 抽出した実行登録番号: $execRegNo""" & vbCrLf
             script = script & vbCrLf
             script = script & "      # 標準エラー出力ファイル名（%r）を抽出（空白を含むパスに対応）" & vbCrLf
-            script = script & "      $logPath = ''" & vbCrLf
-            script = script & "      if ($detailStr -match '/[^\r\n]+\.err') { $logPath = $matches[0] }" & vbCrLf
-            script = script & "      elseif ($detailStr -match '[A-Za-z]:[^\r\n]+\.err') { $logPath = $matches[0] }" & vbCrLf
-            script = script & "      Write-Log ""[DEBUG-14] 抽出したログパス: $logPath""" & vbCrLf
-            script = script & "      if ($logPath) {" & vbCrLf
+            script = script & "      $stderrFile = ''" & vbCrLf
+            script = script & "      if ($detailStr -match '/[^\r\n]+\.err') { $stderrFile = $matches[0] }" & vbCrLf
+            script = script & "      elseif ($detailStr -match '[A-Za-z]:[^\r\n]+\.err') { $stderrFile = $matches[0] }" & vbCrLf
+            script = script & "      Write-Log ""[DEBUG-14] 抽出したログパス: $stderrFile""" & vbCrLf
+            script = script & "      if ($stderrFile) {" & vbCrLf
             script = script & "        Write-Output ""RESULT_LOGPATH:$logFile""" & vbCrLf
             script = script & "      }" & vbCrLf
             script = script & vbCrLf
             script = script & "      # 標準エラーファイルを直接読み取る（ローカルモード）" & vbCrLf
             script = script & "      $logContent = $null" & vbCrLf
-            script = script & "      if ($logPath -and (Test-Path $logPath)) {" & vbCrLf
-            script = script & "        Write-Log ""[DEBUG-15] 標準エラーファイルを直接読み取り: $logPath""" & vbCrLf
-            script = script & "        $logContent = Get-Content $logPath -Encoding Default -ErrorAction SilentlyContinue" & vbCrLf
+            script = script & "      if ($stderrFile -and (Test-Path $stderrFile)) {" & vbCrLf
+            script = script & "        Write-Log ""[DEBUG-15] 標準エラーファイルを直接読み取り: $stderrFile""" & vbCrLf
+            script = script & "        $logContent = Get-Content $stderrFile -Encoding Default -ErrorAction SilentlyContinue" & vbCrLf
             script = script & "      }" & vbCrLf
             script = script & vbCrLf
             script = script & "      if ($logContent) {" & vbCrLf
