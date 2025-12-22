@@ -47,23 +47,23 @@ echo   ジョブパス            : %JOB_PATH%
 echo.
 
 rem ========================================
-rem ジョブ情報の取得（ajsshow -i）
+rem ジョブ番号の取得（ajsshow -i %II %rr）
 rem ========================================
 echo ========================================
-echo ジョブ情報を取得中...
+echo ジョブ番号を取得中...
 echo ========================================
 echo.
 
 rem 一時ファイル作成
 set TEMP_AJSSHOW=%TEMP%\jp1_ajsshow_%RANDOM%.txt
 
-rem ajsshowコマンド実行（-g 1 -i で実行登録番号と標準エラーファイルパスを取得）
-rem フォーマット: %ll %rr → 実行登録番号 標準エラーファイルパス
+rem ajsshowコマンド実行（-g 1 -i でジョブ番号と標準エラーファイルパスを取得）
+rem フォーマット: %II %rr → ジョブ番号 標準エラーファイルパス
 rem 公式ドキュメント: https://itpfdoc.hitachi.co.jp/manuals/3021/30213L4920/AJSO0131.HTM
-echo 実行コマンド: ajsshow -F %SCHEDULER_SERVICE% -g 1 -i '%%ll %%rr' "%JOB_PATH%"
+echo 実行コマンド: ajsshow -F %SCHEDULER_SERVICE% -g 1 -i '%%II %%rr' "%JOB_PATH%"
 echo.
 
-ajsshow -F %SCHEDULER_SERVICE% -g 1 -i '%%ll %%rr' "%JOB_PATH%" > "%TEMP_AJSSHOW%" 2>&1
+ajsshow -F %SCHEDULER_SERVICE% -g 1 -i '%%II %%rr' "%JOB_PATH%" > "%TEMP_AJSSHOW%" 2>&1
 set AJSSHOW_EXITCODE=%ERRORLEVEL%
 
 echo ajsshow結果:
@@ -82,26 +82,26 @@ if not %AJSSHOW_EXITCODE%==0 (
     goto :ERROR_EXIT
 )
 
-rem 実行登録番号とログファイルパスを抽出
-set EXEC_REG_NO=
+rem ジョブ番号とログファイルパスを抽出
+set JOB_NO=
 set LOG_FILE_PATH=
 
-rem 出力を解析（形式: 実行登録番号 ファイルパス）
+rem 出力を解析（形式: ジョブ番号 ファイルパス）
 for /f "tokens=1,*" %%A in ('type "%TEMP_AJSSHOW%"') do (
-    if not defined EXEC_REG_NO (
-        set EXEC_REG_NO=%%A
+    if not defined JOB_NO (
+        set JOB_NO=%%A
         set LOG_FILE_PATH=%%B
     )
 )
 
 del "%TEMP_AJSSHOW%" 2>nul
 
-echo [情報] 実行登録番号: %EXEC_REG_NO%
+echo [情報] ジョブ番号: %JOB_NO%
 echo [情報] ログファイル: %LOG_FILE_PATH%
 echo.
 
-if not defined EXEC_REG_NO (
-    echo [エラー] 実行登録番号を取得できませんでした
+if not defined JOB_NO (
+    echo [エラー] ジョブ番号を取得できませんでした
     goto :ERROR_EXIT
 )
 
@@ -137,23 +137,27 @@ if defined LOG_FILE_PATH (
 rem 方法2: ファイルが読めなかった場合、jpqjobgetを試行
 if !LOG_CONTENT_FOUND!==0 (
     echo [試行2] jpqjobgetでスプールを取得...
-    echo 実行コマンド: jpqjobget -F %SCHEDULER_SERVICE% -n %EXEC_REG_NO% -s "%JOB_PATH%"
-    jpqjobget -F %SCHEDULER_SERVICE% -n %EXEC_REG_NO% -s "%JOB_PATH%" > "%SPOOL_FILE%" 2>&1
+    rem 公式構文: jpqjobget -j ジョブ番号 -oso 標準出力ファイル
+    rem 参考: https://itpfdoc.hitachi.co.jp/manuals/3021/30213b1920/AJSO0194.HTM
+    echo 実行コマンド: jpqjobget -j %JOB_NO% -oso "%SPOOL_FILE%"
+    jpqjobget -j %JOB_NO% -oso "%SPOOL_FILE%" 2>&1
     set JPQJOBGET_EXITCODE=!ERRORLEVEL!
     echo jpqjobget終了コード: !JPQJOBGET_EXITCODE!
 
     rem エラーチェック
-    findstr /i "無効 KAVS エラー" "%SPOOL_FILE%" >nul 2>&1
-    if !ERRORLEVEL!==0 (
-        echo.
-        echo [警告] jpqjobgetでエラーが発生しました
-        type "%SPOOL_FILE%"
-        del "%SPOOL_FILE%" 2>nul
-    ) else (
-        for %%F in ("%SPOOL_FILE%") do (
-            if %%~zF GTR 0 (
-                echo [OK] jpqjobgetでスプールを取得しました
-                set LOG_CONTENT_FOUND=1
+    if exist "%SPOOL_FILE%" (
+        findstr /i "KAVS" "%SPOOL_FILE%" >nul 2>&1
+        if !ERRORLEVEL!==0 (
+            echo.
+            echo [警告] jpqjobgetでエラーが発生しました
+            type "%SPOOL_FILE%"
+            del "%SPOOL_FILE%" 2>nul
+        ) else (
+            for %%F in ("%SPOOL_FILE%") do (
+                if %%~zF GTR 0 (
+                    echo [OK] jpqjobgetでスプールを取得しました
+                    set LOG_CONTENT_FOUND=1
+                )
             )
         )
     )
