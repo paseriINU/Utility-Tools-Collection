@@ -625,9 +625,10 @@ Private Function ParseJobListResult(result As String, rootPath As String) As Boo
     Dim i As Long
 
     ' ルートパスの末尾のスラッシュを正規化
+    ' ただし、"/" のみの場合は空文字列にならないよう除外
     Dim basePath As String
     basePath = rootPath
-    If Right(basePath, 1) = "/" Then
+    If Len(basePath) > 1 And Right(basePath, 1) = "/" Then
         basePath = Left(basePath, Len(basePath) - 1)
     End If
 
@@ -682,7 +683,12 @@ Private Function ParseJobListResult(result As String, rootPath As String) As Boo
                             pathStack(stackDepth) = basePath
                         Else
                             ' ネストレベル: 親のパス + "/" + ユニット名
-                            pathStack(stackDepth) = pathStack(stackDepth - 1) & "/" & unitName
+                            ' ただし、親パスが"/"の場合は"/"を追加しない（"//"を防ぐ）
+                            If pathStack(stackDepth - 1) = "/" Then
+                                pathStack(stackDepth) = "/" & unitName
+                            Else
+                                pathStack(stackDepth) = pathStack(stackDepth - 1) & "/" & unitName
+                            End If
                         End If
 
                         ' 行番号を確保（親が先に行番号を取得するため、親が上に表示される）
