@@ -31,9 +31,6 @@ rem 取得対象のジョブのフルパス（ジョブネット内のジョブ�
 rem 例: /main_unit/jobgroup1/daily_batch/job1
 set JOB_PATH=/main_unit/jobgroup1/daily_batch/job1
 
-rem 取得するスプールの種類（stdout=標準出力、stderr=標準エラー出力、both=両方）
-set SPOOL_TYPE=stdout
-
 rem ==============================================================================
 rem ■ メイン処理（以下は編集不要）
 rem ==============================================================================
@@ -47,7 +44,6 @@ echo.
 echo 設定内容:
 echo   スケジューラーサービス: %SCHEDULER_SERVICE%
 echo   ジョブパス            : %JOB_PATH%
-echo   スプール種類          : %SPOOL_TYPE%
 echo.
 
 rem ========================================
@@ -103,97 +99,20 @@ echo [OK] 実行登録番号: %EXEC_REG_NO%
 echo.
 
 rem ========================================
-rem スプール取得（jpqjobget）
+rem スプール取得（jpqjobget -s: 標準出力）
 rem ========================================
 echo ========================================
 echo スプールを取得中...
 echo ========================================
 echo.
 
-set SPOOL_CONTENT=
 set SPOOL_FILE=%TEMP%\jp1_spool_%RANDOM%.txt
 
-rem スプール種類に応じてオプションを設定
-if /i "%SPOOL_TYPE%"=="stdout" (
-    set SPOOL_OPTIONS=-oso
-) else if /i "%SPOOL_TYPE%"=="stderr" (
-    set SPOOL_OPTIONS=-ose
-) else if /i "%SPOOL_TYPE%"=="both" (
-    set SPOOL_OPTIONS=-oso -ose
-) else (
-    set SPOOL_OPTIONS=-oso
-)
-
-rem stdoutの取得
-if /i "%SPOOL_TYPE%"=="stdout" goto :GET_STDOUT
-if /i "%SPOOL_TYPE%"=="both" goto :GET_BOTH
-if /i "%SPOOL_TYPE%"=="stderr" goto :GET_STDERR
-goto :GET_STDOUT
-
-:GET_STDOUT
-echo   取得中: stdout ...
-set STDOUT_FILE=%TEMP%\jp1_stdout_%RANDOM%.txt
-rem -n モードでは -s でジョブパスを指定、出力は標準出力へ
-jpqjobget -F %SCHEDULER_SERVICE% -n %EXEC_REG_NO% -s "%JOB_PATH%" > "%STDOUT_FILE%" 2>&1
+echo 実行コマンド: jpqjobget -F %SCHEDULER_SERVICE% -n %EXEC_REG_NO% -s "%JOB_PATH%"
+jpqjobget -F %SCHEDULER_SERVICE% -n %EXEC_REG_NO% -s "%JOB_PATH%" > "%SPOOL_FILE%" 2>&1
 set JPQJOBGET_EXITCODE=%ERRORLEVEL%
 
-if %JPQJOBGET_EXITCODE%==0 if exist "%STDOUT_FILE%" (
-    echo   [OK] stdout を取得しました
-    set SPOOL_FILE=%STDOUT_FILE%
-) else (
-    echo   [警告] stdout の取得に失敗しました（終了コード: %JPQJOBGET_EXITCODE%）
-)
-goto :SHOW_RESULT
-
-:GET_STDERR
-echo   取得中: stderr ...
-set STDERR_FILE=%TEMP%\jp1_stderr_%RANDOM%.txt
-rem -n モードでは -e でジョブパスを指定、出力は標準出力へ
-jpqjobget -F %SCHEDULER_SERVICE% -n %EXEC_REG_NO% -e "%JOB_PATH%" > "%STDERR_FILE%" 2>&1
-set JPQJOBGET_EXITCODE=%ERRORLEVEL%
-
-if %JPQJOBGET_EXITCODE%==0 if exist "%STDERR_FILE%" (
-    echo   [OK] stderr を取得しました
-    set SPOOL_FILE=%STDERR_FILE%
-) else (
-    echo   [警告] stderr の取得に失敗しました（終了コード: %JPQJOBGET_EXITCODE%）
-)
-goto :SHOW_RESULT
-
-:GET_BOTH
-set COMBINED_FILE=%TEMP%\jp1_combined_%RANDOM%.txt
-
-echo   取得中: stderr ...
-set STDERR_FILE=%TEMP%\jp1_stderr_%RANDOM%.txt
-jpqjobget -F %SCHEDULER_SERVICE% -n %EXEC_REG_NO% -e "%JOB_PATH%" > "%STDERR_FILE%" 2>&1
-if %ERRORLEVEL%==0 if exist "%STDERR_FILE%" (
-    for %%F in ("%STDERR_FILE%") do if %%~zF GTR 0 (
-        echo   [OK] stderr を取得しました
-        echo ===== STDERR ===== > "%COMBINED_FILE%"
-        type "%STDERR_FILE%" >> "%COMBINED_FILE%"
-        echo. >> "%COMBINED_FILE%"
-    )
-    del "%STDERR_FILE%" 2>nul
-) else (
-    echo   [情報] stderr は空です
-)
-
-echo   取得中: stdout ...
-set STDOUT_FILE=%TEMP%\jp1_stdout_%RANDOM%.txt
-jpqjobget -F %SCHEDULER_SERVICE% -n %EXEC_REG_NO% -s "%JOB_PATH%" > "%STDOUT_FILE%" 2>&1
-if %ERRORLEVEL%==0 if exist "%STDOUT_FILE%" (
-    for %%F in ("%STDOUT_FILE%") do if %%~zF GTR 0 (
-        echo   [OK] stdout を取得しました
-        echo ===== STDOUT ===== >> "%COMBINED_FILE%"
-        type "%STDOUT_FILE%" >> "%COMBINED_FILE%"
-    )
-    del "%STDOUT_FILE%" 2>nul
-) else (
-    echo   [情報] stdout は空です
-)
-
-set SPOOL_FILE=%COMBINED_FILE%
-goto :SHOW_RESULT
+echo jpqjobget終了コード: %JPQJOBGET_EXITCODE%
 
 :SHOW_RESULT
 echo.
