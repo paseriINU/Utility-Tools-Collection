@@ -1745,14 +1745,14 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
         script = script & "    Write-Log '[詳細取得] 異常終了したジョブを検索中...'" & vbCrLf
         script = script & "    $failedJobsResult = Invoke-JP1Command 'ajsshow.exe' @('-F', '" & config("SchedulerService") & "', '-R', '-f', '%J %T %C %R', '" & jobnetPath & "')" & vbCrLf
         script = script & "    $failedJobsStr = $failedJobsResult.Output -join ""`n""" & vbCrLf
-        script = script & "    Write-Log ""[DEBUG-02] ajsshow -R -f 結果: $failedJobsStr""" & vbCrLf
+        script = script & "    Write-Log ""[DEBUG] ajsshow -R -f 結果: $failedJobsStr""" & vbCrLf
         script = script & vbCrLf
         script = script & "    $failedJobPath = ''" & vbCrLf
         script = script & "    $nonZeroReturnJobPath = ''" & vbCrLf
         script = script & "    foreach ($line in $failedJobsResult.Output) {" & vbCrLf
         script = script & "      if ($line -match '^(/[^\s]+)\s+(\w*job|\w*jb)\s+(異常終了|警告終了|警告検出終了|Abnormal|Warning|ended abnormally|ended with warning)') {" & vbCrLf
         script = script & "        $failedJobPath = $matches[1]" & vbCrLf
-        script = script & "        Write-Log ""[DEBUG-03] 異常終了ジョブ検出: $failedJobPath""" & vbCrLf
+        script = script & "        Write-Log ""[DEBUG] 異常終了ジョブ検出: $failedJobPath""" & vbCrLf
         script = script & "        break" & vbCrLf
         script = script & "      }" & vbCrLf
         script = script & "      if (-not $nonZeroReturnJobPath -and $line -match '^(/[^\s]+)\s+(\w*job|\w*jb)\s+\S+\s+([1-9]\d*|-\d+)') {" & vbCrLf
@@ -1762,16 +1762,16 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
         script = script & "    if (-not $failedJobPath -and $nonZeroReturnJobPath) { $failedJobPath = $nonZeroReturnJobPath }" & vbCrLf
         script = script & vbCrLf
         script = script & "    if ($failedJobPath) {" & vbCrLf
-        script = script & "      Write-Log ""[DEBUG-04] failedJobPath: $failedJobPath""" & vbCrLf
+        script = script & "      Write-Log ""[DEBUG] failedJobPath: $failedJobPath""" & vbCrLf
         script = script & "      $detailResult = Invoke-JP1Command 'ajsshow.exe' @('-F', '" & config("SchedulerService") & "', '-g', '1', '-i', '%## %ll %rr', $failedJobPath)" & vbCrLf
         script = script & "      $detailStr = $detailResult.Output -join ""`n""" & vbCrLf
-        script = script & "      Write-Log ""[DEBUG-05] 詳細結果: $detailStr""" & vbCrLf
+        script = script & "      Write-Log ""[DEBUG] 詳細結果: $detailStr""" & vbCrLf
         script = script & vbCrLf
         script = script & "      $stderrFile = ''" & vbCrLf
         script = script & "      if ($detailStr -match '[A-Za-z]:[^\r\n]+\.err') { $stderrFile = $matches[0] }" & vbCrLf
         script = script & "      if ($stderrFile) {" & vbCrLf
         script = script & "        Write-Output ""RESULT_LOGPATH:$logFile""" & vbCrLf
-        script = script & "        Write-Log ""[DEBUG-06] 標準エラーファイル: $stderrFile""" & vbCrLf
+        script = script & "        Write-Log ""[DEBUG] 標準エラーファイル: $stderrFile""" & vbCrLf
         script = script & "        $logContent = Read-FileContent $stderrFile" & vbCrLf
         script = script & "        if ($logContent) {" & vbCrLf
         script = script & "          Write-Log '[詳細] 標準エラーログ:'" & vbCrLf
