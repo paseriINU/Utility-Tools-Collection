@@ -1440,6 +1440,14 @@
                 return '';
             }
 
+            // デバッグ: 入力バイト配列の先頭20バイトを出力
+            const inputDebug = [];
+            for (let d = 0; d < Math.min(titleBytes.length, 20); d++) {
+                inputDebug.push(titleBytes[d].toString(16).padStart(2, '0'));
+            }
+            console.log('[decodeTitle] 入力バイト(先頭20):', inputDebug.join(' '));
+            console.log('[decodeTitle] 入力長:', titleBytes.length);
+
             // PDFエスケープシーケンスを処理するためにまずLatin-1でデコード
             let rawStr = '';
             for (let i = 0; i < titleBytes.length; i++) {
@@ -1464,28 +1472,36 @@
             if (processedBytes.length >= 2 &&
                 processedBytes[0] === 0xFE &&
                 processedBytes[1] === 0xFF) {
+                console.log('[decodeTitle] UTF-16BE BOM検出');
                 try {
                     // BOMを含めてデコード
                     const utf16Str = new TextDecoder('utf-16be').decode(processedBytes);
                     if (utf16Str && utf16Str.trim()) {
+                        console.log('[decodeTitle] UTF-16BEデコード成功:', utf16Str.substring(0, 30));
                         // BOMを除去して返す
                         return utf16Str.replace(/^\uFEFF/, '');
                     }
-                } catch (e) { }
+                } catch (e) {
+                    console.log('[decodeTitle] UTF-16BEデコード失敗:', e.message);
+                }
             }
 
             // UTF-16LE BOMチェック（FF FEで始まる）- Acrobat JavaScript生成のしおり対応
             if (processedBytes.length >= 2 &&
                 processedBytes[0] === 0xFF &&
                 processedBytes[1] === 0xFE) {
+                console.log('[decodeTitle] UTF-16LE BOM検出');
                 try {
                     // BOMを含めてデコード
                     const utf16Str = new TextDecoder('utf-16le').decode(processedBytes);
                     if (utf16Str && utf16Str.trim()) {
+                        console.log('[decodeTitle] UTF-16LEデコード成功:', utf16Str.substring(0, 30));
                         // BOMを除去して返す
                         return utf16Str.replace(/^\uFEFF/, '');
                     }
-                } catch (e) { }
+                } catch (e) {
+                    console.log('[decodeTitle] UTF-16LEデコード失敗:', e.message);
+                }
             }
 
             // UTF-8 BOMチェック
@@ -1559,6 +1575,8 @@
                     ? ['utf-16le', 'utf-16be']
                     : ['utf-16be', 'utf-16le'];
 
+                console.log('[decodeTitle] UTF-16スコア LE:', leScore, 'BE:', beScore, 'NULLバイト:', nullByteCount, '/', totalPairs);
+
                 // スコアがあるか、NULLバイトパターンがある場合にUTF-16を試す
                 if (leScore > 0 || beScore > 0 || hasNullBytePattern) {
                     for (const encoding of tryEncodings) {
@@ -1570,12 +1588,17 @@
                                 const controlChars = (utf16Str.match(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g) || []).length;
                                 const validChars = utf16Str.length - replacementChars - controlChars;
 
+                                console.log('[decodeTitle]', encoding, '結果:', utf16Str.substring(0, 30), '有効:', validChars, '/', utf16Str.length);
+
                                 // 有効な文字が半分以上あれば採用
                                 if (validChars > utf16Str.length * 0.5 && replacementChars < utf16Str.length * 0.1) {
+                                    console.log('[decodeTitle] 採用:', encoding);
                                     return utf16Str;
                                 }
                             }
-                        } catch (e) { }
+                        } catch (e) {
+                            console.log('[decodeTitle]', encoding, 'デコード失敗:', e.message);
+                        }
                     }
                 }
             }
@@ -1586,10 +1609,11 @@
                 // 有効なUTF-8文字列かチェック（制御文字が多すぎないか）
                 const controlChars = (utf8Str.match(/[\x00-\x1F]/g) || []).length;
                 if (controlChars < utf8Str.length * 0.1) {
+                    console.log('[decodeTitle] UTF-8採用:', utf8Str.substring(0, 30));
                     return utf8Str;
                 }
             } catch (e) {
-                // UTF-8でデコードできない場合は次を試す
+                console.log('[decodeTitle] UTF-8デコード失敗');
             }
 
             // Shift_JIS (Windows-31J) として解釈を試みる
@@ -1598,10 +1622,11 @@
                 // 置換文字が少なければ有効とみなす
                 const replacementChars = (shiftJisStr.match(/\uFFFD/g) || []).length;
                 if (replacementChars < shiftJisStr.length * 0.2) {
+                    console.log('[decodeTitle] Shift_JIS採用:', shiftJisStr.substring(0, 30));
                     return shiftJisStr;
                 }
             } catch (e) {
-                // Shift_JISデコーダーが利用できない場合
+                console.log('[decodeTitle] Shift_JISデコード失敗');
             }
 
             // PDFDocEncodingとして解釈を試みる（0x80-0x9F範囲の特殊文字対応）
@@ -1611,14 +1636,16 @@
                 if (pdfDocStr && pdfDocStr.trim()) {
                     const controlChars = (pdfDocStr.match(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g) || []).length;
                     if (controlChars < pdfDocStr.length * 0.1) {
+                        console.log('[decodeTitle] PDFDocEncoding採用:', pdfDocStr.substring(0, 30));
                         return pdfDocStr;
                     }
                 }
             } catch (e) {
-                // PDFDocEncodingデコードに失敗
+                console.log('[decodeTitle] PDFDocEncodingデコード失敗');
             }
 
             // 最終手段: PDFエスケープをデコードした文字列をそのまま返す
+            console.log('[decodeTitle] フォールバック（rawデコード文字列）:', decodedStr.substring(0, 30));
             return decodedStr;
         }
 
@@ -2149,8 +2176,18 @@
             - 16進数エスケープ: \xNN
             - 特殊文字: \n, \r, \t, \b, \f, \\, \(, \)
             */
+
+            // デバッグ: 入力文字列の最初の20バイトを16進数で出力
+            const debugBytes = [];
+            for (let d = 0; d < Math.min(str.length, 20); d++) {
+                debugBytes.push(str.charCodeAt(d).toString(16).padStart(2, '0'));
+            }
+            console.log('[decodePDFString] 入力バイト(先頭20):', debugBytes.join(' '));
+            console.log('[decodePDFString] 入力長:', str.length);
+
             let result = '';
             let i = 0;
+            let escapeCount = 0;
 
             while (i < str.length) {
                 if (str[i] === '\\' && i + 1 < str.length) {
@@ -2158,6 +2195,7 @@
 
                     // 8進数エスケープ: \0 - \377
                     if (nextChar >= '0' && nextChar <= '7') {
+                        escapeCount++;
                         // 最大3桁の8進数を取得
                         let octalStr = '';
                         let j = i + 1;
@@ -2172,6 +2210,7 @@
                             i = j;
                         } else {
                             // 3桁で255超えの場合、2桁として解釈
+                            console.log('[decodePDFString] 8進数255超え:', octalStr, '-> 2桁解釈:', octalStr.substring(0, 2));
                             const twoDigitOctal = octalStr.substring(0, 2);
                             result += String.fromCharCode(parseInt(twoDigitOctal, 8));
                             i += 3; // \NN の分
@@ -2219,6 +2258,14 @@
                 result += str[i];
                 i++;
             }
+
+            // デバッグ: 結果を出力
+            const resultBytes = [];
+            for (let d = 0; d < Math.min(result.length, 20); d++) {
+                resultBytes.push(result.charCodeAt(d).toString(16).padStart(2, '0'));
+            }
+            console.log('[decodePDFString] 出力バイト(先頭20):', resultBytes.join(' '));
+            console.log('[decodePDFString] 出力長:', result.length, 'エスケープ処理数:', escapeCount);
 
             return result;
         }
