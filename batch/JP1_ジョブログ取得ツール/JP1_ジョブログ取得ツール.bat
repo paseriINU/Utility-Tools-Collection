@@ -31,10 +31,10 @@ rem 取得対象のジョブのフルパス（ジョブネット内のジョブ�
 rem 例: /main_unit/jobgroup1/daily_batch/job1
 set JOB_PATH=/main_unit/jobgroup1/daily_batch/job1
 
-rem JP1ユーザー名（空の場合は現在のログインユーザーで実行）
+rem JP1ユーザー名（必須）
 set JP1_USER=
 
-rem JP1パスワード（空の場合は実行時に入力、JP1_USERが空の場合は不要）
+rem JP1パスワード（必須）
 set JP1_PASSWORD=
 
 rem 取得するスプールの種類（stdout=標準出力、stderr=標準エラー出力、both=両方）
@@ -49,6 +49,21 @@ echo ================================================================
 echo   JP1 ジョブログ取得ツール（バッチ版）
 echo ================================================================
 echo.
+
+rem 必須設定のチェック
+if "%JP1_USER%"=="" (
+    echo [エラー] JP1ユーザー名が設定されていません
+    echo.
+    echo 設定セクションのJP1_USERを設定してください。
+    goto :ERROR_EXIT
+)
+
+if "%JP1_PASSWORD%"=="" (
+    echo [エラー] JP1パスワードが設定されていません
+    echo.
+    echo 設定セクションのJP1_PASSWORDを設定してください。
+    goto :ERROR_EXIT
+)
 
 rem コマンドパス検索
 set AJSSHOW_PATH=
@@ -98,17 +113,6 @@ echo   ジョブパス            : %JOB_PATH%
 echo   スプール種類          : %SPOOL_TYPE%
 echo.
 
-rem JP1認証パラメータの構築
-set AUTH_PARAMS=
-if not "%JP1_USER%"=="" (
-    if "%JP1_PASSWORD%"=="" (
-        echo [注意] JP1パスワードが設定されていません。
-        set /p JP1_PASSWORD=JP1パスワードを入力してください:
-        echo.
-    )
-    set AUTH_PARAMS=-u %JP1_USER% -p %JP1_PASSWORD%
-)
-
 rem ========================================
 rem ジョブ情報の取得（ajsshow）
 rem ========================================
@@ -121,24 +125,12 @@ rem 一時ファイル作成
 set TEMP_AJSSHOW=%TEMP%\jp1_ajsshow_%RANDOM%.txt
 
 rem ajsshowコマンド実行（-E で実行結果詳細を取得）
-echo 実行コマンド: ajsshow -F %SCHEDULER_SERVICE% -E "%JOB_PATH%"
+set AJSSHOW_CMD="%AJSSHOW_PATH%" -F %SCHEDULER_SERVICE% -u %JP1_USER% -p %JP1_PASSWORD% -E "%JOB_PATH%"
+echo 実行コマンド: %AJSSHOW_CMD%
 echo.
 
-rem JP1ユーザー指定の有無で分岐
-if not "%JP1_USER%"=="" goto :AJSSHOW_WITH_AUTH
-goto :AJSSHOW_WITHOUT_AUTH
-
-:AJSSHOW_WITH_AUTH
-"%AJSSHOW_PATH%" -F %SCHEDULER_SERVICE% -u %JP1_USER% -p %JP1_PASSWORD% -E "%JOB_PATH%" > "%TEMP_AJSSHOW%" 2>&1
+%AJSSHOW_CMD% > "%TEMP_AJSSHOW%" 2>&1
 set AJSSHOW_EXITCODE=%ERRORLEVEL%
-goto :AJSSHOW_DONE
-
-:AJSSHOW_WITHOUT_AUTH
-"%AJSSHOW_PATH%" -F %SCHEDULER_SERVICE% -E "%JOB_PATH%" > "%TEMP_AJSSHOW%" 2>&1
-set AJSSHOW_EXITCODE=%ERRORLEVEL%
-goto :AJSSHOW_DONE
-
-:AJSSHOW_DONE
 
 echo ajsshow結果:
 type "%TEMP_AJSSHOW%"
