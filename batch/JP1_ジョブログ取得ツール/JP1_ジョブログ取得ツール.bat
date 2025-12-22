@@ -62,12 +62,12 @@ rem 一時ファイル作成
 set TEMP_AJSSHOW=%TEMP%\jp1_ajsshow_%RANDOM%.txt
 
 rem ajsshowコマンド実行（-g 1 -i でジョブ番号を取得）
-rem フォーマット: %I → ジョブ番号のみを出力（jpqjobgetの-jオプションで使用）
+rem フォーマット: %II（2バイト版）→ ジョブ番号のみを出力（jpqjobgetの-jオプションで使用）
 rem 公式ドキュメント: https://itpfdoc.hitachi.co.jp/manuals/3021/30213L4920/AJSO0131.HTM
-echo 実行コマンド: ajsshow -F %SCHEDULER_SERVICE% -g 1 -i '%%I' "%JOB_PATH%"
+echo 実行コマンド: ajsshow -F %SCHEDULER_SERVICE% -g 1 -i '%%II' "%JOB_PATH%"
 echo.
 
-ajsshow -F %SCHEDULER_SERVICE% -g 1 -i '%%I' "%JOB_PATH%" > "%TEMP_AJSSHOW%" 2>&1
+ajsshow -F %SCHEDULER_SERVICE% -g 1 -i '%%II' "%JOB_PATH%" > "%TEMP_AJSSHOW%" 2>&1
 set AJSSHOW_EXITCODE=%ERRORLEVEL%
 
 echo ajsshow結果:
