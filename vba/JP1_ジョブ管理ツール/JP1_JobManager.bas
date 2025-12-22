@@ -1728,8 +1728,8 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
             script = script & "    if ($failedJobPath) {" & vbCrLf
             script = script & "      Write-Log ""[DEBUG-09] failedJobPath が見つかりました: $failedJobPath""" & vbCrLf
             script = script & "      # 失敗したジョブの詳細を取得（実行ID、実行登録番号、標準エラー出力ファイル名、ジョブ番号）" & vbCrLf
-            script = script & "      Write-Log ""[DEBUG-10] 実行コマンド: $ajsshowPath -F '" & config("SchedulerService") & "' -g 1 -i '%## %ll %rr %I' $failedJobPath""" & vbCrLf
-            script = script & "      $detailResult = & $ajsshowPath -F '" & config("SchedulerService") & "' -g 1 -i '%## %ll %rr %I' $failedJobPath 2>&1" & vbCrLf
+            script = script & "      Write-Log ""[DEBUG-10] 実行コマンド: $ajsshowPath -F '" & config("SchedulerService") & "' -g 1 -i '%## %ll %rr %II' $failedJobPath""" & vbCrLf
+            script = script & "      $detailResult = & $ajsshowPath -F '" & config("SchedulerService") & "' -g 1 -i '%## %ll %rr %II' $failedJobPath 2>&1" & vbCrLf
             script = script & "      $detailStr = $detailResult -join ""`n""" & vbCrLf
             script = script & "      Write-Log ""[DEBUG-11] ajsshow -g 1 -i 結果:""" & vbCrLf
             script = script & "      Write-Log $detailStr" & vbCrLf
@@ -1762,7 +1762,7 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
             script = script & vbCrLf
             script = script & "      # ファイルが読めなかった場合、jpqjobgetを試行" & vbCrLf
             script = script & "      if (-not $logContent -and $jpqjobgetPath) {" & vbCrLf
-            script = script & "        # ジョブ番号（%I）を抽出（ajsshow出力の最後の数値）" & vbCrLf
+            script = script & "        # ジョブ番号（%II）を抽出（ajsshow出力の最後の数値）" & vbCrLf
             script = script & "        $jobNo = ''" & vbCrLf
             script = script & "        $parts = ($detailStr -split '\s+') | Where-Object { $_ -match '^\d+$' }" & vbCrLf
             script = script & "        if ($parts) { $jobNo = @($parts)[-1] }" & vbCrLf
