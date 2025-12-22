@@ -1686,12 +1686,6 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
             script = script & "  if ($lastStatusStr -match '警告検出終了|異常終了|異常検出終了|ended abnormally|ended with warning') {" & vbCrLf
             script = script & "    Write-Log '[詳細取得] 異常終了したジョブを検索中...'" & vbCrLf
             script = script & vbCrLf
-            script = script & "    # jpqjobgetのパスを検索" & vbCrLf
-            script = script & "    $jpqjobgetPath = $null" & vbCrLf
-            script = script & "    $jpqSearchPaths = @('C:\Program Files\HITACHI\JP1AJS3\bin\jpqjobget.exe','C:\Program Files (x86)\HITACHI\JP1AJS3\bin\jpqjobget.exe','C:\Program Files\Hitachi\JP1AJS2\bin\jpqjobget.exe','C:\Program Files (x86)\Hitachi\JP1AJS2\bin\jpqjobget.exe')" & vbCrLf
-            script = script & "    foreach ($p in $jpqSearchPaths) { if (Test-Path $p) { $jpqjobgetPath = $p; break } }" & vbCrLf
-            script = script & "    Write-Log ""[DEBUG-01] jpqjobgetPath: $jpqjobgetPath""" & vbCrLf
-            script = script & vbCrLf
             script = script & "    # ajsshow -R -f で配下すべてのユニットを取得（フォーマット: ジョブ名 種別 状態 戻り値）" & vbCrLf
             script = script & "    Write-Log ""[DEBUG-02] 実行コマンド: $ajsshowPath -F '" & config("SchedulerService") & "' -R -f '%J %T %C %R' '" & jobnetPath & "'""" & vbCrLf
             script = script & "    $failedJobsResult = & $ajsshowPath -F '" & config("SchedulerService") & "' -R -f '%J %T %C %R' '" & jobnetPath & "' 2>&1" & vbCrLf
@@ -1753,44 +1747,11 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
             script = script & "        Write-Output ""RESULT_LOGPATH:$logFile""" & vbCrLf
             script = script & "      }" & vbCrLf
             script = script & vbCrLf
-            script = script & "      # まず標準エラーファイルを直接読み取る（ローカルモード）" & vbCrLf
+            script = script & "      # 標準エラーファイルを直接読み取る（ローカルモード）" & vbCrLf
             script = script & "      $logContent = $null" & vbCrLf
             script = script & "      if ($logPath -and (Test-Path $logPath)) {" & vbCrLf
             script = script & "        Write-Log ""[DEBUG-15] 標準エラーファイルを直接読み取り: $logPath""" & vbCrLf
             script = script & "        $logContent = Get-Content $logPath -Encoding Default -ErrorAction SilentlyContinue" & vbCrLf
-            script = script & "      }" & vbCrLf
-            script = script & vbCrLf
-            script = script & "      # ファイルが読めなかった場合、jpqjobgetを試行" & vbCrLf
-            script = script & "      if (-not $logContent -and $jpqjobgetPath) {" & vbCrLf
-            script = script & "        # ジョブ番号（%II）を抽出（ajsshow出力の最後の数値）" & vbCrLf
-            script = script & "        $jobNo = ''" & vbCrLf
-            script = script & "        $parts = ($detailStr -split '\s+') | Where-Object { $_ -match '^\d+$' }" & vbCrLf
-            script = script & "        if ($parts) { $jobNo = @($parts)[-1] }" & vbCrLf
-            script = script & "        Write-Log ""[DEBUG-16] 抽出したジョブ番号: $jobNo""" & vbCrLf
-            script = script & vbCrLf
-            script = script & "        if ($jobNo) {" & vbCrLf
-            script = script & "          $tempDir = $env:TEMP" & vbCrLf
-            script = script & "          $stderrFile = Join-Path $tempDir ""jp1_stderr_$jobNo.tmp""" & vbCrLf
-            script = script & "          $stdoutFile = Join-Path $tempDir ""jp1_stdout_$jobNo.tmp""" & vbCrLf
-            script = script & "          Write-Log ""[DEBUG-17] jpqjobget実行: -j $jobNo -ose $stderrFile""" & vbCrLf
-            script = script & "          $jpqResult = & $jpqjobgetPath -j $jobNo -ose $stderrFile 2>&1" & vbCrLf
-            script = script & "          Write-Log ""[DEBUG-18] jpqjobget -ose 結果: $($jpqResult -join ' ')""" & vbCrLf
-            script = script & "          if (Test-Path $stderrFile) {" & vbCrLf
-            script = script & "            $logContent = Get-Content $stderrFile -Encoding Default -ErrorAction SilentlyContinue" & vbCrLf
-            script = script & "            Remove-Item $stderrFile -Force -ErrorAction SilentlyContinue" & vbCrLf
-            script = script & "          }" & vbCrLf
-            script = script & "          if (-not $logContent) {" & vbCrLf
-            script = script & "            Write-Log ""[DEBUG-19] 標準エラー取得失敗、標準出力を試行""" & vbCrLf
-            script = script & "            $jpqResult = & $jpqjobgetPath -j $jobNo -oso $stdoutFile 2>&1" & vbCrLf
-            script = script & "            Write-Log ""[DEBUG-20] jpqjobget -oso 結果: $($jpqResult -join ' ')""" & vbCrLf
-            script = script & "            if (Test-Path $stdoutFile) {" & vbCrLf
-            script = script & "              $logContent = Get-Content $stdoutFile -Encoding Default -ErrorAction SilentlyContinue" & vbCrLf
-            script = script & "              Remove-Item $stdoutFile -Force -ErrorAction SilentlyContinue" & vbCrLf
-            script = script & "            }" & vbCrLf
-            script = script & "          }" & vbCrLf
-            script = script & "        } else {" & vbCrLf
-            script = script & "          Write-Log 'ジョブ番号が取得できませんでした'" & vbCrLf
-            script = script & "        }" & vbCrLf
             script = script & "      }" & vbCrLf
             script = script & vbCrLf
             script = script & "      if ($logContent) {" & vbCrLf
@@ -2075,25 +2036,6 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
             script = script & "            Get-Content $filePath -Encoding Default -ErrorAction SilentlyContinue" & vbCrLf
             script = script & "          }" & vbCrLf
             script = script & "        } -ArgumentList $stderrFile" & vbCrLf
-            script = script & "      }" & vbCrLf
-            script = script & vbCrLf
-            script = script & "      # ファイルが読めなかった場合、jpqjobgetを試行" & vbCrLf
-            script = script & "      if (-not $logContent -and $execRegNo) {" & vbCrLf
-            script = script & "        Write-Log ""[DEBUG-33] jpqjobget実行(リモート): -F '" & config("SchedulerService") & "' -n $execRegNo -e $failedJobPath""" & vbCrLf
-            script = script & "        $logContent = Invoke-Command -Session $session -ScriptBlock {" & vbCrLf
-            script = script & "          param($schedulerService, $execRegNo, $jobPath)" & vbCrLf
-            script = script & "          $jpqPath = $null" & vbCrLf
-            script = script & "          $searchPaths = @('C:\Program Files\HITACHI\JP1AJS3\bin\jpqjobget.exe','C:\Program Files (x86)\HITACHI\JP1AJS3\bin\jpqjobget.exe','C:\Program Files\Hitachi\JP1AJS2\bin\jpqjobget.exe','C:\Program Files (x86)\Hitachi\JP1AJS2\bin\jpqjobget.exe')" & vbCrLf
-            script = script & "          foreach ($p in $searchPaths) { if (Test-Path $p) { $jpqPath = $p; break } }" & vbCrLf
-            script = script & "          if (-not $jpqPath) { return $null }" & vbCrLf
-            script = script & "          # 標準エラーを取得" & vbCrLf
-            script = script & "          $result = & $jpqPath '-F' $schedulerService '-n' $execRegNo '-e' $jobPath 2>&1" & vbCrLf
-            script = script & "          if (-not $result -or $result -match 'KAVS') {" & vbCrLf
-            script = script & "            # 標準エラーがなければ標準出力を取得" & vbCrLf
-            script = script & "            $result = & $jpqPath '-F' $schedulerService '-n' $execRegNo '-s' $jobPath 2>&1" & vbCrLf
-            script = script & "          }" & vbCrLf
-            script = script & "          $result" & vbCrLf
-            script = script & "        } -ArgumentList '" & config("SchedulerService") & "', $execRegNo, $failedJobPath" & vbCrLf
             script = script & "      }" & vbCrLf
             script = script & vbCrLf
             script = script & "      if ($logContent) {" & vbCrLf
