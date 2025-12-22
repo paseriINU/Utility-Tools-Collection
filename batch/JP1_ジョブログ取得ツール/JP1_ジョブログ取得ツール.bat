@@ -51,23 +51,23 @@ echo   スプール種類          : %SPOOL_TYPE%
 echo.
 
 rem ========================================
-rem ジョブ番号の取得（ajsshow -i）
+rem 実行登録番号の取得（ajsshow -i）
 rem ========================================
 echo ========================================
-echo ジョブ番号を取得中...
+echo 実行登録番号を取得中...
 echo ========================================
 echo.
 
 rem 一時ファイル作成
 set TEMP_AJSSHOW=%TEMP%\jp1_ajsshow_%RANDOM%.txt
 
-rem ajsshowコマンド実行（-g 1 -i でジョブ番号を取得）
-rem フォーマット: %II（2バイト版）→ ジョブ番号のみを出力（jpqjobgetの-jオプションで使用）
+rem ajsshowコマンド実行（-g 1 -i で実行登録番号を取得）
+rem フォーマット: %ll（2バイト版）→ 実行登録番号を出力（jpqjobgetの-nオプションで使用）
 rem 公式ドキュメント: https://itpfdoc.hitachi.co.jp/manuals/3021/30213L4920/AJSO0131.HTM
-echo 実行コマンド: ajsshow -F %SCHEDULER_SERVICE% -g 1 -i '%%II' "%JOB_PATH%"
+echo 実行コマンド: ajsshow -F %SCHEDULER_SERVICE% -g 1 -i '%%ll' "%JOB_PATH%"
 echo.
 
-ajsshow -F %SCHEDULER_SERVICE% -g 1 -i '%%II' "%JOB_PATH%" > "%TEMP_AJSSHOW%" 2>&1
+ajsshow -F %SCHEDULER_SERVICE% -g 1 -i '%%ll' "%JOB_PATH%" > "%TEMP_AJSSHOW%" 2>&1
 set AJSSHOW_EXITCODE=%ERRORLEVEL%
 
 echo ajsshow結果:
@@ -86,8 +86,8 @@ if not %AJSSHOW_EXITCODE%==0 (
     goto :ERROR_EXIT
 )
 
-rem ジョブ番号を抽出（出力から数値のみを取得）
-set JOB_NO=
+rem 実行登録番号を抽出（出力から数値のみを取得）
+set EXEC_REG_NO=
 
 rem 出力から数値を抽出
 for /f "tokens=*" %%L in ('type "%TEMP_AJSSHOW%"') do (
@@ -95,24 +95,24 @@ for /f "tokens=*" %%L in ('type "%TEMP_AJSSHOW%"') do (
     rem 空白で分割して数値を探す
     for %%N in (!LINE!) do (
         echo %%N | findstr /r "^[0-9][0-9]*$" >nul
-        if !ERRORLEVEL!==0 set JOB_NO=%%N
+        if !ERRORLEVEL!==0 set EXEC_REG_NO=%%N
     )
 )
 
 del "%TEMP_AJSSHOW%" 2>nul
 
-if not defined JOB_NO (
-    echo [エラー] ジョブ番号を取得できませんでした
+if not defined EXEC_REG_NO (
+    echo [エラー] 実行登録番号を取得できませんでした
     echo.
-    echo ajsshow -i の出力からジョブ番号を特定できませんでした。
+    echo ajsshow -i の出力から実行登録番号を特定できませんでした。
     echo ジョブが実行されていることを確認してください。
     goto :ERROR_EXIT
 )
 
 rem 空白を除去
-set JOB_NO=%JOB_NO: =%
+set EXEC_REG_NO=%EXEC_REG_NO: =%
 
-echo [OK] ジョブ番号: %JOB_NO%
+echo [OK] 実行登録番号: %EXEC_REG_NO%
 echo.
 
 rem ========================================
@@ -146,7 +146,7 @@ goto :GET_STDOUT
 :GET_STDOUT
 echo   取得中: stdout ...
 set STDOUT_FILE=%TEMP%\jp1_stdout_%RANDOM%.txt
-jpqjobget -j %JOB_NO% -oso "%STDOUT_FILE%" >nul 2>&1
+jpqjobget -F %SCHEDULER_SERVICE% -n %EXEC_REG_NO% -e "%JOB_PATH%" -oso "%STDOUT_FILE%" >nul 2>&1
 set JPQJOBGET_EXITCODE=%ERRORLEVEL%
 
 if %JPQJOBGET_EXITCODE%==0 if exist "%STDOUT_FILE%" (
@@ -160,7 +160,7 @@ goto :SHOW_RESULT
 :GET_STDERR
 echo   取得中: stderr ...
 set STDERR_FILE=%TEMP%\jp1_stderr_%RANDOM%.txt
-jpqjobget -j %JOB_NO% -ose "%STDERR_FILE%" >nul 2>&1
+jpqjobget -F %SCHEDULER_SERVICE% -n %EXEC_REG_NO% -e "%JOB_PATH%" -ose "%STDERR_FILE%" >nul 2>&1
 set JPQJOBGET_EXITCODE=%ERRORLEVEL%
 
 if %JPQJOBGET_EXITCODE%==0 if exist "%STDERR_FILE%" (
@@ -176,7 +176,7 @@ set COMBINED_FILE=%TEMP%\jp1_combined_%RANDOM%.txt
 
 echo   取得中: stderr ...
 set STDERR_FILE=%TEMP%\jp1_stderr_%RANDOM%.txt
-jpqjobget -j %JOB_NO% -ose "%STDERR_FILE%" >nul 2>&1
+jpqjobget -F %SCHEDULER_SERVICE% -n %EXEC_REG_NO% -e "%JOB_PATH%" -ose "%STDERR_FILE%" >nul 2>&1
 if %ERRORLEVEL%==0 if exist "%STDERR_FILE%" (
     echo   [OK] stderr を取得しました
     echo ===== STDERR ===== > "%COMBINED_FILE%"
@@ -189,7 +189,7 @@ if %ERRORLEVEL%==0 if exist "%STDERR_FILE%" (
 
 echo   取得中: stdout ...
 set STDOUT_FILE=%TEMP%\jp1_stdout_%RANDOM%.txt
-jpqjobget -j %JOB_NO% -oso "%STDOUT_FILE%" >nul 2>&1
+jpqjobget -F %SCHEDULER_SERVICE% -n %EXEC_REG_NO% -e "%JOB_PATH%" -oso "%STDOUT_FILE%" >nul 2>&1
 if %ERRORLEVEL%==0 if exist "%STDOUT_FILE%" (
     echo   [OK] stdout を取得しました
     echo ===== STDOUT ===== >> "%COMBINED_FILE%"
