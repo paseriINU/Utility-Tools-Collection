@@ -103,26 +103,15 @@ if not defined LOG_FILE_PATH (
 echo.
 
 rem ========================================
-rem スプール取得（ファイル直接読み取り）
+rem スプール取得・クリップボードコピー
 rem ========================================
 echo ========================================
 echo スプールを取得中...
 echo ========================================
 echo.
 
-set SPOOL_FILE=%TEMP%\jp1_spool_%RANDOM%.txt
-
-echo ファイルを読み取り中: %LOG_FILE_PATH%
-
-if exist "%LOG_FILE_PATH%" (
-    copy "%LOG_FILE_PATH%" "%SPOOL_FILE%" >nul 2>&1
-    if exist "%SPOOL_FILE%" (
-        echo [OK] 標準出力ファイルを読み取りました
-    ) else (
-        echo [エラー] ファイルのコピーに失敗しました
-        goto :ERROR_EXIT
-    )
-) else (
+rem ファイル存在チェック
+if not exist "%LOG_FILE_PATH%" (
     echo [エラー] 標準出力ファイルが存在しません: %LOG_FILE_PATH%
     echo.
     echo 以下を確認してください:
@@ -131,23 +120,12 @@ if exist "%LOG_FILE_PATH%" (
     goto :ERROR_EXIT
 )
 
-echo.
-
-rem 結果確認
-if not exist "%SPOOL_FILE%" (
-    echo ========================================
-    echo [エラー] スプールを取得できませんでした
-    echo ========================================
-    goto :ERROR_EXIT
-)
-
 rem ファイルサイズチェック
-for %%F in ("%SPOOL_FILE%") do set FILE_SIZE=%%~zF
+for %%F in ("%LOG_FILE_PATH%") do set FILE_SIZE=%%~zF
 if "%FILE_SIZE%"=="0" (
     echo ========================================
     echo [情報] スプールは空です
     echo ========================================
-    del "%SPOOL_FILE%" 2>nul
     goto :SUCCESS_EXIT
 )
 
@@ -156,18 +134,15 @@ echo ========================================
 echo 取得したスプール内容:
 echo ========================================
 echo.
-type "%SPOOL_FILE%"
+type "%LOG_FILE_PATH%"
 echo.
 
-rem クリップボードにコピー
-clip < "%SPOOL_FILE%"
+rem クリップボードにコピー（一時ファイル不要）
+type "%LOG_FILE_PATH%" | clip
 
 echo ========================================
 echo [OK] スプール内容をクリップボードにコピーしました
 echo ========================================
-
-rem 一時ファイル削除
-del "%SPOOL_FILE%" 2>nul
 
 :SUCCESS_EXIT
 echo.
