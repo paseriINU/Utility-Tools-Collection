@@ -86,18 +86,8 @@ if not %AJSSHOW_EXITCODE%==0 (
     goto :ERROR_EXIT
 )
 
-rem 実行登録番号を抽出（出力から数値のみを取得）
-set EXEC_REG_NO=
-
-rem 出力から数値を抽出
-for /f "tokens=*" %%L in ('type "%TEMP_AJSSHOW%"') do (
-    set LINE=%%L
-    rem 空白で分割して数値を探す
-    for %%N in (!LINE!) do (
-        echo %%N | findstr /r "^[0-9][0-9]*$" >nul
-        if !ERRORLEVEL!==0 set EXEC_REG_NO=%%N
-    )
-)
+rem 実行登録番号を抽出（出力をそのまま取得）
+set /p EXEC_REG_NO=<"%TEMP_AJSSHOW%"
 
 del "%TEMP_AJSSHOW%" 2>nul
 
@@ -108,9 +98,6 @@ if not defined EXEC_REG_NO (
     echo ジョブが実行されていることを確認してください。
     goto :ERROR_EXIT
 )
-
-rem 空白を除去
-set EXEC_REG_NO=%EXEC_REG_NO: =%
 
 echo [OK] 実行登録番号: %EXEC_REG_NO%
 echo.
