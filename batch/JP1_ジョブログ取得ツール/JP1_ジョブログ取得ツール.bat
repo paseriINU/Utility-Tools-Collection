@@ -51,22 +51,23 @@ echo   スプール種類          : %SPOOL_TYPE%
 echo.
 
 rem ========================================
-rem ジョブ情報の取得（ajsshow）
+rem ジョブ番号の取得（ajsshow -i）
 rem ========================================
 echo ========================================
-echo ジョブ情報を取得中...
+echo ジョブ番号を取得中...
 echo ========================================
 echo.
 
 rem 一時ファイル作成
 set TEMP_AJSSHOW=%TEMP%\jp1_ajsshow_%RANDOM%.txt
 
-rem ajsshowコマンド実行（-E で実行結果詳細を取得）
-set AJSSHOW_CMD=ajsshow -F %SCHEDULER_SERVICE% -E "%JOB_PATH%"
-echo 実行コマンド: %AJSSHOW_CMD%
+rem ajsshowコマンド実行（-g 1 -i "%%I" でジョブ番号を取得）
+rem %%I = ジョブ番号（jpqjobgetで使用）
+set AJSSHOW_CMD=ajsshow -F %SCHEDULER_SERVICE% -g 1 -i "%%I" "%JOB_PATH%"
+echo 実行コマンド: ajsshow -F %SCHEDULER_SERVICE% -g 1 -i "%%I" "%JOB_PATH%"
 echo.
 
-%AJSSHOW_CMD% > "%TEMP_AJSSHOW%" 2>&1
+ajsshow -F %SCHEDULER_SERVICE% -g 1 -i "%%I" "%JOB_PATH%" > "%TEMP_AJSSHOW%" 2>&1
 set AJSSHOW_EXITCODE=%ERRORLEVEL%
 
 echo ajsshow結果:
@@ -85,67 +86,33 @@ if not %AJSSHOW_EXITCODE%==0 (
     goto :ERROR_EXIT
 )
 
-rem 実行ID（ジョブ番号）を抽出
-rem ajsshow -E の出力から各種形式でジョブ番号を抽出
+rem ジョブ番号を抽出（出力から数値のみを取得）
 set JOB_NO=
 
-rem JOBNO または JOB-NO を含む行から抽出
-for /f "tokens=*" %%L in ('type "%TEMP_AJSSHOW%" ^| findstr /i "JOBNO JOB-NO"') do (
+rem 出力から数値を抽出
+for /f "tokens=*" %%L in ('type "%TEMP_AJSSHOW%"') do (
     set LINE=%%L
-    rem : で区切られた形式（JOB-NO : 12345）
-    for /f "tokens=2 delims=:" %%V in ("!LINE!") do (
-        for /f "tokens=1" %%N in ("%%V") do (
-            echo %%N | findstr /r "^[0-9][0-9]*$" >nul
-            if !ERRORLEVEL!==0 set JOB_NO=%%N
-        )
-    )
-    rem = で区切られた形式（JOBNO=12345）
-    for /f "tokens=2 delims==" %%V in ("!LINE!") do (
-        for /f "tokens=1" %%N in ("%%V") do (
-            echo %%N | findstr /r "^[0-9][0-9]*$" >nul
-            if !ERRORLEVEL!==0 set JOB_NO=%%N
-        )
-    )
-)
-
-rem @XXXX の形式から抽出（実行IDが@で始まる場合）
-if not defined JOB_NO (
-    for /f "tokens=*" %%L in ('type "%TEMP_AJSSHOW%" ^| findstr /r "^@[0-9]"') do (
-        set LINE=%%L
-        set JOB_NO=!LINE:@=!
-    )
-)
-
-rem EXEC-ID を含む行から抽出
-if not defined JOB_NO (
-    for /f "tokens=*" %%L in ('type "%TEMP_AJSSHOW%" ^| findstr /i "EXEC-ID"') do (
-        set LINE=%%L
-        for /f "tokens=2 delims=:" %%V in ("!LINE!") do (
-            for /f "tokens=1" %%N in ("%%V") do (
-                echo %%N | findstr /r "^[0-9][0-9]*$" >nul
-                if !ERRORLEVEL!==0 set JOB_NO=%%N
-            )
-        )
+    rem 空白で分割して数値を探す
+    for %%N in (!LINE!) do (
+        echo %%N | findstr /r "^[0-9][0-9]*$" >nul
+        if !ERRORLEVEL!==0 set JOB_NO=%%N
     )
 )
 
 del "%TEMP_AJSSHOW%" 2>nul
 
 if not defined JOB_NO (
-    echo [エラー] 実行ID（ジョブ番号）を取得できませんでした
+    echo [エラー] ジョブ番号を取得できませんでした
     echo.
-    echo ajsshowの出力から実行IDを特定できませんでした。
+    echo ajsshow -i "%%I" の出力からジョブ番号を特定できませんでした。
     echo ジョブが実行されていることを確認してください。
-    echo.
-    echo ヒント: ajsshow -E コマンドの出力にJOBNO、JOB-NO、EXEC-IDが
-    echo        含まれていることを確認してください。
     goto :ERROR_EXIT
 )
 
 rem 空白を除去
 set JOB_NO=%JOB_NO: =%
 
-echo [OK] 実行ID: %JOB_NO%
+echo [OK] ジョブ番号: %JOB_NO%
 echo.
 
 rem ========================================
