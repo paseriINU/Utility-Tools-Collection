@@ -2300,13 +2300,7 @@ Private Sub ToggleCheckMark(row As Long)
     End If
 
     ' セルの書式を中央揃えに
-    With ws.Cells(row, COL_SELECT)
-        .HorizontalAlignment = xlCenter
-        .Font.Size = 14
-    End With
-
-    ' 行の高さを固定（自動調整で大きくなるのを防ぐ）
-    ws.Rows(row).RowHeight = 18
+    ws.Cells(row, COL_SELECT).HorizontalAlignment = xlCenter
 
     Application.EnableEvents = True
     Exit Sub
