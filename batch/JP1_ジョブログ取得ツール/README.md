@@ -4,17 +4,28 @@ JP1/AJS3の指定されたジョブの標準出力（スプール）を取得し
 
 ## 概要
 
-- JP1/AJS3の`ajsshow -B`コマンドを使用してジョブのスプールを取得
+- JP1/AJS3の`ajsshow`および`jpqjobget`コマンドを使用してジョブのスプールを取得
 - 取得したログをクリップボードに自動コピー
 - 標準出力（stdout）、標準エラー出力（stderr）、または両方を取得可能
 - ローカルのJP1サーバーで直接実行
 
+## バージョン
+
+| ファイル名 | 説明 |
+|-----------|------|
+| `JP1_ジョブログ取得ツール.bat` | PowerShellハイブリッド版（UTF-8対応） |
+| `JP1_ジョブログ取得ツール_batch.bat` | 純粋バッチ版（Shift-JIS専用、文字コード問題が少ない） |
+
+**推奨**: 文字コードの問題が発生する場合は`_batch.bat`版をお使いください。
+
 ## 必要な環境
 
 - Windows 10/11 または Windows Server 2016以降
-- PowerShell 5.1以降
 - JP1/AJS3がインストールされている環境
-- `ajsshow.exe`コマンドへのアクセス権限
+- `ajsshow.exe`および`jpqjobget.exe`コマンドへのアクセス権限
+
+### PowerShellハイブリッド版の追加要件
+- PowerShell 5.1以降
 
 ## インストール/セットアップ
 
@@ -153,8 +164,9 @@ C:\Program Files (x86)\HITACHI\JP1AJS3\bin\ajsshow.exe
 
 ```
 JP1_ジョブログ取得ツール/
-├── JP1_ジョブログ取得ツール.bat  # メインスクリプト
-└── README.md                      # このファイル
+├── JP1_ジョブログ取得ツール.bat        # PowerShellハイブリッド版
+├── JP1_ジョブログ取得ツール_batch.bat  # 純粋バッチ版（Shift-JIS）
+└── README.md                           # このファイル
 ```
 
 ## 関連ツール
