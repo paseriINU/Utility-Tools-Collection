@@ -121,13 +121,13 @@ rem 一時ファイル作成
 set TEMP_AJSSHOW=%TEMP%\jp1_ajsshow_%RANDOM%.txt
 
 rem ajsshowコマンド実行（-g 1で最新世代、-Rで実行結果を詳細表示）
-set AJSSHOW_CMD="%AJSSHOW_PATH%" -F %SCHEDULER_SERVICE% -g 1 -R "%JOB_PATH%"
-if not "%JP1_USER%"=="" (
-    set AJSSHOW_CMD="%AJSSHOW_PATH%" -u %JP1_USER% -p %JP1_PASSWORD% -F %SCHEDULER_SERVICE% -g 1 -R "%JOB_PATH%"
-)
 echo 実行コマンド: ajsshow -F %SCHEDULER_SERVICE% -g 1 -R "%JOB_PATH%"
 
-%AJSSHOW_CMD% > "%TEMP_AJSSHOW%" 2>&1
+if not "%JP1_USER%"=="" (
+    "%AJSSHOW_PATH%" -u %JP1_USER% -p %JP1_PASSWORD% -F %SCHEDULER_SERVICE% -g 1 -R "%JOB_PATH%" > "%TEMP_AJSSHOW%" 2>&1
+) else (
+    "%AJSSHOW_PATH%" -F %SCHEDULER_SERVICE% -g 1 -R "%JOB_PATH%" > "%TEMP_AJSSHOW%" 2>&1
+)
 set AJSSHOW_EXITCODE=%ERRORLEVEL%
 
 echo ajsshow結果:
