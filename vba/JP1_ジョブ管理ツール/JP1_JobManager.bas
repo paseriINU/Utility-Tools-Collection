@@ -2299,6 +2299,9 @@ Private Sub ToggleCheckMark(row As Long)
         .Font.Size = 14
     End With
 
+    ' 行の高さを固定（自動調整で大きくなるのを防ぐ）
+    ws.Rows(row).RowHeight = 18
+
     Application.EnableEvents = True
     Exit Sub
 
