@@ -626,6 +626,30 @@ $ git checkout main && git pull
 - **エンコーディング注意**: 特にバッチファイルはShift_JISで保存（UTF-8入力がある場合は chcp 65001 使用）
 - **プライバシー**: 機密情報（パスワード、APIキーなど）をコミットしないこと
 
+## JP1/AJS3関連の開発ガイドライン
+
+JP1/AJS3関連のツールを作成・修正する場合は、以下のリファレンスを参照すること：
+
+- **JP1コマンドリファレンス**: `vba/JP1_ジョブ管理ツール/JP1_AJS3_COMMANDS.md`
+  - ajsshow, ajsentry, jpqjobget等のコマンド構文
+  - フォーマット指示子（%so, %rr, %II等）の使い方
+  - PCジョブ/UNIXジョブ/QUEUEジョブの違い
+
+### 重要な注意事項
+
+1. **jpqjobgetはQUEUEジョブ専用**
+   - PCジョブ/UNIXジョブでは使用不可
+   - PCジョブ/UNIXジョブは`ajsshow -i %so`（標準出力）や`-i %rr`（標準エラー）でファイルパスを取得し直接読み取る
+
+2. **ajsshowフォーマット指示子**
+   - 2バイト版（%JJ, %rr等）を基本的に使用
+   - 単一指定: `ajsshow -i %rr /パス` → 出力がシングルクォートで囲まれる
+   - 複数指定: `ajsshow -i "%JJ %rr" /パス` → ダブルクォートで囲む
+
+3. **公式ドキュメント**
+   - [ajsshow コマンドリファレンス](https://itpfdoc.hitachi.co.jp/manuals/3021/30213L4920/AJSO0131.HTM)
+   - [jpqjobget コマンドリファレンス](https://itpfdoc.hitachi.co.jp/manuals/3021/30213b1920/AJSO0194.HTM)
+
 ## Tools Currently Available
 
 ### Batch Scripts (.bat)

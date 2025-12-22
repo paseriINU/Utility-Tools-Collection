@@ -81,7 +81,7 @@ JP1/AJS3（Automatic Job Management System 3）は、日立製作所が提供す
 | `ajsshow` | 詳細情報を取得 | ★★★ |
 | `ajsname` | 名前を解決 | ★☆☆ |
 | `ajslogprint` | ログ情報を出力 | ★★☆ |
-| `jpqjobget` | ジョブの実行結果（標準出力/エラー）を取得 | ★★★ |
+| `jpqjobget` | ジョブの実行結果を取得（**QUEUEジョブ専用**） | ★☆☆ |
 | `jpqjobshow` | ジョブの詳細情報を表示 | ★★☆ |
 
 ### 定義操作
@@ -508,39 +508,48 @@ ajsshow [オプション] ジョブネットパス
 
 > 参考: [公式ドキュメント](https://itpfdoc.hitachi.co.jp/manuals/3021/30213L4920/AJSO0131.HTM)
 
-| 指示子 | 2バイト版 | 説明 |
-|--------|-----------|------|
-| `%J` | `%JJ` | ユニット名（完全名） |
-| `%j` | | ユニット名（30バイト以内） |
-| `%T` | `%TT` | ユニット種別（タイプ） |
-| `%C` | `%CC` | ジョブネットまたはジョブの状態 |
-| `%R` | `%RR` | 戻り値またはシグナルコード |
-| `%I` | `%II` | **ジョブ番号**（jpqjobgetの-jで使用） |
-| `%#` | `%##` | 実行ID |
-| `%G` | | 世代番号 |
-| `%l` | `%ll` | 実行ログパス |
-| `%r` | `%rr` | 標準エラー出力ファイル名 |
-| `%S` | | 実行開始日時 |
-| `%E` | | 実行終了日時 |
-| `%a` | | 実行所要時間 |
-| `%ex` | | 実行ホスト |
-| `%sc` | | スクリプトファイル |
-| `%prm` | | パラメータ |
-| `%wkp` | | 作業パス |
+> ⚠️ **使用上の注意**
+> - **2バイト版（%JJ, %rr等）を基本的に使用すること**（1バイト版は互換性のため）
+> - 単一指定: `ajsshow -i %rr /パス` → 出力がシングルクォートで囲まれる
+> - 複数指定: `ajsshow -i "%JJ %rr" /パス` → ダブルクォートで囲む、出力は囲まれない
+
+| 指示子（2バイト版推奨） | 1バイト版 | 説明 |
+|------------------------|-----------|------|
+| `%JJ` | `%J` | ユニット名（完全名） |
+| `%TT` | `%T` | ユニット種別（タイプ） |
+| `%CC` | `%C` | ジョブネットまたはジョブの状態 |
+| `%RR` | `%R` | 戻り値またはシグナルコード |
+| `%II` | `%I` | ジョブ番号（UNIXジョブのみ有効、キューレスジョブは`***`） |
+| `%##` | `%#` | 実行ID |
+| `%ll` | `%l` | 実行登録番号（YYYYMMDDNNN形式） |
+| `%so` | | **標準出力ファイル名**（PCジョブ/UNIXジョブで使用） |
+| `%rr` | `%r` | 標準エラー出力ファイル名 |
+| | `%G` | 世代番号 |
+| | `%o` | 実行終了予定日時（処理サイクル計算） |
+| | `%S` | 実行開始日時 |
+| | `%E` | 実行終了日時 |
+| | `%a` | 実行所要時間 |
+| | `%ex` | 実行ホスト |
+| | `%sc` | スクリプトファイル |
+| | `%prm` | パラメータ |
+| | `%wkp` | 作業パス |
 
 **実行例**:
 ```cmd
 rem 実行結果の詳細を取得
 ajsshow -F AJSROOT1 /main_unit/jobgroup1/daily_batch -E
 
-rem 定義情報を取得
-ajsshow -F AJSROOT1 /main_unit/jobgroup1/daily_batch -i '%J %T %C'
+rem 定義情報を取得（複数指定はダブルクォートで囲む）
+ajsshow -F AJSROOT1 /main_unit/jobgroup1/daily_batch -i "%JJ %TT %CC"
+
+rem 標準出力ファイルパスを取得（単一指定）
+ajsshow -F AJSROOT1 -g 1 -i %so /main_unit/jobgroup1/daily_batch/job1
 
 rem 最新の実行結果を取得
 ajsshow -F AJSROOT1 -g 1 /main_unit/jobgroup1/daily_batch
 
 rem 配下のユニットも含めて状態取得
-ajsshow -F AJSROOT1 -R -f '%J %T %C %R' /main_unit/jobgroup1
+ajsshow -F AJSROOT1 -R -f "%JJ %TT %CC %RR" /main_unit/jobgroup1
 
 rem ルートジョブネットの実行結果のみ
 ajsshow -F AJSROOT1 -g a -T /main_unit/jobgroup1/daily_batch
@@ -598,8 +607,17 @@ ajslogprint [オプション] ジョブパス
 
 ### jpqjobget（ジョブ実行結果取得）
 
-ジョブの実行結果（標準出力・標準エラー出力）を取得するコマンドです。
-**異常終了時のエラー内容を確認する際に非常に重要なコマンドです。**
+> ⚠️ **重要: QUEUEジョブ専用コマンド**
+>
+> `jpqjobget`は**QUEUEジョブ専用**のコマンドです。
+> **PCジョブやUNIXジョブでは使用できません。**
+>
+> - **QUEUEジョブ**: `jpqjobsub`コマンドで投入されたジョブ（旧方式、現在はほとんど使用されない）
+> - **PCジョブ/UNIXジョブ**: `ajsshow -i '%so'`（標準出力）や`-i '%rr'`（標準エラー）でファイルパスを取得し、直接読み取る
+>
+> 参考: https://itpfdoc.hitachi.co.jp/manuals/3021/30213b1920/AJSO0194.HTM
+
+QUEUEジョブの実行結果（標準出力・標準エラー出力）を取得するコマンドです。
 
 ```cmd
 jpqjobget [オプション] -j ジョブ番号
@@ -1081,14 +1099,22 @@ ajsshow -F AJSROOT1 -R -f '%J %T %S %R' /グループ名/ジョブネット名
 
 #### 5. 異常終了時のエラー内容確認
 
+**PCジョブ/UNIXジョブの場合**（ファイル直接読み取り）:
 ```cmd
-rem ジョブ番号を取得
-ajsshow -F AJSROOT1 -g 1 -i '%## %rr %ll %I' /グループ名/ジョブネット名/ジョブ名
+rem 標準エラー出力ファイルパスを取得（単一指定、出力はシングルクォートで囲まれる）
+ajsshow -F AJSROOT1 -g 1 -i %rr /グループ名/ジョブネット名/ジョブ名
 
-rem 標準エラー出力を取得（ジョブ番号が12345の場合）
-jpqjobget -j 12345 -ose C:\temp\stderr.txt
+rem 取得したファイルパスを直接参照（シングルクォートを除去して使用）
+type "取得したファイルパス"
+```
 
-rem ファイル内容を確認
+**QUEUEジョブの場合**（jpqjobget使用・現在はほとんど使用されない）:
+```cmd
+rem ジョブ番号を取得（UNIXジョブのみ有効）
+ajsshow -F AJSROOT1 -g 1 -i %II /グループ名/ジョブネット名/ジョブ名
+
+rem 標準エラー出力を取得
+jpqjobget -j ジョブ番号 -ose C:\temp\stderr.txt
 type C:\temp\stderr.txt
 ```
 
@@ -1180,14 +1206,13 @@ rem 1. 実行結果の詳細を確認
 ajsshow -F AJSROOT1 -g 1 -E /グループ名/ジョブネット名
 
 rem 2. 配下のジョブの状態を確認
-ajsshow -F AJSROOT1 -R -f '%J %T %S %R' /グループ名/ジョブネット名
+ajsshow -F AJSROOT1 -R -f "%JJ %TT %S %RR" /グループ名/ジョブネット名
 
-rem 3. 異常終了したジョブのジョブ番号を取得
-ajsshow -F AJSROOT1 -g 1 -i '%## %rr %ll %I' /グループ名/ジョブネット名/異常終了ジョブ名
+rem 3. 異常終了したジョブの標準エラー出力ファイルパスを取得
+ajsshow -F AJSROOT1 -g 1 -i %rr /グループ名/ジョブネット名/異常終了ジョブ名
 
-rem 4. 標準エラー出力を確認
-jpqjobget -j ジョブ番号 -ose C:\temp\stderr.txt
-type C:\temp\stderr.txt
+rem 4. 標準エラー出力を確認（取得したファイルパスからシングルクォートを除去して使用）
+type "取得したファイルパス"
 ```
 
 #### Q6. 実行中のジョブを止めたい
