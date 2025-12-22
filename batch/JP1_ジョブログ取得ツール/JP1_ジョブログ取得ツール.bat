@@ -9,7 +9,8 @@ rem
 rem ■ 説明
 rem    JP1/AJS3の指定されたジョブの標準出力（スプール）を取得し、
 rem    クリップボードにコピーします。
-rem    まずログファイルを直接読み取り、失敗時はjpqjobgetを使用します。
+rem    ajsshowで標準出力ファイルパスを取得し、直接読み取ります。
+rem    ※ PCジョブ・UNIXジョブ用（QUEUEジョブには対応していません）
 rem
 rem ■ 使い方
 rem    1. 下記の「設定セクション」を編集
@@ -47,26 +48,26 @@ echo   ジョブパス            : %JOB_PATH%
 echo.
 
 rem ========================================
-rem ジョブ番号の取得（ajsshow -i %II）
+rem 標準出力ファイルパスの取得（ajsshow -i %so）
 rem ========================================
 echo ========================================
-echo ジョブ番号を取得中...
+echo 標準出力ファイルパスを取得中...
 echo ========================================
 echo.
 
 rem 一時ファイル作成
 set TEMP_AJSSHOW=%TEMP%\jp1_ajsshow_%RANDOM%.txt
 
-rem ajsshowコマンド実行（ジョブ番号を取得）
-rem フォーマット: %II → ジョブ番号（2バイト版）
+rem ajsshowコマンド実行（標準出力ファイルパスを取得）
+rem フォーマット: %so → 標準出力ファイル名
 rem 公式ドキュメント: https://itpfdoc.hitachi.co.jp/manuals/3021/30213L4920/AJSO0131.HTM
-echo 実行コマンド: ajsshow -F %SCHEDULER_SERVICE% -g 1 -i '%%II' "%JOB_PATH%"
+echo 実行コマンド: ajsshow -F %SCHEDULER_SERVICE% -g 1 -i '%%so' "%JOB_PATH%"
 echo.
 
-ajsshow -F %SCHEDULER_SERVICE% -g 1 -i '%%II' "%JOB_PATH%" > "%TEMP_AJSSHOW%" 2>&1
+ajsshow -F %SCHEDULER_SERVICE% -g 1 -i '%%so' "%JOB_PATH%" > "%TEMP_AJSSHOW%" 2>&1
 set AJSSHOW_EXITCODE=%ERRORLEVEL%
 
-echo ajsshow結果（ジョブ番号）:
+echo ajsshow結果:
 type "%TEMP_AJSSHOW%"
 echo.
 
@@ -82,51 +83,27 @@ if not %AJSSHOW_EXITCODE%==0 (
     goto :ERROR_EXIT
 )
 
-rem ジョブ番号を抽出
-set JOB_NO=
-for /f "usebackq" %%A in ("%TEMP_AJSSHOW%") do (
-    if not defined JOB_NO set JOB_NO=%%A
+rem 標準出力ファイルパスを抽出（シングルクォートを除去）
+set LOG_FILE_PATH=
+for /f "usebackq delims=" %%A in ("%TEMP_AJSSHOW%") do (
+    if not defined LOG_FILE_PATH set LOG_FILE_PATH=%%A
 )
 del "%TEMP_AJSSHOW%" 2>nul
 
-echo [情報] ジョブ番号: %JOB_NO%
+rem シングルクォートを除去
+set LOG_FILE_PATH=%LOG_FILE_PATH:'=%
 
-if not defined JOB_NO (
-    echo [エラー] ジョブ番号を取得できませんでした
+echo [情報] 標準出力ファイル: %LOG_FILE_PATH%
+
+if not defined LOG_FILE_PATH (
+    echo [エラー] 標準出力ファイルパスを取得できませんでした
     goto :ERROR_EXIT
 )
 
-rem ========================================
-rem 標準エラーファイルパスの取得（ajsshow -i %rr）
-rem ========================================
-echo.
-echo 標準エラーファイルパスを取得中...
-
-set TEMP_AJSSHOW2=%TEMP%\jp1_ajsshow2_%RANDOM%.txt
-
-rem ajsshowコマンド実行（標準エラーファイルパスを取得）
-rem フォーマット: %rr → 標準エラー出力ファイル名（2バイト版）
-echo 実行コマンド: ajsshow -F %SCHEDULER_SERVICE% -g 1 -i '%%rr' "%JOB_PATH%"
-echo.
-
-ajsshow -F %SCHEDULER_SERVICE% -g 1 -i '%%rr' "%JOB_PATH%" > "%TEMP_AJSSHOW2%" 2>&1
-
-echo ajsshow結果（ファイルパス）:
-type "%TEMP_AJSSHOW2%"
-echo.
-
-rem ログファイルパスを抽出
-set LOG_FILE_PATH=
-for /f "usebackq delims=" %%A in ("%TEMP_AJSSHOW2%") do (
-    if not defined LOG_FILE_PATH set LOG_FILE_PATH=%%A
-)
-del "%TEMP_AJSSHOW2%" 2>nul
-
-echo [情報] ログファイル: %LOG_FILE_PATH%
 echo.
 
 rem ========================================
-rem スプール取得（まずファイル直接読み取りを試行）
+rem スプール取得（ファイル直接読み取り）
 rem ========================================
 echo ========================================
 echo スプールを取得中...
@@ -134,53 +111,24 @@ echo ========================================
 echo.
 
 set SPOOL_FILE=%TEMP%\jp1_spool_%RANDOM%.txt
-set LOG_CONTENT_FOUND=0
 
-rem 方法1: ログファイルを直接読み取る
-if defined LOG_FILE_PATH (
-    echo [試行1] ログファイルを直接読み取り: %LOG_FILE_PATH%
-    if exist "%LOG_FILE_PATH%" (
-        copy "%LOG_FILE_PATH%" "%SPOOL_FILE%" >nul 2>&1
-        if exist "%SPOOL_FILE%" (
-            for %%F in ("%SPOOL_FILE%") do (
-                if %%~zF GTR 0 (
-                    echo [OK] ログファイルを直接読み取りました
-                    set LOG_CONTENT_FOUND=1
-                )
-            )
-        )
-    ) else (
-        echo [情報] ファイルが存在しません
-    )
-)
+echo ファイルを読み取り中: %LOG_FILE_PATH%
 
-rem 方法2: ファイルが読めなかった場合、jpqjobgetを試行
-if !LOG_CONTENT_FOUND!==0 (
-    echo [試行2] jpqjobgetでスプールを取得...
-    rem 公式構文: jpqjobget -j ジョブ番号 -oso 標準出力ファイル
-    rem 参考: https://itpfdoc.hitachi.co.jp/manuals/3021/30213b1920/AJSO0194.HTM
-    echo 実行コマンド: jpqjobget -j %JOB_NO% -oso "%SPOOL_FILE%"
-    jpqjobget -j %JOB_NO% -oso "%SPOOL_FILE%" 2>&1
-    set JPQJOBGET_EXITCODE=!ERRORLEVEL!
-    echo jpqjobget終了コード: !JPQJOBGET_EXITCODE!
-
-    rem エラーチェック
+if exist "%LOG_FILE_PATH%" (
+    copy "%LOG_FILE_PATH%" "%SPOOL_FILE%" >nul 2>&1
     if exist "%SPOOL_FILE%" (
-        findstr /i "KAVS" "%SPOOL_FILE%" >nul 2>&1
-        if !ERRORLEVEL!==0 (
-            echo.
-            echo [警告] jpqjobgetでエラーが発生しました
-            type "%SPOOL_FILE%"
-            del "%SPOOL_FILE%" 2>nul
-        ) else (
-            for %%F in ("%SPOOL_FILE%") do (
-                if %%~zF GTR 0 (
-                    echo [OK] jpqjobgetでスプールを取得しました
-                    set LOG_CONTENT_FOUND=1
-                )
-            )
-        )
+        echo [OK] 標準出力ファイルを読み取りました
+    ) else (
+        echo [エラー] ファイルのコピーに失敗しました
+        goto :ERROR_EXIT
     )
+) else (
+    echo [エラー] 標準出力ファイルが存在しません: %LOG_FILE_PATH%
+    echo.
+    echo 以下を確認してください:
+    echo   - ジョブが実行済みか
+    echo   - スプールが保存されているか（保存期間の設定を確認）
+    goto :ERROR_EXIT
 )
 
 echo.
