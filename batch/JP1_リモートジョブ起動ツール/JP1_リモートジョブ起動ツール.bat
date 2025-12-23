@@ -250,6 +250,30 @@ try {
         Write-Host "ajsentryコマンドを実行中（即時実行のみ）..." -ForegroundColor Cyan
     }
 
+    #region ajsentry実行前に実行登録番号を取得（比較用）
+    $scriptBlockBeforeExec = {
+        param($ajsShowPath, $jp1User, $jp1Pass, $schedulerService, $jobnetPath)
+
+        if (-not (Test-Path $ajsShowPath)) {
+            return @{ ExitCode = -1; Output = @(); ExecRegNum = "" }
+        }
+
+        # ajsshow -g 1 -i %ll で最新世代の実行登録番号を取得
+        $output = & $ajsShowPath -h localhost -u $jp1User -p $jp1Pass -F $schedulerService -g 1 -i '%ll' $jobnetPath 2>&1
+        $execRegNum = ($output | Select-Object -First 1) -replace "'", ""
+
+        @{
+            ExitCode = $LASTEXITCODE
+            Output = $output
+            ExecRegNum = $execRegNum.Trim()
+        }
+    }
+
+    $beforeResult = Invoke-Command -Session $session -ScriptBlock $scriptBlockBeforeExec -ArgumentList $Config.AjsshowPath, $Config.JP1User, $Config.JP1Password, $Config.SchedulerService, $Config.JobnetPath
+    $beforeExecRegNum = $beforeResult.ExecRegNum
+    Write-Host "  実行前の実行登録番号: $beforeExecRegNum" -ForegroundColor Gray
+    #endregion
+
     #region ジョブネット起動
     $scriptBlockEntry = {
         param($ajsPath, $jp1User, $jp1Pass, $schedulerService, $jobnetPath, $waitForCompletion)
@@ -276,6 +300,31 @@ try {
 
     $result = Invoke-Command -Session $session -ScriptBlock $scriptBlockEntry -ArgumentList $Config.AjsentryPath, $Config.JP1User, $Config.JP1Password, $Config.SchedulerService, $Config.JobnetPath, $Config.WaitForCompletion
 
+    #region ajsentry実行後に実行登録番号を取得して変化を確認
+    $afterResult = Invoke-Command -Session $session -ScriptBlock $scriptBlockBeforeExec -ArgumentList $Config.AjsshowPath, $Config.JP1User, $Config.JP1Password, $Config.SchedulerService, $Config.JobnetPath
+    $execRegNum = $afterResult.ExecRegNum
+    Write-Host "  実行後の実行登録番号: $execRegNum" -ForegroundColor Gray
+
+    # 実行登録番号が変化したかチェック
+    if ($execRegNum -eq $beforeExecRegNum) {
+        Write-Host ""
+        Write-Host "========================================" -ForegroundColor Red
+        Write-Host "[エラー] 実行登録番号が変化していません" -ForegroundColor Red
+        Write-Host "ジョブが実行されませんでした" -ForegroundColor Red
+        Write-Host "========================================" -ForegroundColor Red
+        Write-Host ""
+        Write-Host "考えられる原因:" -ForegroundColor Yellow
+        Write-Host "  - ジョブネットパスが正しくない" -ForegroundColor Yellow
+        Write-Host "  - ジョブネットが既に実行中" -ForegroundColor Yellow
+        Write-Host "  - ジョブネットが保留中" -ForegroundColor Yellow
+        Write-Host "  - 実行登録の権限がない" -ForegroundColor Yellow
+        Remove-PSSession -Session $session
+        $exitCode = 1
+        throw "実行登録番号が変化していません"
+    }
+    Write-Host "  [OK] 実行登録番号が変化しました" -ForegroundColor Green
+    #endregion
+
     Write-Host ""
     Write-Host "ajsentry出力:" -ForegroundColor White
     $result.Output | ForEach-Object {
@@ -300,7 +349,7 @@ try {
         Write-Host "========================================" -ForegroundColor Cyan
 
         $scriptBlockStatus = {
-            param($ajsShowPath, $jp1User, $jp1Pass, $schedulerService, $jobnetPath)
+            param($ajsShowPath, $jp1User, $jp1Pass, $schedulerService, $jobnetPath, $execRegNum)
 
             if (-not (Test-Path $ajsShowPath)) {
                 return @{
@@ -310,8 +359,8 @@ try {
                 }
             }
 
-            # ajsshow -i %CC でジョブネット状態を取得
-            $output = & $ajsShowPath -h localhost -u $jp1User -p $jp1Pass -F $schedulerService -i '%CC' $jobnetPath 2>&1
+            # ajsshow -B 実行登録番号 -i %CC でジョブネット状態を取得（特定の世代を指定）
+            $output = & $ajsShowPath -h localhost -u $jp1User -p $jp1Pass -F $schedulerService -B $execRegNum -i '%CC' $jobnetPath 2>&1
             $exitCode = $LASTEXITCODE
 
             @{
@@ -321,7 +370,7 @@ try {
             }
         }
 
-        $statusResult = Invoke-Command -Session $session -ScriptBlock $scriptBlockStatus -ArgumentList $Config.AjsshowPath, $Config.JP1User, $Config.JP1Password, $Config.SchedulerService, $Config.JobnetPath
+        $statusResult = Invoke-Command -Session $session -ScriptBlock $scriptBlockStatus -ArgumentList $Config.AjsshowPath, $Config.JP1User, $Config.JP1Password, $Config.SchedulerService, $Config.JobnetPath, $execRegNum
 
         if ($statusResult.Available) {
             $statusStr = $statusResult.Output -join ' '
@@ -360,7 +409,7 @@ try {
         Write-Host ""
 
         $scriptBlockShow = {
-            param($ajsShowPath, $jp1User, $jp1Pass, $schedulerService, $jobnetPath)
+            param($ajsShowPath, $jp1User, $jp1Pass, $schedulerService, $jobnetPath, $execRegNum)
 
             if (-not (Test-Path $ajsShowPath)) {
                 return @{
@@ -370,9 +419,10 @@ try {
                 }
             }
 
-            # ajsshow構文: ajsshow -h ホスト -u ユーザー -p パス -F スケジューラーサービス -E ジョブネットパス
+            # ajsshow構文: ajsshow -h ホスト -u ユーザー -p パス -F スケジューラーサービス -B 実行登録番号 -E ジョブネットパス
+            # -B: 特定の実行登録番号を指定
             # -E: 実行結果の詳細情報を表示
-            $output = & $ajsShowPath -h localhost -u $jp1User -p $jp1Pass -F $schedulerService -E $jobnetPath 2>&1
+            $output = & $ajsShowPath -h localhost -u $jp1User -p $jp1Pass -F $schedulerService -B $execRegNum -E $jobnetPath 2>&1
             $exitCode = $LASTEXITCODE
 
             @{
@@ -382,7 +432,7 @@ try {
             }
         }
 
-        $showResult = Invoke-Command -Session $session -ScriptBlock $scriptBlockShow -ArgumentList $Config.AjsshowPath, $Config.JP1User, $Config.JP1Password, $Config.SchedulerService, $Config.JobnetPath
+        $showResult = Invoke-Command -Session $session -ScriptBlock $scriptBlockShow -ArgumentList $Config.AjsshowPath, $Config.JP1User, $Config.JP1Password, $Config.SchedulerService, $Config.JobnetPath, $execRegNum
 
         if ($showResult.Available) {
             Write-Host "詳細情報 (ajsshow -E):" -ForegroundColor Yellow
