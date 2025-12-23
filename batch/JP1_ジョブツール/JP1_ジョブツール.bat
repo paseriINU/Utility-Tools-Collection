@@ -270,33 +270,29 @@ for /f "delims=" %%A in ('ajsshow -F %SCHEDULER_SERVICE% -g 1 -i "%%so" "%JOB_PA
 
 echo   標準出力ファイル: !LOG_FILE_PATH1!
 
-if defined LOG_FILE_PATH1 (
-    if exist "!LOG_FILE_PATH1!" (
-        echo.
-        echo ----------------------------------------------------------------
-        echo [ジョブ1] %JOB_PATH1%
-        echo ----------------------------------------------------------------
-        type "!LOG_FILE_PATH1!"
-        echo.
+if exist "!LOG_FILE_PATH1!" (
+    echo.
+    echo ----------------------------------------------------------------
+    echo [ジョブ1] %JOB_PATH1%
+    echo ----------------------------------------------------------------
+    type "!LOG_FILE_PATH1!"
+    echo.
 
-        rem ログをファイルに出力
-        set "OUTPUT_FILE1=%OUTPUT_DIR%job1_log.txt"
-        copy "!LOG_FILE_PATH1!" "!OUTPUT_FILE1!" >nul
-        echo [OK] ジョブ1のログを出力しました: !OUTPUT_FILE1!
-        echo.
+    rem ログをファイルに出力
+    set "OUTPUT_FILE1=%OUTPUT_DIR%job1_log.txt"
+    copy "!LOG_FILE_PATH1!" "!OUTPUT_FILE1!" >nul
+    echo [OK] ジョブ1のログを出力しました: !OUTPUT_FILE1!
+    echo.
 
-        rem ======================================================================
-        rem ■ ここに入れたい処理を記述してください
-        rem ======================================================================
+    rem ======================================================================
+    rem ■ ここに入れたい処理を記述してください
+    rem ======================================================================
 
 
-        rem ======================================================================
+    rem ======================================================================
 
-    ) else (
-        echo [情報] ジョブ1の標準出力ファイルが存在しません
-    )
 ) else (
-    echo [情報] ジョブ1の標準出力ファイルパスを取得できませんでした
+    echo [情報] ジョブ1の標準出力ファイルが存在しません
 )
 echo.
 
@@ -335,24 +331,20 @@ for /f "delims=" %%A in ('ajsshow -F %SCHEDULER_SERVICE% -g 1 -i "%%so" "%JOB_PA
 
 echo   標準出力ファイル: !LOG_FILE_PATH2!
 
-if defined LOG_FILE_PATH2 (
-    if exist "!LOG_FILE_PATH2!" (
-        echo.
-        echo ----------------------------------------------------------------
-        echo [ジョブ2] %JOB_PATH2%
-        echo ----------------------------------------------------------------
-        type "!LOG_FILE_PATH2!"
-        echo.
+if exist "!LOG_FILE_PATH2!" (
+    echo.
+    echo ----------------------------------------------------------------
+    echo [ジョブ2] %JOB_PATH2%
+    echo ----------------------------------------------------------------
+    type "!LOG_FILE_PATH2!"
+    echo.
 
-        rem ログをファイルに出力
-        set "OUTPUT_FILE2=%OUTPUT_DIR%job2_log.txt"
-        copy "!LOG_FILE_PATH2!" "!OUTPUT_FILE2!" >nul
-        echo [OK] ジョブ2のログを出力しました: !OUTPUT_FILE2!
-    ) else (
-        echo [情報] ジョブ2の標準出力ファイルが存在しません
-    )
+    rem ログをファイルに出力
+    set "OUTPUT_FILE2=%OUTPUT_DIR%job2_log.txt"
+    copy "!LOG_FILE_PATH2!" "!OUTPUT_FILE2!" >nul
+    echo [OK] ジョブ2のログを出力しました: !OUTPUT_FILE2!
 ) else (
-    echo [情報] ジョブ2の標準出力ファイルパスを取得できませんでした
+    echo [情報] ジョブ2の標準出力ファイルが存在しません
 )
 echo.
 
