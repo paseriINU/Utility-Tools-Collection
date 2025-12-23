@@ -270,32 +270,38 @@ for /f "delims=" %%A in ('ajsshow -F %SCHEDULER_SERVICE% -g 1 -i "%%so" "%JOB_PA
 
 echo   標準出力ファイル: !LOG_FILE_PATH1!
 
-rem ファイル存在チェック
-dir "!LOG_FILE_PATH1!" >nul 2>&1
-if !ERRORLEVEL!==0 (
-    echo.
-    echo ----------------------------------------------------------------
-    echo [ジョブ1] %JOB_PATH1%
-    echo ----------------------------------------------------------------
-    type "!LOG_FILE_PATH1!"
-    echo.
+rem サブルーチンでファイル処理（特殊文字対策）
+call :PROCESS_LOG1
+goto :AFTER_LOG1
 
-    rem ログをファイルに出力
-    set "OUTPUT_FILE1=%OUTPUT_DIR%job1_log.txt"
-    copy "!LOG_FILE_PATH1!" "!OUTPUT_FILE1!" >nul
-    echo [OK] ジョブ1のログを出力しました: !OUTPUT_FILE1!
-    echo.
-
-    rem ======================================================================
-    rem ■ ここに入れたい処理を記述してください
-    rem ======================================================================
-
-
-    rem ======================================================================
-
-) else (
+:PROCESS_LOG1
+if not exist "%LOG_FILE_PATH1%" (
     echo [情報] ジョブ1の標準出力ファイルが存在しません
+    exit /b
 )
+echo.
+echo ----------------------------------------------------------------
+echo [ジョブ1] %JOB_PATH1%
+echo ----------------------------------------------------------------
+type "%LOG_FILE_PATH1%"
+echo.
+
+rem ログをファイルに出力
+set "OUTPUT_FILE1=%OUTPUT_DIR%job1_log.txt"
+copy "%LOG_FILE_PATH1%" "%OUTPUT_FILE1%" >nul
+echo [OK] ジョブ1のログを出力しました: %OUTPUT_FILE1%
+echo.
+
+rem ======================================================================
+rem ■ ここに入れたい処理を記述してください
+rem ======================================================================
+
+
+rem ======================================================================
+
+exit /b
+
+:AFTER_LOG1
 echo.
 
 :GET_JOB2
@@ -333,23 +339,29 @@ for /f "delims=" %%A in ('ajsshow -F %SCHEDULER_SERVICE% -g 1 -i "%%so" "%JOB_PA
 
 echo   標準出力ファイル: !LOG_FILE_PATH2!
 
-rem ファイル存在チェック
-dir "!LOG_FILE_PATH2!" >nul 2>&1
-if !ERRORLEVEL!==0 (
-    echo.
-    echo ----------------------------------------------------------------
-    echo [ジョブ2] %JOB_PATH2%
-    echo ----------------------------------------------------------------
-    type "!LOG_FILE_PATH2!"
-    echo.
+rem サブルーチンでファイル処理（特殊文字対策）
+call :PROCESS_LOG2
+goto :AFTER_LOG2
 
-    rem ログをファイルに出力
-    set "OUTPUT_FILE2=%OUTPUT_DIR%job2_log.txt"
-    copy "!LOG_FILE_PATH2!" "!OUTPUT_FILE2!" >nul
-    echo [OK] ジョブ2のログを出力しました: !OUTPUT_FILE2!
-) else (
+:PROCESS_LOG2
+if not exist "%LOG_FILE_PATH2%" (
     echo [情報] ジョブ2の標準出力ファイルが存在しません
+    exit /b
 )
+echo.
+echo ----------------------------------------------------------------
+echo [ジョブ2] %JOB_PATH2%
+echo ----------------------------------------------------------------
+type "%LOG_FILE_PATH2%"
+echo.
+
+rem ログをファイルに出力
+set "OUTPUT_FILE2=%OUTPUT_DIR%job2_log.txt"
+copy "%LOG_FILE_PATH2%" "%OUTPUT_FILE2%" >nul
+echo [OK] ジョブ2のログを出力しました: %OUTPUT_FILE2%
+exit /b
+
+:AFTER_LOG2
 echo.
 
 :LOG_DONE
