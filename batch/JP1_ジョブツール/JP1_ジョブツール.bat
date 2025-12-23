@@ -160,11 +160,13 @@ if not "%WAIT_TIMEOUT%"=="0" (
 )
 
 rem ajsshowでステータス（%CC）を取得して状態確認
-rem %CC = 状態コード（E:正常終了, A:異常終了, K:強制終了, r:実行中 など）
 set "WAIT_STATUS="
 for /f "delims=" %%i in ('ajsshow -F %SCHEDULER_SERVICE% -g 1 -i "%%CC" "%JOBNET_PATH%" 2^>^&1') do (
     if not defined WAIT_STATUS set "WAIT_STATUS=%%i"
 )
+
+rem デバッグ: 取得した状態を表示
+echo   [DEBUG] WAIT_STATUS=[!WAIT_STATUS!]
 
 rem 出力がない場合はエラー
 if not defined WAIT_STATUS (
