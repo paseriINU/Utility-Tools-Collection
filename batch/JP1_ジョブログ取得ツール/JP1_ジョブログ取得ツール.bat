@@ -8,14 +8,14 @@ rem ■ JP1ジョブログ取得ツール
 rem
 rem ■ 説明
 rem    JP1/AJS3の指定されたジョブの標準出力（スプール）を取得し、
-rem    クリップボードにコピーします。
+rem    テキストファイルに出力します。
 rem    ajsshowで標準出力ファイルパスを取得し、直接読み取ります。
 rem    ※ PCジョブ・UNIXジョブ用（QUEUEジョブには対応していません）
 rem
 rem ■ 使い方
 rem    1. 下記の「設定セクション」を編集
 rem    2. このファイルをダブルクリックで実行
-rem    3. 取得したログがクリップボードにコピーされます
+rem    3. 取得したログがテキストファイルに出力されます
 rem
 rem ■ 注意
 rem    このファイルはShift-JIS（CP932）で保存してください
@@ -31,6 +31,9 @@ set SCHEDULER_SERVICE=AJSROOT1
 rem 取得対象のジョブのフルパス（ジョブネット内のジョブを指定）
 rem 例: /main_unit/jobgroup1/daily_batch/job1
 set JOB_PATH=/main_unit/jobgroup1/daily_batch/job1
+
+rem ログ出力先フォルダ（バッチファイルと同じ場所に出力する場合は %~dp0 のまま）
+set OUTPUT_DIR=%~dp0
 
 rem ==============================================================================
 rem ■ メイン処理（以下は編集不要）
@@ -55,40 +58,53 @@ echo 標準出力ファイルパスを取得中...
 echo ========================================
 echo.
 
-rem 一時ファイル作成
-set TEMP_AJSSHOW=%TEMP%\jp1_ajsshow_%RANDOM%.txt
-
 rem ajsshowコマンド実行（標準出力ファイルパスを取得）
 rem フォーマット: %so → 標準出力ファイル名
 rem 公式ドキュメント: https://itpfdoc.hitachi.co.jp/manuals/3021/30213L4920/AJSO0131.HTM
 echo 実行コマンド: ajsshow -F %SCHEDULER_SERVICE% -g 1 -i '%%so' "%JOB_PATH%"
 echo.
 
-ajsshow -F %SCHEDULER_SERVICE% -g 1 -i '%%so' "%JOB_PATH%" > "%TEMP_AJSSHOW%" 2>&1
-set AJSSHOW_EXITCODE=%ERRORLEVEL%
+rem まず実終了コード（%%RR）を取得してエラー判定
+set RETURN_CODE=
+for /f "delims=" %%A in ('ajsshow -F %SCHEDULER_SERVICE% -g 1 -i "%%RR" "%JOB_PATH%" 2^>^&1') do (
+    if not defined RETURN_CODE set RETURN_CODE=%%A
+)
 
-echo ajsshow結果:
-type "%TEMP_AJSSHOW%"
-echo.
-
-if not %AJSSHOW_EXITCODE%==0 (
-    echo [エラー] ジョブ情報の取得に失敗しました（終了コード: %AJSSHOW_EXITCODE%）
+rem 数値かどうかでエラー判定（数値以外ならエラー）
+set "RETURN_CODE_NUM="
+for /f "delims=0123456789" %%A in ("!RETURN_CODE!") do set "RETURN_CODE_NUM=%%A"
+if defined RETURN_CODE_NUM (
+    echo [エラー] ジョブ情報の取得に失敗しました
+    echo   エラー: !RETURN_CODE!
     echo.
     echo 以下を確認してください:
     echo   - ジョブパスが正しいか: %JOB_PATH%
     echo   - ジョブが実行済みか（少なくとも1回実行されている必要があります）
     echo   - JP1ユーザーに権限があるか
     echo   - スケジューラサービス名が正しいか: %SCHEDULER_SERVICE%
-    del "%TEMP_AJSSHOW%" 2>nul
     goto :ERROR_EXIT
 )
 
-rem 標準出力ファイルパスを抽出（シングルクォートを除去）
+echo [情報] ジョブ実終了コード: !RETURN_CODE!
+if not "!RETURN_CODE!"=="0" (
+    echo [警告] ジョブは異常終了しています（終了コード: !RETURN_CODE!）
+)
+echo.
+
+rem 標準出力ファイルパスを取得
 set LOG_FILE_PATH=
-for /f "usebackq delims=" %%A in ("%TEMP_AJSSHOW%") do (
+for /f "delims=" %%A in ('ajsshow -F %SCHEDULER_SERVICE% -g 1 -i "%%so" "%JOB_PATH%" 2^>^&1') do (
     if not defined LOG_FILE_PATH set LOG_FILE_PATH=%%A
 )
-del "%TEMP_AJSSHOW%" 2>nul
+
+echo ajsshow結果: !LOG_FILE_PATH!
+echo.
+
+rem 出力が空の場合もエラー
+if not defined LOG_FILE_PATH (
+    echo [エラー] 標準出力ファイルパスを取得できませんでした
+    goto :ERROR_EXIT
+)
 
 rem シングルクォートを除去
 set LOG_FILE_PATH=%LOG_FILE_PATH:'=%
@@ -103,7 +119,7 @@ if not defined LOG_FILE_PATH (
 echo.
 
 rem ========================================
-rem スプール取得・クリップボードコピー
+rem スプール取得・ファイル出力
 rem ========================================
 echo ========================================
 echo スプールを取得中...
@@ -137,11 +153,13 @@ echo.
 type "%LOG_FILE_PATH%"
 echo.
 
-rem クリップボードにコピー（一時ファイル不要）
-type "%LOG_FILE_PATH%" | clip
+rem ファイルに出力
+set OUTPUT_FILE=%OUTPUT_DIR%joblog.txt
+copy "%LOG_FILE_PATH%" "%OUTPUT_FILE%" >nul
 
 echo ========================================
-echo [OK] スプール内容をクリップボードにコピーしました
+echo [OK] スプール内容をファイルに出力しました
+echo   出力先: %OUTPUT_FILE%
 echo ========================================
 
 :SUCCESS_EXIT
