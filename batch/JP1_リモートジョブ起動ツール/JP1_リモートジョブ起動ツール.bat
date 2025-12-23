@@ -64,6 +64,9 @@ $Config = @{
     # 起動するジョブネットのフルパス
     JobnetPath = "/main_unit/jobgroup1/daily_batch"
 
+    # スケジューラーサービス名（通常は AJSROOT1）
+    SchedulerService = "AJSROOT1"
+
     # ajsentryコマンドのパス（リモートサーバ上）
     AjsentryPath = "C:\Program Files\HITACHI\JP1AJS3\bin\ajsentry.exe"
 
@@ -252,13 +255,15 @@ try {
 
     #region ジョブネット起動
     $scriptBlockEntry = {
-        param($ajsPath, $jp1User, $jp1Pass, $jobnetPath)
+        param($ajsPath, $jp1User, $jp1Pass, $schedulerService, $jobnetPath)
 
         if (-not (Test-Path $ajsPath)) {
             throw "ajsentryが見つかりません: $ajsPath"
         }
 
-        $output = & $ajsPath -h localhost -u $jp1User -p $jp1Pass -F $jobnetPath 2>&1
+        # ajsentry構文: ajsentry -h ホスト -u ユーザー -p パス -F スケジューラーサービス -n ジョブネットパス
+        # -n: 即時実行登録
+        $output = & $ajsPath -h localhost -u $jp1User -p $jp1Pass -F $schedulerService -n $jobnetPath 2>&1
         $exitCode = $LASTEXITCODE
 
         @{
@@ -267,7 +272,7 @@ try {
         }
     }
 
-    $result = Invoke-Command -Session $session -ScriptBlock $scriptBlockEntry -ArgumentList $Config.AjsentryPath, $Config.JP1User, $Config.JP1Password, $Config.JobnetPath
+    $result = Invoke-Command -Session $session -ScriptBlock $scriptBlockEntry -ArgumentList $Config.AjsentryPath, $Config.JP1User, $Config.JP1Password, $Config.SchedulerService, $Config.JobnetPath
 
     Write-Host ""
     Write-Host "========================================" -ForegroundColor Cyan
@@ -303,13 +308,14 @@ try {
 
         # ajsstatusでジョブネットの状態を監視
         $scriptBlockStatus = {
-            param($ajsStatusPath, $jp1User, $jp1Pass, $jobnetPath)
+            param($ajsStatusPath, $jp1User, $jp1Pass, $schedulerService, $jobnetPath)
 
             if (-not (Test-Path $ajsStatusPath)) {
                 throw "ajsstatusが見つかりません: $ajsStatusPath"
             }
 
-            $output = & $ajsStatusPath -h localhost -u $jp1User -p $jp1Pass -F $jobnetPath 2>&1
+            # ajsstatus構文: ajsstatus -h ホスト -u ユーザー -p パス -F スケジューラーサービス ジョブネットパス
+            $output = & $ajsStatusPath -h localhost -u $jp1User -p $jp1Pass -F $schedulerService $jobnetPath 2>&1
             $exitCode = $LASTEXITCODE
 
             @{
@@ -330,7 +336,7 @@ try {
             }
 
             # 状態確認
-            $statusResult = Invoke-Command -Session $session -ScriptBlock $scriptBlockStatus -ArgumentList $Config.AjsstatusPath, $Config.JP1User, $Config.JP1Password, $Config.JobnetPath
+            $statusResult = Invoke-Command -Session $session -ScriptBlock $scriptBlockStatus -ArgumentList $Config.AjsstatusPath, $Config.JP1User, $Config.JP1Password, $Config.SchedulerService, $Config.JobnetPath
 
             $statusOutput = $statusResult.RawOutput.ToLower()
 
@@ -402,7 +408,7 @@ try {
         Write-Host ""
 
         $scriptBlockShow = {
-            param($ajsShowPath, $jp1User, $jp1Pass, $jobnetPath)
+            param($ajsShowPath, $jp1User, $jp1Pass, $schedulerService, $jobnetPath)
 
             if (-not (Test-Path $ajsShowPath)) {
                 return @{
@@ -412,8 +418,9 @@ try {
                 }
             }
 
-            # -i オプションで詳細情報を取得、-E で実行結果詳細
-            $output = & $ajsShowPath -h localhost -u $jp1User -p $jp1Pass -F $jobnetPath -E 2>&1
+            # ajsshow構文: ajsshow -h ホスト -u ユーザー -p パス -F スケジューラーサービス -E ジョブネットパス
+            # -E: 実行結果の詳細情報を表示
+            $output = & $ajsShowPath -h localhost -u $jp1User -p $jp1Pass -F $schedulerService -E $jobnetPath 2>&1
             $exitCode = $LASTEXITCODE
 
             @{
@@ -423,7 +430,7 @@ try {
             }
         }
 
-        $showResult = Invoke-Command -Session $session -ScriptBlock $scriptBlockShow -ArgumentList $Config.AjsshowPath, $Config.JP1User, $Config.JP1Password, $Config.JobnetPath
+        $showResult = Invoke-Command -Session $session -ScriptBlock $scriptBlockShow -ArgumentList $Config.AjsshowPath, $Config.JP1User, $Config.JP1Password, $Config.SchedulerService, $Config.JobnetPath
 
         if ($showResult.Available) {
             Write-Host "詳細情報 (ajsshow -E):" -ForegroundColor Yellow

@@ -430,11 +430,14 @@ ajsshow [オプション] ジョブネットパス
 
 **実行例**:
 ```cmd
-rem 実行結果の詳細を取得
-ajsshow -F AJSROOT1 /main_unit/jobgroup1/daily_batch -E
+rem 実行結果の詳細を取得（-Eオプション）
+ajsshow -F AJSROOT1 -E /main_unit/jobgroup1/daily_batch
 
-rem 定義情報を取得
-ajsshow -F AJSROOT1 /main_unit/jobgroup1/daily_batch -i
+rem 状態を取得（-iオプション + 2バイト版フォーマット指示子）
+ajsshow -F AJSROOT1 -g 1 -i "%CC" /main_unit/jobgroup1/daily_batch
+
+rem 標準出力ファイルパスを取得（-iオプション + 2バイト版フォーマット指示子）
+ajsshow -F AJSROOT1 -g 1 -i "%so" /main_unit/jobgroup1/daily_batch/job1
 ```
 
 **出力例（-Eオプション）**:

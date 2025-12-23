@@ -1412,8 +1412,8 @@ ajsrelease -F AJSROOT1 -R /グループ名/ジョブネット名
 rem 1. 実行結果の詳細を確認
 ajsshow -F AJSROOT1 -g 1 -E /グループ名/ジョブネット名
 
-rem 2. 配下のジョブの状態を確認
-ajsshow -F AJSROOT1 -R -f "%JJ %TT %S %RR" /グループ名/ジョブネット名
+rem 2. 配下のジョブの状態を確認（1バイト版フォーマット指示子）
+ajsshow -F AJSROOT1 -RE -f "%J %T %S %R" /グループ名/ジョブネット名
 
 rem 3. 異常終了したジョブの標準エラー出力ファイルパスを取得
 ajsshow -F AJSROOT1 -g 1 -i %rr /グループ名/ジョブネット名/異常終了ジョブ名

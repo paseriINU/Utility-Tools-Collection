@@ -106,6 +106,9 @@ $Config = @{
     # 起動するジョブネットのフルパス
     JobnetPath = "/main_unit/jobgroup1/daily_batch"
 
+    # スケジューラーサービス名（通常は AJSROOT1）
+    SchedulerService = "AJSROOT1"
+
     # ajsentryコマンドのパス（リモートサーバ上）
     AjsentryPath = "C:\Program Files\HITACHI\JP1AJS3\bin\ajsentry.exe"
 
@@ -260,6 +263,7 @@ ajsentry出力:
 | JP1User | JP1ユーザー名 | `jp1admin` |
 | JP1Password | JP1パスワード（空の場合は実行時入力） | ` `（空推奨） |
 | JobnetPath | ジョブネットのフルパス | `/main_unit/jobgroup1/daily_batch` |
+| SchedulerService | スケジューラーサービス名 | `AJSROOT1` |
 | AjsentryPath | リモートサーバ上のajsentryパス | `C:\Program Files\HITACHI\JP1AJS3\bin\ajsentry.exe` |
 | AjsstatusPath | リモートサーバ上のajsstatusパス | `C:\Program Files\HITACHI\JP1AJS3\bin\ajsstatus.exe` |
 | AjsshowPath | リモートサーバ上のajsshowパス | `C:\Program Files\HITACHI\JP1AJS3\bin\ajsshow.exe` |
