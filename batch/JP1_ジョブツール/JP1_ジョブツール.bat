@@ -21,17 +21,8 @@ rem ============================================================================
 rem ■ 設定セクション（ここを編集してください）
 rem ============================================================================
 
-rem JP1/AJS3コマンドのパス（インストールディレクトリ）
-set "JP1_BIN=C:\Program Files (x86)\HITACHI\JP1AJS3\bin"
-
 rem スケジューラーサービス名（通常は AJSROOT1）
 set "SCHEDULER_SERVICE=AJSROOT1"
-
-rem JP1ユーザー名（空の場合は実行時に入力）
-set "JP1_USER=jp1admin"
-
-rem JP1パスワード（空の場合は実行時に入力、セキュリティ上空欄推奨）
-set "JP1_PASSWORD="
 
 rem 起動するジョブネットのフルパス
 set "JOBNET_PATH=/main_unit/jobgroup1/daily_batch"
@@ -41,13 +32,10 @@ rem ※ジョブネットではなく、その中の個別ジョブを指定
 set "JOB_PATH=/main_unit/jobgroup1/daily_batch/job1"
 
 rem 完了待ちのタイムアウト（秒）。0の場合は無制限
-set "WAIT_TIMEOUT=3600"
+set "WAIT_TIMEOUT=0"
 
 rem 状態確認の間隔（秒）
 set "POLLING_INTERVAL=10"
-
-rem ホスト名（ローカル実行の場合は localhost または空欄）
-set "JP1_HOST=localhost"
 
 rem ============================================================================
 rem ■ メイン処理（以下は編集不要）
@@ -59,45 +47,16 @@ echo   JP1 ジョブツール
 echo ================================================================
 echo.
 
-rem コマンドパスの確認
-if not exist "%JP1_BIN%\ajsentry.exe" (
-    echo [エラー] ajsentry.exe が見つかりません
-    echo   パス: %JP1_BIN%\ajsentry.exe
-    goto :ERROR_EXIT
-)
-if not exist "%JP1_BIN%\ajsshow.exe" (
-    echo [エラー] ajsshow.exe が見つかりません
-    echo   パス: %JP1_BIN%\ajsshow.exe
-    goto :ERROR_EXIT
-)
-
 echo 設定情報:
-echo   JP1コマンドパス  : %JP1_BIN%
 echo   スケジューラー   : %SCHEDULER_SERVICE%
-echo   JP1ユーザー      : %JP1_USER%
 echo   ジョブネットパス : %JOBNET_PATH%
 echo   ジョブパス       : %JOB_PATH%
-echo   タイムアウト     : %WAIT_TIMEOUT%秒
+if "%WAIT_TIMEOUT%"=="0" (
+    echo   タイムアウト     : 無制限
+) else (
+    echo   タイムアウト     : %WAIT_TIMEOUT%秒
+)
 echo.
-
-rem 認証情報の確認
-if "%JP1_USER%"=="" (
-    set /p "JP1_USER=JP1ユーザー名を入力してください: "
-    if "!JP1_USER!"=="" (
-        echo [エラー] JP1ユーザー名が入力されていません
-        goto :ERROR_EXIT
-    )
-)
-
-if "%JP1_PASSWORD%"=="" (
-    echo [注意] JP1パスワードが設定されていません。
-    set /p "JP1_PASSWORD=JP1パスワードを入力してください: "
-    if "!JP1_PASSWORD!"=="" (
-        echo [エラー] JP1パスワードが入力されていません
-        goto :ERROR_EXIT
-    )
-    echo.
-)
 
 rem 実行確認
 echo ジョブネットを起動し、完了後にログを取得しますか？ (y/n)
@@ -117,17 +76,12 @@ echo ジョブネット起動中...
 echo ================================================================
 echo.
 
-rem ajsentryコマンドの構築
-set "AJSENTRY_CMD="%JP1_BIN%\ajsentry.exe""
-if not "%JP1_HOST%"=="" set "AJSENTRY_CMD=%AJSENTRY_CMD% -h %JP1_HOST%"
-set "AJSENTRY_CMD=%AJSENTRY_CMD% -u %JP1_USER% -p %JP1_PASSWORD% -F %SCHEDULER_SERVICE% %JOBNET_PATH%"
-
 rem 一時ファイルの準備
 set "TEMP_OUTPUT=%TEMP%\jp1_output_%RANDOM%.txt"
 
 rem ajsentry実行
-echo コマンド実行中: ajsentry ...
-call %AJSENTRY_CMD% > "%TEMP_OUTPUT%" 2>&1
+echo コマンド実行中: ajsentry -F %SCHEDULER_SERVICE% %JOBNET_PATH%
+ajsentry -F %SCHEDULER_SERVICE% %JOBNET_PATH% > "%TEMP_OUTPUT%" 2>&1
 set "AJSENTRY_EXITCODE=%ERRORLEVEL%"
 
 rem 結果表示
@@ -171,11 +125,7 @@ if not "%WAIT_TIMEOUT%"=="0" (
 )
 
 rem ajsstatusで状態確認
-set "AJSSTATUS_CMD="%JP1_BIN%\ajsstatus.exe""
-if not "%JP1_HOST%"=="" set "AJSSTATUS_CMD=%AJSSTATUS_CMD% -h %JP1_HOST%"
-set "AJSSTATUS_CMD=%AJSSTATUS_CMD% -u %JP1_USER% -p %JP1_PASSWORD% -F %SCHEDULER_SERVICE% %JOBNET_PATH%"
-
-call %AJSSTATUS_CMD% > "%TEMP_OUTPUT%" 2>&1
+ajsstatus -F %SCHEDULER_SERVICE% %JOBNET_PATH% > "%TEMP_OUTPUT%" 2>&1
 
 rem 状態判定
 set "STATUS_LINE="
@@ -258,7 +208,7 @@ rem ajsshowコマンド実行（標準出力ファイルパスを取得）
 echo 実行コマンド: ajsshow -F %SCHEDULER_SERVICE% -g 1 -i '%%so' "%JOB_PATH%"
 echo.
 
-"%JP1_BIN%\ajsshow.exe" -F %SCHEDULER_SERVICE% -g 1 -i '%%so' "%JOB_PATH%" > "%TEMP_AJSSHOW%" 2>&1
+ajsshow -F %SCHEDULER_SERVICE% -g 1 -i '%%so' "%JOB_PATH%" > "%TEMP_AJSSHOW%" 2>&1
 set "AJSSHOW_EXITCODE=%ERRORLEVEL%"
 
 echo ajsshow結果:
@@ -348,7 +298,6 @@ exit /b 0
 echo.
 echo 追加の確認事項:
 echo   - JP1/AJS3サービスが起動しているか
-echo   - JP1ユーザー名、パスワードが正しいか
 echo   - ジョブネットパス、ジョブパスが正しいか
 echo.
 pause

@@ -12,17 +12,16 @@ JP1/AJS3のジョブネットをローカルで起動するバッチファイル
 ## 必要な環境
 
 - Windows Server（JP1/AJS3がインストールされていること）
-- JP1/AJS3 コマンドへのアクセス権限
-- JP1ユーザー認証情報
+- JP1/AJS3 コマンドへのアクセス権限（パスが通っていること）
 
 ## 特徴
 
 | 項目 | 説明 |
 |------|------|
 | 実行方式 | ローカル実行（JP1サーバ上で直接実行） |
-| 管理者権限 | 不要（JP1権限のみ必要） |
+| 管理者権限 | 不要 |
 | 完了待ち | 対応（ajsstatusでポーリング） |
-| タイムアウト | 設定可能（秒単位） |
+| タイムアウト | 設定可能（デフォルト:無制限） |
 
 ## 使い方
 
@@ -31,17 +30,8 @@ JP1/AJS3のジョブネットをローカルで起動するバッチファイル
 `JP1_ローカルジョブ起動ツール.bat` の設定セクションを編集します：
 
 ```batch
-rem JP1/AJS3コマンドのパス（インストールディレクトリ）
-set "JP1_BIN=C:\Program Files (x86)\HITACHI\JP1AJS3\bin"
-
 rem スケジューラーサービス名（通常は AJSROOT1）
 set "SCHEDULER_SERVICE=AJSROOT1"
-
-rem JP1ユーザー名（空の場合は実行時に入力）
-set "JP1_USER=jp1admin"
-
-rem JP1パスワード（空の場合は実行時に入力、セキュリティ上空欄推奨）
-set "JP1_PASSWORD="
 
 rem 起動するジョブネットのフルパス
 set "JOBNET_PATH=/main_unit/jobgroup1/daily_batch"
@@ -50,7 +40,7 @@ rem ジョブ完了を待つ場合は 1、起動のみの場合は 0
 set "WAIT_FOR_COMPLETION=1"
 
 rem 完了待ちのタイムアウト（秒）。0の場合は無制限
-set "WAIT_TIMEOUT=3600"
+set "WAIT_TIMEOUT=0"
 ```
 
 ### 2. 実行
@@ -65,16 +55,10 @@ JP1/AJS3サーバ上でバッチファイルをダブルクリックして実行
 ================================================================
 
 設定情報:
-  JP1コマンドパス  : C:\Program Files (x86)\HITACHI\JP1AJS3\bin
   スケジューラー   : AJSROOT1
-  JP1ユーザー      : jp1admin
   ジョブネットパス : /main_unit/jobgroup1/daily_batch
-  ホスト           : localhost
   完了待ち         : 有効
-  タイムアウト     : 3600秒
-
-[注意] JP1パスワードが設定されていません。
-JP1パスワードを入力してください: ********
+  タイムアウト     : 無制限
 
 ジョブネットを起動しますか？ (y/n)
 y
@@ -83,7 +67,7 @@ y
 ジョブネット起動中...
 ================================================================
 
-コマンド実行中: ajsentry ...
+コマンド実行中: ajsentry -F AJSROOT1 /main_unit/jobgroup1/daily_batch
 
 ----------------------------------------------------------------
 ajsentry出力:
@@ -109,7 +93,6 @@ KAVS1820-I ajsentryコマンドが正常終了しました。
 ================================================================
 
   ジョブネット: /main_unit/jobgroup1/daily_batch
-  サーバ      : localhost
   起動結果    : 成功
   実行結果    : 正常終了
 
@@ -120,15 +103,11 @@ KAVS1820-I ajsentryコマンドが正常終了しました。
 
 | 設定項目 | 説明 | デフォルト値 |
 |---------|------|-------------|
-| `JP1_BIN` | JP1コマンドのインストールパス | `C:\Program Files (x86)\HITACHI\JP1AJS3\bin` |
 | `SCHEDULER_SERVICE` | スケジューラーサービス名 | `AJSROOT1` |
-| `JP1_USER` | JP1ユーザー名 | `jp1admin` |
-| `JP1_PASSWORD` | JP1パスワード（空欄推奨） | 空欄 |
 | `JOBNET_PATH` | 起動するジョブネットのパス | `/main_unit/jobgroup1/daily_batch` |
 | `WAIT_FOR_COMPLETION` | 完了待ち（1:有効、0:無効） | `1` |
-| `WAIT_TIMEOUT` | タイムアウト（秒、0:無制限） | `3600` |
+| `WAIT_TIMEOUT` | タイムアウト（秒、0:無制限） | `0` |
 | `POLLING_INTERVAL` | 状態確認間隔（秒） | `10` |
-| `JP1_HOST` | ホスト名（通常はlocalhost） | `localhost` |
 
 ## リモートジョブ起動ツールとの違い
 
@@ -142,23 +121,14 @@ KAVS1820-I ajsentryコマンドが正常終了しました。
 ## 注意事項
 
 - JP1/AJS3がインストールされているサーバ上で実行してください
-- パスワードを設定ファイルに記載する場合はセキュリティにご注意ください
+- JP1コマンドにパスが通っている必要があります
 - ジョブネットパスは `/` から始まるフルパスで指定してください
-- タイムアウトを0に設定すると無制限に待機します
 
 ## トラブルシューティング
 
-### ajsentry.exe が見つかりません
+### ajsentryコマンドが見つかりません
 
-JP1/AJS3のインストールパスを確認してください：
-- 32bit版: `C:\Program Files (x86)\HITACHI\JP1AJS3\bin`
-- 64bit版: `C:\Program Files\HITACHI\JP1AJS3\bin`
-- 旧バージョン: `C:\Program Files\Hitachi\JP1AJS2\bin`
-
-### 認証エラー（KAVS4200-E）
-
-- JP1ユーザー名とパスワードが正しいか確認してください
-- JP1/Baseで認証が有効になっているか確認してください
+JP1/AJS3コマンドにパスが通っているか確認してください。
 
 ### ジョブネットが見つかりません
 
@@ -168,11 +138,6 @@ JP1/AJS3のインストールパスを確認してください：
   ```cmd
   ajsprint -F AJSROOT1 /main_unit -R
   ```
-
-### 完了待ちがタイムアウト
-
-- WAIT_TIMEOUT の値を増やしてください
-- ジョブが実際に実行中か JP1/AJS3 - View で確認してください
 
 ## 関連ツール
 

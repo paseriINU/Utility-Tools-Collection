@@ -13,15 +13,14 @@ JP1/AJS3のジョブネット起動とログ取得を行うツールです。
 ## 必要な環境
 
 - Windows Server（JP1/AJS3がインストールされていること）
-- JP1/AJS3 コマンドへのアクセス権限
-- JP1ユーザー認証情報
+- JP1/AJS3 コマンドへのアクセス権限（パスが通っていること）
 
 ## 特徴
 
 | 項目 | 説明 |
 |------|------|
 | 実行方式 | ローカル実行（JP1サーバ上で直接実行） |
-| 管理者権限 | 不要（JP1権限のみ必要） |
+| 管理者権限 | 不要 |
 | 完了待ち | 対応（ajsstatusでポーリング） |
 | ログ取得 | クリップボードに自動コピー |
 
@@ -32,17 +31,8 @@ JP1/AJS3のジョブネット起動とログ取得を行うツールです。
 `JP1_ジョブツール.bat` の設定セクションを編集します：
 
 ```batch
-rem JP1/AJS3コマンドのパス（インストールディレクトリ）
-set "JP1_BIN=C:\Program Files (x86)\HITACHI\JP1AJS3\bin"
-
 rem スケジューラーサービス名（通常は AJSROOT1）
 set "SCHEDULER_SERVICE=AJSROOT1"
-
-rem JP1ユーザー名（空の場合は実行時に入力）
-set "JP1_USER=jp1admin"
-
-rem JP1パスワード（空の場合は実行時に入力、セキュリティ上空欄推奨）
-set "JP1_PASSWORD="
 
 rem 起動するジョブネットのフルパス
 set "JOBNET_PATH=/main_unit/jobgroup1/daily_batch"
@@ -50,6 +40,9 @@ set "JOBNET_PATH=/main_unit/jobgroup1/daily_batch"
 rem ログ取得対象のジョブのフルパス（ジョブネット内のジョブを指定）
 rem ※ジョブネットではなく、その中の個別ジョブを指定
 set "JOB_PATH=/main_unit/jobgroup1/daily_batch/job1"
+
+rem 完了待ちのタイムアウト（秒）。0の場合は無制限
+set "WAIT_TIMEOUT=0"
 ```
 
 ### 2. 実行
@@ -64,12 +57,10 @@ JP1/AJS3サーバ上でバッチファイルをダブルクリックして実行
 ================================================================
 
 設定情報:
-  JP1コマンドパス  : C:\Program Files (x86)\HITACHI\JP1AJS3\bin
   スケジューラー   : AJSROOT1
-  JP1ユーザー      : jp1admin
   ジョブネットパス : /main_unit/jobgroup1/daily_batch
   ジョブパス       : /main_unit/jobgroup1/daily_batch/job1
-  タイムアウト     : 3600秒
+  タイムアウト     : 無制限
 
 ジョブネットを起動し、完了後にログを取得しますか？ (y/n)
 y
@@ -78,7 +69,7 @@ y
 ジョブネット起動中...
 ================================================================
 
-コマンド実行中: ajsentry ...
+コマンド実行中: ajsentry -F AJSROOT1 /main_unit/jobgroup1/daily_batch
 
 ----------------------------------------------------------------
 ajsentry出力:
@@ -134,15 +125,11 @@ Processing finished at 2025-12-23 10:35:00
 
 | 設定項目 | 説明 | デフォルト値 |
 |---------|------|-------------|
-| `JP1_BIN` | JP1コマンドのインストールパス | `C:\Program Files (x86)\HITACHI\JP1AJS3\bin` |
 | `SCHEDULER_SERVICE` | スケジューラーサービス名 | `AJSROOT1` |
-| `JP1_USER` | JP1ユーザー名 | `jp1admin` |
-| `JP1_PASSWORD` | JP1パスワード（空欄推奨） | 空欄 |
 | `JOBNET_PATH` | 起動するジョブネットのパス | `/main_unit/jobgroup1/daily_batch` |
 | `JOB_PATH` | ログ取得対象のジョブパス | `/main_unit/jobgroup1/daily_batch/job1` |
-| `WAIT_TIMEOUT` | タイムアウト（秒、0:無制限） | `3600` |
+| `WAIT_TIMEOUT` | タイムアウト（秒、0:無制限） | `0` |
 | `POLLING_INTERVAL` | 状態確認間隔（秒） | `10` |
-| `JP1_HOST` | ホスト名（通常はlocalhost） | `localhost` |
 
 ## JOBNET_PATH と JOB_PATH の違い
 
@@ -164,28 +151,20 @@ Processing finished at 2025-12-23 10:35:00
 ## 注意事項
 
 - JP1/AJS3がインストールされているサーバ上で実行してください
-- パスワードを設定ファイルに記載する場合はセキュリティにご注意ください
+- JP1コマンドにパスが通っている必要があります
 - ジョブネットパス・ジョブパスは `/` から始まるフルパスで指定してください
 - ログ取得はジョブが実行済み（スプールが存在する）である必要があります
 
 ## トラブルシューティング
 
-### ajsentry.exe / ajsshow.exe が見つかりません
+### ajsentryコマンドが見つかりません
 
-JP1/AJS3のインストールパスを確認してください：
-- 32bit版: `C:\Program Files (x86)\HITACHI\JP1AJS3\bin`
-- 64bit版: `C:\Program Files\HITACHI\JP1AJS3\bin`
-- 旧バージョン: `C:\Program Files\Hitachi\JP1AJS2\bin`
+JP1/AJS3コマンドにパスが通っているか確認してください。
 
 ### ログ取得で「選択オプションに合うユニットが存在しません」
 
 - ジョブネットではなく、ジョブネット内の**個別ジョブ**を指定してください
 - 例: `/グループ/ジョブネット` ではなく `/グループ/ジョブネット/ジョブ名`
-
-### 認証エラー（KAVS4200-E）
-
-- JP1ユーザー名とパスワードが正しいか確認してください
-- JP1/Baseで認証が有効になっているか確認してください
 
 ## 使用コマンド
 
