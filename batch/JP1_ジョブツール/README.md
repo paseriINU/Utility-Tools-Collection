@@ -6,9 +6,10 @@ JP1/AJS3のジョブネット起動とログ取得を行うツールです。
 
 以下の処理を連続実行します：
 
-1. **ジョブネット起動** - ajsentryでジョブネットを即時起動
-2. **完了待ち** - ajsstatusでジョブ完了を待機
-3. **ログ取得** - ajsshowでジョブの標準出力を取得しクリップボードにコピー
+1. **メニュー選択** - 実行するジョブを選択
+2. **ジョブネット起動** - ajsentryでジョブネットを即時起動
+3. **完了待ち** - ajsstatusでジョブ完了を待機
+4. **ログ取得** - 2つのジョブの標準出力を取得しクリップボードにコピー
 
 ## 必要な環境
 
@@ -21,8 +22,8 @@ JP1/AJS3のジョブネット起動とログ取得を行うツールです。
 |------|------|
 | 実行方式 | ローカル実行（JP1サーバ上で直接実行） |
 | 管理者権限 | 不要 |
-| 完了待ち | 対応（ajsstatusでポーリング） |
-| ログ取得 | クリップボードに自動コピー |
+| メニュー選択 | 複数のジョブネットから選択可能 |
+| ログ取得 | 2つのジョブログを結合してクリップボードにコピー |
 
 ## 使い方
 
@@ -34,15 +35,21 @@ JP1/AJS3のジョブネット起動とログ取得を行うツールです。
 rem スケジューラーサービス名（通常は AJSROOT1）
 set "SCHEDULER_SERVICE=AJSROOT1"
 
-rem 起動するジョブネットのフルパス
-set "JOBNET_PATH=/main_unit/jobgroup1/daily_batch"
+rem ----------------------------------------------------------------------------
+rem 選択肢1: TEST
+rem ----------------------------------------------------------------------------
+set "MENU1_NAME=TEST"
+set "MENU1_JOBNET=/main_unit/jobgroup1/test_batch"
+set "MENU1_JOB1=/main_unit/jobgroup1/test_batch/job1"
+set "MENU1_JOB2=/main_unit/jobgroup1/test_batch/job2"
 
-rem ログ取得対象のジョブのフルパス（ジョブネット内のジョブを指定）
-rem ※ジョブネットではなく、その中の個別ジョブを指定
-set "JOB_PATH=/main_unit/jobgroup1/daily_batch/job1"
-
-rem 完了待ちのタイムアウト（秒）。0の場合は無制限
-set "WAIT_TIMEOUT=0"
+rem ----------------------------------------------------------------------------
+rem 選択肢2: TEST2
+rem ----------------------------------------------------------------------------
+set "MENU2_NAME=TEST2"
+set "MENU2_JOBNET=/main_unit/jobgroup2/test2_batch"
+set "MENU2_JOB1=/main_unit/jobgroup2/test2_batch/job1"
+set "MENU2_JOB2=/main_unit/jobgroup2/test2_batch/job2"
 ```
 
 ### 2. 実行
@@ -56,17 +63,31 @@ JP1/AJS3サーバ上でバッチファイルをダブルクリックして実行
   JP1 ジョブツール
 ================================================================
 
+実行するジョブを選択してください:
+
+  1. TEST
+  2. TEST2
+
+  0. キャンセル
+
+選択 (0-2): 1
+
+================================================================
+選択: TEST
+================================================================
+
 設定情報:
   スケジューラー   : AJSROOT1
-  ジョブネットパス : /main_unit/jobgroup1/daily_batch
-  ジョブパス       : /main_unit/jobgroup1/daily_batch/job1
+  ジョブネットパス : /main_unit/jobgroup1/test_batch
+  ジョブパス1      : /main_unit/jobgroup1/test_batch/job1
+  ジョブパス2      : /main_unit/jobgroup1/test_batch/job2
   タイムアウト     : 無制限
 
 ================================================================
 ジョブネット起動中...
 ================================================================
 
-コマンド実行中: ajsentry -F AJSROOT1 /main_unit/jobgroup1/daily_batch
+コマンド実行中: ajsentry -F AJSROOT1 /main_unit/jobgroup1/test_batch
 
 ----------------------------------------------------------------
 ajsentry出力:
@@ -90,16 +111,29 @@ KAVS1820-I ajsentryコマンドが正常終了しました。
 ジョブログを取得中...
 ================================================================
 
-[情報] 標準出力ファイル: D:\JP1\spool\stdout_12345.txt
+[ジョブ1] /main_unit/jobgroup1/test_batch/job1
+
+  標準出力ファイル: D:\JP1\spool\stdout_12345.txt
+[OK] ジョブ1のログを取得しました
+
+[ジョブ2] /main_unit/jobgroup1/test_batch/job2
+
+  標準出力ファイル: D:\JP1\spool\stdout_12346.txt
+[OK] ジョブ2のログを取得しました
 
 ================================================================
-取得したスプール内容:
+取得したスプール内容（2ジョブ分）:
 ================================================================
 
-Processing started at 2025-12-23 10:30:00
-Step 1: Data extraction completed
-Step 2: Data transformation completed
-Processing finished at 2025-12-23 10:35:00
+----------------------------------------------------------------
+[ジョブ1] /main_unit/jobgroup1/test_batch/job1
+----------------------------------------------------------------
+Job1 output here...
+
+----------------------------------------------------------------
+[ジョブ2] /main_unit/jobgroup1/test_batch/job2
+----------------------------------------------------------------
+Job2 output here...
 
 ================================================================
 [OK] スプール内容をクリップボードにコピーしました
@@ -109,8 +143,10 @@ Processing finished at 2025-12-23 10:35:00
 処理サマリー
 ================================================================
 
-  ジョブネット : /main_unit/jobgroup1/daily_batch
-  ジョブ       : /main_unit/jobgroup1/daily_batch/job1
+  選択         : TEST
+  ジョブネット : /main_unit/jobgroup1/test_batch
+  ジョブ1      : /main_unit/jobgroup1/test_batch/job1
+  ジョブ2      : /main_unit/jobgroup1/test_batch/job2
   起動結果     : 成功
   実行結果     : 正常終了
   ログ取得     : 成功（クリップボードにコピー済み）
@@ -123,19 +159,21 @@ Processing finished at 2025-12-23 10:35:00
 | 設定項目 | 説明 | デフォルト値 |
 |---------|------|-------------|
 | `SCHEDULER_SERVICE` | スケジューラーサービス名 | `AJSROOT1` |
-| `JOBNET_PATH` | 起動するジョブネットのパス | `/main_unit/jobgroup1/daily_batch` |
-| `JOB_PATH` | ログ取得対象のジョブパス | `/main_unit/jobgroup1/daily_batch/job1` |
 | `WAIT_TIMEOUT` | タイムアウト（秒、0:無制限） | `0` |
 | `POLLING_INTERVAL` | 状態確認間隔（秒） | `10` |
 
-## JOBNET_PATH と JOB_PATH の違い
+### 選択肢の設定
 
-| 項目 | 説明 | 例 |
-|------|------|-----|
-| `JOBNET_PATH` | ジョブネット全体のパス（起動対象） | `/main_unit/jobgroup1/daily_batch` |
-| `JOB_PATH` | ジョブネット内の個別ジョブのパス（ログ取得対象） | `/main_unit/jobgroup1/daily_batch/job1` |
-
-**注意**: ログ取得はジョブ単位で行われるため、`JOB_PATH`にはジョブネット内の個別ジョブを指定してください。
+| 設定項目 | 説明 |
+|---------|------|
+| `MENU1_NAME` | 選択肢1の表示名 |
+| `MENU1_JOBNET` | 選択肢1のジョブネットパス |
+| `MENU1_JOB1` | 選択肢1のログ取得対象ジョブ1 |
+| `MENU1_JOB2` | 選択肢1のログ取得対象ジョブ2 |
+| `MENU2_NAME` | 選択肢2の表示名 |
+| `MENU2_JOBNET` | 選択肢2のジョブネットパス |
+| `MENU2_JOB1` | 選択肢2のログ取得対象ジョブ1 |
+| `MENU2_JOB2` | 選択肢2のログ取得対象ジョブ2 |
 
 ## 関連ツール
 

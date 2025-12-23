@@ -24,18 +24,27 @@ rem ============================================================================
 rem スケジューラーサービス名（通常は AJSROOT1）
 set "SCHEDULER_SERVICE=AJSROOT1"
 
-rem 起動するジョブネットのフルパス
-set "JOBNET_PATH=/main_unit/jobgroup1/daily_batch"
-
-rem ログ取得対象のジョブのフルパス（ジョブネット内のジョブを指定）
-rem ※ジョブネットではなく、その中の個別ジョブを指定
-set "JOB_PATH=/main_unit/jobgroup1/daily_batch/job1"
-
 rem 完了待ちのタイムアウト（秒）。0の場合は無制限
 set "WAIT_TIMEOUT=0"
 
 rem 状態確認の間隔（秒）
 set "POLLING_INTERVAL=10"
+
+rem ----------------------------------------------------------------------------
+rem 選択肢1: TEST
+rem ----------------------------------------------------------------------------
+set "MENU1_NAME=TEST"
+set "MENU1_JOBNET=/main_unit/jobgroup1/test_batch"
+set "MENU1_JOB1=/main_unit/jobgroup1/test_batch/job1"
+set "MENU1_JOB2=/main_unit/jobgroup1/test_batch/job2"
+
+rem ----------------------------------------------------------------------------
+rem 選択肢2: TEST2
+rem ----------------------------------------------------------------------------
+set "MENU2_NAME=TEST2"
+set "MENU2_JOBNET=/main_unit/jobgroup2/test2_batch"
+set "MENU2_JOB1=/main_unit/jobgroup2/test2_batch/job1"
+set "MENU2_JOB2=/main_unit/jobgroup2/test2_batch/job2"
 
 rem ============================================================================
 rem ■ メイン処理（以下は編集不要）
@@ -47,10 +56,53 @@ echo   JP1 ジョブツール
 echo ================================================================
 echo.
 
+rem ----------------------------------------------------------------------------
+rem メニュー表示
+rem ----------------------------------------------------------------------------
+echo 実行するジョブを選択してください:
+echo.
+echo   1. %MENU1_NAME%
+echo   2. %MENU2_NAME%
+echo.
+echo   0. キャンセル
+echo.
+set /p "MENU_CHOICE=選択 (0-2): "
+
+if "%MENU_CHOICE%"=="0" (
+    echo 処理をキャンセルしました。
+    goto :NORMAL_EXIT
+)
+
+if "%MENU_CHOICE%"=="1" (
+    set "JOBNET_PATH=%MENU1_JOBNET%"
+    set "JOB_PATH1=%MENU1_JOB1%"
+    set "JOB_PATH2=%MENU1_JOB2%"
+    set "SELECTED_NAME=%MENU1_NAME%"
+    goto :START_JOB
+)
+
+if "%MENU_CHOICE%"=="2" (
+    set "JOBNET_PATH=%MENU2_JOBNET%"
+    set "JOB_PATH1=%MENU2_JOB1%"
+    set "JOB_PATH2=%MENU2_JOB2%"
+    set "SELECTED_NAME=%MENU2_NAME%"
+    goto :START_JOB
+)
+
+echo [エラー] 無効な選択です
+goto :ERROR_EXIT
+
+:START_JOB
+echo.
+echo ================================================================
+echo 選択: %SELECTED_NAME%
+echo ================================================================
+echo.
 echo 設定情報:
 echo   スケジューラー   : %SCHEDULER_SERVICE%
 echo   ジョブネットパス : %JOBNET_PATH%
-echo   ジョブパス       : %JOB_PATH%
+echo   ジョブパス1      : %JOB_PATH1%
+echo   ジョブパス2      : %JOB_PATH2%
 if "%WAIT_TIMEOUT%"=="0" (
     echo   タイムアウト     : 無制限
 ) else (
@@ -184,85 +236,123 @@ echo.
 del "%TEMP_OUTPUT%" 2>nul
 
 rem ============================================================================
-rem ジョブログ取得
+rem ジョブログ取得（2つのジョブ）
 rem ============================================================================
 echo ================================================================
 echo ジョブログを取得中...
 echo ================================================================
 echo.
 
+rem 結合用一時ファイル
+set "TEMP_COMBINED=%TEMP%\jp1_combined_%RANDOM%.txt"
+type nul > "%TEMP_COMBINED%"
+
 rem 一時ファイル作成
 set "TEMP_AJSSHOW=%TEMP%\jp1_ajsshow_%RANDOM%.txt"
 
-rem ajsshowコマンド実行（標準出力ファイルパスを取得）
-echo 実行コマンド: ajsshow -F %SCHEDULER_SERVICE% -g 1 -i '%%so' "%JOB_PATH%"
+rem ----------------------------------------------------------------------------
+rem ジョブ1のログ取得
+rem ----------------------------------------------------------------------------
+echo [ジョブ1] %JOB_PATH1%
 echo.
 
-ajsshow -F %SCHEDULER_SERVICE% -g 1 -i '%%so' "%JOB_PATH%" > "%TEMP_AJSSHOW%" 2>&1
+ajsshow -F %SCHEDULER_SERVICE% -g 1 -i '%%so' "%JOB_PATH1%" > "%TEMP_AJSSHOW%" 2>&1
 set "AJSSHOW_EXITCODE=%ERRORLEVEL%"
 
-echo ajsshow結果:
-type "%TEMP_AJSSHOW%"
+if not %AJSSHOW_EXITCODE%==0 (
+    echo [エラー] ジョブ1の情報取得に失敗しました
+    del "%TEMP_AJSSHOW%" 2>nul
+    goto :GET_JOB2
+)
+
+rem 標準出力ファイルパスを抽出
+set "LOG_FILE_PATH1="
+for /f "usebackq delims=" %%A in ("%TEMP_AJSSHOW%") do (
+    if not defined LOG_FILE_PATH1 set "LOG_FILE_PATH1=%%A"
+)
+set "LOG_FILE_PATH1=!LOG_FILE_PATH1:'=!"
+
+echo   標準出力ファイル: !LOG_FILE_PATH1!
+
+if defined LOG_FILE_PATH1 (
+    if exist "!LOG_FILE_PATH1!" (
+        echo ---------------------------------------------------------------- >> "%TEMP_COMBINED%"
+        echo [ジョブ1] %JOB_PATH1% >> "%TEMP_COMBINED%"
+        echo ---------------------------------------------------------------- >> "%TEMP_COMBINED%"
+        type "!LOG_FILE_PATH1!" >> "%TEMP_COMBINED%"
+        echo. >> "%TEMP_COMBINED%"
+        echo [OK] ジョブ1のログを取得しました
+    ) else (
+        echo [情報] ジョブ1の標準出力ファイルが存在しません
+    )
+) else (
+    echo [情報] ジョブ1の標準出力ファイルパスを取得できませんでした
+)
 echo.
+
+:GET_JOB2
+rem ----------------------------------------------------------------------------
+rem ジョブ2のログ取得
+rem ----------------------------------------------------------------------------
+echo [ジョブ2] %JOB_PATH2%
+echo.
+
+ajsshow -F %SCHEDULER_SERVICE% -g 1 -i '%%so' "%JOB_PATH2%" > "%TEMP_AJSSHOW%" 2>&1
+set "AJSSHOW_EXITCODE=%ERRORLEVEL%"
 
 if not %AJSSHOW_EXITCODE%==0 (
-    echo [エラー] ジョブ情報の取得に失敗しました（終了コード: %AJSSHOW_EXITCODE%）
-    echo.
-    echo 以下を確認してください:
-    echo   - ジョブパスが正しいか: %JOB_PATH%
-    echo   - ジョブが実行済みか
-    echo   - ジョブネットではなくジョブを指定しているか
+    echo [エラー] ジョブ2の情報取得に失敗しました
     del "%TEMP_AJSSHOW%" 2>nul
-    goto :ERROR_EXIT
+    goto :SHOW_COMBINED
 )
 
-rem 標準出力ファイルパスを抽出（シングルクォートを除去）
-set "LOG_FILE_PATH="
+rem 標準出力ファイルパスを抽出
+set "LOG_FILE_PATH2="
 for /f "usebackq delims=" %%A in ("%TEMP_AJSSHOW%") do (
-    if not defined LOG_FILE_PATH set "LOG_FILE_PATH=%%A"
+    if not defined LOG_FILE_PATH2 set "LOG_FILE_PATH2=%%A"
 )
+set "LOG_FILE_PATH2=!LOG_FILE_PATH2:'=!"
+
+echo   標準出力ファイル: !LOG_FILE_PATH2!
+
+if defined LOG_FILE_PATH2 (
+    if exist "!LOG_FILE_PATH2!" (
+        echo ---------------------------------------------------------------- >> "%TEMP_COMBINED%"
+        echo [ジョブ2] %JOB_PATH2% >> "%TEMP_COMBINED%"
+        echo ---------------------------------------------------------------- >> "%TEMP_COMBINED%"
+        type "!LOG_FILE_PATH2!" >> "%TEMP_COMBINED%"
+        echo. >> "%TEMP_COMBINED%"
+        echo [OK] ジョブ2のログを取得しました
+    ) else (
+        echo [情報] ジョブ2の標準出力ファイルが存在しません
+    )
+) else (
+    echo [情報] ジョブ2の標準出力ファイルパスを取得できませんでした
+)
+echo.
+
 del "%TEMP_AJSSHOW%" 2>nul
 
-rem シングルクォートを除去
-set "LOG_FILE_PATH=%LOG_FILE_PATH:'=%"
-
-echo [情報] 標準出力ファイル: %LOG_FILE_PATH%
-
-if not defined LOG_FILE_PATH (
-    echo [エラー] 標準出力ファイルパスを取得できませんでした
-    goto :ERROR_EXIT
-)
-
-echo.
-
-rem ファイル存在チェック
-if not exist "%LOG_FILE_PATH%" (
-    echo [エラー] 標準出力ファイルが存在しません: %LOG_FILE_PATH%
-    goto :ERROR_EXIT
-)
-
-rem ファイルサイズチェック
-for %%F in ("%LOG_FILE_PATH%") do set "FILE_SIZE=%%~zF"
-if "%FILE_SIZE%"=="0" (
-    echo [情報] スプールは空です
-    goto :NORMAL_EXIT
-)
-
-rem コンソールに出力
+:SHOW_COMBINED
+rem ----------------------------------------------------------------------------
+rem 結合ログの表示とクリップボードコピー
+rem ----------------------------------------------------------------------------
 echo ================================================================
-echo 取得したスプール内容:
+echo 取得したスプール内容（2ジョブ分）:
 echo ================================================================
 echo.
-type "%LOG_FILE_PATH%"
+type "%TEMP_COMBINED%"
 echo.
 
 rem クリップボードにコピー
-type "%LOG_FILE_PATH%" | clip
+type "%TEMP_COMBINED%" | clip
 
 echo ================================================================
 echo [OK] スプール内容をクリップボードにコピーしました
 echo ================================================================
 echo.
+
+del "%TEMP_COMBINED%" 2>nul
 
 rem ============================================================================
 rem サマリー表示
@@ -271,8 +361,10 @@ echo ================================================================
 echo 処理サマリー
 echo ================================================================
 echo.
+echo   選択         : %SELECTED_NAME%
 echo   ジョブネット : %JOBNET_PATH%
-echo   ジョブ       : %JOB_PATH%
+echo   ジョブ1      : %JOB_PATH1%
+echo   ジョブ2      : %JOB_PATH2%
 echo   起動結果     : 成功
 echo   実行結果     : 正常終了
 echo   ログ取得     : 成功（クリップボードにコピー済み）
