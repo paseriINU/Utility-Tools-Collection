@@ -135,6 +135,13 @@ if %AJSENTRY_EXITCODE% neq 0 (
 )
 
 echo [OK] ジョブネットの起動に成功しました
+
+rem 実行登録番号を取得（この世代を追跡するため）
+set "EXEC_REG_NUM="
+for /f "delims=" %%A in ('ajsshow -F %SCHEDULER_SERVICE% -g 1 -i "%%ll" "%JOBNET_PATH%" 2^>^&1') do (
+    if not defined EXEC_REG_NUM set "EXEC_REG_NUM=%%A"
+)
+echo   実行登録番号: !EXEC_REG_NUM!
 echo.
 
 rem ============================================================================
@@ -159,9 +166,9 @@ if not "%WAIT_TIMEOUT%"=="0" (
     )
 )
 
-rem ajsshowでステータス（%CC）を取得して状態確認
+rem ajsshowでステータス（%CC）を取得して状態確認（実行登録番号で特定）
 set "WAIT_STATUS="
-for /f "delims=" %%i in ('ajsshow -F %SCHEDULER_SERVICE% -g 1 -i "%%CC" "%JOBNET_PATH%" 2^>^&1') do (
+for /f "delims=" %%i in ('ajsshow -F %SCHEDULER_SERVICE% -B !EXEC_REG_NUM! -i "%%CC" "%JOBNET_PATH%" 2^>^&1') do (
     if not defined WAIT_STATUS set "WAIT_STATUS=%%i"
 )
 
@@ -242,9 +249,9 @@ rem ----------------------------------------------------------------------------
 echo [ジョブ1] %JOB_PATH1%
 echo.
 
-rem まず実終了コード（%%RR）を取得してエラー判定
+rem まず実終了コード（%%RR）を取得してエラー判定（実行登録番号で特定）
 set "RETURN_CODE1="
-for /f "delims=" %%A in ('ajsshow -F %SCHEDULER_SERVICE% -g 1 -i "%%RR" "%JOB_PATH1%" 2^>^&1') do (
+for /f "delims=" %%A in ('ajsshow -F %SCHEDULER_SERVICE% -B !EXEC_REG_NUM! -i "%%RR" "%JOB_PATH1%" 2^>^&1') do (
     if not defined RETURN_CODE1 set "RETURN_CODE1=%%A"
 )
 
@@ -262,9 +269,9 @@ if not "!RETURN_CODE1!"=="0" (
     echo   [警告] ジョブ1は異常終了しています
 )
 
-rem 標準出力ファイルパスを取得
+rem 標準出力ファイルパスを取得（実行登録番号で特定）
 set "LOG_FILE_PATH1="
-for /f "delims=" %%A in ('ajsshow -F %SCHEDULER_SERVICE% -g 1 -i "%%so" "%JOB_PATH1%" 2^>^&1') do (
+for /f "delims=" %%A in ('ajsshow -F %SCHEDULER_SERVICE% -B !EXEC_REG_NUM! -i "%%so" "%JOB_PATH1%" 2^>^&1') do (
     if not defined LOG_FILE_PATH1 set "LOG_FILE_PATH1=%%A"
 )
 
@@ -311,9 +318,9 @@ rem ----------------------------------------------------------------------------
 echo [ジョブ2] %JOB_PATH2%
 echo.
 
-rem まず実終了コード（%%RR）を取得してエラー判定
+rem まず実終了コード（%%RR）を取得してエラー判定（実行登録番号で特定）
 set "RETURN_CODE2="
-for /f "delims=" %%A in ('ajsshow -F %SCHEDULER_SERVICE% -g 1 -i "%%RR" "%JOB_PATH2%" 2^>^&1') do (
+for /f "delims=" %%A in ('ajsshow -F %SCHEDULER_SERVICE% -B !EXEC_REG_NUM! -i "%%RR" "%JOB_PATH2%" 2^>^&1') do (
     if not defined RETURN_CODE2 set "RETURN_CODE2=%%A"
 )
 
@@ -331,9 +338,9 @@ if not "!RETURN_CODE2!"=="0" (
     echo   [警告] ジョブ2は異常終了しています
 )
 
-rem 標準出力ファイルパスを取得
+rem 標準出力ファイルパスを取得（実行登録番号で特定）
 set "LOG_FILE_PATH2="
-for /f "delims=" %%A in ('ajsshow -F %SCHEDULER_SERVICE% -g 1 -i "%%so" "%JOB_PATH2%" 2^>^&1') do (
+for /f "delims=" %%A in ('ajsshow -F %SCHEDULER_SERVICE% -B !EXEC_REG_NUM! -i "%%so" "%JOB_PATH2%" 2^>^&1') do (
     if not defined LOG_FILE_PATH2 set "LOG_FILE_PATH2=%%A"
 )
 
