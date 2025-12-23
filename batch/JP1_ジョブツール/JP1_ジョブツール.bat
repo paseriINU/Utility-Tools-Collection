@@ -30,6 +30,9 @@ set "WAIT_TIMEOUT=0"
 rem 状態確認の間隔（秒）
 set "POLLING_INTERVAL=10"
 
+rem ログ出力先フォルダ（バッチファイルと同じ場所に出力する場合は %~dp0 のまま）
+set "OUTPUT_DIR=%~dp0"
+
 rem ----------------------------------------------------------------------------
 rem 選択肢1: TEST
 rem ----------------------------------------------------------------------------
@@ -261,9 +264,10 @@ if defined LOG_FILE_PATH1 (
         type "!LOG_FILE_PATH1!"
         echo.
 
-        rem クリップボードにコピー
-        type "!LOG_FILE_PATH1!" | clip
-        echo [OK] ジョブ1のログをクリップボードにコピーしました
+        rem ログをファイルに出力
+        set "OUTPUT_FILE1=%OUTPUT_DIR%job1_log.txt"
+        copy "!LOG_FILE_PATH1!" "!OUTPUT_FILE1!" >nul
+        echo [OK] ジョブ1のログを出力しました: !OUTPUT_FILE1!
         echo.
 
         rem ======================================================================
@@ -315,9 +319,10 @@ if defined LOG_FILE_PATH2 (
         type "!LOG_FILE_PATH2!"
         echo.
 
-        rem クリップボードにコピー
-        type "!LOG_FILE_PATH2!" | clip
-        echo [OK] ジョブ2のログをクリップボードにコピーしました
+        rem ログをファイルに出力
+        set "OUTPUT_FILE2=%OUTPUT_DIR%job2_log.txt"
+        copy "!LOG_FILE_PATH2!" "!OUTPUT_FILE2!" >nul
+        echo [OK] ジョブ2のログを出力しました: !OUTPUT_FILE2!
     ) else (
         echo [情報] ジョブ2の標準出力ファイルが存在しません
     )
@@ -343,7 +348,7 @@ echo   ジョブ1      : %JOB_PATH1%
 echo   ジョブ2      : %JOB_PATH2%
 echo   起動結果     : 成功
 echo   実行結果     : 正常終了
-echo   ログ取得     : 成功（クリップボードにコピー済み）
+echo   ログ取得     : 成功（ファイル出力済み）
 echo.
 
 :NORMAL_EXIT

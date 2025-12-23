@@ -8,14 +8,14 @@ rem ■ JP1ジョブログ取得ツール
 rem
 rem ■ 説明
 rem    JP1/AJS3の指定されたジョブの標準出力（スプール）を取得し、
-rem    クリップボードにコピーします。
+rem    テキストファイルに出力します。
 rem    ajsshowで標準出力ファイルパスを取得し、直接読み取ります。
 rem    ※ PCジョブ・UNIXジョブ用（QUEUEジョブには対応していません）
 rem
 rem ■ 使い方
 rem    1. 下記の「設定セクション」を編集
 rem    2. このファイルをダブルクリックで実行
-rem    3. 取得したログがクリップボードにコピーされます
+rem    3. 取得したログがテキストファイルに出力されます
 rem
 rem ■ 注意
 rem    このファイルはShift-JIS（CP932）で保存してください
@@ -31,6 +31,9 @@ set SCHEDULER_SERVICE=AJSROOT1
 rem 取得対象のジョブのフルパス（ジョブネット内のジョブを指定）
 rem 例: /main_unit/jobgroup1/daily_batch/job1
 set JOB_PATH=/main_unit/jobgroup1/daily_batch/job1
+
+rem ログ出力先フォルダ（バッチファイルと同じ場所に出力する場合は %~dp0 のまま）
+set OUTPUT_DIR=%~dp0
 
 rem ==============================================================================
 rem ■ メイン処理（以下は編集不要）
@@ -94,7 +97,7 @@ if not defined LOG_FILE_PATH (
 echo.
 
 rem ========================================
-rem スプール取得・クリップボードコピー
+rem スプール取得・ファイル出力
 rem ========================================
 echo ========================================
 echo スプールを取得中...
@@ -128,11 +131,13 @@ echo.
 type "%LOG_FILE_PATH%"
 echo.
 
-rem クリップボードにコピー（一時ファイル不要）
-type "%LOG_FILE_PATH%" | clip
+rem ファイルに出力
+set OUTPUT_FILE=%OUTPUT_DIR%joblog.txt
+copy "%LOG_FILE_PATH%" "%OUTPUT_FILE%" >nul
 
 echo ========================================
-echo [OK] スプール内容をクリップボードにコピーしました
+echo [OK] スプール内容をファイルに出力しました
+echo   出力先: %OUTPUT_FILE%
 echo ========================================
 
 :SUCCESS_EXIT
