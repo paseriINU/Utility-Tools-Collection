@@ -121,10 +121,10 @@ echo ジョブネット起動中...
 echo ================================================================
 echo.
 
-rem ajsentry実行
-echo コマンド実行中: ajsentry -F %SCHEDULER_SERVICE% %JOBNET_PATH%
+rem ajsentry実行（-n: 即時実行）
+echo コマンド実行中: ajsentry -F %SCHEDULER_SERVICE% -n %JOBNET_PATH%
 echo.
-ajsentry -F %SCHEDULER_SERVICE% %JOBNET_PATH%
+ajsentry -F %SCHEDULER_SERVICE% -n %JOBNET_PATH%
 set "AJSENTRY_EXITCODE=%ERRORLEVEL%"
 echo.
 
