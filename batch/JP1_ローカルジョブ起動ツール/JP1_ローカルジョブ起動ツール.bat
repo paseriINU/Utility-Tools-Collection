@@ -27,13 +27,9 @@ rem 起動するジョブネットのフルパス
 set "JOBNET_PATH=/main_unit/jobgroup1/daily_batch"
 
 rem ジョブ完了を待つ場合は 1、起動のみの場合は 0
+rem 1: ajsentry -n -w で完了まで待機
+rem 0: ajsentry -n で即時起動のみ（完了を待たない）
 set "WAIT_FOR_COMPLETION=1"
-
-rem 完了待ちのタイムアウト（秒）。0の場合は無制限
-set "WAIT_TIMEOUT=0"
-
-rem 状態確認の間隔（秒）
-set "POLLING_INTERVAL=10"
 
 rem ============================================================================
 rem ■ メイン処理（以下は編集不要）
@@ -50,14 +46,9 @@ echo 設定情報:
 echo   スケジューラー   : %SCHEDULER_SERVICE%
 echo   ジョブネットパス : %JOBNET_PATH%
 if "%WAIT_FOR_COMPLETION%"=="1" (
-    echo   完了待ち         : 有効
-    if "%WAIT_TIMEOUT%"=="0" (
-        echo   タイムアウト     : 無制限
-    ) else (
-        echo   タイムアウト     : %WAIT_TIMEOUT%秒
-    )
+    echo   完了待ち         : 有効（ajsentry -w）
 ) else (
-    echo   完了待ち         : 無効
+    echo   完了待ち         : 無効（即時起動のみ）
 )
 echo.
 
@@ -75,20 +66,20 @@ for /f "delims=" %%A in ('ajsshow -F %SCHEDULER_SERVICE% -g 1 -i "%%ll" "%JOBNET
     if not defined BEFORE_EXEC_REG_NUM set "BEFORE_EXEC_REG_NUM=%%A"
 )
 
-rem ajsentry実行（-n: 即時実行, -w: 完了待ち）
-echo コマンド実行中: ajsentry -F %SCHEDULER_SERVICE% -n -w %JOBNET_PATH%
-echo.
-ajsentry -F %SCHEDULER_SERVICE% -n -w %JOBNET_PATH%
+rem ajsentry実行
+rem -n: 即時実行登録
+rem -w: 完了待ち（WAIT_FOR_COMPLETION=1の場合のみ）
+if "%WAIT_FOR_COMPLETION%"=="1" (
+    echo コマンド実行中: ajsentry -F %SCHEDULER_SERVICE% -n -w %JOBNET_PATH%
+    echo.
+    ajsentry -F %SCHEDULER_SERVICE% -n -w %JOBNET_PATH%
+) else (
+    echo コマンド実行中: ajsentry -F %SCHEDULER_SERVICE% -n %JOBNET_PATH%
+    echo.
+    ajsentry -F %SCHEDULER_SERVICE% -n %JOBNET_PATH%
+)
 set "AJSENTRY_EXITCODE=%ERRORLEVEL%"
 echo.
-
-if %AJSENTRY_EXITCODE% neq 0 (
-    echo [エラー] ジョブネットの起動に失敗しました
-    echo   終了コード: %AJSENTRY_EXITCODE%
-    goto :error_exit
-)
-
-echo [OK] ジョブネットの起動に成功しました
 
 rem 実行登録番号を取得（ajsentry後の最新世代）
 set "EXEC_REG_NUM="
@@ -104,94 +95,24 @@ if "!EXEC_REG_NUM!"=="!BEFORE_EXEC_REG_NUM!" (
 echo   実行登録番号: !EXEC_REG_NUM!
 echo.
 
-rem ============================================================================
-rem 完了待ち処理
-rem ============================================================================
-if "%WAIT_FOR_COMPLETION%"=="0" goto :show_details
-
+rem 結果判定
 echo ================================================================
-echo ジョブ完了待機中...
-echo ================================================================
-echo.
-
-set "ELAPSED_SECONDS=0"
-set "JOB_STATUS=unknown"
-
-:wait_loop
-rem タイムアウトチェック
-if not "%WAIT_TIMEOUT%"=="0" (
-    if %ELAPSED_SECONDS% geq %WAIT_TIMEOUT% (
-        echo.
-        echo [タイムアウト] 完了待ちがタイムアウトしました
-        echo   タイムアウト時間: %WAIT_TIMEOUT%秒
-        set "JOB_STATUS=timeout"
-        goto :wait_done
+if "%WAIT_FOR_COMPLETION%"=="1" (
+    rem ajsentry -w の終了コードでジョブネットの結果を判定
+    if %AJSENTRY_EXITCODE% equ 0 (
+        echo [OK] ジョブネットが正常終了しました
+    ) else (
+        echo [NG] ジョブネットが異常終了しました
+        echo   終了コード: %AJSENTRY_EXITCODE%
     )
-)
-
-rem ajsshowでステータス（%CC）を取得して状態確認（実行登録番号で特定）
-rem %CC = 状態（日本語文字列: 正常終了, 異常終了, 強制終了, 実行中 など）
-set "WAIT_STATUS="
-for /f "delims=" %%i in ('ajsshow -F %SCHEDULER_SERVICE% -B !EXEC_REG_NUM! -i "%%CC" "%JOBNET_PATH%" 2^>^&1') do (
-    if not defined WAIT_STATUS set "WAIT_STATUS=%%i"
-)
-
-rem 出力がない場合はエラー
-if not defined WAIT_STATUS (
-    echo.
-    echo [エラー] ステータスを取得できませんでした
-    set "JOB_STATUS=error"
-    goto :wait_done
-)
-
-rem KAVS エラーチェック
-echo !WAIT_STATUS! | findstr /r "^KAVS.*-E" >nul
-if %ERRORLEVEL%==0 (
-    echo.
-    echo [エラー] ajsshowでエラーが発生しました
-    echo   エラー: !WAIT_STATUS!
-    set "JOB_STATUS=error"
-    goto :wait_done
-)
-
-rem 状態判定（日本語文字列で判定）
-echo !WAIT_STATUS! | findstr /i "正常終了" >nul
-if !ERRORLEVEL!==0 (
-    set "JOB_STATUS=normal"
-    goto :wait_done
-)
-echo !WAIT_STATUS! | findstr /i "異常終了 強制終了 中断" >nul
-if !ERRORLEVEL!==0 (
-    set "JOB_STATUS=abnormal"
-    goto :wait_done
-)
-
-rem その他は実行中として待機継続
-set /a "MINUTES=ELAPSED_SECONDS/60"
-set /a "SECS=ELAPSED_SECONDS%%60"
-echo   状態: !WAIT_STATUS! ^(経過時間: !MINUTES!分!SECS!秒^)
-
-:wait_continue
-rem 待機
-ping -n %POLLING_INTERVAL% 127.0.0.1 >nul
-set /a "ELAPSED_SECONDS+=POLLING_INTERVAL"
-goto :wait_loop
-
-:wait_done
-echo.
-echo ================================================================
-if "%JOB_STATUS%"=="normal" (
-    echo [OK] ジョブネットが正常終了しました
-) else if "%JOB_STATUS%"=="abnormal" (
-    echo [NG] ジョブネットが異常終了しました
-) else if "%JOB_STATUS%"=="timeout" (
-    echo [NG] 完了待ちがタイムアウトしました
-) else if "%JOB_STATUS%"=="not_found" (
-    echo [NG] ジョブネットが見つかりません
-) else if "%JOB_STATUS%"=="error" (
-    echo [NG] コマンド実行エラー
 ) else (
-    echo [--] ジョブネット状態: %JOB_STATUS%
+    rem 即時起動のみの場合はajsentryの起動成否を判定
+    if %AJSENTRY_EXITCODE% equ 0 (
+        echo [OK] ジョブネットの起動に成功しました
+    ) else (
+        echo [NG] ジョブネットの起動に失敗しました
+        echo   終了コード: %AJSENTRY_EXITCODE%
+    )
 )
 echo ================================================================
 echo.

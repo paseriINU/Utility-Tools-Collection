@@ -1677,16 +1677,9 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
 
     ' ajsentry実行（共通）-n: 即時実行, -w: 完了待ち
     script = script & "  # ajsentry実行（即時実行・完了待ち）" & vbCrLf
-    script = script & "  Write-Log '[実行] ajsentry - ジョブ起動'" & vbCrLf
+    script = script & "  Write-Log '[実行] ajsentry - ジョブ起動（-wオプションで完了待ち）'" & vbCrLf
     script = script & "  $entryResult = Invoke-JP1Command 'ajsentry.exe' @('-F', '" & config("SchedulerService") & "', '-n', '-w', '" & jobnetPath & "')" & vbCrLf
     script = script & "  Write-Log ""結果: $($entryResult.Output -join ' ')""" & vbCrLf
-    script = script & "  if ($entryResult.ExitCode -ne 0) {" & vbCrLf
-    script = script & "    Write-Log '[ERROR] ジョブ起動失敗'" & vbCrLf
-    script = script & "    Write-Output ""RESULT_STATUS:起動失敗""" & vbCrLf
-    script = script & "    Write-Output ""RESULT_MESSAGE:$($entryResult.Output -join ' ')""" & vbCrLf
-    script = script & "    exit" & vbCrLf
-    script = script & "  }" & vbCrLf
-    script = script & "  Write-Log '[成功] ジョブ起動完了'" & vbCrLf
     script = script & vbCrLf
     script = script & "  # 実行登録番号を取得（ajsentry後の最新世代）" & vbCrLf
     script = script & "  $execRegResult = Invoke-JP1Command 'ajsshow.exe' @('-F', '" & config("SchedulerService") & "', '-g', '1', '-i', '%ll', '" & jobnetPath & "')" & vbCrLf
@@ -1701,53 +1694,27 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
     script = script & vbCrLf
 
     If waitCompletion Then
-        ' 完了待ち（共通）
-        script = script & "  # ジョブ完了待ち" & vbCrLf
-        script = script & "  Write-Log '[待機] ジョブ完了待ち開始...'" & vbCrLf
-        script = script & "  $timeout = " & config("Timeout") & vbCrLf
-        script = script & "  $interval = " & config("PollingInterval") & vbCrLf
-        script = script & "  $startTime = Get-Date" & vbCrLf
-        script = script & "  $isRunning = $true" & vbCrLf
-        script = script & "  $pollCount = 0" & vbCrLf
-        script = script & "  $lastStatusStr = ''" & vbCrLf
-        script = script & vbCrLf
-        script = script & "  while ($isRunning) {" & vbCrLf
-        script = script & "    $pollCount++" & vbCrLf
-        script = script & "    if ($timeout -gt 0 -and ((Get-Date) - $startTime).TotalSeconds -ge $timeout) {" & vbCrLf
-        script = script & "      Write-Log '[TIMEOUT] タイムアウトしました'" & vbCrLf
-        script = script & "      Write-Output ""RESULT_STATUS:タイムアウト""" & vbCrLf
-        script = script & "      break" & vbCrLf
-        script = script & "    }" & vbCrLf
-        script = script & "    $statusResult = Invoke-JP1Command 'ajsshow.exe' @('-F', '" & config("SchedulerService") & "', '-B', $execRegNum, '" & jobnetPath & "')" & vbCrLf
-        script = script & "    $statusStr = $statusResult.Output -join ' '" & vbCrLf
-        script = script & "    $lastStatusStr = $statusStr" & vbCrLf
-        script = script & "    Write-Log ""[ポーリング $pollCount] ステータス: $statusStr""" & vbCrLf
-        script = script & vbCrLf
-        script = script & "    if ($statusStr -match '異常終了|異常検出終了|ended abnormally|abnormal end|abend|killed|failed|キャンセル|中止') {" & vbCrLf
-        script = script & "      Write-Log '[完了] 異常終了'" & vbCrLf
-        script = script & "      Write-Output ""RESULT_STATUS:異常終了""" & vbCrLf
-        script = script & "      $isRunning = $false" & vbCrLf
-        script = script & "    } elseif ($statusStr -match '警告検出終了|ended with warning|warning end') {" & vbCrLf
-        script = script & "      Write-Log '[完了] 警告検出終了'" & vbCrLf
-        script = script & "      Write-Output ""RESULT_STATUS:警告検出終了""" & vbCrLf
-        script = script & "      $isRunning = $false" & vbCrLf
-        script = script & "    } elseif ($statusStr -match '正常終了|ended normally|normal end|completed|end:') {" & vbCrLf
-        script = script & "      Write-Log '[完了] 正常終了'" & vbCrLf
-        script = script & "      Write-Output ""RESULT_STATUS:正常終了""" & vbCrLf
-        script = script & "      $isRunning = $false" & vbCrLf
-        script = script & "    } elseif ($statusStr -match '未実行|未登録|not registered|not found|KAVS0161') {" & vbCrLf
-        script = script & "      Write-Log '[エラー] ユニットが見つかりません'" & vbCrLf
-        script = script & "      Write-Output ""RESULT_STATUS:エラー""" & vbCrLf
-        script = script & "      $isRunning = $false" & vbCrLf
-        script = script & "    } else {" & vbCrLf
-        script = script & "      Start-Sleep -Seconds $interval" & vbCrLf
-        script = script & "    }" & vbCrLf
+        ' ajsentry -wの終了コードで結果を判定（ステータス確認ループは不要）
+        script = script & "  # ajsentry -wの終了コードで結果を判定" & vbCrLf
+        script = script & "  $lastStatusStr = $entryResult.Output -join ' '" & vbCrLf
+        script = script & "  if ($entryResult.ExitCode -eq 0) {" & vbCrLf
+        script = script & "    Write-Log '[完了] 正常終了'" & vbCrLf
+        script = script & "    Write-Output ""RESULT_STATUS:正常終了""" & vbCrLf
+        script = script & "  } else {" & vbCrLf
+        script = script & "    Write-Log '[完了] 異常終了（終了コード: ' + $entryResult.ExitCode + '）'" & vbCrLf
+        script = script & "    Write-Output ""RESULT_STATUS:異常終了""" & vbCrLf
         script = script & "  }" & vbCrLf
+        script = script & vbCrLf
+
+        ' 詳細情報取得（ajsshowで実行結果を確認）
+        script = script & "  # 詳細情報取得" & vbCrLf
+        script = script & "  $statusResult = Invoke-JP1Command 'ajsshow.exe' @('-F', '" & config("SchedulerService") & "', '-B', $execRegNum, '" & jobnetPath & "')" & vbCrLf
+        script = script & "  $lastStatusStr = $statusResult.Output -join ' '" & vbCrLf
+        script = script & "  Write-Log ""詳細ステータス: $lastStatusStr""" & vbCrLf
         script = script & vbCrLf
 
         ' 時間抽出（共通）
         script = script & "  # 時間抽出" & vbCrLf
-        script = script & "  Write-Log ""最終ステータス: $lastStatusStr""" & vbCrLf
         script = script & "  $timePattern = '\d{4}/\d{2}/\d{2}\s+\d{2}:\d{2}'" & vbCrLf
         script = script & "  $allTimes = [regex]::Matches($lastStatusStr, $timePattern)" & vbCrLf
         script = script & "  if ($allTimes.Count -ge 1) { Write-Output ""RESULT_START:$($allTimes[0].Value)"" }" & vbCrLf
@@ -1756,9 +1723,9 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
         script = script & "  Write-Output ""RESULT_MESSAGE:$cleanMsg""" & vbCrLf
         script = script & vbCrLf
 
-        ' エラー詳細取得（共通）
+        ' エラー詳細取得（ajsentry -wの終了コードが0以外の場合）
         script = script & "  # エラー詳細取得" & vbCrLf
-        script = script & "  if ($lastStatusStr -match '警告検出終了|異常終了|異常検出終了|ended abnormally|ended with warning') {" & vbCrLf
+        script = script & "  if ($entryResult.ExitCode -ne 0) {" & vbCrLf
         script = script & "    Write-Log '[詳細取得] 異常終了したジョブを検索中...'" & vbCrLf
         script = script & "    $failedJobsResult = Invoke-JP1Command 'ajsshow.exe' @('-F', '" & config("SchedulerService") & "', '-R', '-f', '%J %T %C %R', '" & jobnetPath & "')" & vbCrLf
         script = script & "    $failedJobsStr = $failedJobsResult.Output -join ""`n""" & vbCrLf
