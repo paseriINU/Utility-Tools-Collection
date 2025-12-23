@@ -270,7 +270,9 @@ for /f "delims=" %%A in ('ajsshow -F %SCHEDULER_SERVICE% -g 1 -i "%%so" "%JOB_PA
 
 echo   標準出力ファイル: !LOG_FILE_PATH1!
 
-if exist "!LOG_FILE_PATH1!" (
+rem ファイル存在チェック
+dir "!LOG_FILE_PATH1!" >nul 2>&1
+if !ERRORLEVEL!==0 (
     echo.
     echo ----------------------------------------------------------------
     echo [ジョブ1] %JOB_PATH1%
@@ -331,7 +333,9 @@ for /f "delims=" %%A in ('ajsshow -F %SCHEDULER_SERVICE% -g 1 -i "%%so" "%JOB_PA
 
 echo   標準出力ファイル: !LOG_FILE_PATH2!
 
-if exist "!LOG_FILE_PATH2!" (
+rem ファイル存在チェック
+dir "!LOG_FILE_PATH2!" >nul 2>&1
+if !ERRORLEVEL!==0 (
     echo.
     echo ----------------------------------------------------------------
     echo [ジョブ2] %JOB_PATH2%
