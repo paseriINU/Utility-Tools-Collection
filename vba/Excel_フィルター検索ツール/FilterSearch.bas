@@ -19,7 +19,7 @@ Private Const FILTER_COLUMN_B As Long = 2               ' フィルター列2（
 
 ' フォームを表示
 Public Sub ShowFilterSearchForm()
-    FilterSearchForm.Show vbModeless
+    FSearchForm.Show vbModeless
 End Sub
 
 ' OR条件でフィルターを適用
