@@ -18,10 +18,7 @@ Public Sub InitializeFilterSearchTool()
 
     Application.ScreenUpdating = False
 
-    ' 既存フォームがあれば削除
-    DeleteExistingForm
-
-    ' フォームを作成
+    ' フォームを作成（既存フォームは削除しない）
     CreateFilterSearchForm
 
     Application.ScreenUpdating = True
@@ -49,20 +46,6 @@ End Sub
 ' ========================================
 ' 内部プロシージャ
 ' ========================================
-
-' 既存のフォームを削除
-Private Sub DeleteExistingForm()
-    Dim vbComp As Object
-
-    On Error Resume Next
-    For Each vbComp In ThisWorkbook.VBProject.VBComponents
-        If vbComp.Name = FORM_NAME Then
-            ThisWorkbook.VBProject.VBComponents.Remove vbComp
-            Exit For
-        End If
-    Next vbComp
-    On Error GoTo 0
-End Sub
 
 ' フォームを作成
 Private Sub CreateFilterSearchForm()
