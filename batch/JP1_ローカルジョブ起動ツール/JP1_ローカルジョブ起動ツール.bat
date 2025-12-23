@@ -69,6 +69,12 @@ echo ジョブネット起動中...
 echo ================================================================
 echo.
 
+rem ajsentry実行前に現在の最新実行登録番号を取得（比較用）
+set "BEFORE_EXEC_REG_NUM="
+for /f "delims=" %%A in ('ajsshow -F %SCHEDULER_SERVICE% -g 1 -i "%%ll" "%JOBNET_PATH%" 2^>^&1') do (
+    if not defined BEFORE_EXEC_REG_NUM set "BEFORE_EXEC_REG_NUM=%%A"
+)
+
 rem ajsentry実行（-n: 即時実行）
 echo コマンド実行中: ajsentry -F %SCHEDULER_SERVICE% -n %JOBNET_PATH%
 echo.
@@ -83,6 +89,18 @@ if %AJSENTRY_EXITCODE% neq 0 (
 )
 
 echo [OK] ジョブネットの起動に成功しました
+
+rem 実行登録番号を取得（ajsentry後の最新世代）
+set "EXEC_REG_NUM="
+for /f "delims=" %%A in ('ajsshow -F %SCHEDULER_SERVICE% -g 1 -i "%%ll" "%JOBNET_PATH%" 2^>^&1') do (
+    if not defined EXEC_REG_NUM set "EXEC_REG_NUM=%%A"
+)
+
+rem 実行登録番号が変わったことを確認（自分が起動したジョブであることを保証）
+if "!EXEC_REG_NUM!"=="!BEFORE_EXEC_REG_NUM!" (
+    echo [警告] 実行登録番号が変化していません。既存のジョブを追跡します。
+)
+echo   実行登録番号: !EXEC_REG_NUM!
 echo.
 
 rem ============================================================================
@@ -110,10 +128,10 @@ if not "%WAIT_TIMEOUT%"=="0" (
     )
 )
 
-rem ajsshowでステータス（%CC）を取得して状態確認
-rem %CC = 状態コード（E:正常終了, A:異常終了, K:強制終了, r:実行中 など）
+rem ajsshowでステータス（%CC）を取得して状態確認（実行登録番号で特定）
+rem %CC = 状態（日本語文字列: 正常終了, 異常終了, 強制終了, 実行中 など）
 set "WAIT_STATUS="
-for /f "delims=" %%i in ('ajsshow -F %SCHEDULER_SERVICE% -g 1 -i "%%CC" "%JOBNET_PATH%" 2^>^&1') do (
+for /f "delims=" %%i in ('ajsshow -F %SCHEDULER_SERVICE% -B !EXEC_REG_NUM! -i "%%CC" "%JOBNET_PATH%" 2^>^&1') do (
     if not defined WAIT_STATUS set "WAIT_STATUS=%%i"
 )
 
@@ -186,9 +204,9 @@ echo ジョブ詳細情報を取得中...
 echo ================================================================
 echo.
 
-echo 詳細情報 (ajsshow -E):
+echo 詳細情報 (ajsshow -E -B !EXEC_REG_NUM!):
 echo ----------------------------------------------------------------
-ajsshow -F %SCHEDULER_SERVICE% -E %JOBNET_PATH%
+ajsshow -F %SCHEDULER_SERVICE% -B !EXEC_REG_NUM! -E %JOBNET_PATH%
 echo ----------------------------------------------------------------
 echo.
 

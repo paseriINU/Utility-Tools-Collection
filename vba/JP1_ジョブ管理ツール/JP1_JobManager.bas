@@ -1669,6 +1669,12 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
         script = script & vbCrLf
     End If
 
+    ' ajsentry実行前に現在の最新実行登録番号を取得（比較用）
+    script = script & "  # ajsentry実行前の実行登録番号を取得（比較用）" & vbCrLf
+    script = script & "  $beforeRegResult = Invoke-JP1Command 'ajsshow.exe' @('-F', '" & config("SchedulerService") & "', '-g', '1', '-i', '%ll', '" & jobnetPath & "')" & vbCrLf
+    script = script & "  $beforeExecRegNum = ($beforeRegResult.Output -join '').Trim()" & vbCrLf
+    script = script & vbCrLf
+
     ' ajsentry実行（共通）-n: 即時実行
     script = script & "  # ajsentry実行（即時実行）" & vbCrLf
     script = script & "  Write-Log '[実行] ajsentry - ジョブ起動'" & vbCrLf
@@ -1682,9 +1688,12 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
     script = script & "  }" & vbCrLf
     script = script & "  Write-Log '[成功] ジョブ起動完了'" & vbCrLf
     script = script & vbCrLf
-    script = script & "  # 実行登録番号を取得（この世代を追跡するため）" & vbCrLf
+    script = script & "  # 実行登録番号を取得（ajsentry後の最新世代）" & vbCrLf
     script = script & "  $execRegResult = Invoke-JP1Command 'ajsshow.exe' @('-F', '" & config("SchedulerService") & "', '-g', '1', '-i', '%ll', '" & jobnetPath & "')" & vbCrLf
     script = script & "  $execRegNum = ($execRegResult.Output -join '').Trim()" & vbCrLf
+    script = script & "  if ($execRegNum -eq $beforeExecRegNum) {" & vbCrLf
+    script = script & "    Write-Log '[警告] 実行登録番号が変化していません。既存のジョブを追跡します。'" & vbCrLf
+    script = script & "  }" & vbCrLf
     script = script & "  Write-Log ""実行登録番号: $execRegNum""" & vbCrLf
     script = script & vbCrLf
 
