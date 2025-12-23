@@ -159,51 +159,50 @@ if not "%WAIT_TIMEOUT%"=="0" (
     )
 )
 
-rem ajsstatusで状態確認
-set "STATUS_LINE="
-for /f "delims=" %%i in ('ajsstatus -F %SCHEDULER_SERVICE% %JOBNET_PATH% 2^>^&1') do (
-    set "STATUS_LINE=%%i"
+rem ajsshowで実終了コード（%RR）を取得して状態確認
+set "WAIT_RETURN_CODE="
+for /f "delims=" %%i in ('ajsshow -F %SCHEDULER_SERVICE% -g 1 -i "%%RR" "%JOBNET_PATH%" 2^>^&1') do (
+    if not defined WAIT_RETURN_CODE set "WAIT_RETURN_CODE=%%i"
 )
 
-rem エラーチェック（KAVS****-E 形式のエラーメッセージを検出）
-echo !STATUS_LINE! | findstr /r "^KAVS.*-E" >nul
-if %ERRORLEVEL%==0 (
-    echo.
-    echo [エラー] ajsstatusでエラーが発生しました
-    echo   エラー: !STATUS_LINE!
-    set "JOB_STATUS=error"
-    goto :WAIT_DONE
-)
-
-echo !STATUS_LINE! | findstr /i "ended abnormally abnormal end abend killed interrupted failed" >nul
-if %ERRORLEVEL%==0 (
-    set "JOB_STATUS=abnormal"
-    goto :WAIT_DONE
-)
-
-echo !STATUS_LINE! | findstr /i "ended normally normal end completed" >nul
-if %ERRORLEVEL%==0 (
-    set "JOB_STATUS=normal"
-    goto :WAIT_DONE
-)
-
-echo !STATUS_LINE! | findstr /i "now running running wait queued executing" >nul
-if %ERRORLEVEL%==0 (
+rem 出力がない場合は実行中
+if not defined WAIT_RETURN_CODE (
     set /a "MINUTES=ELAPSED_SECONDS/60"
     set /a "SECS=ELAPSED_SECONDS%%60"
     echo   状態: 実行中... ^(経過時間: !MINUTES!分!SECS!秒^)
     goto :WAIT_CONTINUE
 )
 
-echo !STATUS_LINE! | findstr /i "not registered not found does not exist" >nul
+rem KAVS エラーチェック
+echo !WAIT_RETURN_CODE! | findstr /r "^KAVS.*-E" >nul
 if %ERRORLEVEL%==0 (
-    set "JOB_STATUS=not_found"
+    echo.
+    echo [エラー] ajsshowでエラーが発生しました
+    echo   エラー: !WAIT_RETURN_CODE!
+    set "JOB_STATUS=error"
     goto :WAIT_DONE
 )
 
-set /a "MINUTES=ELAPSED_SECONDS/60"
-set /a "SECS=ELAPSED_SECONDS%%60"
-echo   状態: 確認中... ^(経過時間: !MINUTES!分!SECS!秒^)
+rem 数値かどうかチェック
+set "WAIT_RETURN_CODE_NUM="
+for /f "delims=0123456789" %%A in ("!WAIT_RETURN_CODE!") do set "WAIT_RETURN_CODE_NUM=%%A"
+
+rem 数値以外の場合は実行中（空文字や''など）
+if defined WAIT_RETURN_CODE_NUM (
+    set /a "MINUTES=ELAPSED_SECONDS/60"
+    set /a "SECS=ELAPSED_SECONDS%%60"
+    echo   状態: 実行中... ^(経過時間: !MINUTES!分!SECS!秒^)
+    goto :WAIT_CONTINUE
+)
+
+rem 数値の場合は終了判定（0=正常、0以外=異常）
+if "!WAIT_RETURN_CODE!"=="0" (
+    set "JOB_STATUS=normal"
+    goto :WAIT_DONE
+) else (
+    set "JOB_STATUS=abnormal"
+    goto :WAIT_DONE
+)
 
 :WAIT_CONTINUE
 ping -n %POLLING_INTERVAL% 127.0.0.1 >nul
