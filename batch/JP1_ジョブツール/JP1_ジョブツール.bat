@@ -118,26 +118,16 @@ echo ジョブネット起動中...
 echo ================================================================
 echo.
 
-rem 一時ファイルの準備
-set "TEMP_OUTPUT=%TEMP%\jp1_output_%RANDOM%.txt"
-
 rem ajsentry実行
 echo コマンド実行中: ajsentry -F %SCHEDULER_SERVICE% %JOBNET_PATH%
-ajsentry -F %SCHEDULER_SERVICE% %JOBNET_PATH% > "%TEMP_OUTPUT%" 2>&1
-set "AJSENTRY_EXITCODE=%ERRORLEVEL%"
-
-rem 結果表示
 echo.
-echo ----------------------------------------------------------------
-echo ajsentry出力:
-type "%TEMP_OUTPUT%"
-echo ----------------------------------------------------------------
+ajsentry -F %SCHEDULER_SERVICE% %JOBNET_PATH%
+set "AJSENTRY_EXITCODE=%ERRORLEVEL%"
 echo.
 
 if %AJSENTRY_EXITCODE% neq 0 (
     echo [エラー] ジョブネットの起動に失敗しました
     echo   終了コード: %AJSENTRY_EXITCODE%
-    del "%TEMP_OUTPUT%" 2>nul
     goto :ERROR_EXIT
 )
 
@@ -167,11 +157,8 @@ if not "%WAIT_TIMEOUT%"=="0" (
 )
 
 rem ajsstatusで状態確認
-ajsstatus -F %SCHEDULER_SERVICE% %JOBNET_PATH% > "%TEMP_OUTPUT%" 2>&1
-
-rem 状態判定
 set "STATUS_LINE="
-for /f "delims=" %%i in ('type "%TEMP_OUTPUT%"') do (
+for /f "delims=" %%i in ('ajsstatus -F %SCHEDULER_SERVICE% %JOBNET_PATH% 2^>^&1') do (
     set "STATUS_LINE=%%i"
 )
 
@@ -217,23 +204,18 @@ if "%JOB_STATUS%"=="normal" (
     echo [OK] ジョブネットが正常終了しました
 ) else if "%JOB_STATUS%"=="abnormal" (
     echo [NG] ジョブネットが異常終了しました
-    del "%TEMP_OUTPUT%" 2>nul
     goto :ERROR_EXIT
 ) else if "%JOB_STATUS%"=="timeout" (
     echo [NG] 完了待ちがタイムアウトしました
-    del "%TEMP_OUTPUT%" 2>nul
     goto :ERROR_EXIT
 ) else if "%JOB_STATUS%"=="not_found" (
     echo [NG] ジョブネットが見つかりません
-    del "%TEMP_OUTPUT%" 2>nul
     goto :ERROR_EXIT
 ) else (
     echo [--] ジョブネット状態: %JOB_STATUS%
 )
 echo ================================================================
 echo.
-
-del "%TEMP_OUTPUT%" 2>nul
 
 rem ============================================================================
 rem ジョブログ取得（2つのジョブ）
