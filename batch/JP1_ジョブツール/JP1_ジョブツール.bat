@@ -49,6 +49,14 @@ set "MENU2_JOBNET=/main_unit/jobgroup2/test2_batch"
 set "MENU2_JOB1=/main_unit/jobgroup2/test2_batch/job1"
 set "MENU2_JOB2=/main_unit/jobgroup2/test2_batch/job2"
 
+rem ----------------------------------------------------------------------------
+rem 選択肢3: TEST3
+rem ----------------------------------------------------------------------------
+set "MENU3_NAME=TEST3"
+set "MENU3_JOBNET=/main_unit/jobgroup3/test3_batch"
+set "MENU3_JOB1=/main_unit/jobgroup3/test3_batch/job1"
+set "MENU3_JOB2=/main_unit/jobgroup3/test3_batch/job2"
+
 rem ============================================================================
 rem ■ メイン処理（以下は編集不要）
 rem ============================================================================
@@ -66,10 +74,11 @@ echo 実行するジョブを選択してください:
 echo.
 echo   1. %MENU1_NAME%
 echo   2. %MENU2_NAME%
+echo   3. %MENU3_NAME%
 echo.
 echo   0. キャンセル
 echo.
-set /p "MENU_CHOICE=選択 (0-2): "
+set /p "MENU_CHOICE=選択 (0-3): "
 
 if "%MENU_CHOICE%"=="0" (
     echo 処理をキャンセルしました。
@@ -89,6 +98,14 @@ if "%MENU_CHOICE%"=="2" (
     set "JOB_PATH1=%MENU2_JOB1%"
     set "JOB_PATH2=%MENU2_JOB2%"
     set "SELECTED_NAME=%MENU2_NAME%"
+    goto :START_JOB
+)
+
+if "%MENU_CHOICE%"=="3" (
+    set "JOBNET_PATH=%MENU3_JOBNET%"
+    set "JOB_PATH1=%MENU3_JOB1%"
+    set "JOB_PATH2=%MENU3_JOB2%"
+    set "SELECTED_NAME=%MENU3_NAME%"
     goto :START_JOB
 )
 
@@ -306,6 +323,15 @@ rem ログをファイルに出力
 set "OUTPUT_FILE2=%OUTPUT_DIR%job2_log.txt"
 copy "%LOG_FILE_PATH2%" "%OUTPUT_FILE2%" >nul
 echo [OK] ジョブ2のログを出力しました: %OUTPUT_FILE2%
+echo.
+
+rem ======================================================================
+rem ■ ここに入れたい処理を記述してください
+rem ======================================================================
+
+
+rem ======================================================================
+
 exit /b
 
 :AFTER_LOG2
