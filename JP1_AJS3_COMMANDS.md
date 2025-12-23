@@ -70,7 +70,7 @@ JP1/AJS3（Automatic Job Management System 3）は、日立製作所が提供す
 | `ajsresume` | 一時停止を解除 | ★☆☆ |
 | `ajsintrpt` | 実行を中断 | ★☆☆ |
 | `ajsleave` | 実行登録を解除 | ★☆☆ |
-| `ajsplan` | 実行登録（スケジュール登録） | ★★☆ |
+| `ajsplan` | スケジュール一時変更・**保留設定(-h)/解除(-r)** | ★★★ |
 
 ### 情報取得
 
@@ -101,7 +101,7 @@ JP1/AJS3（Automatic Job Management System 3）は、日立製作所が提供す
 
 | コマンド | 説明 | 使用頻度 |
 |----------|------|----------|
-| `ajsplan` | 実行予定を表示 | ★★☆ |
+| `ajsplan` | スケジュール一時変更・**保留設定(-h)/解除(-r)** | ★★★ |
 | `ajscalendar` | カレンダーを管理 | ★☆☆ |
 | `ajsschedule` | スケジュールを管理 | ★☆☆ |
 
@@ -452,7 +452,7 @@ ajsresume -F AJSROOT1 /main_unit/jobgroup1/daily_batch
 ジョブの状態を変更する場合は、そのジョブが含まれるジョブネットの状態も変更されます。
 
 > ⚠️ **注意**: ajschgstatは**保留解除コマンドではありません**。
-> 保留解除については、JP1/AJS3 - Viewでの操作、または別途コマンドを確認してください。
+> 保留解除には`ajsplan -r`コマンドを使用してください。
 
 ```cmd
 ajschgstat [-F サービス名]
