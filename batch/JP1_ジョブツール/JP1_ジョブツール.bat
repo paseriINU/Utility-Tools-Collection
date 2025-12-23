@@ -121,12 +121,6 @@ echo ジョブネット起動中...
 echo ================================================================
 echo.
 
-rem ajsentry実行前に現在の最新実行登録番号を取得（比較用）
-set "BEFORE_EXEC_REG_NUM="
-for /f "delims=" %%A in ('ajsshow -F %SCHEDULER_SERVICE% -g 1 -i "%%ll" "%JOBNET_PATH%" 2^>^&1') do (
-    if not defined BEFORE_EXEC_REG_NUM set "BEFORE_EXEC_REG_NUM=%%A"
-)
-
 rem ajsentry実行（-n: 即時実行）
 echo コマンド実行中: ajsentry -F %SCHEDULER_SERVICE% -n %JOBNET_PATH%
 echo.
@@ -142,15 +136,10 @@ if %AJSENTRY_EXITCODE% neq 0 (
 
 echo [OK] ジョブネットの起動に成功しました
 
-rem 実行登録番号を取得（ajsentry後の最新世代）
+rem 実行登録番号を取得（以降は-Bオプションでこの世代を追跡）
 set "EXEC_REG_NUM="
 for /f "delims=" %%A in ('ajsshow -F %SCHEDULER_SERVICE% -g 1 -i "%%ll" "%JOBNET_PATH%" 2^>^&1') do (
     if not defined EXEC_REG_NUM set "EXEC_REG_NUM=%%A"
-)
-
-rem 実行登録番号が変わったことを確認（自分が起動したジョブであることを保証）
-if "!EXEC_REG_NUM!"=="!BEFORE_EXEC_REG_NUM!" (
-    echo [警告] 実行登録番号が変化していません。既存のジョブを追跡します。
 )
 echo   実行登録番号: !EXEC_REG_NUM!
 echo.
