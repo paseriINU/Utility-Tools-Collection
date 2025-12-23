@@ -165,9 +165,6 @@ for /f "delims=" %%i in ('ajsshow -F %SCHEDULER_SERVICE% -g 1 -i "%%CC" "%JOBNET
     if not defined WAIT_STATUS set "WAIT_STATUS=%%i"
 )
 
-rem デバッグ: 取得した状態を表示
-echo   [DEBUG] WAIT_STATUS=[!WAIT_STATUS!]
-
 rem 出力がない場合はエラー
 if not defined WAIT_STATUS (
     echo.
@@ -270,7 +267,11 @@ set "LOG_FILE_PATH1="
 for /f "delims=" %%A in ('ajsshow -F %SCHEDULER_SERVICE% -g 1 -i "%%so" "%JOB_PATH1%" 2^>^&1') do (
     if not defined LOG_FILE_PATH1 set "LOG_FILE_PATH1=%%A"
 )
-set "LOG_FILE_PATH1=!LOG_FILE_PATH1:'=!"
+
+rem シングルクォートを除去（安全に処理）
+if defined LOG_FILE_PATH1 (
+    set "LOG_FILE_PATH1=!LOG_FILE_PATH1:'=!"
+)
 
 echo   標準出力ファイル: !LOG_FILE_PATH1!
 
@@ -336,7 +337,11 @@ set "LOG_FILE_PATH2="
 for /f "delims=" %%A in ('ajsshow -F %SCHEDULER_SERVICE% -g 1 -i "%%so" "%JOB_PATH2%" 2^>^&1') do (
     if not defined LOG_FILE_PATH2 set "LOG_FILE_PATH2=%%A"
 )
-set "LOG_FILE_PATH2=!LOG_FILE_PATH2:'=!"
+
+rem シングルクォートを除去（安全に処理）
+if defined LOG_FILE_PATH2 (
+    set "LOG_FILE_PATH2=!LOG_FILE_PATH2:'=!"
+)
 
 echo   標準出力ファイル: !LOG_FILE_PATH2!
 
