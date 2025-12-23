@@ -159,50 +159,49 @@ if not "%WAIT_TIMEOUT%"=="0" (
     )
 )
 
-rem ajsshowで実終了コード（%RR）を取得して状態確認
-set "WAIT_RETURN_CODE="
-for /f "delims=" %%i in ('ajsshow -F %SCHEDULER_SERVICE% -g 1 -i "%%RR" "%JOBNET_PATH%" 2^>^&1') do (
-    if not defined WAIT_RETURN_CODE set "WAIT_RETURN_CODE=%%i"
+rem ajsshowでステータス（%CC）を取得して状態確認
+rem %CC = 状態コード（E:正常終了, A:異常終了, K:強制終了, r:実行中 など）
+set "WAIT_STATUS="
+for /f "delims=" %%i in ('ajsshow -F %SCHEDULER_SERVICE% -g 1 -i "%%CC" "%JOBNET_PATH%" 2^>^&1') do (
+    if not defined WAIT_STATUS set "WAIT_STATUS=%%i"
 )
 
-rem 出力がない場合は実行中
-if not defined WAIT_RETURN_CODE (
-    set /a "MINUTES=ELAPSED_SECONDS/60"
-    set /a "SECS=ELAPSED_SECONDS%%60"
-    echo   状態: 実行中... ^(経過時間: !MINUTES!分!SECS!秒^)
-    goto :WAIT_CONTINUE
-)
-
-rem KAVS エラーチェック
-echo !WAIT_RETURN_CODE! | findstr /r "^KAVS.*-E" >nul
-if %ERRORLEVEL%==0 (
+rem 出力がない場合はエラー
+if not defined WAIT_STATUS (
     echo.
-    echo [エラー] ajsshowでエラーが発生しました
-    echo   エラー: !WAIT_RETURN_CODE!
+    echo [エラー] ステータスを取得できませんでした
     set "JOB_STATUS=error"
     goto :WAIT_DONE
 )
 
-rem 数値かどうかチェック
-set "WAIT_RETURN_CODE_NUM="
-for /f "delims=0123456789" %%A in ("!WAIT_RETURN_CODE!") do set "WAIT_RETURN_CODE_NUM=%%A"
-
-rem 数値以外の場合は実行中（空文字や''など）
-if defined WAIT_RETURN_CODE_NUM (
-    set /a "MINUTES=ELAPSED_SECONDS/60"
-    set /a "SECS=ELAPSED_SECONDS%%60"
-    echo   状態: 実行中... ^(経過時間: !MINUTES!分!SECS!秒^)
-    goto :WAIT_CONTINUE
+rem KAVS エラーチェック
+echo !WAIT_STATUS! | findstr /r "^KAVS.*-E" >nul
+if %ERRORLEVEL%==0 (
+    echo.
+    echo [エラー] ajsshowでエラーが発生しました
+    echo   エラー: !WAIT_STATUS!
+    set "JOB_STATUS=error"
+    goto :WAIT_DONE
 )
 
-rem 数値の場合は終了判定（0=正常、0以外=異常）
-if "!WAIT_RETURN_CODE!"=="0" (
+rem 状態判定（E:正常終了、A/K:異常終了、その他:実行中）
+if "!WAIT_STATUS!"=="E" (
     set "JOB_STATUS=normal"
     goto :WAIT_DONE
-) else (
+)
+if "!WAIT_STATUS!"=="A" (
     set "JOB_STATUS=abnormal"
     goto :WAIT_DONE
 )
+if "!WAIT_STATUS!"=="K" (
+    set "JOB_STATUS=abnormal"
+    goto :WAIT_DONE
+)
+
+rem その他は実行中として待機継続
+set /a "MINUTES=ELAPSED_SECONDS/60"
+set /a "SECS=ELAPSED_SECONDS%%60"
+echo   状態: !WAIT_STATUS! ^(経過時間: !MINUTES!分!SECS!秒^)
 
 :WAIT_CONTINUE
 ping -n %POLLING_INTERVAL% 127.0.0.1 >nul
