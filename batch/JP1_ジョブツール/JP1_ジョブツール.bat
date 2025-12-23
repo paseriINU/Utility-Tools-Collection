@@ -241,27 +241,35 @@ echo ジョブログを取得中...
 echo ================================================================
 echo.
 
-rem 一時ファイル作成
-set "TEMP_AJSSHOW=%TEMP%\jp1_ajsshow_%RANDOM%.txt"
-
 rem ----------------------------------------------------------------------------
 rem ジョブ1のログ取得
 rem ----------------------------------------------------------------------------
 echo [ジョブ1] %JOB_PATH1%
 echo.
 
-ajsshow -F %SCHEDULER_SERVICE% -g 1 -i '%%so' "%JOB_PATH1%" > "%TEMP_AJSSHOW%" 2>&1
-set "AJSSHOW_EXITCODE=%ERRORLEVEL%"
+rem まず実終了コード（%%RR）を取得してエラー判定
+set "RETURN_CODE1="
+for /f "delims=" %%A in ('ajsshow -F %SCHEDULER_SERVICE% -g 1 -i "%%RR" "%JOB_PATH1%" 2^>^&1') do (
+    if not defined RETURN_CODE1 set "RETURN_CODE1=%%A"
+)
 
-if not %AJSSHOW_EXITCODE%==0 (
+rem 数値かどうかでエラー判定（数値以外ならエラー）
+set "RETURN_CODE1_NUM="
+for /f "delims=0123456789" %%A in ("!RETURN_CODE1!") do set "RETURN_CODE1_NUM=%%A"
+if defined RETURN_CODE1_NUM (
     echo [エラー] ジョブ1の情報取得に失敗しました
-    del "%TEMP_AJSSHOW%" 2>nul
+    echo   エラー: !RETURN_CODE1!
     goto :GET_JOB2
 )
 
-rem 標準出力ファイルパスを抽出
+echo   実終了コード: !RETURN_CODE1!
+if not "!RETURN_CODE1!"=="0" (
+    echo   [警告] ジョブ1は異常終了しています
+)
+
+rem 標準出力ファイルパスを取得
 set "LOG_FILE_PATH1="
-for /f "usebackq delims=" %%A in ("%TEMP_AJSSHOW%") do (
+for /f "delims=" %%A in ('ajsshow -F %SCHEDULER_SERVICE% -g 1 -i "%%so" "%JOB_PATH1%" 2^>^&1') do (
     if not defined LOG_FILE_PATH1 set "LOG_FILE_PATH1=%%A"
 )
 set "LOG_FILE_PATH1=!LOG_FILE_PATH1:'=!"
@@ -305,18 +313,29 @@ rem ----------------------------------------------------------------------------
 echo [ジョブ2] %JOB_PATH2%
 echo.
 
-ajsshow -F %SCHEDULER_SERVICE% -g 1 -i '%%so' "%JOB_PATH2%" > "%TEMP_AJSSHOW%" 2>&1
-set "AJSSHOW_EXITCODE=%ERRORLEVEL%"
+rem まず実終了コード（%%RR）を取得してエラー判定
+set "RETURN_CODE2="
+for /f "delims=" %%A in ('ajsshow -F %SCHEDULER_SERVICE% -g 1 -i "%%RR" "%JOB_PATH2%" 2^>^&1') do (
+    if not defined RETURN_CODE2 set "RETURN_CODE2=%%A"
+)
 
-if not %AJSSHOW_EXITCODE%==0 (
+rem 数値かどうかでエラー判定（数値以外ならエラー）
+set "RETURN_CODE2_NUM="
+for /f "delims=0123456789" %%A in ("!RETURN_CODE2!") do set "RETURN_CODE2_NUM=%%A"
+if defined RETURN_CODE2_NUM (
     echo [エラー] ジョブ2の情報取得に失敗しました
-    del "%TEMP_AJSSHOW%" 2>nul
+    echo   エラー: !RETURN_CODE2!
     goto :LOG_DONE
 )
 
-rem 標準出力ファイルパスを抽出
+echo   実終了コード: !RETURN_CODE2!
+if not "!RETURN_CODE2!"=="0" (
+    echo   [警告] ジョブ2は異常終了しています
+)
+
+rem 標準出力ファイルパスを取得
 set "LOG_FILE_PATH2="
-for /f "usebackq delims=" %%A in ("%TEMP_AJSSHOW%") do (
+for /f "delims=" %%A in ('ajsshow -F %SCHEDULER_SERVICE% -g 1 -i "%%so" "%JOB_PATH2%" 2^>^&1') do (
     if not defined LOG_FILE_PATH2 set "LOG_FILE_PATH2=%%A"
 )
 set "LOG_FILE_PATH2=!LOG_FILE_PATH2:'=!"
@@ -343,8 +362,6 @@ if defined LOG_FILE_PATH2 (
     echo [情報] ジョブ2の標準出力ファイルパスを取得できませんでした
 )
 echo.
-
-del "%TEMP_AJSSHOW%" 2>nul
 
 :LOG_DONE
 
