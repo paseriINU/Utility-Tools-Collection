@@ -64,20 +64,18 @@ rem 公式ドキュメント: https://itpfdoc.hitachi.co.jp/manuals/3021/30213L4
 echo 実行コマンド: ajsshow -F %SCHEDULER_SERVICE% -g 1 -i '%%so' "%JOB_PATH%"
 echo.
 
-rem 標準出力ファイルパスを直接取得（一時ファイル不要）
-set LOG_FILE_PATH=
-for /f "delims=" %%A in ('ajsshow -F %SCHEDULER_SERVICE% -g 1 -i "%%so" "%JOB_PATH%" 2^>^&1') do (
-    if not defined LOG_FILE_PATH set LOG_FILE_PATH=%%A
+rem まず実終了コード（%%RR）を取得してエラー判定
+set RETURN_CODE=
+for /f "delims=" %%A in ('ajsshow -F %SCHEDULER_SERVICE% -g 1 -i "%%RR" "%JOB_PATH%" 2^>^&1') do (
+    if not defined RETURN_CODE set RETURN_CODE=%%A
 )
 
-echo ajsshow結果: !LOG_FILE_PATH!
-echo.
-
-rem エラーチェック（KAVS****-E 形式のエラーメッセージを検出）
-echo !LOG_FILE_PATH! | findstr /r "^KAVS.*-E" >nul
-if %ERRORLEVEL%==0 (
+rem 数値かどうかでエラー判定（数値以外ならエラー）
+set "RETURN_CODE_NUM="
+for /f "delims=0123456789" %%A in ("!RETURN_CODE!") do set "RETURN_CODE_NUM=%%A"
+if defined RETURN_CODE_NUM (
     echo [エラー] ジョブ情報の取得に失敗しました
-    echo   エラー: !LOG_FILE_PATH!
+    echo   エラー: !RETURN_CODE!
     echo.
     echo 以下を確認してください:
     echo   - ジョブパスが正しいか: %JOB_PATH%
@@ -87,15 +85,24 @@ if %ERRORLEVEL%==0 (
     goto :ERROR_EXIT
 )
 
+echo [情報] ジョブ実終了コード: !RETURN_CODE!
+if not "!RETURN_CODE!"=="0" (
+    echo [警告] ジョブは異常終了しています（終了コード: !RETURN_CODE!）
+)
+echo.
+
+rem 標準出力ファイルパスを取得
+set LOG_FILE_PATH=
+for /f "delims=" %%A in ('ajsshow -F %SCHEDULER_SERVICE% -g 1 -i "%%so" "%JOB_PATH%" 2^>^&1') do (
+    if not defined LOG_FILE_PATH set LOG_FILE_PATH=%%A
+)
+
+echo ajsshow結果: !LOG_FILE_PATH!
+echo.
+
 rem 出力が空の場合もエラー
 if not defined LOG_FILE_PATH (
-    echo [エラー] ジョブ情報の取得に失敗しました（出力なし）
-    echo.
-    echo 以下を確認してください:
-    echo   - ジョブパスが正しいか: %JOB_PATH%
-    echo   - ジョブが実行済みか（少なくとも1回実行されている必要があります）
-    echo   - JP1ユーザーに権限があるか
-    echo   - スケジューラサービス名が正しいか: %SCHEDULER_SERVICE%
+    echo [エラー] 標準出力ファイルパスを取得できませんでした
     goto :ERROR_EXIT
 )
 
