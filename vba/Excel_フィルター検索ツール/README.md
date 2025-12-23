@@ -28,8 +28,8 @@
 1. `Alt + F11` でVBAエディタを開く
 2. メニュー「ファイル」→「ファイルのインポート」
 3. 以下のファイルをインポート:
-   - `FilterSearch.bas`（メイン処理）
-   - `FilterSearch_Setup.bas`（初期化モジュール）
+   - `FSearch.bas`（メイン処理）
+   - `FSearch_Setup.bas`（初期化モジュール）
 
 #### 3. 初期化を実行
 
@@ -44,7 +44,7 @@ VBAプロジェクトへのアクセスが許可できない場合。
 #### 1. モジュールをインポート
 
 1. `Alt + F11` でVBAエディタを開く
-2. `FilterSearch.bas` をインポート
+2. `FSearch.bas` をインポート
 
 #### 2. フォームを手動作成
 
@@ -66,7 +66,7 @@ VBAプロジェクトへのアクセスが許可できない場合。
 
 ## 設定変更
 
-`FilterSearch.bas` の定数を変更して対象シートや列を変更できます:
+`FSearch.bas` の定数を変更して対象シートや列を変更できます:
 
 ```vba
 Private Const TARGET_SHEET_NAME As String = "テスト"    ' 対象シート名
@@ -98,8 +98,8 @@ Private Const FILTER_COLUMN_B As Long = 2               ' フィルター列2（
 
 ```
 Excel_フィルター検索ツール/
-├── FilterSearch.bas         # 標準モジュール（メイン処理）
-├── FilterSearch_Setup.bas   # 初期化モジュール（フォーム自動作成）
-├── FSearchForm.frm          # ユーザーフォーム（手動作成時の参考）
-└── README.md                # このファイル
+├── FSearch.bas         # 標準モジュール（メイン処理）
+├── FSearch_Setup.bas   # 初期化モジュール（フォーム自動作成）
+├── FSearchForm.frm     # ユーザーフォーム（手動作成時の参考）
+└── README.md           # このファイル
 ```

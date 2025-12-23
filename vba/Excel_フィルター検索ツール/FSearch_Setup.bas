@@ -1,4 +1,3 @@
-Attribute VB_Name = "FilterSearch_Setup"
 Option Explicit
 
 ' ========================================
@@ -210,12 +209,12 @@ Private Sub AddFormCode(vbComp As Object)
     code = code & "    End If" & vbCrLf
     code = code & "    " & vbCrLf
     code = code & "    ReDim Preserve keywords(1 To count)" & vbCrLf
-    code = code & "    Call FilterSearch.ApplyOrFilter(keywords)" & vbCrLf
+    code = code & "    Call FSearch.ApplyOrFilter(keywords)" & vbCrLf
     code = code & "End Sub" & vbCrLf & vbCrLf
 
     ' クリアボタンクリック
     code = code & "Private Sub btnClear_Click()" & vbCrLf
-    code = code & "    Call FilterSearch.ClearFilter" & vbCrLf
+    code = code & "    Call FSearch.ClearFilter" & vbCrLf
     code = code & "    txtWord1.Value = """": txtWord2.Value = """": txtWord3.Value = """"" & vbCrLf
     code = code & "    txtWord4.Value = """": txtWord5.Value = """"" & vbCrLf
     code = code & "    txtWord1.SetFocus" & vbCrLf
