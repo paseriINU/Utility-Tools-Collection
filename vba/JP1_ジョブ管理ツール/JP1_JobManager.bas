@@ -1669,10 +1669,10 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
         script = script & vbCrLf
     End If
 
-    ' ajsentry実行（共通）
-    script = script & "  # ajsentry実行" & vbCrLf
+    ' ajsentry実行（共通）-n: 即時実行
+    script = script & "  # ajsentry実行（即時実行）" & vbCrLf
     script = script & "  Write-Log '[実行] ajsentry - ジョブ起動'" & vbCrLf
-    script = script & "  $entryResult = Invoke-JP1Command 'ajsentry.exe' @('-F', '" & config("SchedulerService") & "', '" & jobnetPath & "')" & vbCrLf
+    script = script & "  $entryResult = Invoke-JP1Command 'ajsentry.exe' @('-F', '" & config("SchedulerService") & "', '-n', '" & jobnetPath & "')" & vbCrLf
     script = script & "  Write-Log ""結果: $($entryResult.Output -join ' ')""" & vbCrLf
     script = script & "  if ($entryResult.ExitCode -ne 0) {" & vbCrLf
     script = script & "    Write-Log '[ERROR] ジョブ起動失敗'" & vbCrLf
@@ -1681,6 +1681,11 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
     script = script & "    exit" & vbCrLf
     script = script & "  }" & vbCrLf
     script = script & "  Write-Log '[成功] ジョブ起動完了'" & vbCrLf
+    script = script & vbCrLf
+    script = script & "  # 実行登録番号を取得（この世代を追跡するため）" & vbCrLf
+    script = script & "  $execRegResult = Invoke-JP1Command 'ajsshow.exe' @('-F', '" & config("SchedulerService") & "', '-g', '1', '-i', '%ll', '" & jobnetPath & "')" & vbCrLf
+    script = script & "  $execRegNum = ($execRegResult.Output -join '').Trim()" & vbCrLf
+    script = script & "  Write-Log ""実行登録番号: $execRegNum""" & vbCrLf
     script = script & vbCrLf
 
     If waitCompletion Then
@@ -1701,7 +1706,7 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
         script = script & "      Write-Output ""RESULT_STATUS:タイムアウト""" & vbCrLf
         script = script & "      break" & vbCrLf
         script = script & "    }" & vbCrLf
-        script = script & "    $statusResult = Invoke-JP1Command 'ajsshow.exe' @('-F', '" & config("SchedulerService") & "', '" & jobnetPath & "')" & vbCrLf
+        script = script & "    $statusResult = Invoke-JP1Command 'ajsshow.exe' @('-F', '" & config("SchedulerService") & "', '-B', $execRegNum, '" & jobnetPath & "')" & vbCrLf
         script = script & "    $statusStr = $statusResult.Output -join ' '" & vbCrLf
         script = script & "    $lastStatusStr = $statusStr" & vbCrLf
         script = script & "    Write-Log ""[ポーリング $pollCount] ステータス: $statusStr""" & vbCrLf
@@ -1763,7 +1768,7 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
         script = script & vbCrLf
         script = script & "    if ($failedJobPath) {" & vbCrLf
         script = script & "      Write-Log ""[DEBUG] failedJobPath: $failedJobPath""" & vbCrLf
-        script = script & "      $detailResult = Invoke-JP1Command 'ajsshow.exe' @('-F', '" & config("SchedulerService") & "', '-g', '1', '-i', '%## %ll %rr', $failedJobPath)" & vbCrLf
+        script = script & "      $detailResult = Invoke-JP1Command 'ajsshow.exe' @('-F', '" & config("SchedulerService") & "', '-B', $execRegNum, '-i', '%## %ll %rr', $failedJobPath)" & vbCrLf
         script = script & "      $detailStr = $detailResult.Output -join ""`n""" & vbCrLf
         script = script & "      Write-Log ""[DEBUG] 詳細結果: $detailStr""" & vbCrLf
         script = script & vbCrLf
