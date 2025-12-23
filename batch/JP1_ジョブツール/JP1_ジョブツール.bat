@@ -3,12 +3,8 @@ rem ============================================================================
 rem JP1 ジョブツール
 rem
 rem 概要:
-rem   JP1/AJS3のジョブネット起動とログ取得を行う統合ツールです。
-rem
-rem 機能:
-rem   1. ジョブネット起動（完了待ち付き）
-rem   2. ジョブログ取得
-rem   3. ジョブネット起動 + ログ取得
+rem   JP1/AJS3のジョブネット起動とログ取得を行うツールです。
+rem   ジョブネット起動 → 完了待ち → ログ取得を連続実行します。
 rem
 rem 使い方:
 rem   1. 下記の「設定セクション」を編集
@@ -17,7 +13,7 @@ rem
 rem 作成日: 2025-12-23
 rem ============================================================================
 
-chcp 65001 >nul
+chcp 932 >nul
 title JP1 ジョブツール
 setlocal enabledelayedexpansion
 
@@ -44,9 +40,6 @@ rem ログ取得対象のジョブのフルパス（ジョブネット内のジ�
 rem ※ジョブネットではなく、その中の個別ジョブを指定
 set "JOB_PATH=/main_unit/jobgroup1/daily_batch/job1"
 
-rem ジョブ完了を待つ場合は 1、起動のみの場合は 0
-set "WAIT_FOR_COMPLETION=1"
-
 rem 完了待ちのタイムアウト（秒）。0の場合は無制限
 set "WAIT_TIMEOUT=3600"
 
@@ -60,49 +53,9 @@ rem ============================================================================
 rem ■ メイン処理（以下は編集不要）
 rem ============================================================================
 
-:MAIN_MENU
-cls
 echo.
 echo ================================================================
 echo   JP1 ジョブツール
-echo ================================================================
-echo.
-echo 設定情報:
-echo   JP1コマンドパス  : %JP1_BIN%
-echo   スケジューラー   : %SCHEDULER_SERVICE%
-echo   JP1ユーザー      : %JP1_USER%
-echo   ジョブネットパス : %JOBNET_PATH%
-echo   ジョブパス       : %JOB_PATH%
-echo.
-echo ----------------------------------------------------------------
-echo.
-echo 機能を選択してください:
-echo.
-echo   1. ジョブネット起動（完了待ち付き）
-echo   2. ジョブログ取得
-echo   3. ジョブネット起動 + ログ取得
-echo.
-echo   0. 終了
-echo.
-set /p "MENU_CHOICE=選択 (0-3): "
-
-if "%MENU_CHOICE%"=="0" goto :EXIT_TOOL
-if "%MENU_CHOICE%"=="1" goto :RUN_JOBNET
-if "%MENU_CHOICE%"=="2" goto :GET_LOG
-if "%MENU_CHOICE%"=="3" goto :RUN_AND_LOG
-echo.
-echo [エラー] 無効な選択です。0〜3を入力してください。
-pause
-goto :MAIN_MENU
-
-rem ============================================================================
-rem ジョブネット起動処理
-rem ============================================================================
-:RUN_JOBNET
-cls
-echo.
-echo ================================================================
-echo   ジョブネット起動
 echo ================================================================
 echo.
 
@@ -110,129 +63,29 @@ rem コマンドパスの確認
 if not exist "%JP1_BIN%\ajsentry.exe" (
     echo [エラー] ajsentry.exe が見つかりません
     echo   パス: %JP1_BIN%\ajsentry.exe
-    echo.
-    pause
-    goto :MAIN_MENU
+    goto :ERROR_EXIT
 )
-
-rem 認証情報の確認
-call :CHECK_AUTH
-if %ERRORLEVEL% neq 0 goto :MAIN_MENU
-
-echo ジョブネット: %JOBNET_PATH%
-echo.
-echo ジョブネットを起動しますか？ (y/n)
-set /p "CONFIRM="
-if /i not "%CONFIRM%"=="y" (
-    echo 処理をキャンセルしました。
-    pause
-    goto :MAIN_MENU
-)
-
-call :EXECUTE_JOBNET
-set "JOBNET_RESULT=%ERRORLEVEL%"
-echo.
-pause
-if "%RETURN_TO_MENU%"=="1" goto :MAIN_MENU
-goto :EXIT_TOOL
-
-rem ============================================================================
-rem ジョブログ取得処理
-rem ============================================================================
-:GET_LOG
-cls
-echo.
-echo ================================================================
-echo   ジョブログ取得
-echo ================================================================
-echo.
-
-rem コマンドパスの確認
 if not exist "%JP1_BIN%\ajsshow.exe" (
     echo [エラー] ajsshow.exe が見つかりません
     echo   パス: %JP1_BIN%\ajsshow.exe
-    echo.
-    pause
-    goto :MAIN_MENU
+    goto :ERROR_EXIT
 )
 
-echo ジョブパス: %JOB_PATH%
+echo 設定情報:
+echo   JP1コマンドパス  : %JP1_BIN%
+echo   スケジューラー   : %SCHEDULER_SERVICE%
+echo   JP1ユーザー      : %JP1_USER%
+echo   ジョブネットパス : %JOBNET_PATH%
+echo   ジョブパス       : %JOB_PATH%
+echo   タイムアウト     : %WAIT_TIMEOUT%秒
 echo.
-
-call :EXECUTE_GET_LOG
-echo.
-pause
-goto :MAIN_MENU
-
-rem ============================================================================
-rem ジョブネット起動 + ログ取得
-rem ============================================================================
-:RUN_AND_LOG
-cls
-echo.
-echo ================================================================
-echo   ジョブネット起動 + ログ取得
-echo ================================================================
-echo.
-
-rem コマンドパスの確認
-if not exist "%JP1_BIN%\ajsentry.exe" (
-    echo [エラー] ajsentry.exe が見つかりません
-    pause
-    goto :MAIN_MENU
-)
-if not exist "%JP1_BIN%\ajsshow.exe" (
-    echo [エラー] ajsshow.exe が見つかりません
-    pause
-    goto :MAIN_MENU
-)
 
 rem 認証情報の確認
-call :CHECK_AUTH
-if %ERRORLEVEL% neq 0 goto :MAIN_MENU
-
-echo ジョブネット: %JOBNET_PATH%
-echo ジョブパス  : %JOB_PATH%
-echo.
-echo ジョブネットを起動し、完了後にログを取得しますか？ (y/n)
-set /p "CONFIRM="
-if /i not "%CONFIRM%"=="y" (
-    echo 処理をキャンセルしました。
-    pause
-    goto :MAIN_MENU
-)
-
-rem ジョブネット起動
-call :EXECUTE_JOBNET
-set "JOBNET_RESULT=%ERRORLEVEL%"
-
-if %JOBNET_RESULT% neq 0 (
-    echo.
-    echo [エラー] ジョブネットの実行に失敗しました。ログ取得をスキップします。
-    pause
-    goto :MAIN_MENU
-)
-
-echo.
-echo ================================================================
-echo ジョブログを取得中...
-echo ================================================================
-echo.
-
-call :EXECUTE_GET_LOG
-echo.
-pause
-goto :MAIN_MENU
-
-rem ============================================================================
-rem 認証情報確認サブルーチン
-rem ============================================================================
-:CHECK_AUTH
 if "%JP1_USER%"=="" (
     set /p "JP1_USER=JP1ユーザー名を入力してください: "
     if "!JP1_USER!"=="" (
         echo [エラー] JP1ユーザー名が入力されていません
-        exit /b 1
+        goto :ERROR_EXIT
     )
 )
 
@@ -241,16 +94,24 @@ if "%JP1_PASSWORD%"=="" (
     set /p "JP1_PASSWORD=JP1パスワードを入力してください: "
     if "!JP1_PASSWORD!"=="" (
         echo [エラー] JP1パスワードが入力されていません
-        exit /b 1
+        goto :ERROR_EXIT
     )
     echo.
 )
-exit /b 0
+
+rem 実行確認
+echo ジョブネットを起動し、完了後にログを取得しますか？ (y/n)
+set /p "CONFIRM="
+if /i not "%CONFIRM%"=="y" (
+    echo 処理をキャンセルしました。
+    goto :NORMAL_EXIT
+)
+
+echo.
 
 rem ============================================================================
-rem ジョブネット実行サブルーチン
+rem ジョブネット起動
 rem ============================================================================
-:EXECUTE_JOBNET
 echo ================================================================
 echo ジョブネット起動中...
 echo ================================================================
@@ -281,18 +142,15 @@ if %AJSENTRY_EXITCODE% neq 0 (
     echo [エラー] ジョブネットの起動に失敗しました
     echo   終了コード: %AJSENTRY_EXITCODE%
     del "%TEMP_OUTPUT%" 2>nul
-    exit /b 1
+    goto :ERROR_EXIT
 )
 
 echo [OK] ジョブネットの起動に成功しました
 echo.
 
-rem 完了待ち処理
-if "%WAIT_FOR_COMPLETION%"=="0" (
-    del "%TEMP_OUTPUT%" 2>nul
-    exit /b 0
-)
-
+rem ============================================================================
+rem ジョブ完了待ち
+rem ============================================================================
 echo ================================================================
 echo ジョブ完了待機中...
 echo ================================================================
@@ -365,27 +223,31 @@ echo.
 echo ================================================================
 if "%JOB_STATUS%"=="normal" (
     echo [OK] ジョブネットが正常終了しました
-    del "%TEMP_OUTPUT%" 2>nul
-    exit /b 0
 ) else if "%JOB_STATUS%"=="abnormal" (
     echo [NG] ジョブネットが異常終了しました
+    del "%TEMP_OUTPUT%" 2>nul
+    goto :ERROR_EXIT
 ) else if "%JOB_STATUS%"=="timeout" (
     echo [NG] 完了待ちがタイムアウトしました
+    del "%TEMP_OUTPUT%" 2>nul
+    goto :ERROR_EXIT
 ) else if "%JOB_STATUS%"=="not_found" (
     echo [NG] ジョブネットが見つかりません
+    del "%TEMP_OUTPUT%" 2>nul
+    goto :ERROR_EXIT
 ) else (
     echo [--] ジョブネット状態: %JOB_STATUS%
 )
 echo ================================================================
+echo.
+
 del "%TEMP_OUTPUT%" 2>nul
-exit /b 1
 
 rem ============================================================================
-rem ジョブログ取得サブルーチン
+rem ジョブログ取得
 rem ============================================================================
-:EXECUTE_GET_LOG
 echo ================================================================
-echo 標準出力ファイルパスを取得中...
+echo ジョブログを取得中...
 echo ================================================================
 echo.
 
@@ -408,10 +270,10 @@ if not %AJSSHOW_EXITCODE%==0 (
     echo.
     echo 以下を確認してください:
     echo   - ジョブパスが正しいか: %JOB_PATH%
-    echo   - ジョブが実行済みか（少なくとも1回実行されている必要があります）
+    echo   - ジョブが実行済みか
     echo   - ジョブネットではなくジョブを指定しているか
     del "%TEMP_AJSSHOW%" 2>nul
-    exit /b 1
+    goto :ERROR_EXIT
 )
 
 rem 標準出力ファイルパスを抽出（シングルクォートを除去）
@@ -428,34 +290,22 @@ echo [情報] 標準出力ファイル: %LOG_FILE_PATH%
 
 if not defined LOG_FILE_PATH (
     echo [エラー] 標準出力ファイルパスを取得できませんでした
-    exit /b 1
+    goto :ERROR_EXIT
 )
 
-echo.
-
-rem ========================================
-rem スプール取得・クリップボードコピー
-rem ========================================
-echo ================================================================
-echo スプールを取得中...
-echo ================================================================
 echo.
 
 rem ファイル存在チェック
 if not exist "%LOG_FILE_PATH%" (
     echo [エラー] 標準出力ファイルが存在しません: %LOG_FILE_PATH%
-    echo.
-    echo 以下を確認してください:
-    echo   - ジョブが実行済みか
-    echo   - スプールが保存されているか
-    exit /b 1
+    goto :ERROR_EXIT
 )
 
 rem ファイルサイズチェック
 for %%F in ("%LOG_FILE_PATH%") do set "FILE_SIZE=%%~zF"
 if "%FILE_SIZE%"=="0" (
     echo [情報] スプールは空です
-    exit /b 0
+    goto :NORMAL_EXIT
 )
 
 rem コンソールに出力
@@ -472,12 +322,34 @@ type "%LOG_FILE_PATH%" | clip
 echo ================================================================
 echo [OK] スプール内容をクリップボードにコピーしました
 echo ================================================================
-exit /b 0
+echo.
 
 rem ============================================================================
-rem 終了処理
+rem サマリー表示
 rem ============================================================================
-:EXIT_TOOL
+echo ================================================================
+echo 処理サマリー
+echo ================================================================
 echo.
-echo 終了します。
+echo   ジョブネット : %JOBNET_PATH%
+echo   ジョブ       : %JOB_PATH%
+echo   起動結果     : 成功
+echo   実行結果     : 正常終了
+echo   ログ取得     : 成功（クリップボードにコピー済み）
+echo.
+
+:NORMAL_EXIT
+echo 処理が完了しました。
+echo.
+pause
 exit /b 0
+
+:ERROR_EXIT
+echo.
+echo 追加の確認事項:
+echo   - JP1/AJS3サービスが起動しているか
+echo   - JP1ユーザー名、パスワードが正しいか
+echo   - ジョブネットパス、ジョブパスが正しいか
+echo.
+pause
+exit /b 1
