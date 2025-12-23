@@ -1669,10 +1669,16 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
         script = script & vbCrLf
     End If
 
-    ' ajsentry実行（共通）-n: 即時実行
-    script = script & "  # ajsentry実行（即時実行）" & vbCrLf
+    ' ajsentry実行前に現在の最新実行登録番号を取得（比較用）
+    script = script & "  # ajsentry実行前の実行登録番号を取得（比較用）" & vbCrLf
+    script = script & "  $beforeRegResult = Invoke-JP1Command 'ajsshow.exe' @('-F', '" & config("SchedulerService") & "', '-g', '1', '-i', '%ll', '" & jobnetPath & "')" & vbCrLf
+    script = script & "  $beforeExecRegNum = ($beforeRegResult.Output -join '').Trim()" & vbCrLf
+    script = script & vbCrLf
+
+    ' ajsentry実行（共通）-n: 即時実行, -w: 完了待ち
+    script = script & "  # ajsentry実行（即時実行・完了待ち）" & vbCrLf
     script = script & "  Write-Log '[実行] ajsentry - ジョブ起動'" & vbCrLf
-    script = script & "  $entryResult = Invoke-JP1Command 'ajsentry.exe' @('-F', '" & config("SchedulerService") & "', '-n', '" & jobnetPath & "')" & vbCrLf
+    script = script & "  $entryResult = Invoke-JP1Command 'ajsentry.exe' @('-F', '" & config("SchedulerService") & "', '-n', '-w', '" & jobnetPath & "')" & vbCrLf
     script = script & "  Write-Log ""結果: $($entryResult.Output -join ' ')""" & vbCrLf
     script = script & "  if ($entryResult.ExitCode -ne 0) {" & vbCrLf
     script = script & "    Write-Log '[ERROR] ジョブ起動失敗'" & vbCrLf
@@ -1682,9 +1688,12 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
     script = script & "  }" & vbCrLf
     script = script & "  Write-Log '[成功] ジョブ起動完了'" & vbCrLf
     script = script & vbCrLf
-    script = script & "  # 実行登録番号を取得（以降は-Bオプションでこの世代を追跡）" & vbCrLf
+    script = script & "  # 実行登録番号を取得（ajsentry後の最新世代）" & vbCrLf
     script = script & "  $execRegResult = Invoke-JP1Command 'ajsshow.exe' @('-F', '" & config("SchedulerService") & "', '-g', '1', '-i', '%ll', '" & jobnetPath & "')" & vbCrLf
     script = script & "  $execRegNum = ($execRegResult.Output -join '').Trim()" & vbCrLf
+    script = script & "  if ($execRegNum -eq $beforeExecRegNum) {" & vbCrLf
+    script = script & "    Write-Log '[警告] 実行登録番号が変化していません。既存のジョブを追跡します。'" & vbCrLf
+    script = script & "  }" & vbCrLf
     script = script & "  Write-Log ""実行登録番号: $execRegNum""" & vbCrLf
     script = script & vbCrLf
 
