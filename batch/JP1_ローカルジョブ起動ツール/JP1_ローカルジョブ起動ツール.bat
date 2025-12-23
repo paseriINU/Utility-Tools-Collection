@@ -69,26 +69,16 @@ echo ジョブネット起動中...
 echo ================================================================
 echo.
 
-rem 一時ファイルの準備
-set "TEMP_OUTPUT=%TEMP%\jp1_output_%RANDOM%.txt"
-
 rem ajsentry実行
 echo コマンド実行中: ajsentry -F %SCHEDULER_SERVICE% %JOBNET_PATH%
-ajsentry -F %SCHEDULER_SERVICE% %JOBNET_PATH% > "%TEMP_OUTPUT%" 2>&1
-set "AJSENTRY_EXITCODE=%ERRORLEVEL%"
-
-rem 結果表示
 echo.
-echo ----------------------------------------------------------------
-echo ajsentry出力:
-type "%TEMP_OUTPUT%"
-echo ----------------------------------------------------------------
+ajsentry -F %SCHEDULER_SERVICE% %JOBNET_PATH%
+set "AJSENTRY_EXITCODE=%ERRORLEVEL%"
 echo.
 
 if %AJSENTRY_EXITCODE% neq 0 (
     echo [エラー] ジョブネットの起動に失敗しました
     echo   終了コード: %AJSENTRY_EXITCODE%
-    del "%TEMP_OUTPUT%" 2>nul
     goto :error_exit
 )
 
@@ -121,11 +111,8 @@ if not "%WAIT_TIMEOUT%"=="0" (
 )
 
 rem ajsstatusで状態確認
-ajsstatus -F %SCHEDULER_SERVICE% %JOBNET_PATH% > "%TEMP_OUTPUT%" 2>&1
-
-rem 状態判定
 set "STATUS_LINE="
-for /f "delims=" %%i in ('type "%TEMP_OUTPUT%"') do (
+for /f "delims=" %%i in ('ajsstatus -F %SCHEDULER_SERVICE% %JOBNET_PATH% 2^>^&1') do (
     set "STATUS_LINE=%%i"
 )
 
@@ -193,11 +180,9 @@ echo ジョブ詳細情報を取得中...
 echo ================================================================
 echo.
 
-ajsshow -F %SCHEDULER_SERVICE% -E %JOBNET_PATH% > "%TEMP_OUTPUT%" 2>&1
-
 echo 詳細情報 (ajsshow -E):
 echo ----------------------------------------------------------------
-type "%TEMP_OUTPUT%"
+ajsshow -F %SCHEDULER_SERVICE% -E %JOBNET_PATH%
 echo ----------------------------------------------------------------
 echo.
 
@@ -225,9 +210,6 @@ if "%WAIT_FOR_COMPLETION%"=="1" (
 )
 echo.
 
-rem 一時ファイルの削除
-del "%TEMP_OUTPUT%" 2>nul
-
 rem 終了判定
 if "%JOB_STATUS%"=="normal" goto :normal_exit
 if "%JOB_STATUS%"=="unknown" goto :normal_exit
@@ -237,7 +219,6 @@ goto :error_exit
 :normal_exit
 echo 処理が完了しました。
 echo.
-del "%TEMP_OUTPUT%" 2>nul
 pause
 exit /b 0
 
@@ -247,6 +228,5 @@ echo 追加の確認事項:
 echo   - JP1/AJS3サービスが起動しているか
 echo   - ジョブネットパスが正しいか
 echo.
-del "%TEMP_OUTPUT%" 2>nul
 pause
 exit /b 1
