@@ -262,15 +262,10 @@ if not "!RETURN_CODE1!"=="0" (
     echo   [警告] ジョブ1は異常終了しています
 )
 
-rem 標準出力ファイルパスを取得
+rem 標準出力ファイルパスを取得（シングルクォートを除去して取得）
 set "LOG_FILE_PATH1="
-for /f "delims=" %%A in ('ajsshow -F %SCHEDULER_SERVICE% -g 1 -i "%%so" "%JOB_PATH1%" 2^>^&1') do (
+for /f "delims='" %%A in ('ajsshow -F %SCHEDULER_SERVICE% -g 1 -i "%%so" "%JOB_PATH1%" 2^>^&1') do (
     if not defined LOG_FILE_PATH1 set "LOG_FILE_PATH1=%%A"
-)
-
-rem シングルクォートを除去（安全に処理）
-if defined LOG_FILE_PATH1 (
-    set "LOG_FILE_PATH1=!LOG_FILE_PATH1:'=!"
 )
 
 echo   標準出力ファイル: !LOG_FILE_PATH1!
@@ -332,15 +327,10 @@ if not "!RETURN_CODE2!"=="0" (
     echo   [警告] ジョブ2は異常終了しています
 )
 
-rem 標準出力ファイルパスを取得
+rem 標準出力ファイルパスを取得（シングルクォートを除去して取得）
 set "LOG_FILE_PATH2="
-for /f "delims=" %%A in ('ajsshow -F %SCHEDULER_SERVICE% -g 1 -i "%%so" "%JOB_PATH2%" 2^>^&1') do (
+for /f "delims='" %%A in ('ajsshow -F %SCHEDULER_SERVICE% -g 1 -i "%%so" "%JOB_PATH2%" 2^>^&1') do (
     if not defined LOG_FILE_PATH2 set "LOG_FILE_PATH2=%%A"
-)
-
-rem シングルクォートを除去（安全に処理）
-if defined LOG_FILE_PATH2 (
-    set "LOG_FILE_PATH2=!LOG_FILE_PATH2:'=!"
 )
 
 echo   標準出力ファイル: !LOG_FILE_PATH2!
