@@ -12,7 +12,7 @@ rem
 rem 作成日: 2025-12-23
 rem ============================================================================
 
-chcp 65001 >nul
+chcp 932 >nul
 title JP1 ローカルジョブ起動ツール
 setlocal enabledelayedexpansion
 
