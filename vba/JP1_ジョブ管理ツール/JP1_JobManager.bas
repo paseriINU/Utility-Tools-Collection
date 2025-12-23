@@ -1705,6 +1705,7 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
         script = script & "  if ($jobStatus -match '正常終了') {" & vbCrLf
         script = script & "    Write-Log '[完了] 正常終了'" & vbCrLf
         script = script & "    Write-Output ""RESULT_STATUS:正常終了""" & vbCrLf
+        script = script & "    Write-Output ""RESULT_LOGPATH:$logFile""" & vbCrLf
         script = script & "  } elseif ($jobStatus -match '警告検出終了|警告終了') {" & vbCrLf
         script = script & "    Write-Log '[完了] 警告検出終了'" & vbCrLf
         script = script & "    Write-Output ""RESULT_STATUS:警告検出終了""" & vbCrLf
@@ -1728,10 +1729,60 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
         script = script & "  # 時間抽出" & vbCrLf
         script = script & "  $timePattern = '\d{4}/\d{2}/\d{2}\s+\d{2}:\d{2}'" & vbCrLf
         script = script & "  $allTimes = [regex]::Matches($lastStatusStr, $timePattern)" & vbCrLf
-        script = script & "  if ($allTimes.Count -ge 1) { Write-Output ""RESULT_START:$($allTimes[0].Value)"" }" & vbCrLf
-        script = script & "  if ($allTimes.Count -ge 2) { Write-Output ""RESULT_END:$($allTimes[1].Value)"" }" & vbCrLf
+        script = script & "  $startTimeStr = ''" & vbCrLf
+        script = script & "  $endTimeStr = ''" & vbCrLf
+        script = script & "  if ($allTimes.Count -ge 1) {" & vbCrLf
+        script = script & "    $startTimeStr = $allTimes[0].Value" & vbCrLf
+        script = script & "    Write-Output ""RESULT_START:$startTimeStr""" & vbCrLf
+        script = script & "    Write-Log ""開始時刻: $startTimeStr""" & vbCrLf
+        script = script & "  }" & vbCrLf
+        script = script & "  if ($allTimes.Count -ge 2) {" & vbCrLf
+        script = script & "    $endTimeStr = $allTimes[1].Value" & vbCrLf
+        script = script & "    Write-Output ""RESULT_END:$endTimeStr""" & vbCrLf
+        script = script & "    Write-Log ""終了時刻: $endTimeStr""" & vbCrLf
+        script = script & "  }" & vbCrLf
+        script = script & "  # 実行時間計算" & vbCrLf
+        script = script & "  if ($startTimeStr -and $endTimeStr) {" & vbCrLf
+        script = script & "    try {" & vbCrLf
+        script = script & "      $startDt = [datetime]::ParseExact($startTimeStr, 'yyyy/MM/dd HH:mm', $null)" & vbCrLf
+        script = script & "      $endDt = [datetime]::ParseExact($endTimeStr, 'yyyy/MM/dd HH:mm', $null)" & vbCrLf
+        script = script & "      $duration = $endDt - $startDt" & vbCrLf
+        script = script & "      $durationStr = '{0:D2}:{1:D2}:{2:D2}' -f [int]$duration.TotalHours, $duration.Minutes, $duration.Seconds" & vbCrLf
+        script = script & "      Write-Log ""実行時間: $durationStr""" & vbCrLf
+        script = script & "    } catch { }" & vbCrLf
+        script = script & "  }" & vbCrLf
         script = script & "  $cleanMsg = $lastStatusStr -replace 'KAVS\d+-[IEW][^\r\n]*', '' -replace '\s+', ' '" & vbCrLf
         script = script & "  Write-Output ""RESULT_MESSAGE:$cleanMsg""" & vbCrLf
+        script = script & vbCrLf
+
+        ' ジョブネット内のジョブ一覧を表示（詳細ログ）
+        script = script & "  # ジョブネット内のジョブ状態一覧を取得" & vbCrLf
+        script = script & "  Write-Log ''" & vbCrLf
+        script = script & "  Write-Log '【ジョブ実行結果一覧】'" & vbCrLf
+        script = script & "  $jobListResult = Invoke-JP1Command 'ajsshow.exe' @('-F', '" & config("SchedulerService") & "', '-B', $execRegNum, '-R', '-f', '%JJ %TT %CC %RR', '" & jobnetPath & "')" & vbCrLf
+        script = script & "  Write-Log ('  ' + '-' * 78)" & vbCrLf
+        script = script & "  Write-Log ('  {0,-40} {1,-10} {2,-12} {3}' -f 'ジョブ名', 'タイプ', '状態', '戻り値')" & vbCrLf
+        script = script & "  Write-Log ('  ' + '-' * 78)" & vbCrLf
+        script = script & "  foreach ($jobLine in $jobListResult.Output) {" & vbCrLf
+        script = script & "    if ($jobLine -match '^(/[^\s]+)\s+(\S+)\s+(\S+)\s*(.*)$') {" & vbCrLf
+        script = script & "      $jName = $matches[1]" & vbCrLf
+        script = script & "      $jType = $matches[2]" & vbCrLf
+        script = script & "      $jStatus = $matches[3]" & vbCrLf
+        script = script & "      $jReturn = $matches[4].Trim()" & vbCrLf
+        script = script & "      # ジョブ名が長い場合は省略" & vbCrLf
+        script = script & "      if ($jName.Length -gt 40) { $jName = '...' + $jName.Substring($jName.Length - 37) }" & vbCrLf
+        script = script & "      $statusMark = switch -Regex ($jStatus) {" & vbCrLf
+        script = script & "        '正常終了' { '[OK]' }" & vbCrLf
+        script = script & "        '異常終了|異常検出' { '[NG]' }" & vbCrLf
+        script = script & "        '警告' { '[!]' }" & vbCrLf
+        script = script & "        '未実行|未起動' { '[-]' }" & vbCrLf
+        script = script & "        default { '' }" & vbCrLf
+        script = script & "      }" & vbCrLf
+        script = script & "      Write-Log ('  {0,-40} {1,-10} {2} {3,-10} {4}' -f $jName, $jType, $statusMark, $jStatus, $jReturn)" & vbCrLf
+        script = script & "    }" & vbCrLf
+        script = script & "  }" & vbCrLf
+        script = script & "  Write-Log ('  ' + '-' * 78)" & vbCrLf
+        script = script & "  Write-Log ''" & vbCrLf
         script = script & vbCrLf
 
         ' エラー詳細取得（異常終了の場合）
@@ -1782,6 +1833,7 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
     Else
         script = script & "  Write-Log '[完了] 起動成功（完了待ちなし）'" & vbCrLf
         script = script & "  Write-Output ""RESULT_STATUS:起動成功""" & vbCrLf
+        script = script & "  Write-Output ""RESULT_LOGPATH:$logFile""" & vbCrLf
         script = script & "  Write-Output ""RESULT_MESSAGE:$($entryResult.Output -join ' ')""" & vbCrLf
     End If
 
