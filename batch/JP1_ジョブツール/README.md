@@ -33,7 +33,7 @@ JP1/AJS3のジョブネット起動とログ取得を行うツールです。
 
 ```batch
 rem JP1/AJS3コマンドのパス（インストールディレクトリ）
-set "JP1_BIN=C:\Program Files\HITACHI\JP1AJS3\bin"
+set "JP1_BIN=C:\Program Files (x86)\HITACHI\JP1AJS3\bin"
 
 rem スケジューラーサービス名（通常は AJSROOT1）
 set "SCHEDULER_SERVICE=AJSROOT1"
@@ -64,7 +64,7 @@ JP1/AJS3サーバ上でバッチファイルをダブルクリックして実行
 ================================================================
 
 設定情報:
-  JP1コマンドパス  : C:\Program Files\HITACHI\JP1AJS3\bin
+  JP1コマンドパス  : C:\Program Files (x86)\HITACHI\JP1AJS3\bin
   スケジューラー   : AJSROOT1
   JP1ユーザー      : jp1admin
   ジョブネットパス : /main_unit/jobgroup1/daily_batch
@@ -134,7 +134,7 @@ Processing finished at 2025-12-23 10:35:00
 
 | 設定項目 | 説明 | デフォルト値 |
 |---------|------|-------------|
-| `JP1_BIN` | JP1コマンドのインストールパス | `C:\Program Files\HITACHI\JP1AJS3\bin` |
+| `JP1_BIN` | JP1コマンドのインストールパス | `C:\Program Files (x86)\HITACHI\JP1AJS3\bin` |
 | `SCHEDULER_SERVICE` | スケジューラーサービス名 | `AJSROOT1` |
 | `JP1_USER` | JP1ユーザー名 | `jp1admin` |
 | `JP1_PASSWORD` | JP1パスワード（空欄推奨） | 空欄 |
@@ -173,8 +173,8 @@ Processing finished at 2025-12-23 10:35:00
 ### ajsentry.exe / ajsshow.exe が見つかりません
 
 JP1/AJS3のインストールパスを確認してください：
-- 標準パス: `C:\Program Files\HITACHI\JP1AJS3\bin`
 - 32bit版: `C:\Program Files (x86)\HITACHI\JP1AJS3\bin`
+- 64bit版: `C:\Program Files\HITACHI\JP1AJS3\bin`
 - 旧バージョン: `C:\Program Files\Hitachi\JP1AJS2\bin`
 
 ### ログ取得で「選択オプションに合うユニットが存在しません」

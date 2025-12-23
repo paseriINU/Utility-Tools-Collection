@@ -22,7 +22,7 @@ rem ■ 設定セクション（ここを編集してください）
 rem ============================================================================
 
 rem JP1/AJS3コマンドのパス（インストールディレクトリ）
-set "JP1_BIN=C:\Program Files\HITACHI\JP1AJS3\bin"
+set "JP1_BIN=C:\Program Files (x86)\HITACHI\JP1AJS3\bin"
 
 rem スケジューラーサービス名（通常は AJSROOT1）
 set "SCHEDULER_SERVICE=AJSROOT1"
