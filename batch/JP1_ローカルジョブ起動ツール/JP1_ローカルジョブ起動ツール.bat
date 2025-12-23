@@ -135,16 +135,14 @@ if %ERRORLEVEL%==0 (
     goto :wait_done
 )
 
-rem 状態判定（E:正常終了、A/K:異常終了、その他:実行中）
-if "!WAIT_STATUS!"=="E" (
+rem 状態判定（日本語文字列で判定）
+echo !WAIT_STATUS! | findstr /i "正常終了" >nul
+if !ERRORLEVEL!==0 (
     set "JOB_STATUS=normal"
     goto :wait_done
 )
-if "!WAIT_STATUS!"=="A" (
-    set "JOB_STATUS=abnormal"
-    goto :wait_done
-)
-if "!WAIT_STATUS!"=="K" (
+echo !WAIT_STATUS! | findstr /i "異常終了 強制終了 中断" >nul
+if !ERRORLEVEL!==0 (
     set "JOB_STATUS=abnormal"
     goto :wait_done
 )
