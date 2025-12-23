@@ -116,6 +116,16 @@ for /f "delims=" %%i in ('ajsstatus -F %SCHEDULER_SERVICE% %JOBNET_PATH% 2^>^&1'
     set "STATUS_LINE=%%i"
 )
 
+rem エラーチェック（KAVS****-E 形式のエラーメッセージを検出）
+echo !STATUS_LINE! | findstr /r "^KAVS.*-E" >nul
+if %ERRORLEVEL%==0 (
+    echo.
+    echo [エラー] ajsstatusでエラーが発生しました
+    echo   エラー: !STATUS_LINE!
+    set "JOB_STATUS=error"
+    goto :wait_done
+)
+
 rem 状態を判定
 echo !STATUS_LINE! | findstr /i "ended abnormally abnormal end abend killed interrupted failed" >nul
 if %ERRORLEVEL%==0 (
@@ -165,6 +175,8 @@ if "%JOB_STATUS%"=="normal" (
     echo [NG] 完了待ちがタイムアウトしました
 ) else if "%JOB_STATUS%"=="not_found" (
     echo [NG] ジョブネットが見つかりません
+) else if "%JOB_STATUS%"=="error" (
+    echo [NG] コマンド実行エラー
 ) else (
     echo [--] ジョブネット状態: %JOB_STATUS%
 )
@@ -204,6 +216,8 @@ if "%WAIT_FOR_COMPLETION%"=="1" (
         echo   実行結果    : 異常終了
     ) else if "%JOB_STATUS%"=="timeout" (
         echo   実行結果    : タイムアウト
+    ) else if "%JOB_STATUS%"=="error" (
+        echo   実行結果    : コマンドエラー
     ) else (
         echo   実行結果    : %JOB_STATUS%
     )
@@ -213,6 +227,7 @@ echo.
 rem 終了判定
 if "%JOB_STATUS%"=="normal" goto :normal_exit
 if "%JOB_STATUS%"=="unknown" goto :normal_exit
+if "%JOB_STATUS%"=="error" goto :error_exit
 if "%WAIT_FOR_COMPLETION%"=="0" goto :normal_exit
 goto :error_exit
 

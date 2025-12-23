@@ -73,8 +73,23 @@ for /f "delims=" %%A in ('ajsshow -F %SCHEDULER_SERVICE% -g 1 -i "%%so" "%JOB_PA
 echo ajsshow結果: !LOG_FILE_PATH!
 echo.
 
-if not defined LOG_FILE_PATH (
+rem エラーチェック（KAVS****-E 形式のエラーメッセージを検出）
+echo !LOG_FILE_PATH! | findstr /r "^KAVS.*-E" >nul
+if %ERRORLEVEL%==0 (
     echo [エラー] ジョブ情報の取得に失敗しました
+    echo   エラー: !LOG_FILE_PATH!
+    echo.
+    echo 以下を確認してください:
+    echo   - ジョブパスが正しいか: %JOB_PATH%
+    echo   - ジョブが実行済みか（少なくとも1回実行されている必要があります）
+    echo   - JP1ユーザーに権限があるか
+    echo   - スケジューラサービス名が正しいか: %SCHEDULER_SERVICE%
+    goto :ERROR_EXIT
+)
+
+rem 出力が空の場合もエラー
+if not defined LOG_FILE_PATH (
+    echo [エラー] ジョブ情報の取得に失敗しました（出力なし）
     echo.
     echo 以下を確認してください:
     echo   - ジョブパスが正しいか: %JOB_PATH%
