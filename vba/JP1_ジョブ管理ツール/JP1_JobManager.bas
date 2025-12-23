@@ -1705,6 +1705,7 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
         script = script & "  if ($jobStatus -match '正常終了') {" & vbCrLf
         script = script & "    Write-Log '[完了] 正常終了'" & vbCrLf
         script = script & "    Write-Output ""RESULT_STATUS:正常終了""" & vbCrLf
+        script = script & "    Write-Output ""RESULT_LOGPATH:$logFile""" & vbCrLf
         script = script & "  } elseif ($jobStatus -match '警告検出終了|警告終了') {" & vbCrLf
         script = script & "    Write-Log '[完了] 警告検出終了'" & vbCrLf
         script = script & "    Write-Output ""RESULT_STATUS:警告検出終了""" & vbCrLf
@@ -1782,6 +1783,7 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
     Else
         script = script & "  Write-Log '[完了] 起動成功（完了待ちなし）'" & vbCrLf
         script = script & "  Write-Output ""RESULT_STATUS:起動成功""" & vbCrLf
+        script = script & "  Write-Output ""RESULT_LOGPATH:$logFile""" & vbCrLf
         script = script & "  Write-Output ""RESULT_MESSAGE:$($entryResult.Output -join ' ')""" & vbCrLf
     End If
 
