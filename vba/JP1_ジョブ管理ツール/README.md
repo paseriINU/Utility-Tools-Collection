@@ -300,7 +300,7 @@ JP1 ジョブ管理ツール 実行ログ
 
 このツールで使用するJP1/AJS3コマンドの一覧と説明です。
 
-> **詳細版**: すべてのJP1/AJS3コマンドの詳細は [JP1_AJS3_COMMANDS.md](./JP1_AJS3_COMMANDS.md) を参照してください。
+> **詳細版**: すべてのJP1/AJS3コマンドの詳細は [JP1_AJS3_COMMANDS.md](../../JP1_AJS3_COMMANDS.md) を参照してください。
 
 ### コマンド一覧
 

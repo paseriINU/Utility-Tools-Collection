@@ -188,7 +188,7 @@ JP1/AJS3コマンドにパスが通っているか確認してください。
 - `ajsshow -i '%CC'` - ジョブネット状態取得
 - `ajsshow -g 1 -i '%so'` - 標準出力ファイルパス取得
 
-詳細は [JP1_AJS3_COMMANDS.md](../../vba/JP1_ジョブ管理ツール/JP1_AJS3_COMMANDS.md) を参照してください。
+詳細は [JP1_AJS3_COMMANDS.md](../../JP1_AJS3_COMMANDS.md) を参照してください。
 
 ## ライセンス
 
