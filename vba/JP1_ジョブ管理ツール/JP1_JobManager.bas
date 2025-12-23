@@ -1694,22 +1694,33 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
     script = script & vbCrLf
 
     If waitCompletion Then
-        ' ajsentry -wの終了コードで結果を判定（ステータス確認ループは不要）
-        script = script & "  # ajsentry -wの終了コードで結果を判定" & vbCrLf
-        script = script & "  $lastStatusStr = $entryResult.Output -join ' '" & vbCrLf
-        script = script & "  if ($entryResult.ExitCode -eq 0) {" & vbCrLf
+        ' ajsentry -w終了後、ajsshowで1回だけ結果を取得
+        ' （ajsentryの戻り値はコマンド実行成否であり、ジョブネット結果ではない）
+        script = script & "  # ajsentry終了後、ajsshowで1回だけ結果を取得" & vbCrLf
+        script = script & "  $statusResult = Invoke-JP1Command 'ajsshow.exe' @('-F', '" & config("SchedulerService") & "', '-B', $execRegNum, '-i', '%CC', '" & jobnetPath & "')" & vbCrLf
+        script = script & "  $jobStatus = ($statusResult.Output -join ' ').Trim()" & vbCrLf
+        script = script & "  Write-Log ""ジョブネット状態: $jobStatus""" & vbCrLf
+        script = script & vbCrLf
+        script = script & "  # 状態判定" & vbCrLf
+        script = script & "  if ($jobStatus -match '正常終了') {" & vbCrLf
         script = script & "    Write-Log '[完了] 正常終了'" & vbCrLf
         script = script & "    Write-Output ""RESULT_STATUS:正常終了""" & vbCrLf
-        script = script & "  } else {" & vbCrLf
-        script = script & "    Write-Log '[完了] 異常終了（終了コード: ' + $entryResult.ExitCode + '）'" & vbCrLf
+        script = script & "  } elseif ($jobStatus -match '警告検出終了|警告終了') {" & vbCrLf
+        script = script & "    Write-Log '[完了] 警告検出終了'" & vbCrLf
+        script = script & "    Write-Output ""RESULT_STATUS:警告検出終了""" & vbCrLf
+        script = script & "  } elseif ($jobStatus -match '異常終了|異常検出終了|強制終了|中断') {" & vbCrLf
+        script = script & "    Write-Log '[完了] 異常終了'" & vbCrLf
         script = script & "    Write-Output ""RESULT_STATUS:異常終了""" & vbCrLf
+        script = script & "  } else {" & vbCrLf
+        script = script & "    Write-Log ""[完了] 状態: $jobStatus""" & vbCrLf
+        script = script & "    Write-Output ""RESULT_STATUS:$jobStatus""" & vbCrLf
         script = script & "  }" & vbCrLf
         script = script & vbCrLf
 
         ' 詳細情報取得（ajsshowで実行結果を確認）
         script = script & "  # 詳細情報取得" & vbCrLf
-        script = script & "  $statusResult = Invoke-JP1Command 'ajsshow.exe' @('-F', '" & config("SchedulerService") & "', '-B', $execRegNum, '" & jobnetPath & "')" & vbCrLf
-        script = script & "  $lastStatusStr = $statusResult.Output -join ' '" & vbCrLf
+        script = script & "  $detailStatusResult = Invoke-JP1Command 'ajsshow.exe' @('-F', '" & config("SchedulerService") & "', '-B', $execRegNum, '" & jobnetPath & "')" & vbCrLf
+        script = script & "  $lastStatusStr = $detailStatusResult.Output -join ' '" & vbCrLf
         script = script & "  Write-Log ""詳細ステータス: $lastStatusStr""" & vbCrLf
         script = script & vbCrLf
 
@@ -1723,9 +1734,9 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
         script = script & "  Write-Output ""RESULT_MESSAGE:$cleanMsg""" & vbCrLf
         script = script & vbCrLf
 
-        ' エラー詳細取得（ajsentry -wの終了コードが0以外の場合）
+        ' エラー詳細取得（異常終了の場合）
         script = script & "  # エラー詳細取得" & vbCrLf
-        script = script & "  if ($entryResult.ExitCode -ne 0) {" & vbCrLf
+        script = script & "  if ($jobStatus -match '警告検出終了|警告終了|異常終了|異常検出終了|強制終了|中断') {" & vbCrLf
         script = script & "    Write-Log '[詳細取得] 異常終了したジョブを検索中...'" & vbCrLf
         script = script & "    $failedJobsResult = Invoke-JP1Command 'ajsshow.exe' @('-F', '" & config("SchedulerService") & "', '-R', '-f', '%J %T %C %R', '" & jobnetPath & "')" & vbCrLf
         script = script & "    $failedJobsStr = $failedJobsResult.Output -join ""`n""" & vbCrLf

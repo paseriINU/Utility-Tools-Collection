@@ -277,31 +277,77 @@ try {
     $result = Invoke-Command -Session $session -ScriptBlock $scriptBlockEntry -ArgumentList $Config.AjsentryPath, $Config.JP1User, $Config.JP1Password, $Config.SchedulerService, $Config.JobnetPath, $Config.WaitForCompletion
 
     Write-Host ""
-    Write-Host "========================================" -ForegroundColor Cyan
-
-    # ajsentry -w の終了コードで結果を判定
-    $jobEndNormally = ($result.ExitCode -eq 0)
-    if ($Config.WaitForCompletion) {
-        if ($jobEndNormally) {
-            Write-Host "ジョブネットが正常終了しました" -ForegroundColor Green
-        } else {
-            Write-Host "ジョブネットが異常終了しました" -ForegroundColor Red
-            Write-Host "終了コード: $($result.ExitCode)" -ForegroundColor Red
-        }
-    } else {
-        if ($result.ExitCode -eq 0) {
-            Write-Host "ジョブネットの起動に成功しました" -ForegroundColor Green
-        } else {
-            Write-Host "ジョブネットの起動に失敗しました" -ForegroundColor Red
-            Write-Host "エラーコード: $($result.ExitCode)" -ForegroundColor Red
-        }
-    }
-    Write-Host "========================================" -ForegroundColor Cyan
-    Write-Host ""
-
     Write-Host "ajsentry出力:" -ForegroundColor White
     $result.Output | ForEach-Object {
         Write-Host "  $_" -ForegroundColor White
+    }
+
+    # ajsentryの戻り値はコマンド実行成否（ジョブネット結果ではない）
+    if ($result.ExitCode -ne 0) {
+        Write-Host ""
+        Write-Host "========================================" -ForegroundColor Red
+        Write-Host "ajsentryコマンドの実行に失敗しました" -ForegroundColor Red
+        Write-Host "終了コード: $($result.ExitCode)" -ForegroundColor Red
+        Write-Host "========================================" -ForegroundColor Red
+    }
+
+    # 完了待ちの場合、ajsshowで1回だけ結果を取得
+    $jobEndNormally = $false
+    if ($Config.WaitForCompletion -and $result.ExitCode -eq 0) {
+        Write-Host ""
+        Write-Host "========================================" -ForegroundColor Cyan
+        Write-Host "ジョブネット結果を取得中..." -ForegroundColor Cyan
+        Write-Host "========================================" -ForegroundColor Cyan
+
+        $scriptBlockStatus = {
+            param($ajsShowPath, $jp1User, $jp1Pass, $schedulerService, $jobnetPath)
+
+            if (-not (Test-Path $ajsShowPath)) {
+                return @{
+                    ExitCode = -1
+                    Output = @("ajsshowが見つかりません: $ajsShowPath")
+                    Available = $false
+                }
+            }
+
+            # ajsshow -i %CC でジョブネット状態を取得
+            $output = & $ajsShowPath -h localhost -u $jp1User -p $jp1Pass -F $schedulerService -i '%CC' $jobnetPath 2>&1
+            $exitCode = $LASTEXITCODE
+
+            @{
+                ExitCode = $exitCode
+                Output = $output
+                Available = $true
+            }
+        }
+
+        $statusResult = Invoke-Command -Session $session -ScriptBlock $scriptBlockStatus -ArgumentList $Config.AjsshowPath, $Config.JP1User, $Config.JP1Password, $Config.SchedulerService, $Config.JobnetPath
+
+        if ($statusResult.Available) {
+            $statusStr = $statusResult.Output -join ' '
+            Write-Host "ジョブネット状態: $statusStr" -ForegroundColor White
+            Write-Host ""
+
+            if ($statusStr -match '正常終了') {
+                Write-Host "========================================" -ForegroundColor Green
+                Write-Host "ジョブネットが正常終了しました" -ForegroundColor Green
+                Write-Host "========================================" -ForegroundColor Green
+                $jobEndNormally = $true
+            } elseif ($statusStr -match '異常終了|強制終了|中断') {
+                Write-Host "========================================" -ForegroundColor Red
+                Write-Host "ジョブネットが異常終了しました" -ForegroundColor Red
+                Write-Host "========================================" -ForegroundColor Red
+            } else {
+                Write-Host "========================================" -ForegroundColor Yellow
+                Write-Host "ジョブネット状態: $statusStr" -ForegroundColor Yellow
+                Write-Host "========================================" -ForegroundColor Yellow
+            }
+        }
+    } elseif (-not $Config.WaitForCompletion -and $result.ExitCode -eq 0) {
+        Write-Host ""
+        Write-Host "========================================" -ForegroundColor Green
+        Write-Host "ジョブネットの起動に成功しました" -ForegroundColor Green
+        Write-Host "========================================" -ForegroundColor Green
     }
     #endregion
 

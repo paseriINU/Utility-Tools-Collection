@@ -149,13 +149,28 @@ if "!EXEC_REG_NUM!"=="!BEFORE_EXEC_REG_NUM!" (
 echo   実行登録番号: !EXEC_REG_NUM!
 echo.
 
-rem ajsentry -w の終了コードで結果を判定
+rem ajsentry終了後、ajsshowで1回だけ結果を取得
+rem （ajsentryの戻り値はコマンド実行成否であり、ジョブネット結果ではない）
+set "JOB_STATUS="
+for /f "delims=" %%i in ('ajsshow -F %SCHEDULER_SERVICE% -B !EXEC_REG_NUM! -i "%%CC" "%JOBNET_PATH%" 2^>^&1') do (
+    if not defined JOB_STATUS set "JOB_STATUS=%%i"
+)
+
 echo ================================================================
-if %AJSENTRY_EXITCODE% equ 0 (
+echo ジョブネット状態: !JOB_STATUS!
+echo.
+
+rem 状態判定
+echo !JOB_STATUS! | findstr /i "正常終了" >nul
+if !ERRORLEVEL!==0 (
     echo [OK] ジョブネットが正常終了しました
 ) else (
-    echo [NG] ジョブネットが異常終了しました
-    echo   終了コード: %AJSENTRY_EXITCODE%
+    echo !JOB_STATUS! | findstr /i "異常終了 強制終了 中断" >nul
+    if !ERRORLEVEL!==0 (
+        echo [NG] ジョブネットが異常終了しました
+    ) else (
+        echo [--] ジョブネット状態: !JOB_STATUS!
+    )
 )
 echo ================================================================
 echo.
