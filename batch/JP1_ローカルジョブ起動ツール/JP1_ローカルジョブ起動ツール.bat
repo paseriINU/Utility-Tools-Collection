@@ -98,7 +98,8 @@ for /f "delims=" %%A in ('ajsshow -F %SCHEDULER_SERVICE% -g 1 -i "%%ll" "%JOBNET
 
 rem 実行登録番号が変わったことを確認（自分が起動したジョブであることを保証）
 if "!EXEC_REG_NUM!"=="!BEFORE_EXEC_REG_NUM!" (
-    echo [警告] 実行登録番号が変化していません。既存のジョブを追跡します。
+    echo [エラー] 実行登録番号が変化していません。ジョブが実行されませんでした。
+    goto :error_exit
 )
 echo   実行登録番号: !EXEC_REG_NUM!
 echo.

@@ -1692,7 +1692,10 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
     script = script & "  $execRegResult = Invoke-JP1Command 'ajsshow.exe' @('-F', '" & config("SchedulerService") & "', '-g', '1', '-i', '%ll', '" & jobnetPath & "')" & vbCrLf
     script = script & "  $execRegNum = ($execRegResult.Output -join '').Trim()" & vbCrLf
     script = script & "  if ($execRegNum -eq $beforeExecRegNum) {" & vbCrLf
-    script = script & "    Write-Log '[警告] 実行登録番号が変化していません。既存のジョブを追跡します。'" & vbCrLf
+    script = script & "    Write-Log '[ERROR] 実行登録番号が変化していません。ジョブが実行されませんでした。'" & vbCrLf
+    script = script & "    Write-Output ""RESULT_STATUS:実行失敗""" & vbCrLf
+    script = script & "    Write-Output ""RESULT_MESSAGE:実行登録番号が変化していません""" & vbCrLf
+    script = script & "    exit" & vbCrLf
     script = script & "  }" & vbCrLf
     script = script & "  Write-Log ""実行登録番号: $execRegNum""" & vbCrLf
     script = script & vbCrLf

@@ -120,10 +120,13 @@ JP1/AJS3（Automatic Job Management System 3）は、日立製作所が提供す
 
 ## ジョブネット操作コマンド
 
-### ajsentry（即時実行）
+### ajsentry（実行登録）
 
-ジョブネットを即時実行（登録実行）するコマンドです。
+ジョブネットを実行登録するコマンドです。
 **最もよく使うコマンドの一つです。**
+
+> ⚠️ **重要**: `-n`オプションを指定しないと即時実行されません。
+> `-n`なしの場合は実行登録のみ行われ、スケジュールに従って実行されます。
 
 ```cmd
 ajsentry [オプション] ジョブネットパス
@@ -134,27 +137,40 @@ ajsentry [オプション] ジョブネットパス
 | オプション | 説明 | 必須 |
 |-----------|------|------|
 | `-F スケジューラーサービス名` | スケジューラーサービスを指定（デフォルト: AJSROOT1） | |
+| `-n` | **即時実行**（このオプションなしでは即時実行されない） | 即時実行時 |
+| `-w` | 実行完了まで待機（**`-n`と同時に指定が必要**） | |
 | `-h ホスト名` | JP1/AJS3マネージャーのホスト名を指定 | リモート時 |
 | `-u ユーザー名` | JP1ユーザー名を指定 | リモート時 |
 | `-p パスワード` | JP1パスワードを指定 | リモート時 |
 | `-T 実行日時` | 実行開始日時を指定（YYYY/MM/DD HH:MM:SS形式） | |
 | `-X yes\|no` | 排他実行の指定（yes=排他あり） | |
-| `-E` | 実行登録のみ（即時実行しない） | |
-| `-w` | 実行完了まで待機 | |
+| `-E` | 実行登録のみ（スケジュール登録） | |
+
+**-wオプションの注意事項**:
+- `-n`オプションと同時に指定すること
+- `-m`、`-k`オプションとは同時に指定できない
+- 以下の場合はジョブ完了を待たずにコマンドが終了する：
+  - ジョブネット実行中にサービスが停止した場合
+  - 終了待ちを指定した世代が繰り越し未実行になった場合
+  - 終了待ちを指定した世代が削除された場合
+  - 終了待ちを指定した世代が未計画になった場合
 
 **実行例**:
 ```cmd
-rem ローカル実行（基本形）
-ajsentry -F AJSROOT1 /main_unit/jobgroup1/daily_batch
+rem 即時実行（基本形）
+ajsentry -F AJSROOT1 -n /main_unit/jobgroup1/daily_batch
+
+rem 即時実行＋完了待ち
+ajsentry -F AJSROOT1 -n -w /main_unit/jobgroup1/daily_batch
 
 rem リモート実行（JP1サーバに接続）
-ajsentry -h jp1server -u jp1admin -p password -F AJSROOT1 /main_unit/daily_batch
+ajsentry -h jp1server -u jp1admin -p password -F AJSROOT1 -n /main_unit/daily_batch
 
 rem 日時指定実行
 ajsentry -F AJSROOT1 -T "2025/12/20 10:00:00" /main_unit/daily_batch
 
-rem 実行完了まで待機
-ajsentry -F AJSROOT1 -w /main_unit/daily_batch
+rem 実行登録のみ（スケジュールに従って実行）
+ajsentry -F AJSROOT1 /main_unit/daily_batch
 ```
 
 **戻り値**:
