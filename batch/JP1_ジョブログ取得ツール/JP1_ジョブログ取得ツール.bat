@@ -55,40 +55,31 @@ echo 標準出力ファイルパスを取得中...
 echo ========================================
 echo.
 
-rem 一時ファイル作成
-set TEMP_AJSSHOW=%TEMP%\jp1_ajsshow_%RANDOM%.txt
-
 rem ajsshowコマンド実行（標準出力ファイルパスを取得）
 rem フォーマット: %so → 標準出力ファイル名
 rem 公式ドキュメント: https://itpfdoc.hitachi.co.jp/manuals/3021/30213L4920/AJSO0131.HTM
 echo 実行コマンド: ajsshow -F %SCHEDULER_SERVICE% -g 1 -i '%%so' "%JOB_PATH%"
 echo.
 
-ajsshow -F %SCHEDULER_SERVICE% -g 1 -i '%%so' "%JOB_PATH%" > "%TEMP_AJSSHOW%" 2>&1
-set AJSSHOW_EXITCODE=%ERRORLEVEL%
+rem 標準出力ファイルパスを直接取得（一時ファイル不要）
+set LOG_FILE_PATH=
+for /f "delims=" %%A in ('ajsshow -F %SCHEDULER_SERVICE% -g 1 -i "%%so" "%JOB_PATH%" 2^>^&1') do (
+    if not defined LOG_FILE_PATH set LOG_FILE_PATH=%%A
+)
 
-echo ajsshow結果:
-type "%TEMP_AJSSHOW%"
+echo ajsshow結果: !LOG_FILE_PATH!
 echo.
 
-if not %AJSSHOW_EXITCODE%==0 (
-    echo [エラー] ジョブ情報の取得に失敗しました（終了コード: %AJSSHOW_EXITCODE%）
+if not defined LOG_FILE_PATH (
+    echo [エラー] ジョブ情報の取得に失敗しました
     echo.
     echo 以下を確認してください:
     echo   - ジョブパスが正しいか: %JOB_PATH%
     echo   - ジョブが実行済みか（少なくとも1回実行されている必要があります）
     echo   - JP1ユーザーに権限があるか
     echo   - スケジューラサービス名が正しいか: %SCHEDULER_SERVICE%
-    del "%TEMP_AJSSHOW%" 2>nul
     goto :ERROR_EXIT
 )
-
-rem 標準出力ファイルパスを抽出（シングルクォートを除去）
-set LOG_FILE_PATH=
-for /f "usebackq delims=" %%A in ("%TEMP_AJSSHOW%") do (
-    if not defined LOG_FILE_PATH set LOG_FILE_PATH=%%A
-)
-del "%TEMP_AJSSHOW%" 2>nul
 
 rem シングルクォートを除去
 set LOG_FILE_PATH=%LOG_FILE_PATH:'=%
