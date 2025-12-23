@@ -372,7 +372,7 @@ rem ローカル実行
 ajsentry.exe -F AJSROOT1 /main_unit/jobgroup1/daily_batch
 
 rem リモート実行
-ajsentry.exe -h localhost -u jp1admin -p password -F /main_unit/jobgroup1/daily_batch
+ajsentry.exe -h localhost -u jp1admin -p password -F AJSROOT1 /main_unit/jobgroup1/daily_batch
 ```
 
 **正常終了時の出力**:
