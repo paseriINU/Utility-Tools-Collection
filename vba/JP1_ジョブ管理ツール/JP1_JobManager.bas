@@ -1656,8 +1656,8 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
     ' 保留解除処理（共通）
     If isHold Then
         script = script & "  # 保留解除" & vbCrLf
-        script = script & "  Write-Log '[実行] ajsrelease - 保留解除'" & vbCrLf
-        script = script & "  $releaseResult = Invoke-JP1Command 'ajsrelease.exe' @('-F', '" & config("SchedulerService") & "', '" & jobnetPath & "')" & vbCrLf
+        script = script & "  Write-Log '[実行] ajsplan -r - 保留解除'" & vbCrLf
+        script = script & "  $releaseResult = Invoke-JP1Command 'ajsplan.exe' @('-F', '" & config("SchedulerService") & "', '-r', '" & jobnetPath & "')" & vbCrLf
         script = script & "  Write-Log ""結果: $($releaseResult.Output -join ' ')""" & vbCrLf
         script = script & "  if ($releaseResult.ExitCode -ne 0) {" & vbCrLf
         script = script & "    Write-Log '[ERROR] 保留解除失敗'" & vbCrLf

@@ -7,7 +7,7 @@ Excel VBAでJP1/AJS3のジョブネット一覧を取得し、選択したジョ
 - **2つの実行モード**: ローカルモード（このPCのJP1を使用）とリモートモード（WinRM経由）を選択可能
 - **ジョブ一覧取得**: `ajsprint`でジョブネット一覧を取得してExcelに表示
 - **保留ジョブの可視化**: 保留中のジョブを一覧でハイライト表示（オレンジ色）
-- **保留自動解除**: 保留中のジョブを実行する際、`ajsrelease`で自動的に保留解除してから実行
+- **保留自動解除**: 保留中のジョブを実行する際、`ajsplan -r`で自動的に保留解除してから実行
 - **選択実行**: チェックしたジョブを実行順で順次起動
 - **完了待ち**: `ajsstatus`でジョブ完了を監視（正常終了/異常終了を判定）
 - **詳細取得**: `ajsshow`で実行結果の詳細を取得
@@ -165,7 +165,7 @@ JP1_ジョブ管理ツール/
 | 開始時刻 | ジョブ実行開始日時 |
 | 実行モード | ローカル/リモート |
 | JP1コマンドパス | 使用されるJP1コマンドのパス（ローカルモード時） |
-| 保留解除 | `ajsrelease` コマンドの実行結果 |
+| 保留解除 | `ajsplan -r` コマンドの実行結果 |
 | ジョブ起動 | `ajsentry` コマンドの実行結果 |
 | 状態確認 | `ajsstatus` によるポーリング状況 |
 | 完了状態 | 正常終了/異常終了の判定結果 |
@@ -310,7 +310,7 @@ JP1 ジョブ管理ツール 実行ログ
 | `ajsentry` | ジョブネットを即時実行する | ジョブネットの起動 |
 | `ajsstatus` | ジョブネットの実行状態を取得する | 完了待ち・状態監視 |
 | `ajsshow` | ジョブネットの詳細情報を取得する | 実行結果の詳細取得 |
-| `ajsrelease` | ジョブネットの保留を解除する | 保留中ジョブの解除 |
+| `ajsplan -r` | ジョブネットの保留を解除する | 保留中ジョブの解除 |
 
 ---
 
@@ -452,12 +452,14 @@ RETURN-CODE     : 0
 
 ---
 
-### ajsrelease（保留解除）
+### ajsplan -r（保留解除）
 
 保留中のジョブネットを解除するコマンドです。
 
+> ⚠️ **注意**: 保留解除には`ajsplan -r`を使用します。`ajsrelease`は「ジョブネットリリース（定義入れ替え）」用のコマンドで、保留解除とは異なります。
+
 ```cmd
-ajsrelease.exe -F <スケジューラーサービス名> <ジョブネットパス>
+ajsplan.exe -F <スケジューラーサービス名> -r <ジョブネットパス>
 ```
 
 **主なオプション**:
@@ -465,18 +467,22 @@ ajsrelease.exe -F <スケジューラーサービス名> <ジョブネットパ�
 | オプション | 説明 |
 |-----------|------|
 | `-F` | スケジューラーサービス名 |
-| `-h` | 接続先のJP1/AJS3マネージャーのホスト名（リモート接続時） |
-| `-u` | JP1ユーザー名（リモート接続時） |
-| `-p` | JP1パスワード（リモート接続時） |
+| `-r` | 保留を解除する |
+| `-h` | 保留を設定する |
+| `-N 世代` | 対象世代を指定（0:登録予定、1:直前確定世代） |
 
 **実行例**:
 ```cmd
-ajsrelease.exe -F AJSROOT1 /main_unit/jobgroup1/weekly_batch
+rem 保留を解除
+ajsplan.exe -F AJSROOT1 -r /main_unit/jobgroup1/weekly_batch
+
+rem 保留を設定
+ajsplan.exe -F AJSROOT1 -h /main_unit/jobgroup1/weekly_batch
 ```
 
 **正常終了時の出力**:
 ```
-KAVS1820-I ajsreleaseコマンドが正常終了しました。
+KAVS0250-I ajsplanコマンドが正常終了しました。
 ```
 
 ---
@@ -500,7 +506,8 @@ C:\Program Files (x86)\Hitachi\JP1AJS2\bin\
 - [JP1/AJS3 ajsentryコマンド](https://www.hitachi.co.jp/Prod/comp/soft1/manual/pc/d3K2211/AJSK01/EU210278.HTM)
 - [JP1/AJS3 ajsstatusコマンド](https://www.hitachi.co.jp/Prod/comp/soft1/manual/pc/d3K2211/AJSK01/EU210314.HTM)
 - [JP1/AJS3 ajsshowコマンド](https://www.hitachi.co.jp/Prod/comp/soft1/manual/pc/d3K2211/AJSK01/EU210310.HTM)
-- [JP1/AJS3 ajsreleaseコマンド](https://www.hitachi.co.jp/Prod/comp/soft1/manual/pc/d3K2211/AJSK01/EU210302.HTM)
+- [JP1/AJS3 ajsplanコマンド（保留設定/解除）](https://itpfdoc.hitachi.co.jp/manuals/3021/30213L4920/AJSO0122.HTM)
+- [JP1/AJS3 ajsreleaseコマンド（ジョブネットリリース）](https://www.hitachi.co.jp/Prod/comp/soft1/manual/pc/d3K2211/AJSK01/EU210302.HTM)
 - [JP1/AJS3 コマンドリファレンス](https://www.hitachi.co.jp/Prod/comp/soft1/manual/pc/d3K2211/AJSK01/EU210000.HTM)
 
 ---
