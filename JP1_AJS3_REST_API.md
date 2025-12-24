@@ -531,11 +531,11 @@ POST /ajs/api/v1/objects/statuses/{unitName}:{execID}/actions/changeStartTime/in
 | execID | 実行ID | 必須 |
 | manager | マネージャーホスト名またはIPアドレス | 必須 |
 | serviceName | スケジューラーサービス名 | 必須 |
-| kindTime | 絶対日時または相対日時の指定方法 | 必須 |
-| absoluteTime | 絶対日時（YYYY-MM-DDThh:mm形式） | 任意 |
-| relativeSign | 相対指定時の方向（+/-） | 任意 |
-| relativeDay | 相対指定時の相対日（0-99） | 任意 |
-| relativeTime | 相対指定時の相対時刻（hh:mm） | 任意 |
+| kindTime | `ABSOLUTETIME`（絶対日時）または `RELATIVETIME`（相対日時） | 必須 |
+| absoluteTime | 絶対日時（YYYY-MM-DDThh:mm形式）※kindTime=ABSOLUTETIME時は必須 | 条件付き必須 |
+| relativeSign | 相対指定時の方向（`+` または `-`）※kindTime=RELATIVETIME時は必須 | 条件付き必須 |
+| relativeDay | 相対指定時の相対日（0-99）※kindTime=RELATIVETIME時は必須 | 条件付き必須 |
+| relativeTime | 相対指定時の相対時刻（hh:mm形式）※kindTime=RELATIVETIME時は必須 | 条件付き必須 |
 | pushedAhead | 前倒し実行時の動作 | 任意 |
 | changeLower | 配下ジョブネット連動変更の有無 | 任意 |
 
@@ -718,10 +718,24 @@ GET /ajs/api/v1/version?query
 #### レスポンス
 
 成功時（200）: 以下をJSON形式で返却
-- `productName`: 製品名
-- `productVersion`: 製品バージョン
-- `displayProductVersion`: 表示用バージョン
-- `productVersionNumber`: バージョン番号
+
+| メンバー | データ型 | 説明 |
+|---------|---------|------|
+| productName | string | 製品名 |
+| productVersion | string | 製品バージョン（VV-RR-SS形式） |
+| displayProductVersion | string | 表示用バージョン（VV-RRまたはVV-RR-SS形式） |
+| productVersionNumber | int | バージョン番号（VVRRSS形式）※**v11-10以降のみ** |
+
+#### レスポンス例
+
+```json
+{
+  "productName": "JP1/AJS3 - Web Console",
+  "productVersion": "11-10-00",
+  "displayProductVersion": "11-10",
+  "productVersionNumber": 111000
+}
+```
 
 ---
 
