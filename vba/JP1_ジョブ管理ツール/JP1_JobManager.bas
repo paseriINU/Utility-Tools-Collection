@@ -1707,6 +1707,15 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
     script = script & "  }" & vbCrLf
     script = script & "  Write-Log ""実行登録番号: $execRegNum""" & vbCrLf
     script = script & vbCrLf
+    script = script & "  # 実行登録番号が変わったことを確認（今回の実行であることを保証）" & vbCrLf
+    script = script & "  if ($execRegNum -eq $beforeExecRegNum) {" & vbCrLf
+    script = script & "    Write-Log '[ERROR] 実行登録番号が変化していません。ジョブが実行されませんでした。'" & vbCrLf
+    script = script & "    Write-Output ""RESULT_STATUS:実行登録番号未変化""" & vbCrLf
+    script = script & "    Write-Output ""RESULT_MESSAGE:実行登録番号が変化していません（前回: $beforeExecRegNum）""" & vbCrLf
+    script = script & "    Write-Output ""RESULT_LOGPATH:$logFile""" & vbCrLf
+    script = script & "    exit" & vbCrLf
+    script = script & "  }" & vbCrLf
+    script = script & vbCrLf
 
     If waitCompletion Then
         ' ajsentry -w終了後、ajsshowで1回だけ結果を取得
