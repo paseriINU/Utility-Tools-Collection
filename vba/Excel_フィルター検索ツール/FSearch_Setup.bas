@@ -78,17 +78,26 @@ Private Sub CreateFilterSearchForm()
 
     ' フォームを追加
     Set vbComp = ThisWorkbook.VBProject.VBComponents.Add(3) ' vbext_ct_MSForm = 3
+
+    ' フォームの初期化を待機
+    DoEvents
+
+    ' フォーム名を設定
     vbComp.Name = FORM_NAME
 
+    ' Designerを取得（フォームのビジュアル部分）
     Set frm = vbComp.Designer
 
+    ' Designerが取得できない場合はエラー
+    If frm Is Nothing Then
+        Err.Raise vbObjectError + 1, "CreateFilterSearchForm", "フォームのDesignerを取得できませんでした"
+    End If
+
     ' フォームのプロパティを設定
-    With frm
-        .Caption = "フィルター検索"
-        .Width = 320
-        .Height = 280
-        .StartUpPosition = 1 ' CenterOwner
-    End With
+    frm.Caption = "フィルター検索"
+    frm.Width = 320
+    frm.Height = 280
+    frm.StartUpPosition = 1 ' CenterOwner
 
     ' サイズ設定
     margin = 12
