@@ -10,7 +10,9 @@ Option Explicit
 ' 設定（必要に応じて変更してください）
 ' ----------------------------------------
 Private Const TARGET_SHEET_NAME As String = "テスト"    ' 対象シート名
-Private Const FILTER_COLUMN As Long = 1                 ' フィルター対象列（A列=1）
+Private Const FILTER_COLUMN_A As Long = 1               ' フィルター対象列1（A列=1）
+Private Const FILTER_COLUMN_B As Long = 2               ' フィルター対象列2（B列=2）
+Private Const RESULT_FILTER_COLUMN As Long = 1          ' フィルターをかける列（A列=1）
 
 ' ========================================
 ' 公開プロシージャ
@@ -50,8 +52,9 @@ Public Sub ApplyOrFilter(keywords() As String)
     ' キーワード数を取得
     keywordCount = UBound(keywords) - LBound(keywords) + 1
 
-    ' キーワードに一致する値を収集
-    matchCount = CollectMatchingValues(tbl, FILTER_COLUMN, keywords, matchingValues)
+    ' キーワードに一致する値を収集（2列をOR検索）
+    matchCount = CollectMatchingValuesFromTwoColumns(tbl, FILTER_COLUMN_A, FILTER_COLUMN_B, _
+        RESULT_FILTER_COLUMN, keywords, matchingValues)
 
     If matchCount = 0 Then
         MsgBox "一致するデータがありません。", vbInformation, "検索結果"
@@ -60,7 +63,7 @@ Public Sub ApplyOrFilter(keywords() As String)
     End If
 
     ' フィルターを適用
-    ApplyTableFilter tbl, FILTER_COLUMN, matchingValues, matchCount
+    ApplyTableFilter tbl, RESULT_FILTER_COLUMN, matchingValues, matchCount
 
     ' 対象シートをアクティブにする
     ws.Activate
@@ -119,15 +122,17 @@ Private Function GetTargetTable(ws As Worksheet) As ListObject
     End If
 End Function
 
-' キーワードに部分一致する値を収集
-Private Function CollectMatchingValues(tbl As ListObject, colNum As Long, _
+' 2列をOR検索してキーワードに部分一致する行の値を収集
+Private Function CollectMatchingValuesFromTwoColumns(tbl As ListObject, _
+    colA As Long, colB As Long, resultCol As Long, _
     keywords() As String, ByRef matchingValues() As String) As Long
 
-    Dim dataRange As Range
-    Dim cell As Range
-    Dim cellValue As String
+    Dim rowCount As Long
+    Dim r As Long
     Dim i As Long
-    Dim matchCount As Long
+    Dim valueA As String
+    Dim valueB As String
+    Dim resultValue As String
     Dim isMatch As Boolean
     Dim dict As Object
 
@@ -136,34 +141,38 @@ Private Function CollectMatchingValues(tbl As ListObject, colNum As Long, _
 
     ' データ範囲を取得（ヘッダー除く）
     If tbl.DataBodyRange Is Nothing Then
-        CollectMatchingValues = 0
+        CollectMatchingValuesFromTwoColumns = 0
         Exit Function
     End If
 
-    Set dataRange = tbl.ListColumns(colNum).DataBodyRange
+    rowCount = tbl.DataBodyRange.Rows.Count
 
-    ' 各セルをチェック
-    For Each cell In dataRange
-        cellValue = CStr(cell.Value)
+    ' 各行をチェック
+    For r = 1 To rowCount
+        valueA = CStr(tbl.DataBodyRange.Cells(r, colA).Value)
+        valueB = CStr(tbl.DataBodyRange.Cells(r, colB).Value)
+        resultValue = CStr(tbl.DataBodyRange.Cells(r, resultCol).Value)
 
-        ' いずれかのキーワードに部分一致するかチェック
+        ' いずれかのキーワードがA列またはB列に部分一致するかチェック
         isMatch = False
         For i = LBound(keywords) To UBound(keywords)
-            If InStr(1, cellValue, keywords(i), vbTextCompare) > 0 Then
+            If InStr(1, valueA, keywords(i), vbTextCompare) > 0 Or _
+               InStr(1, valueB, keywords(i), vbTextCompare) > 0 Then
                 isMatch = True
                 Exit For
             End If
         Next i
 
-        ' 一致した場合、Dictionaryに追加（重複排除）
+        ' 一致した場合、結果列の値をDictionaryに追加（重複排除）
         If isMatch Then
-            If Not dict.Exists(cellValue) Then
-                dict.Add cellValue, True
+            If Not dict.Exists(resultValue) Then
+                dict.Add resultValue, True
             End If
         End If
-    Next cell
+    Next r
 
     ' 結果を配列に変換
+    Dim matchCount As Long
     matchCount = dict.Count
     If matchCount > 0 Then
         ReDim matchingValues(1 To matchCount)
@@ -175,7 +184,7 @@ Private Function CollectMatchingValues(tbl As ListObject, colNum As Long, _
         Next key
     End If
 
-    CollectMatchingValues = matchCount
+    CollectMatchingValuesFromTwoColumns = matchCount
 End Function
 
 ' テーブルにフィルターを適用
