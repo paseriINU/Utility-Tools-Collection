@@ -200,8 +200,7 @@ try {
         }
     } else {
         Write-Host ""
-        Write-Host "[警告] 実行登録中のユニットがありません" -ForegroundColor Yellow
-        Write-Host "  ※ statuses APIは実行登録中のジョブのみ対象です"
+        Write-Host "[警告] 該当するユニットがありません" -ForegroundColor Yellow
     }
 } catch {
     Write-Host "[エラー] $($_.Exception.Message)" -ForegroundColor Red
@@ -217,8 +216,8 @@ if ($execIdList.Count -eq 0) {
     Write-Host "[スキップ] execIDが取得できなかったため、実行結果詳細は取得できません" -ForegroundColor Yellow
     Write-Host ""
     Write-Host "ヒント:" -ForegroundColor Cyan
-    Write-Host "  - ジョブネットを実行登録してから再度実行してください"
-    Write-Host "  - または、ajsshow コマンド（WinRM経由）を使用してください"
+    Write-Host "  - ユニットパスを確認してください"
+    Write-Host "  - 参照権限があるか確認してください"
 } else {
     foreach ($item in $execIdList) {
         $targetPath = $item.Path
@@ -269,8 +268,7 @@ Write-Host "================================================================" -F
 
 Write-Host ""
 Write-Host "注意:" -ForegroundColor Yellow
-Write-Host "  - STEP 1 の statuses API は実行登録中のジョブのみ対象です"
-Write-Host "  - STEP 2 の execResultDetails API は標準エラー出力を取得します"
+Write-Host "  - execResultDetails API は実行結果詳細（標準エラー出力相当）を取得します"
 Write-Host "  - 標準出力の取得には ajsshow コマンド（WinRM経由）が必要です"
 Write-Host ""
 
