@@ -1,7 +1,8 @@
+Attribute VB_Name = "FSearch"
 Option Explicit
 
 ' ========================================
-' フィルター検索モジュール
+' フィルター検索モジュール（テーブル専用）
 ' OR条件で複数キーワードのフィルターを適用
 ' ========================================
 
@@ -9,11 +10,7 @@ Option Explicit
 ' 設定（必要に応じて変更してください）
 ' ----------------------------------------
 Private Const TARGET_SHEET_NAME As String = "テスト"    ' 対象シート名
-Private Const HEADER_ROW As Long = 3                    ' ヘッダー行（タイトル行）
-Private Const DATA_START_COL As Long = 1                ' データ開始列（A列=1）
-Private Const DATA_END_COL As Long = 18                 ' データ終了列（R列=18）
-Private Const FILTER_COLUMN_A As Long = 1               ' フィルター列1（A列=1）
-Private Const FILTER_COLUMN_B As Long = 2               ' フィルター列2（B列=2）
+Private Const FILTER_COLUMN As Long = 1                 ' フィルター対象列（A列=1）
 
 ' ========================================
 ' 公開プロシージャ
@@ -24,17 +21,13 @@ Public Sub ShowFilterSearchForm()
     FSearchForm.Show vbModeless
 End Sub
 
-' OR条件でフィルターを適用
+' OR条件でフィルターを適用（テーブル専用）
 Public Sub ApplyOrFilter(keywords() As String)
     Dim ws As Worksheet
-    Dim dataRange As Range
-    Dim lastRow As Long
-    Dim lastCol As Long
-    Dim criteria() As String
-    Dim i As Long
-    Dim keywordCount As Long
     Dim tbl As ListObject
-    Dim useTable As Boolean
+    Dim keywordCount As Long
+    Dim matchingValues() As String
+    Dim matchCount As Long
 
     On Error GoTo ErrorHandler
 
@@ -42,62 +35,32 @@ Public Sub ApplyOrFilter(keywords() As String)
     Set ws = GetTargetSheet()
     If ws Is Nothing Then Exit Sub
 
-    ' データ範囲を取得（A列を下から上に見て最終行を取得）
-    lastRow = ws.Cells(ws.Rows.Count, DATA_START_COL).End(xlUp).Row
-    lastCol = DATA_END_COL  ' R列固定
-
-    If lastRow <= HEADER_ROW Then
-        MsgBox "データがありません。", vbExclamation, "エラー"
+    ' テーブルを取得
+    Set tbl = GetTargetTable(ws)
+    If tbl Is Nothing Then
+        MsgBox "テーブルが見つかりません。", vbExclamation, "エラー"
         Exit Sub
     End If
 
-    ' データ範囲（ヘッダー行から最終行まで）
-    Set dataRange = ws.Range(ws.Cells(HEADER_ROW, DATA_START_COL), ws.Cells(lastRow, lastCol))
-
-    ' テーブル（ListObject）が存在するかチェック
-    useTable = False
-    For Each tbl In ws.ListObjects
-        If Not Intersect(tbl.Range, dataRange) Is Nothing Then
-            ' テーブルが見つかった場合、テーブルのフィルターを使用
-            useTable = True
-            Set dataRange = tbl.Range
-            Exit For
-        End If
-    Next tbl
-
     ' 既存のフィルターをクリア
-    If useTable Then
-        ' テーブルのフィルターをクリア
-        If tbl.AutoFilter.FilterMode Then
-            tbl.AutoFilter.ShowAllData
-        End If
-    Else
-        ' 通常のオートフィルターをクリア
-        If ws.AutoFilterMode Then
-            ws.AutoFilterMode = False
-        End If
-        ' オートフィルターを有効化
-        dataRange.AutoFilter
+    If tbl.AutoFilter.FilterMode Then
+        tbl.AutoFilter.ShowAllData
     End If
 
     ' キーワード数を取得
     keywordCount = UBound(keywords) - LBound(keywords) + 1
 
-    ' フィルター条件を作成（ワイルドカード付き）
-    ReDim criteria(1 To keywordCount * 2)
-    For i = LBound(keywords) To UBound(keywords)
-        criteria((i - LBound(keywords)) * 2 + 1) = "=*" & keywords(i) & "*"
-        If i < UBound(keywords) Then
-            criteria((i - LBound(keywords)) * 2 + 2) = "=*" & keywords(i) & "*"
-        End If
-    Next i
+    ' キーワードに一致する値を収集
+    matchCount = CollectMatchingValues(tbl, FILTER_COLUMN, keywords, matchingValues)
 
-    ' A列にフィルター適用
-    ApplyColumnFilter ws, dataRange, FILTER_COLUMN_A, keywords
+    If matchCount = 0 Then
+        MsgBox "一致するデータがありません。", vbInformation, "検索結果"
+        ws.Activate
+        Exit Sub
+    End If
 
-    ' B列にフィルター適用（A列の結果に追加）
-    ' 注意: 複数列のOR条件は標準AutoFilterでは難しいため、
-    ' AdvancedFilterまたは別のアプローチを使用
+    ' フィルターを適用
+    ApplyTableFilter tbl, FILTER_COLUMN, matchingValues, matchCount
 
     ' 対象シートをアクティブにする
     ws.Activate
@@ -112,27 +75,18 @@ End Sub
 Public Sub ClearFilter()
     Dim ws As Worksheet
     Dim tbl As ListObject
-    Dim tableCleared As Boolean
 
     On Error GoTo ErrorHandler
 
     Set ws = GetTargetSheet()
     If ws Is Nothing Then Exit Sub
 
-    tableCleared = False
-
-    ' テーブル（ListObject）のフィルターをクリア
+    ' テーブルのフィルターをクリア
     For Each tbl In ws.ListObjects
         If tbl.AutoFilter.FilterMode Then
             tbl.AutoFilter.ShowAllData
-            tableCleared = True
         End If
     Next tbl
-
-    ' 通常のオートフィルターをクリア
-    If ws.AutoFilterMode Then
-        ws.AutoFilterMode = False
-    End If
 
     ' 対象シートをアクティブにする
     ws.Activate
@@ -158,107 +112,87 @@ Private Function GetTargetSheet() As Worksheet
     End If
 End Function
 
-' 指定列にOR条件フィルターを適用
-Private Sub ApplyColumnFilter(ws As Worksheet, dataRange As Range, colNum As Long, keywords() As String)
-    Dim criteria As Variant
-    Dim i As Long
-    Dim keywordCount As Long
-
-    keywordCount = UBound(keywords) - LBound(keywords) + 1
-
-    ' AutoFilterのCriteria1は最大2つまでしか指定できないため、
-    ' 3つ以上の場合は配列でOperator:=xlFilterValuesを使用
-    ' ただしxlFilterValuesは完全一致のため、部分一致にはAdvancedFilterが必要
-
-    ' 2つ以下の場合は標準的なOR条件を使用
-    If keywordCount = 1 Then
-        dataRange.AutoFilter Field:=colNum, _
-            Criteria1:="=*" & keywords(1) & "*", _
-            Operator:=xlOr, _
-            Criteria2:="=*" & keywords(1) & "*"
-
-    ElseIf keywordCount = 2 Then
-        dataRange.AutoFilter Field:=colNum, _
-            Criteria1:="=*" & keywords(1) & "*", _
-            Operator:=xlOr, _
-            Criteria2:="=*" & keywords(2) & "*"
-
-    Else
-        ' 3つ以上の場合はAdvancedFilterを使用
-        ApplyAdvancedFilter ws, colNum, keywords
+' 対象テーブルを取得（シート内の最初のテーブル）
+Private Function GetTargetTable(ws As Worksheet) As ListObject
+    If ws.ListObjects.Count > 0 Then
+        Set GetTargetTable = ws.ListObjects(1)
     End If
-End Sub
+End Function
 
-' AdvancedFilterで複数条件のOR検索を実行
-Private Sub ApplyAdvancedFilter(ws As Worksheet, colNum As Long, keywords() As String)
-    Dim criteriaRange As Range
+' キーワードに部分一致する値を収集
+Private Function CollectMatchingValues(tbl As ListObject, colNum As Long, _
+    keywords() As String, ByRef matchingValues() As String) As Long
+
     Dim dataRange As Range
-    Dim lastRow As Long
-    Dim lastCol As Long
+    Dim cell As Range
+    Dim cellValue As String
     Dim i As Long
-    Dim tempSheet As Worksheet
-    Dim criteriaSheetName As String
-    Dim tbl As ListObject
+    Dim matchCount As Long
+    Dim isMatch As Boolean
+    Dim dict As Object
 
-    ' 一時的な条件範囲を作成
-    criteriaSheetName = "_FilterCriteria_"
+    ' 重複排除用のDictionary
+    Set dict = CreateObject("Scripting.Dictionary")
 
-    ' 既存の一時シートを削除
-    On Error Resume Next
-    Application.DisplayAlerts = False
-    ThisWorkbook.Worksheets(criteriaSheetName).Delete
-    Application.DisplayAlerts = True
-    On Error GoTo 0
+    ' データ範囲を取得（ヘッダー除く）
+    If tbl.DataBodyRange Is Nothing Then
+        CollectMatchingValues = 0
+        Exit Function
+    End If
 
-    ' 条件シートを作成
-    Set tempSheet = ThisWorkbook.Worksheets.Add
-    tempSheet.Name = criteriaSheetName
-    tempSheet.Visible = xlSheetVeryHidden
+    Set dataRange = tbl.ListColumns(colNum).DataBodyRange
 
-    ' 条件を設定（ヘッダー + 各キーワード）
-    ' A列とB列の両方をOR条件にするため、列を並べる
-    tempSheet.Cells(1, 1).Value = ws.Cells(HEADER_ROW, FILTER_COLUMN_A).Value
-    tempSheet.Cells(1, 2).Value = ws.Cells(HEADER_ROW, FILTER_COLUMN_B).Value
+    ' 各セルをチェック
+    For Each cell In dataRange
+        cellValue = CStr(cell.Value)
 
-    For i = LBound(keywords) To UBound(keywords)
-        ' A列の条件
-        tempSheet.Cells(i - LBound(keywords) + 2, 1).Value = "*" & keywords(i) & "*"
-        ' B列の条件（同じ行に入れるとAND、別の行に入れるとOR）
-    Next i
+        ' いずれかのキーワードに部分一致するかチェック
+        isMatch = False
+        For i = LBound(keywords) To UBound(keywords)
+            If InStr(1, cellValue, keywords(i), vbTextCompare) > 0 Then
+                isMatch = True
+                Exit For
+            End If
+        Next i
 
-    ' B列用の条件も追加（OR条件なので別の行に）
-    For i = LBound(keywords) To UBound(keywords)
-        tempSheet.Cells(UBound(keywords) + i - LBound(keywords) + 2, 2).Value = "*" & keywords(i) & "*"
-    Next i
-
-    ' データ範囲（A列を下から上に見て最終行を取得）
-    lastRow = ws.Cells(ws.Rows.Count, DATA_START_COL).End(xlUp).Row
-    lastCol = DATA_END_COL  ' R列固定
-    Set dataRange = ws.Range(ws.Cells(HEADER_ROW, DATA_START_COL), ws.Cells(lastRow, lastCol))
-
-    ' 条件範囲
-    Dim criteriaLastRow As Long
-    criteriaLastRow = (UBound(keywords) - LBound(keywords) + 1) * 2 + 1
-    Set criteriaRange = tempSheet.Range(tempSheet.Cells(1, 1), tempSheet.Cells(criteriaLastRow, 2))
-
-    ' 既存のフィルターをクリア（テーブル対応）
-    For Each tbl In ws.ListObjects
-        If Not Intersect(tbl.Range, dataRange) Is Nothing Then
-            If tbl.AutoFilter.FilterMode Then
-                tbl.AutoFilter.ShowAllData
+        ' 一致した場合、Dictionaryに追加（重複排除）
+        If isMatch Then
+            If Not dict.Exists(cellValue) Then
+                dict.Add cellValue, True
             End If
         End If
-    Next tbl
+    Next cell
 
-    If ws.AutoFilterMode Then
-        ws.AutoFilterMode = False
+    ' 結果を配列に変換
+    matchCount = dict.Count
+    If matchCount > 0 Then
+        ReDim matchingValues(1 To matchCount)
+        i = 1
+        Dim key As Variant
+        For Each key In dict.Keys
+            matchingValues(i) = CStr(key)
+            i = i + 1
+        Next key
     End If
 
-    ' AdvancedFilterを適用（その場でフィルター）
-    dataRange.AdvancedFilter Action:=xlFilterInPlace, CriteriaRange:=criteriaRange, Unique:=False
+    CollectMatchingValues = matchCount
+End Function
 
-    ' 一時シートを削除
-    Application.DisplayAlerts = False
-    tempSheet.Delete
-    Application.DisplayAlerts = True
+' テーブルにフィルターを適用
+Private Sub ApplyTableFilter(tbl As ListObject, colNum As Long, _
+    matchingValues() As String, matchCount As Long)
+
+    Dim filterArray() As String
+    Dim i As Long
+
+    ' フィルター用の配列を作成
+    ReDim filterArray(1 To matchCount)
+    For i = 1 To matchCount
+        filterArray(i) = matchingValues(i)
+    Next i
+
+    ' xlFilterValuesでフィルターを適用（完全一致だが、収集時に部分一致済み）
+    tbl.Range.AutoFilter Field:=colNum, _
+        Criteria1:=filterArray, _
+        Operator:=xlFilterValues
 End Sub
