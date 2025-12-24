@@ -99,7 +99,8 @@ Public Sub ApplyOrFilter(keywords() As String)
     ' 注意: 複数列のOR条件は標準AutoFilterでは難しいため、
     ' AdvancedFilterまたは別のアプローチを使用
 
-    MsgBox keywordCount & "個のキーワードでフィルターを適用しました。", vbInformation, "完了"
+    ' 対象シートをアクティブにする
+    ws.Activate
 
     Exit Sub
 
@@ -133,7 +134,8 @@ Public Sub ClearFilter()
         ws.AutoFilterMode = False
     End If
 
-    MsgBox "フィルターをクリアしました。", vbInformation, "完了"
+    ' 対象シートをアクティブにする
+    ws.Activate
 
     Exit Sub
 
