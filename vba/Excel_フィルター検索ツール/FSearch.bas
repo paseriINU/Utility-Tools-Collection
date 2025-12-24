@@ -45,8 +45,10 @@ Public Sub ApplyOrFilter(keywords() As String)
     End If
 
     ' 既存のフィルターをクリア
-    If tbl.AutoFilter.FilterMode Then
-        tbl.AutoFilter.ShowAllData
+    If Not tbl.AutoFilter Is Nothing Then
+        If tbl.AutoFilter.FilterMode Then
+            tbl.AutoFilter.ShowAllData
+        End If
     End If
 
     ' キーワード数を取得
@@ -86,8 +88,10 @@ Public Sub ClearFilter()
 
     ' テーブルのフィルターをクリア
     For Each tbl In ws.ListObjects
-        If tbl.AutoFilter.FilterMode Then
-            tbl.AutoFilter.ShowAllData
+        If Not tbl.AutoFilter Is Nothing Then
+            If tbl.AutoFilter.FilterMode Then
+                tbl.AutoFilter.ShowAllData
+            End If
         End If
     Next tbl
 
