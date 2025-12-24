@@ -166,101 +166,63 @@ try {
     }
     Write-Host ""
 
-    # units配列の確認
-    if ($response.PSObject.Properties.Name -contains "units") {
-        if ($response.units -and $response.units.Count -gt 0) {
-            Write-Host "[OK] ユニット情報を取得しました（$($response.units.Count) 件）" -ForegroundColor Green
+    # statuses配列またはunits配列の確認（バージョンによって異なる）
+    $dataArray = $null
+    $arrayName = ""
+
+    if ($response.PSObject.Properties.Name -contains "statuses") {
+        $dataArray = $response.statuses
+        $arrayName = "statuses"
+    } elseif ($response.PSObject.Properties.Name -contains "units") {
+        $dataArray = $response.units
+        $arrayName = "units"
+    }
+
+    if ($dataArray -ne $null) {
+        if ($dataArray.Count -gt 0) {
+            Write-Host "[OK] ユニット情報を取得しました（$($dataArray.Count) 件）" -ForegroundColor Green
             Write-Host ""
 
-            foreach ($unit in $response.units) {
+            foreach ($item in $dataArray) {
                 Write-Host "----------------------------------------------------------------" -ForegroundColor Cyan
 
-                # definitionの確認
-                if ($unit.PSObject.Properties.Name -contains "definition") {
-                    Write-Host "ユニット名    : $($unit.definition.unitName)" -ForegroundColor White
-                    Write-Host "ユニットタイプ: $($unit.definition.unitType)"
-                    if ($unit.definition.PSObject.Properties.Name -contains "path") {
-                        Write-Host "パス          : $($unit.definition.path)"
-                    }
-                } else {
-                    Write-Host "ユニット情報  :" -ForegroundColor White
-                    $unit | Format-List
-                }
-                Write-Host ""
-
-                # unitStatusの確認
-                if ($unit.PSObject.Properties.Name -contains "unitStatus") {
-                    $status = $unit.unitStatus
-
-                    # 状態の日本語変換
-                    $statusJp = switch ($status.status) {
-                        "NORMAL"          { "正常終了" }
-                        "ABNORMAL"        { "異常終了" }
-                        "RUNNING"         { "実行中" }
-                        "WARNING"         { "警告終了" }
-                        "WAITING"         { "待機中" }
-                        "HOLDING"         { "保留中" }
-                        "NOT_REGISTERED"  { "未登録" }
-                        "SKIPPED"         { "スキップ" }
-                        "KILLED"          { "強制終了" }
-                        "NOT_SCHEDULED"   { "未予定" }
-                        "WAIT_RUNNING"    { "起動条件待ち" }
-                        "UNEXECUTED"      { "未実行" }
-                        "EXEC_WAIT"       { "実行待ち" }
-                        "QUEUING"         { "キューイング" }
-                        "END_DELAY"       { "終了遅延" }
-                        "START_DELAY"     { "開始遅延" }
-                        default           { $status.status }
-                    }
-
-                    Write-Host "【状態情報】" -ForegroundColor Yellow
-                    Write-Host "  状態        : $statusJp ($($status.status))"
-
-                    if ($status.PSObject.Properties.Name -contains "startTime" -and $status.startTime) {
-                        Write-Host "  開始時刻    : $($status.startTime)"
-                    }
-                    if ($status.PSObject.Properties.Name -contains "endTime" -and $status.endTime) {
-                        Write-Host "  終了時刻    : $($status.endTime)"
-                    }
-                    if ($status.PSObject.Properties.Name -contains "returnCode") {
-                        Write-Host "  終了コード  : $($status.returnCode)"
-                    }
-                    if ($status.PSObject.Properties.Name -contains "holdAttr") {
-                        Write-Host "  保留属性    : $($status.holdAttr)"
-                    }
-                    if ($status.PSObject.Properties.Name -contains "execID") {
-                        Write-Host "  実行ID      : $($status.execID)"
-                    }
-                }
+                # 各プロパティを表示
+                $itemJson = $item | ConvertTo-Json -Depth 3
+                Write-Host $itemJson
                 Write-Host ""
             }
 
             Write-Host "----------------------------------------------------------------" -ForegroundColor Cyan
-            Write-Host "取得件数: $($response.units.Count) 件" -ForegroundColor Green
+            Write-Host "取得件数: $($dataArray.Count) 件" -ForegroundColor Green
 
         } else {
-            Write-Host "[情報] ユニットが見つかりませんでした" -ForegroundColor Yellow
+            Write-Host "[情報] ${arrayName} 配列が空です（0件）" -ForegroundColor Yellow
             Write-Host ""
             Write-Host "考えられる原因:" -ForegroundColor Yellow
             Write-Host "  1. ユニットパスが正しくない"
             Write-Host "     現在の設定: $unitPath"
-            Write-Host "  2. JP1ユーザーに参照権限がない"
-            Write-Host "  3. ジョブネットが一度も実行されていない"
+            Write-Host "  2. ジョブネットが実行登録されていない"
+            Write-Host "  3. JP1ユーザーに参照権限がない"
             Write-Host ""
-            Write-Host "ヒント:" -ForegroundColor Cyan
-            Write-Host "  - パスは / で始める必要があります"
-            Write-Host "  - 例: /MAIN/GROUP1/JOBNET1"
+            Write-Host "試してみてください:" -ForegroundColor Cyan
+            Write-Host "  - パスの最後のスラッシュを削除/追加してみる"
+            Write-Host "  - 親のジョブグループパスを指定してみる"
+            Write-Host "  - Web Console画面で同じパスが表示されるか確認"
+            Write-Host ""
+            Write-Host "パス形式の例:" -ForegroundColor Cyan
+            Write-Host "  /JOBGROUP/JOBNET"
+            Write-Host "  /グループ名/ジョブネット名"
         }
     } else {
-        Write-Host "[情報] レスポンスに units が含まれていません" -ForegroundColor Yellow
+        Write-Host "[情報] レスポンスに statuses/units が含まれていません" -ForegroundColor Yellow
         Write-Host ""
         Write-Host "レスポンス全体:" -ForegroundColor Gray
         $jsonOutput = $response | ConvertTo-Json -Depth 5
         Write-Host $jsonOutput
         Write-Host ""
         Write-Host "APIが異なるレスポンス形式を返しています。" -ForegroundColor Yellow
-        Write-Host "JP1/AJS3のバージョンやWeb Consoleの設定を確認してください。"
     }
+
 
 } catch {
     Write-Host "[エラー] API呼び出しに失敗しました" -ForegroundColor Red
