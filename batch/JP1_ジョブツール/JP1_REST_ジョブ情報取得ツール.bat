@@ -58,6 +58,13 @@ $unitPath = "/main_unit/jobgroup1/daily_batch"
 # デバッグモード（$true でレスポンス詳細を表示）
 $debugMode = $true
 
+# 試すAPIエンドポイント（1〜4を選択）
+# 1: statuses（実行登録中のユニット状態）
+# 2: definitions（ユニット定義情報）
+# 3: results（実行結果 - 存在する場合）
+# 4: すべてのAPIを順番に試す
+$apiMode = 4
+
 # ==============================================================================
 # ■ メイン処理（以下は編集不要）
 # ==============================================================================
@@ -114,162 +121,95 @@ if ($useHttps) {
 }
 
 # ========================================
-# ユニット状態情報の取得
+# API呼び出し関数
 # ========================================
-Write-Host "========================================" -ForegroundColor Yellow
-Write-Host "ユニット状態情報を取得中..." -ForegroundColor Yellow
-Write-Host "========================================" -ForegroundColor Yellow
-Write-Host ""
+function Call-JP1Api {
+    param(
+        [string]$ApiName,
+        [string]$ApiUrl
+    )
 
-try {
-    # ユニット状態取得API（パスはエンコードせずそのまま使用）
-    $baseUri = "${protocol}://${webConsoleHost}:${webConsolePort}/ajs/api/v1/objects/statuses"
-
-    # URLを構築（パスはそのまま使用）
-    $statusUri = "${baseUri}?manager=${managerHost}&serviceName=${schedulerService}&location=${unitPath}&mode=search"
-
+    Write-Host ""
+    Write-Host "========================================" -ForegroundColor Yellow
+    Write-Host "API: $ApiName" -ForegroundColor Yellow
+    Write-Host "========================================" -ForegroundColor Yellow
+    Write-Host ""
     Write-Host "リクエストURL:" -ForegroundColor Cyan
-    Write-Host "  $statusUri"
-    Write-Host ""
-    Write-Host "リクエストヘッダー:" -ForegroundColor Cyan
-    Write-Host "  Content-Type: application/json"
-    Write-Host "  Accept: application/json"
-    Write-Host "  Accept-Language: ja"
-    Write-Host "  X-AJS-Authorization: (Base64認証情報)"
+    Write-Host "  $ApiUrl"
     Write-Host ""
 
-    # Invoke-WebRequestを使用して詳細なレスポンスを取得
-    $webResponse = Invoke-WebRequest -Uri $statusUri -Method GET -Headers $headers -TimeoutSec 30 -UseBasicParsing
-
-    Write-Host "[OK] HTTPステータス: $($webResponse.StatusCode)" -ForegroundColor Green
-    Write-Host ""
-
-    if ($debugMode) {
-        Write-Host "[DEBUG] レスポンスヘッダー:" -ForegroundColor Gray
-        foreach ($key in $webResponse.Headers.Keys) {
-            $val = $webResponse.Headers[$key]
-            Write-Host "  $key = $val" -ForegroundColor Gray
+    try {
+        $webResponse = Invoke-WebRequest -Uri $ApiUrl -Method GET -Headers $headers -TimeoutSec 30 -UseBasicParsing
+        Write-Host "[OK] HTTPステータス: $($webResponse.StatusCode)" -ForegroundColor Green
+        Write-Host ""
+        Write-Host "レスポンスボディ:" -ForegroundColor Cyan
+        Write-Host $webResponse.Content
+        Write-Host ""
+        return $true
+    } catch {
+        $errMsg = $_.Exception.Message
+        Write-Host "[エラー] $errMsg" -ForegroundColor Red
+        if ($_.Exception.Response) {
+            $statusCode = [int]$_.Exception.Response.StatusCode
+            Write-Host "HTTPステータス: $statusCode" -ForegroundColor Red
         }
         Write-Host ""
-        Write-Host "[DEBUG] レスポンスボディ（生データ）:" -ForegroundColor Gray
-        Write-Host $webResponse.Content -ForegroundColor Gray
-        Write-Host ""
+        return $false
     }
+}
 
-    # JSONパース
-    $response = $webResponse.Content | ConvertFrom-Json
+# ========================================
+# 試すAPIエンドポイント一覧
+# ========================================
+$baseUrl = "${protocol}://${webConsoleHost}:${webConsolePort}"
 
-    # レスポンス構造を確認
-    Write-Host "[DEBUG] レスポンス構造:" -ForegroundColor Gray
-    foreach ($prop in ($response | Get-Member -MemberType NoteProperty)) {
-        Write-Host "  - $($prop.Name)" -ForegroundColor Gray
+$apiEndpoints = @(
+    @{
+        Name = "1. statuses（実行登録中ユニット状態）"
+        Url = "${baseUrl}/ajs/api/v1/objects/statuses?manager=${managerHost}&serviceName=${schedulerService}&location=${unitPath}&mode=search"
+    },
+    @{
+        Name = "2. definitions（ユニット定義情報）"
+        Url = "${baseUrl}/ajs/api/v1/objects/definitions?manager=${managerHost}&serviceName=${schedulerService}&location=${unitPath}"
+    },
+    @{
+        Name = "3. results（実行結果詳細）"
+        Url = "${baseUrl}/ajs/api/v1/objects/results?manager=${managerHost}&serviceName=${schedulerService}&location=${unitPath}"
+    },
+    @{
+        Name = "4. executions（実行履歴）"
+        Url = "${baseUrl}/ajs/api/v1/executions?manager=${managerHost}&serviceName=${schedulerService}&location=${unitPath}"
+    },
+    @{
+        Name = "5. statuses（mode無し）"
+        Url = "${baseUrl}/ajs/api/v1/objects/statuses?manager=${managerHost}&serviceName=${schedulerService}&location=${unitPath}"
     }
-    Write-Host ""
+)
 
-    # statuses配列またはunits配列の確認（バージョンによって異なる）
-    $dataArray = $null
-    $arrayName = ""
+Write-Host ""
+Write-Host "================================================================" -ForegroundColor Cyan
+Write-Host "APIエンドポイントを順番に試します..." -ForegroundColor Cyan
+Write-Host "================================================================" -ForegroundColor Cyan
 
-    if ($response.PSObject.Properties.Name -contains "statuses") {
-        $dataArray = $response.statuses
-        $arrayName = "statuses"
-    } elseif ($response.PSObject.Properties.Name -contains "units") {
-        $dataArray = $response.units
-        $arrayName = "units"
+$successCount = 0
+foreach ($api in $apiEndpoints) {
+    $result = Call-JP1Api -ApiName $api.Name -ApiUrl $api.Url
+    if ($result) {
+        $successCount++
     }
-
-    if ($dataArray -ne $null) {
-        if ($dataArray.Count -gt 0) {
-            Write-Host "[OK] ユニット情報を取得しました（$($dataArray.Count) 件）" -ForegroundColor Green
-            Write-Host ""
-
-            foreach ($item in $dataArray) {
-                Write-Host "----------------------------------------------------------------" -ForegroundColor Cyan
-
-                # 各プロパティを表示
-                $itemJson = $item | ConvertTo-Json -Depth 3
-                Write-Host $itemJson
-                Write-Host ""
-            }
-
-            Write-Host "----------------------------------------------------------------" -ForegroundColor Cyan
-            Write-Host "取得件数: $($dataArray.Count) 件" -ForegroundColor Green
-
-        } else {
-            Write-Host "[情報] ${arrayName} 配列が空です（0件）" -ForegroundColor Yellow
-            Write-Host ""
-            Write-Host "考えられる原因:" -ForegroundColor Yellow
-            Write-Host "  1. ユニットパスが正しくない"
-            Write-Host "     現在の設定: $unitPath"
-            Write-Host "  2. ジョブネットが実行登録されていない"
-            Write-Host "  3. JP1ユーザーに参照権限がない"
-            Write-Host ""
-            Write-Host "試してみてください:" -ForegroundColor Cyan
-            Write-Host "  - パスの最後のスラッシュを削除/追加してみる"
-            Write-Host "  - 親のジョブグループパスを指定してみる"
-            Write-Host "  - Web Console画面で同じパスが表示されるか確認"
-            Write-Host ""
-            Write-Host "パス形式の例:" -ForegroundColor Cyan
-            Write-Host "  /JOBGROUP/JOBNET"
-            Write-Host "  /グループ名/ジョブネット名"
-        }
-    } else {
-        Write-Host "[情報] レスポンスに statuses/units が含まれていません" -ForegroundColor Yellow
-        Write-Host ""
-        Write-Host "レスポンス全体:" -ForegroundColor Gray
-        $jsonOutput = $response | ConvertTo-Json -Depth 5
-        Write-Host $jsonOutput
-        Write-Host ""
-        Write-Host "APIが異なるレスポンス形式を返しています。" -ForegroundColor Yellow
-    }
-
-
-} catch {
-    Write-Host "[エラー] API呼び出しに失敗しました" -ForegroundColor Red
-    Write-Host ""
-    Write-Host "エラー詳細:" -ForegroundColor Red
-    Write-Host $_.Exception.Message
-    Write-Host ""
-
-    # HTTPステータスコード別のヒント
-    if ($_.Exception.Response) {
-        $statusCode = [int]$_.Exception.Response.StatusCode
-        Write-Host "HTTPステータスコード: $statusCode" -ForegroundColor Red
-
-        # レスポンスボディを取得
-        try {
-            $reader = New-Object System.IO.StreamReader($_.Exception.Response.GetResponseStream())
-            $errorBody = $reader.ReadToEnd()
-            $reader.Close()
-            Write-Host ""
-            Write-Host "エラーレスポンス:" -ForegroundColor Red
-            Write-Host $errorBody
-        } catch {}
-
-        Write-Host ""
-        switch ($statusCode) {
-            400 { Write-Host "→ リクエスト形式エラー: パラメータを確認してください" -ForegroundColor Yellow }
-            401 { Write-Host "→ 認証エラー: JP1ユーザー名またはパスワードを確認してください" -ForegroundColor Yellow }
-            403 { Write-Host "→ 権限エラー: JP1ユーザーに必要な権限があるか確認してください" -ForegroundColor Yellow }
-            404 { Write-Host "→ 指定したユニットパスが見つかりません" -ForegroundColor Yellow }
-            500 { Write-Host "→ サーバー内部エラー: Web Consoleのログを確認してください" -ForegroundColor Yellow }
-        }
-    }
-
-    Write-Host ""
-    Write-Host "確認事項:" -ForegroundColor Yellow
-    Write-Host "  - Web Consoleが起動しているか"
-    Write-Host "    → ブラウザで http://${webConsoleHost}:${webConsolePort}/ajs/login.html にアクセス"
-    Write-Host "  - ホスト名・ポート番号が正しいか"
-    Write-Host "  - JP1ユーザー名・パスワードが正しいか"
-    Write-Host "  - ユニットパスが正しいか（/で始まる）"
-
-    exit 1
+    Write-Host "----------------------------------------------------------------"
 }
 
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Green
-Write-Host "[完了] 処理が正常に終了しました" -ForegroundColor Green
+Write-Host "テスト完了: $successCount / $($apiEndpoints.Count) 件成功" -ForegroundColor Green
 Write-Host "========================================" -ForegroundColor Green
+
+Write-Host ""
+Write-Host "注意:" -ForegroundColor Yellow
+Write-Host "  - 「statuses」APIは実行登録中のジョブのみ対象です"
+Write-Host "  - 即時実行で終了済みのジョブのスプールログはREST APIでは取得できません"
+Write-Host "  - スプールログ取得には ajsshow コマンド（WinRM経由）が必要です"
+Write-Host ""
 
 exit 0
