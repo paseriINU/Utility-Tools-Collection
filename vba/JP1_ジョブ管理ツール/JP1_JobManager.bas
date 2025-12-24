@@ -1663,6 +1663,7 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
         script = script & "    Write-Log '[ERROR] 保留解除失敗'" & vbCrLf
         script = script & "    Write-Output ""RESULT_STATUS:保留解除失敗""" & vbCrLf
         script = script & "    Write-Output ""RESULT_MESSAGE:$($releaseResult.Output -join ' ')""" & vbCrLf
+        script = script & "    Write-Output ""RESULT_LOGPATH:$logFile""" & vbCrLf
         script = script & "    exit" & vbCrLf
         script = script & "  }" & vbCrLf
         script = script & "  Write-Log '[成功] 保留解除完了'" & vbCrLf
@@ -1687,6 +1688,7 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
     script = script & "    Write-Log ""[ERROR] ajsentryエラー: $entryOutput""" & vbCrLf
     script = script & "    Write-Output ""RESULT_STATUS:実行エラー""" & vbCrLf
     script = script & "    Write-Output ""RESULT_MESSAGE:$entryOutput""" & vbCrLf
+    script = script & "    Write-Output ""RESULT_LOGPATH:$logFile""" & vbCrLf
     script = script & "    exit" & vbCrLf
     script = script & "  }" & vbCrLf
     script = script & vbCrLf
@@ -1698,6 +1700,7 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
     script = script & "    Write-Log '[ERROR] 実行登録番号の取得に失敗しました'" & vbCrLf
     script = script & "    Write-Output ""RESULT_STATUS:実行登録番号取得失敗""" & vbCrLf
     script = script & "    Write-Output ""RESULT_MESSAGE:$($execRegResult.Output -join ' ')""" & vbCrLf
+    script = script & "    Write-Output ""RESULT_LOGPATH:$logFile""" & vbCrLf
     script = script & "    exit" & vbCrLf
     script = script & "  }" & vbCrLf
     script = script & "  Write-Log ""実行登録番号: $execRegNum""" & vbCrLf
