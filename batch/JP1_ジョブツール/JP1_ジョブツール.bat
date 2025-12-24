@@ -152,14 +152,10 @@ ajsentry -F %SCHEDULER_SERVICE% -n -w %JOBNET_PATH%
 set "AJSENTRY_EXITCODE=%ERRORLEVEL%"
 echo.
 
-rem 実行IDと実行登録番号を取得（ajsentry後の最新世代）
+rem 実行IDを取得（ajsentry後の最新世代）
 set "EXEC_ID="
-set "EXEC_REG_NUM="
-for /f "tokens=1,2" %%A in ('ajsshow -F %SCHEDULER_SERVICE% -g 1 -i "%%## %%ll" "%JOBNET_PATH%" 2^>^&1') do (
-    if not defined EXEC_ID (
-        set "EXEC_ID=%%A"
-        set "EXEC_REG_NUM=%%B"
-    )
+for /f "delims=" %%A in ('ajsshow -F %SCHEDULER_SERVICE% -g 1 -i "%%##" "%JOBNET_PATH%" 2^>^&1') do (
+    if not defined EXEC_ID set "EXEC_ID=%%A"
 )
 
 rem 実行IDが変わったことを確認（自分が起動したジョブであることを保証）
@@ -167,13 +163,13 @@ if "!EXEC_ID!"=="!BEFORE_EXEC_ID!" (
     echo [エラー] 実行IDが変化していません。ジョブが実行されませんでした。
     goto :ERROR_EXIT
 )
-echo   実行ID: !EXEC_ID! / 実行登録番号: !EXEC_REG_NUM!
+echo   実行ID: !EXEC_ID!
 echo.
 
 rem ajsentry終了後、ajsshowで1回だけ結果を取得
 rem （ajsentryの戻り値はコマンド実行成否であり、ジョブネット結果ではない）
 set "JOB_STATUS="
-for /f "delims=" %%i in ('ajsshow -F %SCHEDULER_SERVICE% -B !EXEC_REG_NUM! -i "%%CC" "%JOBNET_PATH%" 2^>^&1') do (
+for /f "delims=" %%i in ('ajsshow -F %SCHEDULER_SERVICE% -g 1 -i "%%CC" "%JOBNET_PATH%" 2^>^&1') do (
     if not defined JOB_STATUS set "JOB_STATUS=%%i"
 )
 
@@ -212,7 +208,7 @@ echo.
 
 rem まず実終了コード（%%RR）を取得してエラー判定（実行登録番号で特定）
 set "RETURN_CODE1="
-for /f "delims=" %%A in ('ajsshow -F %SCHEDULER_SERVICE% -B !EXEC_REG_NUM! -i "%%RR" "%JOB_PATH1%" 2^>^&1') do (
+for /f "delims=" %%A in ('ajsshow -F %SCHEDULER_SERVICE% -g 1 -i "%%RR" "%JOB_PATH1%" 2^>^&1') do (
     if not defined RETURN_CODE1 set "RETURN_CODE1=%%A"
 )
 
@@ -232,7 +228,7 @@ if not "!RETURN_CODE1!"=="0" (
 
 rem 標準出力ファイルパスを取得（実行登録番号で特定）
 set "LOG_FILE_PATH1="
-for /f "delims=" %%A in ('ajsshow -F %SCHEDULER_SERVICE% -B !EXEC_REG_NUM! -i "%%so" "%JOB_PATH1%" 2^>^&1') do (
+for /f "delims=" %%A in ('ajsshow -F %SCHEDULER_SERVICE% -g 1 -i "%%so" "%JOB_PATH1%" 2^>^&1') do (
     if not defined LOG_FILE_PATH1 set "LOG_FILE_PATH1=%%A"
 )
 
@@ -281,7 +277,7 @@ echo.
 
 rem まず実終了コード（%%RR）を取得してエラー判定（実行登録番号で特定）
 set "RETURN_CODE2="
-for /f "delims=" %%A in ('ajsshow -F %SCHEDULER_SERVICE% -B !EXEC_REG_NUM! -i "%%RR" "%JOB_PATH2%" 2^>^&1') do (
+for /f "delims=" %%A in ('ajsshow -F %SCHEDULER_SERVICE% -g 1 -i "%%RR" "%JOB_PATH2%" 2^>^&1') do (
     if not defined RETURN_CODE2 set "RETURN_CODE2=%%A"
 )
 
@@ -301,7 +297,7 @@ if not "!RETURN_CODE2!"=="0" (
 
 rem 標準出力ファイルパスを取得（実行登録番号で特定）
 set "LOG_FILE_PATH2="
-for /f "delims=" %%A in ('ajsshow -F %SCHEDULER_SERVICE% -B !EXEC_REG_NUM! -i "%%so" "%JOB_PATH2%" 2^>^&1') do (
+for /f "delims=" %%A in ('ajsshow -F %SCHEDULER_SERVICE% -g 1 -i "%%so" "%JOB_PATH2%" 2^>^&1') do (
     if not defined LOG_FILE_PATH2 set "LOG_FILE_PATH2=%%A"
 )
 
