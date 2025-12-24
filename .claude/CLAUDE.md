@@ -705,6 +705,53 @@ $ git checkout main && git pull
    - [ajsplan コマンドリファレンス](https://itpfdoc.hitachi.co.jp/manuals/3021/30213L4920/AJSO0122.HTM)
    - [jpqjobget コマンドリファレンス](https://itpfdoc.hitachi.co.jp/manuals/3021/30213b1920/AJSO0194.HTM)
 
+### JP1/AJS3 Web Console REST API
+
+JP1/AJS3 Web Console REST APIを使用する場合は、**必ず以下のドキュメントを事前に読むこと**。
+
+```
+必ず読む: JP1_AJS3_REST_API.md（リポジトリルート）
+```
+
+#### ドキュメント済みAPI一覧
+
+| API | 用途 | ドキュメント更新日 |
+|-----|------|-------------------|
+| ユニット一覧取得API (7.1.1) | ユニット状態・execID取得 | 2024/12 |
+| 実行結果詳細取得API (7.1.3) | 実行結果詳細（標準エラー出力）取得 | 2024/12 |
+
+#### 未ドキュメントAPI使用時のルール（必須）
+
+**重要**: 上記以外のREST APIを使用する場合は、**必ずユーザーに公式ドキュメントの提供を求めること**。
+
+```
+このAPI（例: ユニット定義取得API）は現在ドキュメント化されていません。
+正確な実装のため、公式ドキュメントを提供していただけますか？
+
+参考: https://itpfdoc.hitachi.co.jp/manuals/3021/30213b1920/AJSO0280.HTM
+```
+
+**理由**:
+- REST APIはリクエスト形式・レスポンス構造が複雑
+- パラメータやURLエンコードの仕様を正確に把握する必要がある
+- 誤った実装はAPI呼び出し失敗やデータ取得エラーの原因となる
+
+#### REST API使用時の注意事項
+
+1. **認証ヘッダー**
+   - `X-AJS-Authorization`: Base64エンコードした `{JP1ユーザー}:{パスワード}`
+
+2. **URLエンコード**
+   - パス内の特殊文字はエンコードが必要
+   - `/` → `%2F`, `@` → `%40`
+
+3. **レスポンス構造**
+   - statuses API: `statuses[].definition.unitName`, `statuses[].unitStatus.execID`
+   - execResultDetails API: `execResultDetails`（最大5MB）
+
+4. **公式ドキュメント**
+   - [JP1/AJS3 Web Console REST API](https://itpfdoc.hitachi.co.jp/manuals/3021/30213b1920/AJSO0280.HTM)
+
 ## Tools Currently Available
 
 ### Batch Scripts (.bat)
