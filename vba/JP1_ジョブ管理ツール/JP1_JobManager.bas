@@ -1684,6 +1684,13 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
     script = script & "  # 実行登録番号を取得（ajsentry後の最新世代）" & vbCrLf
     script = script & "  $execRegResult = Invoke-JP1Command 'ajsshow.exe' @('-F', '" & config("SchedulerService") & "', '-g', '1', '-i', '%ll', '" & jobnetPath & "')" & vbCrLf
     script = script & "  $execRegNum = ($execRegResult.Output -join '').Trim()" & vbCrLf
+    script = script & "  # 実行登録番号が空または不正な場合のチェック" & vbCrLf
+    script = script & "  if (-not $execRegNum -or $execRegNum -match 'KAVS\d+-E') {" & vbCrLf
+    script = script & "    Write-Log '[ERROR] 実行登録番号の取得に失敗しました'" & vbCrLf
+    script = script & "    Write-Output ""RESULT_STATUS:実行登録番号取得失敗""" & vbCrLf
+    script = script & "    Write-Output ""RESULT_MESSAGE:$($execRegResult.Output -join ' ')""" & vbCrLf
+    script = script & "    exit" & vbCrLf
+    script = script & "  }" & vbCrLf
     script = script & "  if ($execRegNum -eq $beforeExecRegNum) {" & vbCrLf
     script = script & "    Write-Log '[ERROR] 実行登録番号が変化していません。ジョブが実行されませんでした。'" & vbCrLf
     script = script & "    Write-Output ""RESULT_STATUS:実行失敗""" & vbCrLf
@@ -1729,9 +1736,13 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
 
         ' 詳細情報取得（ajsshowで実行結果を確認）
         script = script & "  # 詳細情報取得" & vbCrLf
-        script = script & "  $detailStatusResult = Invoke-JP1Command 'ajsshow.exe' @('-F', '" & config("SchedulerService") & "', '-B', $execRegNum, '" & jobnetPath & "')" & vbCrLf
+        script = script & "  $detailStatusResult = Invoke-JP1Command 'ajsshow.exe' @('-F', '" & config("SchedulerService") & "', '-B', $execRegNum, '-i', '%JJ %CC %SS %EE', '" & jobnetPath & "')" & vbCrLf
         script = script & "  $lastStatusStr = $detailStatusResult.Output -join ' '" & vbCrLf
         script = script & "  Write-Log ""詳細ステータス: $lastStatusStr""" & vbCrLf
+        script = script & "  # 詳細取得エラーチェック" & vbCrLf
+        script = script & "  if ($detailStatusResult.ExitCode -ne 0 -or $lastStatusStr -match 'KAVS\d+-E') {" & vbCrLf
+        script = script & "    Write-Log ""[ERROR] 詳細情報取得エラー: $lastStatusStr""" & vbCrLf
+        script = script & "  }" & vbCrLf
         script = script & vbCrLf
 
         ' 時間抽出（共通）
