@@ -226,6 +226,18 @@ if not "!RETURN_CODE1!"=="0" (
     echo   [警告] ジョブ1は異常終了しています
 )
 
+rem 開始時間・終了時間を取得
+set "START_TIME1="
+set "END_TIME1="
+for /f "tokens=1,2" %%A in ('ajsshow -F %SCHEDULER_SERVICE% -g 1 -i "%%SS %%EE" "%JOB_PATH1%" 2^>^&1') do (
+    if not defined START_TIME1 (
+        set "START_TIME1=%%A"
+        set "END_TIME1=%%B"
+    )
+)
+echo   開始時間: !START_TIME1!
+echo   終了時間: !END_TIME1!
+
 rem 標準出力ファイルパスを取得（実行登録番号で特定）
 set "LOG_FILE_PATH1="
 for /f "delims=" %%A in ('ajsshow -F %SCHEDULER_SERVICE% -g 1 -i "%%so" "%JOB_PATH1%" 2^>^&1') do (
@@ -257,9 +269,46 @@ echo [OK] ジョブ1のログを出力しました: %OUTPUT_FILE1%
 echo.
 
 rem ======================================================================
-rem ■ ここに入れたい処理を記述してください
+rem ■ ログをExcelに貼り付け
 rem ======================================================================
 
+rem PowerShellでExcelにログ内容を貼り付け
+powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+    "$logFile = '%LOG_FILE_PATH1%'; ^
+    $jobPath = '%JOB_PATH1%'; ^
+    $startTime = '%START_TIME1%'; ^
+    $endTime = '%END_TIME1%'; ^
+    $returnCode = '%RETURN_CODE1%'; ^
+    if (Test-Path $logFile) { ^
+        $logContent = Get-Content $logFile -Encoding Default -Raw; ^
+        $excel = New-Object -ComObject Excel.Application; ^
+        $excel.Visible = $true; ^
+        $workbook = $excel.Workbooks.Add(); ^
+        $sheet = $workbook.Worksheets.Item(1); ^
+        $sheet.Name = 'ジョブ1ログ'; ^
+        $sheet.Cells.Item(1,1) = 'ジョブパス:'; ^
+        $sheet.Cells.Item(1,2) = $jobPath; ^
+        $sheet.Cells.Item(2,1) = '開始時間:'; ^
+        $sheet.Cells.Item(2,2) = $startTime; ^
+        $sheet.Cells.Item(3,1) = '終了時間:'; ^
+        $sheet.Cells.Item(3,2) = $endTime; ^
+        $sheet.Cells.Item(4,1) = '終了コード:'; ^
+        $sheet.Cells.Item(4,2) = $returnCode; ^
+        $sheet.Cells.Item(6,1) = '【ログ内容】'; ^
+        $row = 7; ^
+        foreach ($line in $logContent -split \"`n\") { ^
+            $sheet.Cells.Item($row, 1) = $line; ^
+            $row++; ^
+        } ^
+        $sheet.Columns.Item(1).ColumnWidth = 15; ^
+        $sheet.Columns.Item(2).ColumnWidth = 80; ^
+        [System.Runtime.Interopservices.Marshal]::ReleaseComObject($sheet) | Out-Null; ^
+        [System.Runtime.Interopservices.Marshal]::ReleaseComObject($workbook) | Out-Null; ^
+        [System.Runtime.Interopservices.Marshal]::ReleaseComObject($excel) | Out-Null; ^
+        Write-Host '[OK] Excelにログを貼り付けました'; ^
+    } else { ^
+        Write-Host '[情報] ログファイルが存在しません'; ^
+    }"
 
 rem ======================================================================
 
@@ -295,6 +344,18 @@ if not "!RETURN_CODE2!"=="0" (
     echo   [警告] ジョブ2は異常終了しています
 )
 
+rem 開始時間・終了時間を取得
+set "START_TIME2="
+set "END_TIME2="
+for /f "tokens=1,2" %%A in ('ajsshow -F %SCHEDULER_SERVICE% -g 1 -i "%%SS %%EE" "%JOB_PATH2%" 2^>^&1') do (
+    if not defined START_TIME2 (
+        set "START_TIME2=%%A"
+        set "END_TIME2=%%B"
+    )
+)
+echo   開始時間: !START_TIME2!
+echo   終了時間: !END_TIME2!
+
 rem 標準出力ファイルパスを取得（実行登録番号で特定）
 set "LOG_FILE_PATH2="
 for /f "delims=" %%A in ('ajsshow -F %SCHEDULER_SERVICE% -g 1 -i "%%so" "%JOB_PATH2%" 2^>^&1') do (
@@ -326,9 +387,46 @@ echo [OK] ジョブ2のログを出力しました: %OUTPUT_FILE2%
 echo.
 
 rem ======================================================================
-rem ■ ここに入れたい処理を記述してください
+rem ■ ログをExcelに貼り付け
 rem ======================================================================
 
+rem PowerShellでExcelにログ内容を貼り付け
+powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+    "$logFile = '%LOG_FILE_PATH2%'; ^
+    $jobPath = '%JOB_PATH2%'; ^
+    $startTime = '%START_TIME2%'; ^
+    $endTime = '%END_TIME2%'; ^
+    $returnCode = '%RETURN_CODE2%'; ^
+    if (Test-Path $logFile) { ^
+        $logContent = Get-Content $logFile -Encoding Default -Raw; ^
+        $excel = New-Object -ComObject Excel.Application; ^
+        $excel.Visible = $true; ^
+        $workbook = $excel.Workbooks.Add(); ^
+        $sheet = $workbook.Worksheets.Item(1); ^
+        $sheet.Name = 'ジョブ2ログ'; ^
+        $sheet.Cells.Item(1,1) = 'ジョブパス:'; ^
+        $sheet.Cells.Item(1,2) = $jobPath; ^
+        $sheet.Cells.Item(2,1) = '開始時間:'; ^
+        $sheet.Cells.Item(2,2) = $startTime; ^
+        $sheet.Cells.Item(3,1) = '終了時間:'; ^
+        $sheet.Cells.Item(3,2) = $endTime; ^
+        $sheet.Cells.Item(4,1) = '終了コード:'; ^
+        $sheet.Cells.Item(4,2) = $returnCode; ^
+        $sheet.Cells.Item(6,1) = '【ログ内容】'; ^
+        $row = 7; ^
+        foreach ($line in $logContent -split \"`n\") { ^
+            $sheet.Cells.Item($row, 1) = $line; ^
+            $row++; ^
+        } ^
+        $sheet.Columns.Item(1).ColumnWidth = 15; ^
+        $sheet.Columns.Item(2).ColumnWidth = 80; ^
+        [System.Runtime.Interopservices.Marshal]::ReleaseComObject($sheet) | Out-Null; ^
+        [System.Runtime.Interopservices.Marshal]::ReleaseComObject($workbook) | Out-Null; ^
+        [System.Runtime.Interopservices.Marshal]::ReleaseComObject($excel) | Out-Null; ^
+        Write-Host '[OK] Excelにログを貼り付けました'; ^
+    } else { ^
+        Write-Host '[情報] ログファイルが存在しません'; ^
+    }"
 
 rem ======================================================================
 
