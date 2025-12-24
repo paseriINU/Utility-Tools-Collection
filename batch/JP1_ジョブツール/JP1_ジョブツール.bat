@@ -138,10 +138,10 @@ echo ジョブネット起動中...
 echo ================================================================
 echo.
 
-rem ajsentry実行前に現在の最新実行登録番号を取得（比較用）
-set "BEFORE_EXEC_REG_NUM="
-for /f "delims=" %%A in ('ajsshow -F %SCHEDULER_SERVICE% -g 1 -i "%%ll" "%JOBNET_PATH%" 2^>^&1') do (
-    if not defined BEFORE_EXEC_REG_NUM set "BEFORE_EXEC_REG_NUM=%%A"
+rem ajsentry実行前に現在の最新実行IDを取得（比較用）
+set "BEFORE_EXEC_ID="
+for /f "delims=" %%A in ('ajsshow -F %SCHEDULER_SERVICE% -g 1 -i "%%##" "%JOBNET_PATH%" 2^>^&1') do (
+    if not defined BEFORE_EXEC_ID set "BEFORE_EXEC_ID=%%A"
 )
 
 rem ajsentry実行（-n: 即時実行, -w: 完了待ち）
@@ -152,18 +152,22 @@ ajsentry -F %SCHEDULER_SERVICE% -n -w %JOBNET_PATH%
 set "AJSENTRY_EXITCODE=%ERRORLEVEL%"
 echo.
 
-rem 実行登録番号を取得（ajsentry後の最新世代）
+rem 実行IDと実行登録番号を取得（ajsentry後の最新世代）
+set "EXEC_ID="
 set "EXEC_REG_NUM="
-for /f "delims=" %%A in ('ajsshow -F %SCHEDULER_SERVICE% -g 1 -i "%%ll" "%JOBNET_PATH%" 2^>^&1') do (
-    if not defined EXEC_REG_NUM set "EXEC_REG_NUM=%%A"
+for /f "tokens=1,2" %%A in ('ajsshow -F %SCHEDULER_SERVICE% -g 1 -i "%%## %%ll" "%JOBNET_PATH%" 2^>^&1') do (
+    if not defined EXEC_ID (
+        set "EXEC_ID=%%A"
+        set "EXEC_REG_NUM=%%B"
+    )
 )
 
-rem 実行登録番号が変わったことを確認（自分が起動したジョブであることを保証）
-if "!EXEC_REG_NUM!"=="!BEFORE_EXEC_REG_NUM!" (
-    echo [エラー] 実行登録番号が変化していません。ジョブが実行されませんでした。
+rem 実行IDが変わったことを確認（自分が起動したジョブであることを保証）
+if "!EXEC_ID!"=="!BEFORE_EXEC_ID!" (
+    echo [エラー] 実行IDが変化していません。ジョブが実行されませんでした。
     goto :ERROR_EXIT
 )
-echo   実行登録番号: !EXEC_REG_NUM!
+echo   実行ID: !EXEC_ID! / 実行登録番号: !EXEC_REG_NUM!
 echo.
 
 rem ajsentry終了後、ajsshowで1回だけ結果を取得

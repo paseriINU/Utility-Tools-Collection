@@ -1670,10 +1670,10 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
         script = script & vbCrLf
     End If
 
-    ' ajsentry実行前に現在の最新実行登録番号を取得（比較用）
-    script = script & "  # ajsentry実行前の実行登録番号を取得（比較用）" & vbCrLf
-    script = script & "  $beforeRegResult = Invoke-JP1Command 'ajsshow.exe' @('-F', '" & config("SchedulerService") & "', '-g', '1', '-i', '%ll', '" & jobnetPath & "')" & vbCrLf
-    script = script & "  $beforeExecRegNum = ($beforeRegResult.Output -join '').Trim()" & vbCrLf
+    ' ajsentry実行前に現在の最新実行IDを取得（比較用）
+    script = script & "  # ajsentry実行前の実行IDを取得（比較用）" & vbCrLf
+    script = script & "  $beforeIdResult = Invoke-JP1Command 'ajsshow.exe' @('-F', '" & config("SchedulerService") & "', '-g', '1', '-i', '%##', '" & jobnetPath & "')" & vbCrLf
+    script = script & "  $beforeExecId = ($beforeIdResult.Output -join '').Trim()" & vbCrLf
     script = script & vbCrLf
 
     ' ajsentry実行（共通）-n: 即時実行, -w: 完了待ち
@@ -1694,24 +1694,27 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
     script = script & "    exit" & vbCrLf
     script = script & "  }" & vbCrLf
     script = script & vbCrLf
-    script = script & "  # 実行登録番号を取得（ajsentry後の最新世代）" & vbCrLf
-    script = script & "  $execRegResult = Invoke-JP1Command 'ajsshow.exe' @('-F', '" & config("SchedulerService") & "', '-g', '1', '-i', '%ll', '" & jobnetPath & "')" & vbCrLf
-    script = script & "  $execRegNum = ($execRegResult.Output -join '').Trim()" & vbCrLf
-    script = script & "  # 実行登録番号が空または不正な場合のチェック" & vbCrLf
-    script = script & "  if (-not $execRegNum -or $execRegNum -match 'KAVS\d+-E') {" & vbCrLf
-    script = script & "    Write-Log '[ERROR] 実行登録番号の取得に失敗しました'" & vbCrLf
-    script = script & "    Write-Output ""RESULT_STATUS:実行登録番号取得失敗""" & vbCrLf
-    script = script & "    Write-Output ""RESULT_MESSAGE:$($execRegResult.Output -join ' ')""" & vbCrLf
+    script = script & "  # 実行IDと実行登録番号を取得（ajsentry後の最新世代）" & vbCrLf
+    script = script & "  $execIdResult = Invoke-JP1Command 'ajsshow.exe' @('-F', '" & config("SchedulerService") & "', '-g', '1', '-i', '%## %ll', '" & jobnetPath & "')" & vbCrLf
+    script = script & "  $execIdOutput = ($execIdResult.Output -join '').Trim()" & vbCrLf
+    script = script & "  # 実行IDが空または不正な場合のチェック" & vbCrLf
+    script = script & "  if (-not $execIdOutput -or $execIdOutput -match 'KAVS\d+-E') {" & vbCrLf
+    script = script & "    Write-Log '[ERROR] 実行ID/実行登録番号の取得に失敗しました'" & vbCrLf
+    script = script & "    Write-Output ""RESULT_STATUS:実行ID取得失敗""" & vbCrLf
+    script = script & "    Write-Output ""RESULT_MESSAGE:$($execIdResult.Output -join ' ')""" & vbCrLf
     script = script & "    Write-Output ""RESULT_LOGPATH:$logFile""" & vbCrLf
     script = script & "    exit" & vbCrLf
     script = script & "  }" & vbCrLf
-    script = script & "  Write-Log ""実行登録番号: $execRegNum""" & vbCrLf
+    script = script & "  $execIdParts = $execIdOutput -split '\s+'" & vbCrLf
+    script = script & "  $execId = $execIdParts[0]" & vbCrLf
+    script = script & "  $execRegNum = $execIdParts[1]" & vbCrLf
+    script = script & "  Write-Log ""実行ID: $execId / 実行登録番号: $execRegNum""" & vbCrLf
     script = script & vbCrLf
-    script = script & "  # 実行登録番号が変わったことを確認（今回の実行であることを保証）" & vbCrLf
-    script = script & "  if ($execRegNum -eq $beforeExecRegNum) {" & vbCrLf
-    script = script & "    Write-Log '[ERROR] 実行登録番号が変化していません。ジョブが実行されませんでした。'" & vbCrLf
-    script = script & "    Write-Output ""RESULT_STATUS:実行登録番号未変化""" & vbCrLf
-    script = script & "    Write-Output ""RESULT_MESSAGE:実行登録番号が変化していません（前回: $beforeExecRegNum）""" & vbCrLf
+    script = script & "  # 実行IDが変わったことを確認（今回の実行であることを保証）" & vbCrLf
+    script = script & "  if ($execId -eq $beforeExecId) {" & vbCrLf
+    script = script & "    Write-Log '[ERROR] 実行IDが変化していません。ジョブが実行されませんでした。'" & vbCrLf
+    script = script & "    Write-Output ""RESULT_STATUS:実行ID未変化""" & vbCrLf
+    script = script & "    Write-Output ""RESULT_MESSAGE:実行IDが変化していません（前回: $beforeExecId）""" & vbCrLf
     script = script & "    Write-Output ""RESULT_LOGPATH:$logFile""" & vbCrLf
     script = script & "    exit" & vbCrLf
     script = script & "  }" & vbCrLf
