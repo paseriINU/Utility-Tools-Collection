@@ -34,6 +34,20 @@ rem ログ出力先フォルダ（バッチファイルと同じ場所に出力�
 set "OUTPUT_DIR=%~dp0"
 
 rem ----------------------------------------------------------------------------
+rem Excel貼り付け設定
+rem ----------------------------------------------------------------------------
+rem ★★★ Excelファイル名を指定してください ★★★
+set "EXCEL_FILE_NAME=ログ貼り付け用.xlsx"
+
+rem ジョブ1のログ貼り付け先（シート名とセル位置）
+set "JOB1_SHEET_NAME=Sheet1"
+set "JOB1_PASTE_CELL=A1"
+
+rem ジョブ2のログ貼り付け先（シート名とセル位置）
+set "JOB2_SHEET_NAME=Sheet2"
+set "JOB2_PASTE_CELL=A1"
+
+rem ----------------------------------------------------------------------------
 rem 選択肢1: TEST
 rem ----------------------------------------------------------------------------
 set "MENU1_NAME=TEST"
@@ -275,40 +289,28 @@ rem ======================================================================
 rem PowerShellでExcelにログ内容を貼り付け
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
     "$logFile = '%LOG_FILE_PATH1%'; ^
-    $jobPath = '%JOB_PATH1%'; ^
-    $startTime = '%START_TIME1%'; ^
-    $endTime = '%END_TIME1%'; ^
-    $returnCode = '%RETURN_CODE1%'; ^
-    if (Test-Path $logFile) { ^
-        $logContent = Get-Content $logFile -Encoding Default -Raw; ^
-        $excel = New-Object -ComObject Excel.Application; ^
-        $excel.Visible = $true; ^
-        $workbook = $excel.Workbooks.Add(); ^
-        $sheet = $workbook.Worksheets.Item(1); ^
-        $sheet.Name = 'ジョブ1ログ'; ^
-        $sheet.Cells.Item(1,1) = 'ジョブパス:'; ^
-        $sheet.Cells.Item(1,2) = $jobPath; ^
-        $sheet.Cells.Item(2,1) = '開始時間:'; ^
-        $sheet.Cells.Item(2,2) = $startTime; ^
-        $sheet.Cells.Item(3,1) = '終了時間:'; ^
-        $sheet.Cells.Item(3,2) = $endTime; ^
-        $sheet.Cells.Item(4,1) = '終了コード:'; ^
-        $sheet.Cells.Item(4,2) = $returnCode; ^
-        $sheet.Cells.Item(6,1) = '【ログ内容】'; ^
-        $row = 7; ^
-        foreach ($line in $logContent -split \"`n\") { ^
-            $sheet.Cells.Item($row, 1) = $line; ^
-            $row++; ^
-        } ^
-        $sheet.Columns.Item(1).ColumnWidth = 15; ^
-        $sheet.Columns.Item(2).ColumnWidth = 80; ^
-        [System.Runtime.Interopservices.Marshal]::ReleaseComObject($sheet) | Out-Null; ^
-        [System.Runtime.Interopservices.Marshal]::ReleaseComObject($workbook) | Out-Null; ^
-        [System.Runtime.Interopservices.Marshal]::ReleaseComObject($excel) | Out-Null; ^
-        Write-Host '[OK] Excelにログを貼り付けました'; ^
-    } else { ^
+    $excelPath = '%~dp0%EXCEL_FILE_NAME%'; ^
+    $sheetName = '%JOB1_SHEET_NAME%'; ^
+    $pasteCell = '%JOB1_PASTE_CELL%'; ^
+    if (-not (Test-Path $logFile)) { ^
         Write-Host '[情報] ログファイルが存在しません'; ^
-    }"
+        exit; ^
+    } ^
+    if (-not (Test-Path $excelPath)) { ^
+        Write-Host '[エラー] Excelファイルが見つかりません:' $excelPath; ^
+        exit; ^
+    } ^
+    $logContent = Get-Content $logFile -Encoding Default -Raw; ^
+    $excel = New-Object -ComObject Excel.Application; ^
+    $excel.Visible = $true; ^
+    $workbook = $excel.Workbooks.Open($excelPath); ^
+    $sheet = $workbook.Worksheets.Item($sheetName); ^
+    $sheet.Range($pasteCell).Value2 = $logContent; ^
+    $workbook.Save(); ^
+    [System.Runtime.Interopservices.Marshal]::ReleaseComObject($sheet) | Out-Null; ^
+    [System.Runtime.Interopservices.Marshal]::ReleaseComObject($workbook) | Out-Null; ^
+    [System.Runtime.Interopservices.Marshal]::ReleaseComObject($excel) | Out-Null; ^
+    Write-Host '[OK] Excelにログを貼り付けました:' $sheetName $pasteCell"
 
 rem ======================================================================
 
@@ -393,40 +395,28 @@ rem ======================================================================
 rem PowerShellでExcelにログ内容を貼り付け
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
     "$logFile = '%LOG_FILE_PATH2%'; ^
-    $jobPath = '%JOB_PATH2%'; ^
-    $startTime = '%START_TIME2%'; ^
-    $endTime = '%END_TIME2%'; ^
-    $returnCode = '%RETURN_CODE2%'; ^
-    if (Test-Path $logFile) { ^
-        $logContent = Get-Content $logFile -Encoding Default -Raw; ^
-        $excel = New-Object -ComObject Excel.Application; ^
-        $excel.Visible = $true; ^
-        $workbook = $excel.Workbooks.Add(); ^
-        $sheet = $workbook.Worksheets.Item(1); ^
-        $sheet.Name = 'ジョブ2ログ'; ^
-        $sheet.Cells.Item(1,1) = 'ジョブパス:'; ^
-        $sheet.Cells.Item(1,2) = $jobPath; ^
-        $sheet.Cells.Item(2,1) = '開始時間:'; ^
-        $sheet.Cells.Item(2,2) = $startTime; ^
-        $sheet.Cells.Item(3,1) = '終了時間:'; ^
-        $sheet.Cells.Item(3,2) = $endTime; ^
-        $sheet.Cells.Item(4,1) = '終了コード:'; ^
-        $sheet.Cells.Item(4,2) = $returnCode; ^
-        $sheet.Cells.Item(6,1) = '【ログ内容】'; ^
-        $row = 7; ^
-        foreach ($line in $logContent -split \"`n\") { ^
-            $sheet.Cells.Item($row, 1) = $line; ^
-            $row++; ^
-        } ^
-        $sheet.Columns.Item(1).ColumnWidth = 15; ^
-        $sheet.Columns.Item(2).ColumnWidth = 80; ^
-        [System.Runtime.Interopservices.Marshal]::ReleaseComObject($sheet) | Out-Null; ^
-        [System.Runtime.Interopservices.Marshal]::ReleaseComObject($workbook) | Out-Null; ^
-        [System.Runtime.Interopservices.Marshal]::ReleaseComObject($excel) | Out-Null; ^
-        Write-Host '[OK] Excelにログを貼り付けました'; ^
-    } else { ^
+    $excelPath = '%~dp0%EXCEL_FILE_NAME%'; ^
+    $sheetName = '%JOB2_SHEET_NAME%'; ^
+    $pasteCell = '%JOB2_PASTE_CELL%'; ^
+    if (-not (Test-Path $logFile)) { ^
         Write-Host '[情報] ログファイルが存在しません'; ^
-    }"
+        exit; ^
+    } ^
+    if (-not (Test-Path $excelPath)) { ^
+        Write-Host '[エラー] Excelファイルが見つかりません:' $excelPath; ^
+        exit; ^
+    } ^
+    $logContent = Get-Content $logFile -Encoding Default -Raw; ^
+    $excel = New-Object -ComObject Excel.Application; ^
+    $excel.Visible = $true; ^
+    $workbook = $excel.Workbooks.Open($excelPath); ^
+    $sheet = $workbook.Worksheets.Item($sheetName); ^
+    $sheet.Range($pasteCell).Value2 = $logContent; ^
+    $workbook.Save(); ^
+    [System.Runtime.Interopservices.Marshal]::ReleaseComObject($sheet) | Out-Null; ^
+    [System.Runtime.Interopservices.Marshal]::ReleaseComObject($workbook) | Out-Null; ^
+    [System.Runtime.Interopservices.Marshal]::ReleaseComObject($excel) | Out-Null; ^
+    Write-Host '[OK] Excelにログを貼り付けました:' $sheetName $pasteCell"
 
 rem ======================================================================
 
