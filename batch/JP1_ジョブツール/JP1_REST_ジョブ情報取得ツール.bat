@@ -184,13 +184,15 @@ try {
     }
 
     # statuses配列からexecIDを抽出
+    # レスポンス構造: statuses[].definition.unitName, statuses[].unitStatus.execID, statuses[].unitStatus.status
     if ($jsonData.statuses -and $jsonData.statuses.Count -gt 0) {
         Write-Host ""
         Write-Host "取得したユニット一覧:" -ForegroundColor Green
         foreach ($unit in $jsonData.statuses) {
-            $path = $unit.path
-            $execId = $unit.execId
-            $status = $unit.status
+            # ドキュメントに基づく正しいパス取得
+            $path = $unit.definition.unitName
+            $execId = $unit.unitStatus.execID
+            $status = $unit.unitStatus.status
             Write-Host "  パス: $path | execID: $execId | 状態: $status"
             if ($execId) {
                 $execIdList += @{ Path = $path; ExecId = $execId }

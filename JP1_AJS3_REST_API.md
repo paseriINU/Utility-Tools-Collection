@@ -23,32 +23,150 @@
 
 ## API一覧
 
-### 1. ユニット状態取得 (statuses)
+### 7.1.1 ユニット一覧の取得API
 
-実行登録中のユニットの状態を取得します。
+指定したユニットまたはユニット配下の，ジョブグループ，ジョブネット，およびジョブの情報を取得します。
 
-**エンドポイント:**
+#### 実行権限
+
+ログインしたJP1ユーザーが，次のどれかのJP1権限を持つ必要があります：
+- JP1_AJS_Admin権限
+- JP1_AJS_Manager権限
+- JP1_AJS_Editor権限
+- JP1_AJS_Operator権限
+- JP1_AJS_Guest権限
+
+#### リクエスト形式
+
 ```
-GET /ajs/api/v1/objects/statuses?manager={manager}&serviceName={serviceName}&location={path}&mode=search
+GET /ajs/api/v1/objects/statuses?query
 ```
 
-**レスポンス例:**
+#### パラメータ一覧
+
+| パラメータ | 説明 | 必須/任意 |
+|-----------|------|----------|
+| mode | 固定で「search」を指定 | 必須 |
+| manager | マネージャーホスト名またはIPアドレス（1〜255バイト） | 必須 |
+| serviceName | スケジューラーサービス名（1〜30バイト） | 必須 |
+| location | 取得したいユニットの上位ユニットのパス（1〜930バイト） | 必須 |
+| searchLowerUnits | 直下1階層(NO)か配下すべて(YES)か | 任意（デフォルト: NO） |
+| searchTarget | 定義のみ(DEFINITION)か定義と状態(DEFINITION_AND_STATUS)か | 任意（デフォルト: DEFINITION_AND_STATUS） |
+| unitName | 取得したいユニットの名称 | 任意 |
+| unitNameMatchMethods | ユニット名の比較方法（EQ/BW/EW/NE/CO/NC/RE/NO） | 任意（デフォルト: NO） |
+| execID | 実行ID（@[mmmm]{A〜Z}nnnn形式、例: @10A200） | 任意 |
+| unitType | ユニット種別（GROUP/ROOT/NET/JOB/NO） | 任意（デフォルト: NO） |
+| generation | 世代（STATUS/EXECID/PERIOD） | 任意（デフォルト: STATUS） |
+| periodBegin | 世代の開始日時（YYYY-MM-DDThh:mm形式） | 任意 |
+| periodEnd | 世代の終了日時（YYYY-MM-DDThh:mm形式） | 任意 |
+| status | ユニットの状態 | 任意（デフォルト: NO） |
+| delayStatus | 遅延状態 | 任意（デフォルト: NO） |
+| holdPlan | 保留予定の有無 | 任意（デフォルト: NO） |
+| unitComment | ユニットのコメント | 任意 |
+| unitCommentMatchMethods | コメントの比較方法 | 任意（デフォルト: NO） |
+| execHost | 実行ホスト | 任意 |
+| execHostMatchMethods | 実行ホスト名の比較方法 | 任意（デフォルト: NO） |
+| releaseID | リリースID（1〜30バイト） | 任意 |
+| releaseInfoSearchMethods | リリース情報の取得方法 | 任意（デフォルト: NO） |
+
+#### ステータスコード
+
+| コード | テキスト | 説明 |
+|--------|---------|------|
+| 200 | OK | ユニット一覧の取得に成功 |
+| 400 | Bad Request | クエリ文字列が不正 |
+| 401 | Unauthorized | 認証が必要 |
+| 403 | Forbidden | 実行権限がない |
+| 404 | Not found | リソースがない |
+| 409 | Conflict | リクエストは現在のリソース状態と矛盾 |
+| 412 | Precondition failed | Web Consoleサーバが利用できない |
+| 500 | Server-side error | サーバ処理エラー |
+
+#### レスポンス形式
+
+```json
+{
+  "statuses": [ステータス監視のリソース,...],
+  "all": すべての情報を取得できたかどうか
+}
+```
+
+#### レスポンス詳細
+
+| メンバー | データ型 | 説明 |
+|---------|---------|------|
+| statuses | object[] | ステータス監視のリソースの配列（最大1,000件） |
+| all | boolean | 取得件数が1,000件を超えていない場合true |
+
+#### レスポンス例
+
 ```json
 {
   "statuses": [
     {
-      "path": "/jobnet1",
-      "execId": "@A100",
-      "status": "running"
+      "definition": {
+        "owner": "jp1admin",
+        "customJobType": "",
+        "registerStatus": "YES",
+        "rootJobnetName": "/JobGroup/Jobnet",
+        "recoveryUnit": false,
+        "unitType": "ROOTNET",
+        "unitComment": "",
+        "simpleUnitName": "Jobnet",
+        "parameters": "",
+        "execAgent": "",
+        "execFileName": "",
+        "wait": false,
+        "jobnetReleaseUnit": false,
+        "jp1ResourceGroup": "",
+        "unitName": "/JobGroup/Jobnet",
+        "unitID": 1560
+      },
+      "release": null,
+      "unitStatus": {
+        "status": "RUNNING",
+        "execHost": "",
+        "startDelayStatus": "NO",
+        "nestStartDelayStatus": "NO",
+        "endDelayStatus": "NO",
+        "nestEndDelayStatus": "NO",
+        "startDelayTime": "",
+        "endDelayTime": "",
+        "changeType": "NO",
+        "registerTime": "",
+        "jobNumber": -1,
+        "retCode": "",
+        "simpleUnitName": "Jobnet",
+        "schStartTime": "2015-09-02T00:00:00+09:00",
+        "reStartTime": "",
+        "endTime": "",
+        "holdAttr": "NO",
+        "startTime": "2015-09-02T22:50:28+09:00",
+        "unitName": "/JobGroup/Jobnet",
+        "execID": "@A2959"
+      }
     }
   ],
   "all": true
 }
 ```
 
-**注意:**
-- 実行登録中のジョブのみ対象
-- 即時実行で終了済みのジョブは取得できない
+#### 使用例
+
+ジョブグループ（/JobGroup）直下のユニット一覧（最新状態）を取得する場合：
+
+```
+GET /ajs/api/v1/objects/statuses?mode=search&manager=HOSTM&serviceName=AJSROOT1&location=%2FJobGroup HTTP/1.1
+Host: HOSTW:22252
+Accept-Language: ja
+X-AJS-Authorization: dXNlcjpwYXNzd29yZA==
+```
+
+#### 注意事項
+
+- 条件を満たすユニットが存在しない場合、0件のユニット一覧を返却
+- 取得できるユニットは**最大1,000件**
+- 参照権限がないユニットは取得結果に含まれない
 
 ---
 
