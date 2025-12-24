@@ -55,6 +55,11 @@ $jp1Password = "password"
 # 例: "/main_unit/jobgroup1/daily_batch"
 $unitPath = "/main_unit/jobgroup1/daily_batch"
 
+# 実行ID（execResultDetails API用）
+# 例: "@A100", "@A101" など（ジョブネットの実行登録番号）
+# ※ 実行登録時に割り当てられるID。Viewで確認可能
+$execId = "@A100"
+
 # デバッグモード（$true でレスポンス詳細を表示）
 $debugMode = $true
 
@@ -81,6 +86,7 @@ Write-Host "  Managerホスト       : $managerHost"
 Write-Host "  スケジューラー      : $schedulerService"
 Write-Host "  JP1ユーザー         : $jp1User"
 Write-Host "  ユニットパス        : $unitPath"
+Write-Host "  実行ID              : $execId"
 Write-Host ""
 
 # プロトコル設定
@@ -183,6 +189,10 @@ $apiEndpoints = @(
     @{
         Name = "5. statuses（mode無し）"
         Url = "${baseUrl}/ajs/api/v1/objects/statuses?manager=${managerHost}&serviceName=${schedulerService}&location=${unitPath}"
+    },
+    @{
+        Name = "6. execResultDetails（実行結果詳細 - 標準エラー出力）"
+        Url = "${baseUrl}/ajs/api/v1/objects/statuses/${unitPath}:${execId}/actions/execResultDetails/invoke?manager=${managerHost}&serviceName=${schedulerService}"
     }
 )
 
@@ -208,8 +218,9 @@ Write-Host "========================================" -ForegroundColor Green
 Write-Host ""
 Write-Host "注意:" -ForegroundColor Yellow
 Write-Host "  - 「statuses」APIは実行登録中のジョブのみ対象です"
-Write-Host "  - 即時実行で終了済みのジョブのスプールログはREST APIでは取得できません"
-Write-Host "  - スプールログ取得には ajsshow コマンド（WinRM経由）が必要です"
+Write-Host "  - 「execResultDetails」APIは標準エラー出力を取得します（標準出力ではありません）"
+Write-Host "  - execResultDetails APIを使用するには実行ID（@A100など）が必要です"
+Write-Host "  - 標準出力の取得には ajsshow コマンド（WinRM経由）が必要です"
 Write-Host ""
 
 exit 0
