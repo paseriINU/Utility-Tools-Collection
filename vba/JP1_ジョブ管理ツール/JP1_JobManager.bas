@@ -1681,6 +1681,15 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
     script = script & "  $entryResult = Invoke-JP1Command 'ajsentry.exe' @('-F', '" & config("SchedulerService") & "', '-n', '-w', '" & jobnetPath & "')" & vbCrLf
     script = script & "  Write-Log ""結果: $($entryResult.Output -join ' ')""" & vbCrLf
     script = script & vbCrLf
+    script = script & "  # ajsentryの実行結果をチェック" & vbCrLf
+    script = script & "  $entryOutput = $entryResult.Output -join ' '" & vbCrLf
+    script = script & "  if ($entryResult.ExitCode -ne 0 -or $entryOutput -match 'KAVS\d+-E') {" & vbCrLf
+    script = script & "    Write-Log ""[ERROR] ajsentryエラー: $entryOutput""" & vbCrLf
+    script = script & "    Write-Output ""RESULT_STATUS:実行エラー""" & vbCrLf
+    script = script & "    Write-Output ""RESULT_MESSAGE:$entryOutput""" & vbCrLf
+    script = script & "    exit" & vbCrLf
+    script = script & "  }" & vbCrLf
+    script = script & vbCrLf
     script = script & "  # 実行登録番号を取得（ajsentry後の最新世代）" & vbCrLf
     script = script & "  $execRegResult = Invoke-JP1Command 'ajsshow.exe' @('-F', '" & config("SchedulerService") & "', '-g', '1', '-i', '%ll', '" & jobnetPath & "')" & vbCrLf
     script = script & "  $execRegNum = ($execRegResult.Output -join '').Trim()" & vbCrLf
@@ -1689,12 +1698,6 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
     script = script & "    Write-Log '[ERROR] 実行登録番号の取得に失敗しました'" & vbCrLf
     script = script & "    Write-Output ""RESULT_STATUS:実行登録番号取得失敗""" & vbCrLf
     script = script & "    Write-Output ""RESULT_MESSAGE:$($execRegResult.Output -join ' ')""" & vbCrLf
-    script = script & "    exit" & vbCrLf
-    script = script & "  }" & vbCrLf
-    script = script & "  if ($execRegNum -eq $beforeExecRegNum) {" & vbCrLf
-    script = script & "    Write-Log '[ERROR] 実行登録番号が変化していません。ジョブが実行されませんでした。'" & vbCrLf
-    script = script & "    Write-Output ""RESULT_STATUS:実行失敗""" & vbCrLf
-    script = script & "    Write-Output ""RESULT_MESSAGE:実行登録番号が変化していません""" & vbCrLf
     script = script & "    exit" & vbCrLf
     script = script & "  }" & vbCrLf
     script = script & "  Write-Log ""実行登録番号: $execRegNum""" & vbCrLf
