@@ -122,15 +122,11 @@ Write-Host "========================================" -ForegroundColor Yellow
 Write-Host ""
 
 try {
-    # パスをURLエンコード
-    $encodedPath = [System.Uri]::EscapeDataString($unitPath)
+    # ユニット状態取得API（パスはエンコードせずそのまま使用）
+    $baseUri = "${protocol}://${webConsoleHost}:${webConsolePort}/ajs/api/v1/objects/statuses"
 
-    # ユニット状態取得API
-    $statusUri = "${protocol}://${webConsoleHost}:${webConsolePort}/ajs/api/v1/objects/statuses"
-    $statusUri += "?manager=$managerHost"
-    $statusUri += "&serviceName=$schedulerService"
-    $statusUri += "&location=$encodedPath"
-    $statusUri += "&mode=search"
+    # URLを構築（パスはそのまま使用）
+    $statusUri = "${baseUri}?manager=${managerHost}&serviceName=${schedulerService}&location=${unitPath}&mode=search"
 
     Write-Host "リクエストURL:" -ForegroundColor Cyan
     Write-Host "  $statusUri"
@@ -258,8 +254,12 @@ try {
     } else {
         Write-Host "[情報] レスポンスに units が含まれていません" -ForegroundColor Yellow
         Write-Host ""
-        Write-Host "レスポンス内容:" -ForegroundColor Gray
-        $response | ConvertTo-Json -Depth 5
+        Write-Host "レスポンス全体:" -ForegroundColor Gray
+        $jsonOutput = $response | ConvertTo-Json -Depth 5
+        Write-Host $jsonOutput
+        Write-Host ""
+        Write-Host "APIが異なるレスポンス形式を返しています。" -ForegroundColor Yellow
+        Write-Host "JP1/AJS3のバージョンやWeb Consoleの設定を確認してください。"
     }
 
 } catch {
