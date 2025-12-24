@@ -30,6 +30,8 @@ Public Sub ApplyOrFilter(keywords() As String)
     Dim criteria() As String
     Dim i As Long
     Dim keywordCount As Long
+    Dim tbl As ListObject
+    Dim useTable As Boolean
 
     On Error GoTo ErrorHandler
 
@@ -48,13 +50,31 @@ Public Sub ApplyOrFilter(keywords() As String)
 
     Set dataRange = ws.Range(ws.Cells(1, 1), ws.Cells(lastRow, lastCol))
 
-    ' 既存のフィルターをクリア
-    If ws.AutoFilterMode Then
-        ws.AutoFilterMode = False
-    End If
+    ' テーブル（ListObject）が存在するかチェック
+    useTable = False
+    For Each tbl In ws.ListObjects
+        If Not Intersect(tbl.Range, dataRange) Is Nothing Then
+            ' テーブルが見つかった場合、テーブルのフィルターを使用
+            useTable = True
+            Set dataRange = tbl.Range
+            Exit For
+        End If
+    Next tbl
 
-    ' オートフィルターを有効化
-    dataRange.AutoFilter
+    ' 既存のフィルターをクリア
+    If useTable Then
+        ' テーブルのフィルターをクリア
+        If tbl.AutoFilter.FilterMode Then
+            tbl.AutoFilter.ShowAllData
+        End If
+    Else
+        ' 通常のオートフィルターをクリア
+        If ws.AutoFilterMode Then
+            ws.AutoFilterMode = False
+        End If
+        ' オートフィルターを有効化
+        dataRange.AutoFilter
+    End If
 
     ' キーワード数を取得
     keywordCount = UBound(keywords) - LBound(keywords) + 1
@@ -86,12 +106,25 @@ End Sub
 ' フィルターをクリア
 Public Sub ClearFilter()
     Dim ws As Worksheet
+    Dim tbl As ListObject
+    Dim tableCleared As Boolean
 
     On Error GoTo ErrorHandler
 
     Set ws = GetTargetSheet()
     If ws Is Nothing Then Exit Sub
 
+    tableCleared = False
+
+    ' テーブル（ListObject）のフィルターをクリア
+    For Each tbl In ws.ListObjects
+        If tbl.AutoFilter.FilterMode Then
+            tbl.AutoFilter.ShowAllData
+            tableCleared = True
+        End If
+    Next tbl
+
+    ' 通常のオートフィルターをクリア
     If ws.AutoFilterMode Then
         ws.AutoFilterMode = False
     End If
@@ -159,6 +192,7 @@ Private Sub ApplyAdvancedFilter(ws As Worksheet, colNum As Long, keywords() As S
     Dim i As Long
     Dim tempSheet As Worksheet
     Dim criteriaSheetName As String
+    Dim tbl As ListObject
 
     ' 一時的な条件範囲を作成
     criteriaSheetName = "_FilterCriteria_"
@@ -201,7 +235,15 @@ Private Sub ApplyAdvancedFilter(ws As Worksheet, colNum As Long, keywords() As S
     criteriaLastRow = (UBound(keywords) - LBound(keywords) + 1) * 2 + 1
     Set criteriaRange = tempSheet.Range(tempSheet.Cells(1, 1), tempSheet.Cells(criteriaLastRow, 2))
 
-    ' 既存のフィルターをクリア
+    ' 既存のフィルターをクリア（テーブル対応）
+    For Each tbl In ws.ListObjects
+        If Not Intersect(tbl.Range, dataRange) Is Nothing Then
+            If tbl.AutoFilter.FilterMode Then
+                tbl.AutoFilter.ShowAllData
+            End If
+        End If
+    Next tbl
+
     If ws.AutoFilterMode Then
         ws.AutoFilterMode = False
     End If
