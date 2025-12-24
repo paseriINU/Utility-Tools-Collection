@@ -55,6 +55,9 @@ $jp1Password = "password"
 # 例: "/main_unit/jobgroup1/daily_batch"
 $unitPath = "/main_unit/jobgroup1/daily_batch"
 
+# デバッグモード（$true でレスポンス詳細を表示）
+$debugMode = $true
+
 # ==============================================================================
 # ■ メイン処理（以下は編集不要）
 # ==============================================================================
@@ -80,6 +83,10 @@ $protocol = if ($useHttps) { "https" } else { "http" }
 $authString = "${jp1User}:${jp1Password}"
 $authBytes = [System.Text.Encoding]::ASCII.GetBytes($authString)
 $authBase64 = [System.Convert]::ToBase64String($authBytes)
+
+Write-Host "[DEBUG] 認証文字列: ${jp1User}:***" -ForegroundColor Gray
+Write-Host "[DEBUG] Base64: $($authBase64.Substring(0,10))..." -ForegroundColor Gray
+Write-Host ""
 
 # 共通ヘッダー
 $headers = @{
@@ -115,75 +122,143 @@ Write-Host "========================================" -ForegroundColor Yellow
 Write-Host ""
 
 try {
+    # パスをURLエンコード
+    $encodedPath = [System.Uri]::EscapeDataString($unitPath)
+
     # ユニット状態取得API
     $statusUri = "${protocol}://${webConsoleHost}:${webConsolePort}/ajs/api/v1/objects/statuses"
     $statusUri += "?manager=$managerHost"
     $statusUri += "&serviceName=$schedulerService"
-    $statusUri += "&location=$unitPath"
+    $statusUri += "&location=$encodedPath"
     $statusUri += "&mode=search"
 
-    Write-Host "リクエストURL: $statusUri"
+    Write-Host "リクエストURL:" -ForegroundColor Cyan
+    Write-Host "  $statusUri"
+    Write-Host ""
+    Write-Host "リクエストヘッダー:" -ForegroundColor Cyan
+    Write-Host "  Content-Type: application/json"
+    Write-Host "  Accept: application/json"
+    Write-Host "  Accept-Language: ja"
+    Write-Host "  X-AJS-Authorization: (Base64認証情報)"
     Write-Host ""
 
-    $response = Invoke-RestMethod -Uri $statusUri -Method GET -Headers $headers -TimeoutSec 30
+    # Invoke-WebRequestを使用して詳細なレスポンスを取得
+    $webResponse = Invoke-WebRequest -Uri $statusUri -Method GET -Headers $headers -TimeoutSec 30 -UseBasicParsing
 
-    if ($response.units -and $response.units.Count -gt 0) {
-        Write-Host "[OK] ユニット情報を取得しました" -ForegroundColor Green
-        Write-Host ""
+    Write-Host "[OK] HTTPステータス: $($webResponse.StatusCode)" -ForegroundColor Green
+    Write-Host ""
 
-        foreach ($unit in $response.units) {
-            Write-Host "----------------------------------------------------------------" -ForegroundColor Cyan
-            Write-Host "ユニット名    : $($unit.definition.unitName)" -ForegroundColor White
-            Write-Host "ユニットタイプ: $($unit.definition.unitType)"
-            Write-Host "パス          : $($unit.definition.path)"
-            Write-Host ""
-
-            if ($unit.unitStatus) {
-                $status = $unit.unitStatus
-
-                # 状態の日本語変換
-                $statusJp = switch ($status.status) {
-                    "NORMAL"          { "正常終了" }
-                    "ABNORMAL"        { "異常終了" }
-                    "RUNNING"         { "実行中" }
-                    "WARNING"         { "警告終了" }
-                    "WAITING"         { "待機中" }
-                    "HOLDING"         { "保留中" }
-                    "NOT_REGISTERED"  { "未登録" }
-                    "SKIPPED"         { "スキップ" }
-                    "KILLED"          { "強制終了" }
-                    "NOT_SCHEDULED"   { "未予定" }
-                    default           { $status.status }
-                }
-
-                Write-Host "【状態情報】" -ForegroundColor Yellow
-                Write-Host "  状態        : $statusJp ($($status.status))"
-
-                if ($status.startTime) {
-                    Write-Host "  開始時刻    : $($status.startTime)"
-                }
-                if ($status.endTime) {
-                    Write-Host "  終了時刻    : $($status.endTime)"
-                }
-                if ($status.returnCode -ne $null) {
-                    Write-Host "  終了コード  : $($status.returnCode)"
-                }
-                if ($status.holdAttr) {
-                    Write-Host "  保留属性    : $($status.holdAttr)"
-                }
-                if ($status.execID) {
-                    Write-Host "  実行ID      : $($status.execID)"
-                }
-            }
-            Write-Host ""
+    if ($debugMode) {
+        Write-Host "[DEBUG] レスポンスヘッダー:" -ForegroundColor Gray
+        $webResponse.Headers.Keys | ForEach-Object {
+            Write-Host "  $_: $($webResponse.Headers[$_])" -ForegroundColor Gray
         }
+        Write-Host ""
+        Write-Host "[DEBUG] レスポンスボディ（生データ）:" -ForegroundColor Gray
+        Write-Host $webResponse.Content -ForegroundColor Gray
+        Write-Host ""
+    }
 
-        Write-Host "----------------------------------------------------------------" -ForegroundColor Cyan
-        Write-Host "取得件数: $($response.units.Count) 件" -ForegroundColor Green
+    # JSONパース
+    $response = $webResponse.Content | ConvertFrom-Json
 
+    # レスポンス構造を確認
+    Write-Host "[DEBUG] レスポンス構造:" -ForegroundColor Gray
+    $response | Get-Member -MemberType NoteProperty | ForEach-Object {
+        Write-Host "  - $($_.Name)" -ForegroundColor Gray
+    }
+    Write-Host ""
+
+    # units配列の確認
+    if ($response.PSObject.Properties.Name -contains "units") {
+        if ($response.units -and $response.units.Count -gt 0) {
+            Write-Host "[OK] ユニット情報を取得しました（$($response.units.Count) 件）" -ForegroundColor Green
+            Write-Host ""
+
+            foreach ($unit in $response.units) {
+                Write-Host "----------------------------------------------------------------" -ForegroundColor Cyan
+
+                # definitionの確認
+                if ($unit.PSObject.Properties.Name -contains "definition") {
+                    Write-Host "ユニット名    : $($unit.definition.unitName)" -ForegroundColor White
+                    Write-Host "ユニットタイプ: $($unit.definition.unitType)"
+                    if ($unit.definition.PSObject.Properties.Name -contains "path") {
+                        Write-Host "パス          : $($unit.definition.path)"
+                    }
+                } else {
+                    Write-Host "ユニット情報  :" -ForegroundColor White
+                    $unit | Format-List
+                }
+                Write-Host ""
+
+                # unitStatusの確認
+                if ($unit.PSObject.Properties.Name -contains "unitStatus") {
+                    $status = $unit.unitStatus
+
+                    # 状態の日本語変換
+                    $statusJp = switch ($status.status) {
+                        "NORMAL"          { "正常終了" }
+                        "ABNORMAL"        { "異常終了" }
+                        "RUNNING"         { "実行中" }
+                        "WARNING"         { "警告終了" }
+                        "WAITING"         { "待機中" }
+                        "HOLDING"         { "保留中" }
+                        "NOT_REGISTERED"  { "未登録" }
+                        "SKIPPED"         { "スキップ" }
+                        "KILLED"          { "強制終了" }
+                        "NOT_SCHEDULED"   { "未予定" }
+                        "WAIT_RUNNING"    { "起動条件待ち" }
+                        "UNEXECUTED"      { "未実行" }
+                        "EXEC_WAIT"       { "実行待ち" }
+                        "QUEUING"         { "キューイング" }
+                        "END_DELAY"       { "終了遅延" }
+                        "START_DELAY"     { "開始遅延" }
+                        default           { $status.status }
+                    }
+
+                    Write-Host "【状態情報】" -ForegroundColor Yellow
+                    Write-Host "  状態        : $statusJp ($($status.status))"
+
+                    if ($status.PSObject.Properties.Name -contains "startTime" -and $status.startTime) {
+                        Write-Host "  開始時刻    : $($status.startTime)"
+                    }
+                    if ($status.PSObject.Properties.Name -contains "endTime" -and $status.endTime) {
+                        Write-Host "  終了時刻    : $($status.endTime)"
+                    }
+                    if ($status.PSObject.Properties.Name -contains "returnCode") {
+                        Write-Host "  終了コード  : $($status.returnCode)"
+                    }
+                    if ($status.PSObject.Properties.Name -contains "holdAttr") {
+                        Write-Host "  保留属性    : $($status.holdAttr)"
+                    }
+                    if ($status.PSObject.Properties.Name -contains "execID") {
+                        Write-Host "  実行ID      : $($status.execID)"
+                    }
+                }
+                Write-Host ""
+            }
+
+            Write-Host "----------------------------------------------------------------" -ForegroundColor Cyan
+            Write-Host "取得件数: $($response.units.Count) 件" -ForegroundColor Green
+
+        } else {
+            Write-Host "[情報] ユニットが見つかりませんでした" -ForegroundColor Yellow
+            Write-Host ""
+            Write-Host "考えられる原因:" -ForegroundColor Yellow
+            Write-Host "  1. ユニットパスが正しくない"
+            Write-Host "     現在の設定: $unitPath"
+            Write-Host "  2. JP1ユーザーに参照権限がない"
+            Write-Host "  3. ジョブネットが一度も実行されていない"
+            Write-Host ""
+            Write-Host "ヒント:" -ForegroundColor Cyan
+            Write-Host "  - パスは / で始める必要があります"
+            Write-Host "  - 例: /MAIN/GROUP1/JOBNET1"
+        }
     } else {
-        Write-Host "[情報] ユニットが見つかりませんでした" -ForegroundColor Yellow
-        Write-Host "  パスを確認してください: $unitPath"
+        Write-Host "[情報] レスポンスに units が含まれていません" -ForegroundColor Yellow
+        Write-Host ""
+        Write-Host "レスポンス内容:" -ForegroundColor Gray
+        $response | ConvertTo-Json -Depth 5
     }
 
 } catch {
@@ -196,23 +271,35 @@ try {
     # HTTPステータスコード別のヒント
     if ($_.Exception.Response) {
         $statusCode = [int]$_.Exception.Response.StatusCode
-        Write-Host "HTTPステータスコード: $statusCode"
+        Write-Host "HTTPステータスコード: $statusCode" -ForegroundColor Red
 
+        # レスポンスボディを取得
+        try {
+            $reader = New-Object System.IO.StreamReader($_.Exception.Response.GetResponseStream())
+            $errorBody = $reader.ReadToEnd()
+            $reader.Close()
+            Write-Host ""
+            Write-Host "エラーレスポンス:" -ForegroundColor Red
+            Write-Host $errorBody
+        } catch {}
+
+        Write-Host ""
         switch ($statusCode) {
-            401 { Write-Host "→ 認証エラー: JP1ユーザー名またはパスワードを確認してください" }
-            403 { Write-Host "→ 権限エラー: JP1ユーザーに必要な権限があるか確認してください" }
-            404 { Write-Host "→ 指定したユニットパスが見つかりません" }
-            500 { Write-Host "→ サーバー内部エラー: Web Consoleのログを確認してください" }
+            400 { Write-Host "→ リクエスト形式エラー: パラメータを確認してください" -ForegroundColor Yellow }
+            401 { Write-Host "→ 認証エラー: JP1ユーザー名またはパスワードを確認してください" -ForegroundColor Yellow }
+            403 { Write-Host "→ 権限エラー: JP1ユーザーに必要な権限があるか確認してください" -ForegroundColor Yellow }
+            404 { Write-Host "→ 指定したユニットパスが見つかりません" -ForegroundColor Yellow }
+            500 { Write-Host "→ サーバー内部エラー: Web Consoleのログを確認してください" -ForegroundColor Yellow }
         }
     }
 
     Write-Host ""
     Write-Host "確認事項:" -ForegroundColor Yellow
     Write-Host "  - Web Consoleが起動しているか"
-    Write-Host "    → http://${webConsoleHost}:${webConsolePort}/ajs/login.html にアクセス"
+    Write-Host "    → ブラウザで http://${webConsoleHost}:${webConsolePort}/ajs/login.html にアクセス"
     Write-Host "  - ホスト名・ポート番号が正しいか"
     Write-Host "  - JP1ユーザー名・パスワードが正しいか"
-    Write-Host "  - ユニットパスが正しいか"
+    Write-Host "  - ユニットパスが正しいか（/で始まる）"
 
     exit 1
 }
