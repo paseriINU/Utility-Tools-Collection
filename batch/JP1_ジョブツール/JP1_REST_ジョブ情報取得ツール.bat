@@ -55,20 +55,8 @@ $jp1Password = "password"
 # 例: "/main_unit/jobgroup1/daily_batch"
 $unitPath = "/main_unit/jobgroup1/daily_batch"
 
-# 実行ID（execResultDetails API用）
-# 例: "@A100", "@A101" など（ジョブネットの実行登録番号）
-# ※ 実行登録時に割り当てられるID。Viewで確認可能
-$execId = "@A100"
-
 # デバッグモード（$true でレスポンス詳細を表示）
 $debugMode = $true
-
-# 試すAPIエンドポイント（1〜4を選択）
-# 1: statuses（実行登録中のユニット状態）
-# 2: definitions（ユニット定義情報）
-# 3: results（実行結果 - 存在する場合）
-# 4: すべてのAPIを順番に試す
-$apiMode = 4
 
 # ==============================================================================
 # ■ メイン処理（以下は編集不要）
@@ -86,7 +74,6 @@ Write-Host "  Managerホスト       : $managerHost"
 Write-Host "  スケジューラー      : $schedulerService"
 Write-Host "  JP1ユーザー         : $jp1User"
 Write-Host "  ユニットパス        : $unitPath"
-Write-Host "  実行ID              : $execId"
 Write-Host ""
 
 # プロトコル設定
@@ -165,61 +152,123 @@ function Call-JP1Api {
 }
 
 # ========================================
-# 試すAPIエンドポイント一覧
+# メイン処理: 2段階でAPIを呼び出し
 # ========================================
 $baseUrl = "${protocol}://${webConsoleHost}:${webConsolePort}"
 
-$apiEndpoints = @(
-    @{
-        Name = "1. statuses（実行登録中ユニット状態）"
-        Url = "${baseUrl}/ajs/api/v1/objects/statuses?manager=${managerHost}&serviceName=${schedulerService}&location=${unitPath}&mode=search"
-    },
-    @{
-        Name = "2. definitions（ユニット定義情報）"
-        Url = "${baseUrl}/ajs/api/v1/objects/definitions?manager=${managerHost}&serviceName=${schedulerService}&location=${unitPath}"
-    },
-    @{
-        Name = "3. results（実行結果詳細）"
-        Url = "${baseUrl}/ajs/api/v1/objects/results?manager=${managerHost}&serviceName=${schedulerService}&location=${unitPath}"
-    },
-    @{
-        Name = "4. executions（実行履歴）"
-        Url = "${baseUrl}/ajs/api/v1/executions?manager=${managerHost}&serviceName=${schedulerService}&location=${unitPath}"
-    },
-    @{
-        Name = "5. statuses（mode無し）"
-        Url = "${baseUrl}/ajs/api/v1/objects/statuses?manager=${managerHost}&serviceName=${schedulerService}&location=${unitPath}"
-    },
-    @{
-        Name = "6. execResultDetails（実行結果詳細 - 標準エラー出力）"
-        Url = "${baseUrl}/ajs/api/v1/objects/statuses/${unitPath}:${execId}/actions/execResultDetails/invoke?manager=${managerHost}&serviceName=${schedulerService}"
-    }
-)
-
 Write-Host ""
 Write-Host "================================================================" -ForegroundColor Cyan
-Write-Host "APIエンドポイントを順番に試します..." -ForegroundColor Cyan
+Write-Host "STEP 1: ユニット一覧取得API（execID取得）" -ForegroundColor Cyan
 Write-Host "================================================================" -ForegroundColor Cyan
 
-$successCount = 0
-foreach ($api in $apiEndpoints) {
-    $result = Call-JP1Api -ApiName $api.Name -ApiUrl $api.Url
-    if ($result) {
-        $successCount++
+# Step 1: statuses API でユニット一覧と execID を取得
+$statusesUrl = "${baseUrl}/ajs/api/v1/objects/statuses?manager=${managerHost}&serviceName=${schedulerService}&location=${unitPath}&mode=search"
+
+Write-Host ""
+Write-Host "リクエストURL:" -ForegroundColor Cyan
+Write-Host "  $statusesUrl"
+Write-Host ""
+
+$execIdList = @()
+
+try {
+    $response = Invoke-WebRequest -Uri $statusesUrl -Method GET -Headers $headers -TimeoutSec 30 -UseBasicParsing
+    Write-Host "[OK] HTTPステータス: $($response.StatusCode)" -ForegroundColor Green
+
+    $jsonData = $response.Content | ConvertFrom-Json
+
+    if ($debugMode) {
+        Write-Host ""
+        Write-Host "レスポンス:" -ForegroundColor Gray
+        Write-Host $response.Content
     }
-    Write-Host "----------------------------------------------------------------"
+
+    # statuses配列からexecIDを抽出
+    if ($jsonData.statuses -and $jsonData.statuses.Count -gt 0) {
+        Write-Host ""
+        Write-Host "取得したユニット一覧:" -ForegroundColor Green
+        foreach ($unit in $jsonData.statuses) {
+            $path = $unit.path
+            $execId = $unit.execId
+            $status = $unit.status
+            Write-Host "  パス: $path | execID: $execId | 状態: $status"
+            if ($execId) {
+                $execIdList += @{ Path = $path; ExecId = $execId }
+            }
+        }
+    } else {
+        Write-Host ""
+        Write-Host "[警告] 実行登録中のユニットがありません" -ForegroundColor Yellow
+        Write-Host "  ※ statuses APIは実行登録中のジョブのみ対象です"
+    }
+} catch {
+    Write-Host "[エラー] $($_.Exception.Message)" -ForegroundColor Red
 }
 
 Write-Host ""
-Write-Host "========================================" -ForegroundColor Green
-Write-Host "テスト完了: $successCount / $($apiEndpoints.Count) 件成功" -ForegroundColor Green
-Write-Host "========================================" -ForegroundColor Green
+Write-Host "================================================================" -ForegroundColor Cyan
+Write-Host "STEP 2: 実行結果詳細取得API（execResultDetails）" -ForegroundColor Cyan
+Write-Host "================================================================" -ForegroundColor Cyan
+
+if ($execIdList.Count -eq 0) {
+    Write-Host ""
+    Write-Host "[スキップ] execIDが取得できなかったため、実行結果詳細は取得できません" -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "ヒント:" -ForegroundColor Cyan
+    Write-Host "  - ジョブネットを実行登録してから再度実行してください"
+    Write-Host "  - または、ajsshow コマンド（WinRM経由）を使用してください"
+} else {
+    foreach ($item in $execIdList) {
+        $targetPath = $item.Path
+        $targetExecId = $item.ExecId
+
+        Write-Host ""
+        Write-Host "----------------------------------------" -ForegroundColor Yellow
+        Write-Host "対象: $targetPath (execID: $targetExecId)" -ForegroundColor Yellow
+        Write-Host "----------------------------------------" -ForegroundColor Yellow
+
+        # execResultDetails API を呼び出し
+        $execResultUrl = "${baseUrl}/ajs/api/v1/objects/statuses/${targetPath}:${targetExecId}/actions/execResultDetails/invoke?manager=${managerHost}&serviceName=${schedulerService}"
+
+        Write-Host ""
+        Write-Host "リクエストURL:" -ForegroundColor Cyan
+        Write-Host "  $execResultUrl"
+        Write-Host ""
+
+        try {
+            $resultResponse = Invoke-WebRequest -Uri $execResultUrl -Method GET -Headers $headers -TimeoutSec 30 -UseBasicParsing
+            Write-Host "[OK] HTTPステータス: $($resultResponse.StatusCode)" -ForegroundColor Green
+
+            $resultJson = $resultResponse.Content | ConvertFrom-Json
+
+            Write-Host ""
+            Write-Host "実行結果詳細（標準エラー出力）:" -ForegroundColor Green
+            Write-Host "----------------------------------------"
+            if ($resultJson.execResultDetails) {
+                Write-Host $resultJson.execResultDetails
+            } else {
+                Write-Host "(出力なし)"
+            }
+            Write-Host "----------------------------------------"
+        } catch {
+            Write-Host "[エラー] $($_.Exception.Message)" -ForegroundColor Red
+            if ($_.Exception.Response) {
+                $statusCode = [int]$_.Exception.Response.StatusCode
+                Write-Host "HTTPステータス: $statusCode" -ForegroundColor Red
+            }
+        }
+    }
+}
+
+Write-Host ""
+Write-Host "================================================================" -ForegroundColor Green
+Write-Host "処理完了" -ForegroundColor Green
+Write-Host "================================================================" -ForegroundColor Green
 
 Write-Host ""
 Write-Host "注意:" -ForegroundColor Yellow
-Write-Host "  - 「statuses」APIは実行登録中のジョブのみ対象です"
-Write-Host "  - 「execResultDetails」APIは標準エラー出力を取得します（標準出力ではありません）"
-Write-Host "  - execResultDetails APIを使用するには実行ID（@A100など）が必要です"
+Write-Host "  - STEP 1 の statuses API は実行登録中のジョブのみ対象です"
+Write-Host "  - STEP 2 の execResultDetails API は標準エラー出力を取得します"
 Write-Host "  - 標準出力の取得には ajsshow コマンド（WinRM経由）が必要です"
 Write-Host ""
 
