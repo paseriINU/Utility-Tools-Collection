@@ -161,8 +161,39 @@ Write-Host "================================================================" -F
 Write-Host "STEP 1: ユニット一覧取得API（execID取得）" -ForegroundColor Cyan
 Write-Host "================================================================" -ForegroundColor Cyan
 
+# ユニットパスを親パスとユニット名に分割
+# 例: "/main_unit/jobgroup1/daily_batch" → location="/main_unit/jobgroup1", unitName="daily_batch"
+$lastSlashIndex = $unitPath.LastIndexOf('/')
+if ($lastSlashIndex -gt 0) {
+    $parentPath = $unitPath.Substring(0, $lastSlashIndex)
+    $targetUnitName = $unitPath.Substring($lastSlashIndex + 1)
+} else {
+    # ルート直下の場合
+    $parentPath = "/"
+    $targetUnitName = $unitPath.TrimStart('/')
+}
+
+Write-Host ""
+Write-Host "パス解析結果:" -ForegroundColor Cyan
+Write-Host "  上位ユニットパス (location) : $parentPath"
+Write-Host "  ユニット名 (unitName)       : $targetUnitName"
+
+# URLエンコード（/ → %2F）
+$encodedLocation = [System.Uri]::EscapeDataString($parentPath)
+$encodedUnitName = [System.Uri]::EscapeDataString($targetUnitName)
+
+Write-Host "  エンコード後 location       : $encodedLocation"
+Write-Host ""
+
 # Step 1: statuses API でユニット一覧と execID を取得
-$statusesUrl = "${baseUrl}/ajs/api/v1/objects/statuses?manager=${managerHost}&serviceName=${schedulerService}&location=${unitPath}&mode=search"
+# ドキュメント仕様:
+#   - mode: 必須（固定で "search"）
+#   - manager: 必須
+#   - serviceName: 必須
+#   - location: 必須（取得したいユニットの上位ユニットのパス）
+#   - unitName: 任意（ユニット名でフィルタリング）
+#   - unitNameMatchMethods: 任意（EQ=完全一致, BW=前方一致, CO=部分一致等）
+$statusesUrl = "${baseUrl}/ajs/api/v1/objects/statuses?mode=search&manager=${managerHost}&serviceName=${schedulerService}&location=${encodedLocation}&unitName=${encodedUnitName}&unitNameMatchMethods=EQ"
 
 Write-Host ""
 Write-Host "リクエストURL:" -ForegroundColor Cyan
@@ -228,8 +259,13 @@ if ($execIdList.Count -eq 0) {
         Write-Host "対象: $targetPath (execID: $targetExecId)" -ForegroundColor Yellow
         Write-Host "----------------------------------------" -ForegroundColor Yellow
 
+        # URLエンコード（/ → %2F, @ → %40）
+        # ドキュメント例: /ajs/api/v1/objects/statuses/%2FJobGroup%2FJobnet%2FJob:%40A100/actions/execResultDetails/invoke
+        $encodedPath = [System.Uri]::EscapeDataString($targetPath)
+        $encodedExecId = [System.Uri]::EscapeDataString($targetExecId)
+
         # execResultDetails API を呼び出し
-        $execResultUrl = "${baseUrl}/ajs/api/v1/objects/statuses/${targetPath}:${targetExecId}/actions/execResultDetails/invoke?manager=${managerHost}&serviceName=${schedulerService}"
+        $execResultUrl = "${baseUrl}/ajs/api/v1/objects/statuses/${encodedPath}:${encodedExecId}/actions/execResultDetails/invoke?manager=${managerHost}&serviceName=${schedulerService}"
 
         Write-Host ""
         Write-Host "リクエストURL:" -ForegroundColor Cyan
