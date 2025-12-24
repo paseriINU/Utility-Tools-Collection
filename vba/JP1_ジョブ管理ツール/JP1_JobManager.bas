@@ -1682,7 +1682,7 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
     script = script & "  $entryResult = Invoke-JP1Command 'ajsentry.exe' @('-F', '" & config("SchedulerService") & "', '-n', '-w', '" & jobnetPath & "')" & vbCrLf
     script = script & "  $entryOutput = if ($entryResult.Output) { $entryResult.Output -join ' ' } else { '' }" & vbCrLf
     script = script & "  $entryExitCode = $entryResult.ExitCode" & vbCrLf
-    script = script & "  if ($entryOutput) { Write-Log ""結果: $entryOutput"" } else { Write-Log ""結果: ExitCode=$entryExitCode (出力なし)"" }" & vbCrLf
+    script = script & "  if ($entryOutput) { Write-Log ""結果: $entryOutput"" } else { Write-Log ""結果: 正常終了 (ExitCode=$entryExitCode)"" }" & vbCrLf
     script = script & vbCrLf
     script = script & "  # ajsentryの実行結果をチェック" & vbCrLf
     script = script & "  if ($entryExitCode -ne 0 -or $entryOutput -match 'KAVS\d+-E') {" & vbCrLf
