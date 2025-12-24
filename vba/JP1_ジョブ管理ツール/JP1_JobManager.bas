@@ -1680,14 +1680,16 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
     script = script & "  # ajsentry実行（即時実行・完了待ち）" & vbCrLf
     script = script & "  Write-Log '[実行] ajsentry - ジョブ起動（-wオプションで完了待ち）'" & vbCrLf
     script = script & "  $entryResult = Invoke-JP1Command 'ajsentry.exe' @('-F', '" & config("SchedulerService") & "', '-n', '-w', '" & jobnetPath & "')" & vbCrLf
-    script = script & "  Write-Log ""結果: $($entryResult.Output -join ' ')""" & vbCrLf
+    script = script & "  $entryOutput = if ($entryResult.Output) { $entryResult.Output -join ' ' } else { '' }" & vbCrLf
+    script = script & "  $entryExitCode = $entryResult.ExitCode" & vbCrLf
+    script = script & "  if ($entryOutput) { Write-Log ""結果: $entryOutput"" } else { Write-Log ""結果: ExitCode=$entryExitCode (出力なし)"" }" & vbCrLf
     script = script & vbCrLf
     script = script & "  # ajsentryの実行結果をチェック" & vbCrLf
-    script = script & "  $entryOutput = $entryResult.Output -join ' '" & vbCrLf
-    script = script & "  if ($entryResult.ExitCode -ne 0 -or $entryOutput -match 'KAVS\d+-E') {" & vbCrLf
-    script = script & "    Write-Log ""[ERROR] ajsentryエラー: $entryOutput""" & vbCrLf
+    script = script & "  if ($entryExitCode -ne 0 -or $entryOutput -match 'KAVS\d+-E') {" & vbCrLf
+    script = script & "    $errMsg = if ($entryOutput) { $entryOutput } else { ""ExitCode=$entryExitCode"" }" & vbCrLf
+    script = script & "    Write-Log ""[ERROR] ajsentryエラー: $errMsg""" & vbCrLf
     script = script & "    Write-Output ""RESULT_STATUS:実行エラー""" & vbCrLf
-    script = script & "    Write-Output ""RESULT_MESSAGE:$entryOutput""" & vbCrLf
+    script = script & "    Write-Output ""RESULT_MESSAGE:$errMsg""" & vbCrLf
     script = script & "    Write-Output ""RESULT_LOGPATH:$logFile""" & vbCrLf
     script = script & "    exit" & vbCrLf
     script = script & "  }" & vbCrLf
@@ -1860,7 +1862,8 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
         script = script & "  Write-Log '[完了] 起動成功（完了待ちなし）'" & vbCrLf
         script = script & "  Write-Output ""RESULT_STATUS:起動成功""" & vbCrLf
         script = script & "  Write-Output ""RESULT_LOGPATH:$logFile""" & vbCrLf
-        script = script & "  Write-Output ""RESULT_MESSAGE:$($entryResult.Output -join ' ')""" & vbCrLf
+        script = script & "  $msgOutput = if ($entryOutput) { $entryOutput } else { ""起動完了 (ExitCode=$entryExitCode)"" }" & vbCrLf
+        script = script & "  Write-Output ""RESULT_MESSAGE:$msgOutput""" & vbCrLf
     End If
 
     ' リモートモードの場合: セッション終了
