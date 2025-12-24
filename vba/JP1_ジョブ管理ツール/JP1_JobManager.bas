@@ -1701,6 +1701,15 @@ Private Function BuildExecuteJobScript(ByVal config As Object, ByVal jobnetPath 
         script = script & "  $jobStatus = ($statusResult.Output -join ' ').Trim()" & vbCrLf
         script = script & "  Write-Log ""ジョブネット状態: $jobStatus""" & vbCrLf
         script = script & vbCrLf
+        script = script & "  # ajsshowコマンド自体のエラーチェック" & vbCrLf
+        script = script & "  if ($statusResult.ExitCode -ne 0 -or $jobStatus -match 'KAVS\d+-E') {" & vbCrLf
+        script = script & "    Write-Log ""[ERROR] ajsshowコマンドエラー: $jobStatus""" & vbCrLf
+        script = script & "    Write-Output ""RESULT_STATUS:コマンドエラー""" & vbCrLf
+        script = script & "    Write-Output ""RESULT_MESSAGE:$jobStatus""" & vbCrLf
+        script = script & "    Write-Output ""RESULT_LOGPATH:$logFile""" & vbCrLf
+        script = script & "    exit" & vbCrLf
+        script = script & "  }" & vbCrLf
+        script = script & vbCrLf
         script = script & "  # 状態判定" & vbCrLf
         script = script & "  if ($jobStatus -match '正常終了') {" & vbCrLf
         script = script & "    Write-Log '[完了] 正常終了'" & vbCrLf
