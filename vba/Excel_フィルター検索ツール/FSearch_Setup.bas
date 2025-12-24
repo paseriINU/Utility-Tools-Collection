@@ -218,6 +218,7 @@ Private Sub AddFormCode(vbComp As Object)
     code = code & "    End If" & vbCrLf
     code = code & "    " & vbCrLf
     code = code & "    ReDim Preserve keywords(1 To count)" & vbCrLf
+    code = code & "    Me.Hide" & vbCrLf
     code = code & "    Call FSearch.ApplyOrFilter(keywords)" & vbCrLf
     code = code & "    Unload Me" & vbCrLf
     code = code & "End Sub" & vbCrLf & vbCrLf
