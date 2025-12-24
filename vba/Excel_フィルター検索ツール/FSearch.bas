@@ -9,6 +9,9 @@ Option Explicit
 ' 設定（必要に応じて変更してください）
 ' ----------------------------------------
 Private Const TARGET_SHEET_NAME As String = "テスト"    ' 対象シート名
+Private Const HEADER_ROW As Long = 3                    ' ヘッダー行（タイトル行）
+Private Const DATA_START_COL As Long = 1                ' データ開始列（A列=1）
+Private Const DATA_END_COL As Long = 18                 ' データ終了列（R列=18）
 Private Const FILTER_COLUMN_A As Long = 1               ' フィルター列1（A列=1）
 Private Const FILTER_COLUMN_B As Long = 2               ' フィルター列2（B列=2）
 
@@ -39,16 +42,17 @@ Public Sub ApplyOrFilter(keywords() As String)
     Set ws = GetTargetSheet()
     If ws Is Nothing Then Exit Sub
 
-    ' データ範囲を取得
-    lastRow = ws.Cells(ws.Rows.count, FILTER_COLUMN_A).End(xlUp).Row
-    lastCol = ws.Cells(1, ws.Columns.count).End(xlToLeft).Column
+    ' データ範囲を取得（A列を下から上に見て最終行を取得）
+    lastRow = ws.Cells(ws.Rows.Count, DATA_START_COL).End(xlUp).Row
+    lastCol = DATA_END_COL  ' R列固定
 
-    If lastRow < 2 Then
+    If lastRow <= HEADER_ROW Then
         MsgBox "データがありません。", vbExclamation, "エラー"
         Exit Sub
     End If
 
-    Set dataRange = ws.Range(ws.Cells(1, 1), ws.Cells(lastRow, lastCol))
+    ' データ範囲（ヘッダー行から最終行まで）
+    Set dataRange = ws.Range(ws.Cells(HEADER_ROW, DATA_START_COL), ws.Cells(lastRow, lastCol))
 
     ' テーブル（ListObject）が存在するかチェック
     useTable = False
@@ -211,8 +215,8 @@ Private Sub ApplyAdvancedFilter(ws As Worksheet, colNum As Long, keywords() As S
 
     ' 条件を設定（ヘッダー + 各キーワード）
     ' A列とB列の両方をOR条件にするため、列を並べる
-    tempSheet.Cells(1, 1).Value = ws.Cells(1, FILTER_COLUMN_A).Value
-    tempSheet.Cells(1, 2).Value = ws.Cells(1, FILTER_COLUMN_B).Value
+    tempSheet.Cells(1, 1).Value = ws.Cells(HEADER_ROW, FILTER_COLUMN_A).Value
+    tempSheet.Cells(1, 2).Value = ws.Cells(HEADER_ROW, FILTER_COLUMN_B).Value
 
     For i = LBound(keywords) To UBound(keywords)
         ' A列の条件
@@ -225,10 +229,10 @@ Private Sub ApplyAdvancedFilter(ws As Worksheet, colNum As Long, keywords() As S
         tempSheet.Cells(UBound(keywords) + i - LBound(keywords) + 2, 2).Value = "*" & keywords(i) & "*"
     Next i
 
-    ' データ範囲
-    lastRow = ws.Cells(ws.Rows.count, 1).End(xlUp).Row
-    lastCol = ws.Cells(1, ws.Columns.count).End(xlToLeft).Column
-    Set dataRange = ws.Range(ws.Cells(1, 1), ws.Cells(lastRow, lastCol))
+    ' データ範囲（A列を下から上に見て最終行を取得）
+    lastRow = ws.Cells(ws.Rows.Count, DATA_START_COL).End(xlUp).Row
+    lastCol = DATA_END_COL  ' R列固定
+    Set dataRange = ws.Range(ws.Cells(HEADER_ROW, DATA_START_COL), ws.Cells(lastRow, lastCol))
 
     ' 条件範囲
     Dim criteriaLastRow As Long
