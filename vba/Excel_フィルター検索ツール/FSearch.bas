@@ -10,9 +10,8 @@ Option Explicit
 ' 設定（必要に応じて変更してください）
 ' ----------------------------------------
 Private Const TARGET_SHEET_NAME As String = "テスト"    ' 対象シート名
-Private Const FILTER_COLUMN_A As Long = 1               ' フィルター対象列1（A列=1）
-Private Const FILTER_COLUMN_B As Long = 2               ' フィルター対象列2（B列=2）
-Private Const RESULT_FILTER_COLUMN As Long = 1          ' フィルターをかける列（A列=1）
+Private Const FILTER_COLUMN_A As Long = 9               ' フィルター対象列1（I列=9）
+Private Const FILTER_COLUMN_B As Long = 10              ' フィルター対象列2（J列=10）
 
 ' ========================================
 ' 公開プロシージャ
@@ -56,7 +55,7 @@ Public Sub ApplyOrFilter(keywords() As String)
 
     ' キーワードに一致する値を収集（2列をOR検索）
     matchCount = CollectMatchingValuesFromTwoColumns(tbl, FILTER_COLUMN_A, FILTER_COLUMN_B, _
-        RESULT_FILTER_COLUMN, keywords, matchingValues)
+        keywords, matchingValues)
 
     If matchCount = 0 Then
         MsgBox "一致するデータがありません。", vbInformation, "検索結果"
@@ -64,8 +63,8 @@ Public Sub ApplyOrFilter(keywords() As String)
         Exit Sub
     End If
 
-    ' フィルターを適用
-    ApplyTableFilter tbl, RESULT_FILTER_COLUMN, matchingValues, matchCount
+    ' フィルターを適用（FILTER_COLUMN_Aでフィルター）
+    ApplyTableFilter tbl, FILTER_COLUMN_A, matchingValues, matchCount
 
     ' 対象シートをアクティブにする
     ws.Activate
@@ -128,7 +127,7 @@ End Function
 
 ' 2列をOR検索してキーワードに部分一致する行の値を収集
 Private Function CollectMatchingValuesFromTwoColumns(tbl As ListObject, _
-    colA As Long, colB As Long, resultCol As Long, _
+    colA As Long, colB As Long, _
     keywords() As String, ByRef matchingValues() As String) As Long
 
     Dim rowCount As Long
@@ -136,7 +135,6 @@ Private Function CollectMatchingValuesFromTwoColumns(tbl As ListObject, _
     Dim i As Long
     Dim valueA As String
     Dim valueB As String
-    Dim resultValue As String
     Dim isMatch As Boolean
     Dim dict As Object
 
@@ -155,9 +153,8 @@ Private Function CollectMatchingValuesFromTwoColumns(tbl As ListObject, _
     For r = 1 To rowCount
         valueA = CStr(tbl.DataBodyRange.Cells(r, colA).Value)
         valueB = CStr(tbl.DataBodyRange.Cells(r, colB).Value)
-        resultValue = CStr(tbl.DataBodyRange.Cells(r, resultCol).Value)
 
-        ' いずれかのキーワードがA列またはB列に部分一致するかチェック
+        ' いずれかのキーワードがcolA列またはcolB列に部分一致するかチェック
         isMatch = False
         For i = LBound(keywords) To UBound(keywords)
             If InStr(1, valueA, keywords(i), vbTextCompare) > 0 Or _
@@ -167,10 +164,10 @@ Private Function CollectMatchingValuesFromTwoColumns(tbl As ListObject, _
             End If
         Next i
 
-        ' 一致した場合、結果列の値をDictionaryに追加（重複排除）
+        ' 一致した場合、colA列の値をDictionaryに追加（重複排除）
         If isMatch Then
-            If Not dict.Exists(resultValue) Then
-                dict.Add resultValue, True
+            If Not dict.Exists(valueA) Then
+                dict.Add valueA, True
             End If
         End If
     Next r
