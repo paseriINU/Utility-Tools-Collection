@@ -150,8 +150,9 @@ try {
 
     if ($debugMode) {
         Write-Host "[DEBUG] レスポンスヘッダー:" -ForegroundColor Gray
-        $webResponse.Headers.Keys | ForEach-Object {
-            Write-Host "  $_: $($webResponse.Headers[$_])" -ForegroundColor Gray
+        foreach ($key in $webResponse.Headers.Keys) {
+            $val = $webResponse.Headers[$key]
+            Write-Host "  $key = $val" -ForegroundColor Gray
         }
         Write-Host ""
         Write-Host "[DEBUG] レスポンスボディ（生データ）:" -ForegroundColor Gray
@@ -164,8 +165,8 @@ try {
 
     # レスポンス構造を確認
     Write-Host "[DEBUG] レスポンス構造:" -ForegroundColor Gray
-    $response | Get-Member -MemberType NoteProperty | ForEach-Object {
-        Write-Host "  - $($_.Name)" -ForegroundColor Gray
+    foreach ($prop in ($response | Get-Member -MemberType NoteProperty)) {
+        Write-Host "  - $($prop.Name)" -ForegroundColor Gray
     }
     Write-Host ""
 
