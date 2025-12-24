@@ -4,6 +4,40 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 重要な作業ルール
 
+### 推測と事実の区別（必須）
+
+**重要**: 推測を事実として記載しないこと。
+
+1. **エビデンスなしに制限事項や仕様を断言しない**
+   - 公式ドキュメントで確認できた内容のみを「事実」として記載
+   - 動作確認の結果から推測した内容は「推測」と明記する
+   - 一つの事例から一般化しない
+
+2. **推測する場合の記載方法**
+   - 「〜の可能性があります」「〜と思われます」など推測であることを明示
+   - 可能であればユーザーに確認を求める
+
+3. **ドキュメントやコードに記載する場合**
+   - 公式ドキュメントに記載がない制限事項は書かない
+   - 推測に基づく情報はコメントで「※未検証」と明記
+
+**悪い例**:
+```
+statuses APIは実行登録中のジョブのみ対象です  ← 根拠なし
+即時実行で終了済みのジョブは取得できない    ← 推測を事実として記載
+```
+
+**良い例**:
+```
+statuses APIで空配列が返りました。
+原因として以下が考えられます：
+- パス指定の誤り
+- 参照権限の不足
+- （その他の可能性）
+
+正確な原因を特定するには追加調査が必要です。
+```
+
 ### 広範囲な修正を行う場合の事前確認
 
 **必須**: 以下のいずれかに該当する場合、**修正を実行する前に必ずユーザーに確認すること**：
@@ -704,6 +738,53 @@ $ git checkout main && git pull
    - [ajsshow コマンドリファレンス](https://itpfdoc.hitachi.co.jp/manuals/3021/30213L4920/AJSO0131.HTM)
    - [ajsplan コマンドリファレンス](https://itpfdoc.hitachi.co.jp/manuals/3021/30213L4920/AJSO0122.HTM)
    - [jpqjobget コマンドリファレンス](https://itpfdoc.hitachi.co.jp/manuals/3021/30213b1920/AJSO0194.HTM)
+
+### JP1/AJS3 Web Console REST API
+
+JP1/AJS3 Web Console REST APIを使用する場合は、**必ず以下のドキュメントを事前に読むこと**。
+
+```
+必ず読む: JP1_AJS3_REST_API.md（リポジトリルート）
+```
+
+#### ドキュメント済みAPI一覧
+
+| API | 用途 | ドキュメント更新日 |
+|-----|------|-------------------|
+| ユニット一覧取得API (7.1.1) | ユニット状態・execID取得 | 2024/12 |
+| 実行結果詳細取得API (7.1.3) | 実行結果詳細（標準エラー出力）取得 | 2024/12 |
+
+#### 未ドキュメントAPI使用時のルール（必須）
+
+**重要**: 上記以外のREST APIを使用する場合は、**必ずユーザーに公式ドキュメントの提供を求めること**。
+
+```
+このAPI（例: ユニット定義取得API）は現在ドキュメント化されていません。
+正確な実装のため、公式ドキュメントを提供していただけますか？
+
+参考: https://itpfdoc.hitachi.co.jp/manuals/3021/30213b1920/AJSO0280.HTM
+```
+
+**理由**:
+- REST APIはリクエスト形式・レスポンス構造が複雑
+- パラメータやURLエンコードの仕様を正確に把握する必要がある
+- 誤った実装はAPI呼び出し失敗やデータ取得エラーの原因となる
+
+#### REST API使用時の注意事項
+
+1. **認証ヘッダー**
+   - `X-AJS-Authorization`: Base64エンコードした `{JP1ユーザー}:{パスワード}`
+
+2. **URLエンコード**
+   - パス内の特殊文字はエンコードが必要
+   - `/` → `%2F`, `@` → `%40`
+
+3. **レスポンス構造**
+   - statuses API: `statuses[].definition.unitName`, `statuses[].unitStatus.execID`
+   - execResultDetails API: `execResultDetails`（最大5MB）
+
+4. **公式ドキュメント**
+   - [JP1/AJS3 Web Console REST API](https://itpfdoc.hitachi.co.jp/manuals/3021/30213b1920/AJSO0280.HTM)
 
 ## Tools Currently Available
 

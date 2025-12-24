@@ -34,6 +34,20 @@ rem ログ出力先フォルダ（バッチファイルと同じ場所に出力�
 set "OUTPUT_DIR=%~dp0"
 
 rem ----------------------------------------------------------------------------
+rem Excel貼り付け設定
+rem ----------------------------------------------------------------------------
+rem ★★★ Excelファイル名を指定してください ★★★
+set "EXCEL_FILE_NAME=ログ貼り付け用.xlsx"
+
+rem ジョブ1のログ貼り付け先（シート名とセル位置）
+set "JOB1_SHEET_NAME=Sheet1"
+set "JOB1_PASTE_CELL=A1"
+
+rem ジョブ2のログ貼り付け先（シート名とセル位置）
+set "JOB2_SHEET_NAME=Sheet2"
+set "JOB2_PASTE_CELL=A1"
+
+rem ----------------------------------------------------------------------------
 rem 選択肢1: TEST
 rem ----------------------------------------------------------------------------
 set "MENU1_NAME=TEST"
@@ -138,10 +152,10 @@ echo ジョブネット起動中...
 echo ================================================================
 echo.
 
-rem ajsentry実行前に現在の最新実行登録番号を取得（比較用）
-set "BEFORE_EXEC_REG_NUM="
-for /f "delims=" %%A in ('ajsshow -F %SCHEDULER_SERVICE% -g 1 -i "%%ll" "%JOBNET_PATH%" 2^>^&1') do (
-    if not defined BEFORE_EXEC_REG_NUM set "BEFORE_EXEC_REG_NUM=%%A"
+rem ajsentry実行前に現在の最新実行IDを取得（比較用）
+set "BEFORE_EXEC_ID="
+for /f "delims=" %%A in ('ajsshow -F %SCHEDULER_SERVICE% -g 1 -i "%%##" "%JOBNET_PATH%" 2^>^&1') do (
+    if not defined BEFORE_EXEC_ID set "BEFORE_EXEC_ID=%%A"
 )
 
 rem ajsentry実行（-n: 即時実行, -w: 完了待ち）
@@ -152,24 +166,24 @@ ajsentry -F %SCHEDULER_SERVICE% -n -w %JOBNET_PATH%
 set "AJSENTRY_EXITCODE=%ERRORLEVEL%"
 echo.
 
-rem 実行登録番号を取得（ajsentry後の最新世代）
-set "EXEC_REG_NUM="
-for /f "delims=" %%A in ('ajsshow -F %SCHEDULER_SERVICE% -g 1 -i "%%ll" "%JOBNET_PATH%" 2^>^&1') do (
-    if not defined EXEC_REG_NUM set "EXEC_REG_NUM=%%A"
+rem 実行IDを取得（ajsentry後の最新世代）
+set "EXEC_ID="
+for /f "delims=" %%A in ('ajsshow -F %SCHEDULER_SERVICE% -g 1 -i "%%##" "%JOBNET_PATH%" 2^>^&1') do (
+    if not defined EXEC_ID set "EXEC_ID=%%A"
 )
 
-rem 実行登録番号が変わったことを確認（自分が起動したジョブであることを保証）
-if "!EXEC_REG_NUM!"=="!BEFORE_EXEC_REG_NUM!" (
-    echo [エラー] 実行登録番号が変化していません。ジョブが実行されませんでした。
+rem 実行IDが変わったことを確認（自分が起動したジョブであることを保証）
+if "!EXEC_ID!"=="!BEFORE_EXEC_ID!" (
+    echo [エラー] 実行IDが変化していません。ジョブが実行されませんでした。
     goto :ERROR_EXIT
 )
-echo   実行登録番号: !EXEC_REG_NUM!
+echo   実行ID: !EXEC_ID!
 echo.
 
 rem ajsentry終了後、ajsshowで1回だけ結果を取得
 rem （ajsentryの戻り値はコマンド実行成否であり、ジョブネット結果ではない）
 set "JOB_STATUS="
-for /f "delims=" %%i in ('ajsshow -F %SCHEDULER_SERVICE% -B !EXEC_REG_NUM! -i "%%CC" "%JOBNET_PATH%" 2^>^&1') do (
+for /f "delims=" %%i in ('ajsshow -F %SCHEDULER_SERVICE% -g 1 -i "%%CC" "%JOBNET_PATH%" 2^>^&1') do (
     if not defined JOB_STATUS set "JOB_STATUS=%%i"
 )
 
@@ -208,7 +222,7 @@ echo.
 
 rem まず実終了コード（%%RR）を取得してエラー判定（実行登録番号で特定）
 set "RETURN_CODE1="
-for /f "delims=" %%A in ('ajsshow -F %SCHEDULER_SERVICE% -B !EXEC_REG_NUM! -i "%%RR" "%JOB_PATH1%" 2^>^&1') do (
+for /f "delims=" %%A in ('ajsshow -F %SCHEDULER_SERVICE% -g 1 -i "%%RR" "%JOB_PATH1%" 2^>^&1') do (
     if not defined RETURN_CODE1 set "RETURN_CODE1=%%A"
 )
 
@@ -226,9 +240,21 @@ if not "!RETURN_CODE1!"=="0" (
     echo   [警告] ジョブ1は異常終了しています
 )
 
+rem 開始時間・終了時間を取得
+set "START_TIME1="
+set "END_TIME1="
+for /f "tokens=1,2" %%A in ('ajsshow -F %SCHEDULER_SERVICE% -g 1 -i "%%SS %%EE" "%JOB_PATH1%" 2^>^&1') do (
+    if not defined START_TIME1 (
+        set "START_TIME1=%%A"
+        set "END_TIME1=%%B"
+    )
+)
+echo   開始時間: !START_TIME1!
+echo   終了時間: !END_TIME1!
+
 rem 標準出力ファイルパスを取得（実行登録番号で特定）
 set "LOG_FILE_PATH1="
-for /f "delims=" %%A in ('ajsshow -F %SCHEDULER_SERVICE% -B !EXEC_REG_NUM! -i "%%so" "%JOB_PATH1%" 2^>^&1') do (
+for /f "delims=" %%A in ('ajsshow -F %SCHEDULER_SERVICE% -g 1 -i "%%so" "%JOB_PATH1%" 2^>^&1') do (
     if not defined LOG_FILE_PATH1 set "LOG_FILE_PATH1=%%A"
 )
 
@@ -257,9 +283,34 @@ echo [OK] ジョブ1のログを出力しました: %OUTPUT_FILE1%
 echo.
 
 rem ======================================================================
-rem ■ ここに入れたい処理を記述してください
+rem ■ ログをExcelに貼り付け
 rem ======================================================================
 
+rem PowerShellでExcelにログ内容を貼り付け
+powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+    "$logFile = '%LOG_FILE_PATH1%'; ^
+    $excelPath = '%~dp0%EXCEL_FILE_NAME%'; ^
+    $sheetName = '%JOB1_SHEET_NAME%'; ^
+    $pasteCell = '%JOB1_PASTE_CELL%'; ^
+    if (-not (Test-Path $logFile)) { ^
+        Write-Host '[情報] ログファイルが存在しません'; ^
+        exit; ^
+    } ^
+    if (-not (Test-Path $excelPath)) { ^
+        Write-Host '[エラー] Excelファイルが見つかりません:' $excelPath; ^
+        exit; ^
+    } ^
+    $logContent = Get-Content $logFile -Encoding Default -Raw; ^
+    $excel = New-Object -ComObject Excel.Application; ^
+    $excel.Visible = $true; ^
+    $workbook = $excel.Workbooks.Open($excelPath); ^
+    $sheet = $workbook.Worksheets.Item($sheetName); ^
+    $sheet.Range($pasteCell).Value2 = $logContent; ^
+    $workbook.Save(); ^
+    [System.Runtime.Interopservices.Marshal]::ReleaseComObject($sheet) | Out-Null; ^
+    [System.Runtime.Interopservices.Marshal]::ReleaseComObject($workbook) | Out-Null; ^
+    [System.Runtime.Interopservices.Marshal]::ReleaseComObject($excel) | Out-Null; ^
+    Write-Host '[OK] Excelにログを貼り付けました:' $sheetName $pasteCell"
 
 rem ======================================================================
 
@@ -277,7 +328,7 @@ echo.
 
 rem まず実終了コード（%%RR）を取得してエラー判定（実行登録番号で特定）
 set "RETURN_CODE2="
-for /f "delims=" %%A in ('ajsshow -F %SCHEDULER_SERVICE% -B !EXEC_REG_NUM! -i "%%RR" "%JOB_PATH2%" 2^>^&1') do (
+for /f "delims=" %%A in ('ajsshow -F %SCHEDULER_SERVICE% -g 1 -i "%%RR" "%JOB_PATH2%" 2^>^&1') do (
     if not defined RETURN_CODE2 set "RETURN_CODE2=%%A"
 )
 
@@ -295,9 +346,21 @@ if not "!RETURN_CODE2!"=="0" (
     echo   [警告] ジョブ2は異常終了しています
 )
 
+rem 開始時間・終了時間を取得
+set "START_TIME2="
+set "END_TIME2="
+for /f "tokens=1,2" %%A in ('ajsshow -F %SCHEDULER_SERVICE% -g 1 -i "%%SS %%EE" "%JOB_PATH2%" 2^>^&1') do (
+    if not defined START_TIME2 (
+        set "START_TIME2=%%A"
+        set "END_TIME2=%%B"
+    )
+)
+echo   開始時間: !START_TIME2!
+echo   終了時間: !END_TIME2!
+
 rem 標準出力ファイルパスを取得（実行登録番号で特定）
 set "LOG_FILE_PATH2="
-for /f "delims=" %%A in ('ajsshow -F %SCHEDULER_SERVICE% -B !EXEC_REG_NUM! -i "%%so" "%JOB_PATH2%" 2^>^&1') do (
+for /f "delims=" %%A in ('ajsshow -F %SCHEDULER_SERVICE% -g 1 -i "%%so" "%JOB_PATH2%" 2^>^&1') do (
     if not defined LOG_FILE_PATH2 set "LOG_FILE_PATH2=%%A"
 )
 
@@ -326,9 +389,34 @@ echo [OK] ジョブ2のログを出力しました: %OUTPUT_FILE2%
 echo.
 
 rem ======================================================================
-rem ■ ここに入れたい処理を記述してください
+rem ■ ログをExcelに貼り付け
 rem ======================================================================
 
+rem PowerShellでExcelにログ内容を貼り付け
+powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+    "$logFile = '%LOG_FILE_PATH2%'; ^
+    $excelPath = '%~dp0%EXCEL_FILE_NAME%'; ^
+    $sheetName = '%JOB2_SHEET_NAME%'; ^
+    $pasteCell = '%JOB2_PASTE_CELL%'; ^
+    if (-not (Test-Path $logFile)) { ^
+        Write-Host '[情報] ログファイルが存在しません'; ^
+        exit; ^
+    } ^
+    if (-not (Test-Path $excelPath)) { ^
+        Write-Host '[エラー] Excelファイルが見つかりません:' $excelPath; ^
+        exit; ^
+    } ^
+    $logContent = Get-Content $logFile -Encoding Default -Raw; ^
+    $excel = New-Object -ComObject Excel.Application; ^
+    $excel.Visible = $true; ^
+    $workbook = $excel.Workbooks.Open($excelPath); ^
+    $sheet = $workbook.Worksheets.Item($sheetName); ^
+    $sheet.Range($pasteCell).Value2 = $logContent; ^
+    $workbook.Save(); ^
+    [System.Runtime.Interopservices.Marshal]::ReleaseComObject($sheet) | Out-Null; ^
+    [System.Runtime.Interopservices.Marshal]::ReleaseComObject($workbook) | Out-Null; ^
+    [System.Runtime.Interopservices.Marshal]::ReleaseComObject($excel) | Out-Null; ^
+    Write-Host '[OK] Excelにログを貼り付けました:' $sheetName $pasteCell"
 
 rem ======================================================================
 
