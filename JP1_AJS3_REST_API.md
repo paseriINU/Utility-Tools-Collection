@@ -170,41 +170,95 @@ X-AJS-Authorization: dXNlcjpwYXNzd29yZA==
 
 ---
 
-### 2. ユニット定義取得 (definitions)
+### 7.1.3 実行結果詳細の取得API
 
-ユニットの定義情報を取得します。
+実行が終了したユニットの，実行結果の詳細を取得します。
 
-**エンドポイント:**
+#### 実行権限
+
+ログインしたJP1ユーザーが，次のどれかのJP1権限を持つ必要があります：
+- JP1_AJS_Admin権限
+- JP1_AJS_Manager権限
+- JP1_AJS_Editor権限
+- JP1_AJS_Operator権限
+- JP1_AJS_Guest権限
+
+#### リクエスト形式
+
 ```
-GET /ajs/api/v1/objects/definitions?manager={manager}&serviceName={serviceName}&location={path}
+GET /ajs/api/v1/objects/statuses/{unitName}:{execID}/actions/execResultDetails/invoke?query
 ```
 
----
+#### リソース識別情報
 
-### 3. 実行結果詳細取得 (execResultDetails)
+| パラメータ | データ型 | 説明 | 必須/任意 |
+|-----------|---------|------|----------|
+| unitName | string | ユニット完全名（1〜930バイト） | 必須 |
+| execID | string | 実行ID（@[mmmm]{A〜Z}nnnn形式、例: @10A200） | 必須 |
 
-ジョブの実行結果詳細（標準エラー出力）を取得します。
+#### クエリパラメータ
 
-**エンドポイント:**
-```
-GET /ajs/api/v1/objects/statuses/{path}:{execId}/actions/execResultDetails/invoke?manager={manager}&serviceName={serviceName}
-```
+| パラメータ | 説明 | 必須/任意 |
+|-----------|------|----------|
+| manager | マネージャーホスト名またはIPアドレス（1〜255バイト） | 必須 |
+| serviceName | スケジューラーサービス名（1〜30バイト） | 必須 |
 
-**パラメータ:**
-- `{path}`: ユニットパス（例: /jobnet1/job1）
-- `{execId}`: 実行ID（例: @A100）
+#### ステータスコード
 
-**レスポンス例:**
+| コード | メッセージ | 説明 |
+|--------|----------|------|
+| 200 | OK | 実行結果詳細の取得に成功 |
+| 400 | Bad Request | クエリ文字列が不正 |
+| 401 | Unauthorized | 認証が必要 |
+| 403 | Forbidden | 実行権限がない |
+| 404 | Not found | リソースがない、またはアクセス権限がない |
+| 409 | Conflict | リクエストは現在のリソース状態と矛盾 |
+| 412 | Precondition failed | Web Consoleサーバが利用できない |
+| 500 | Server-side error | サーバ処理エラー |
+
+#### レスポンス形式
+
 ```json
 {
-  "execResultDetails": "エラーメッセージ内容...",
+  "execResultDetails": "実行結果詳細",
+  "all": すべての情報を取得できたかどうか
+}
+```
+
+#### レスポンス詳細
+
+| メンバー | データ型 | 説明 |
+|---------|---------|------|
+| execResultDetails | string | 実行結果詳細（**最大5MB**）。5MBを超える場合は切り捨て。改行コード（\n または \r\n）を含む。結果がない場合は空文字列。 |
+| all | boolean | すべての実行結果詳細を取得できた場合true |
+
+#### 使用例
+
+指定したジョブの実行結果詳細を取得する場合：
+
+```
+GET /ajs/api/v1/objects/statuses/%2FJobGroup%2FJobnet%2FJob:%40A100/actions/execResultDetails/invoke?manager=HOSTM&serviceName=AJSROOT1 HTTP/1.1
+Host: HOSTW:22252
+Accept-Language: ja
+X-AJS-Authorization: dXNlcjpwYXNzd29yZA==
+```
+
+#### レスポンス例
+
+```json
+{
+  "execResultDetails": "実行結果詳細",
   "all": true
 }
 ```
 
-**注意:**
-- **標準エラー出力のみ**取得可能（標準出力ではない）
-- 実行IDはstatuses APIで事前に取得する必要がある
+#### 注意事項
+
+- **実行結果詳細**を取得（標準エラー出力相当）
+- 最大サイズは**5MB**（超過分は切り捨て）
+- 改行コードは実行環境依存（\n または \r\n）
+- 実行IDは事前にユニット一覧取得API (7.1.1) で取得する必要がある
+- URLエンコードが必要（例: `/` → `%2F`, `@` → `%40`）
 
 ---
 
@@ -220,16 +274,23 @@ GET /ajs/api/v1/objects/statuses/{path}:{execId}/actions/execResultDetails/invok
 
 ## 制限事項
 
-1. **statuses API は実行登録中のジョブのみ対象**
+1. **ユニット一覧取得API (7.1.1) は実行登録中のジョブのみ対象**
    - 即時実行で終了済みのジョブは取得できない
    - 計画実行で登録中のジョブは取得可能
+   - 最大取得件数は1,000件
 
-2. **execResultDetails API は標準エラー出力のみ**
+2. **実行結果詳細取得API (7.1.3)**
+   - 実行結果詳細を取得（標準エラー出力相当）
+   - 最大5MBまで（超過分は切り捨て）
    - 標準出力の取得には ajsshow コマンド（WinRM経由）が必要
 
 3. **認証**
    - JP1ユーザーの権限が必要
    - Web Console経由でManagerに接続
+
+4. **URLエンコード**
+   - パス内の特殊文字はURLエンコードが必要
+   - `/` → `%2F`, `@` → `%40`
 
 ---
 
