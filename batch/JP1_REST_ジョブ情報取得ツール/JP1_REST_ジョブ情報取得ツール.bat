@@ -413,7 +413,7 @@ try {
     }
 } catch {
     # API呼び出しエラー
-    Write-Output "ERROR: $($_.Exception.Message)"
+    [Console]::WriteLine("ERROR: $($_.Exception.Message)")
     exit 1
 }
 
@@ -448,17 +448,17 @@ if ($execIdList.Count -gt 0) {
             # all フラグのチェック
             # false の場合は、結果が5MBを超えて切り捨てられている
             if ($resultJson.all -eq $false) {
-                Write-Output "ERROR: Result truncated (exceeded 5MB limit) for $targetPath"
+                [Console]::WriteLine("ERROR: Result truncated (exceeded 5MB limit) for $targetPath")
                 exit 1
             }
 
             # 実行結果詳細を出力
             if ($resultJson.execResultDetails) {
-                Write-Output $resultJson.execResultDetails
+                [Console]::WriteLine($resultJson.execResultDetails)
             }
         } catch {
             # 個別ジョブの詳細取得エラー
-            Write-Output "ERROR: Failed to get details for $targetPath"
+            [Console]::WriteLine("ERROR: Failed to get details for $targetPath")
         }
     }
 }
