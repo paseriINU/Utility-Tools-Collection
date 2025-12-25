@@ -60,7 +60,7 @@ $debugMode = $true
 
 # 検索対象（DEFINITION_AND_STATUS: 定義と状態, DEFINITION: 定義のみ）
 # ※ 実行登録されていないユニットを取得するには DEFINITION を指定
-$searchTarget = "DEFINITION_AND_STATUS"
+$searchTarget = "DEFINITION"
 
 # ==============================================================================
 # ■ メイン処理（以下は編集不要）
@@ -216,12 +216,15 @@ try {
     $response = Invoke-WebRequest -Uri $statusesUrl -Method GET -Headers $headers -TimeoutSec 30 -UseBasicParsing
     Write-Host "[OK] HTTPステータス: $($response.StatusCode)" -ForegroundColor Green
 
-    $jsonData = $response.Content | ConvertFrom-Json
+    # UTF-8文字化け対策: RawContentStreamからUTF-8としてデコード
+    $responseBytes = $response.RawContentStream.ToArray()
+    $responseText = [System.Text.Encoding]::UTF8.GetString($responseBytes)
+    $jsonData = $responseText | ConvertFrom-Json
 
     if ($debugMode) {
         Write-Host ""
         Write-Host "レスポンス:" -ForegroundColor Gray
-        Write-Host $response.Content
+        Write-Host $responseText
     }
 
     # statuses配列からexecIDを抽出
@@ -286,7 +289,10 @@ if ($execIdList.Count -eq 0) {
             $resultResponse = Invoke-WebRequest -Uri $execResultUrl -Method GET -Headers $headers -TimeoutSec 30 -UseBasicParsing
             Write-Host "[OK] HTTPステータス: $($resultResponse.StatusCode)" -ForegroundColor Green
 
-            $resultJson = $resultResponse.Content | ConvertFrom-Json
+            # UTF-8文字化け対策
+            $resultBytes = $resultResponse.RawContentStream.ToArray()
+            $resultText = [System.Text.Encoding]::UTF8.GetString($resultBytes)
+            $resultJson = $resultText | ConvertFrom-Json
 
             Write-Host ""
             Write-Host "実行結果詳細（標準エラー出力）:" -ForegroundColor Green
