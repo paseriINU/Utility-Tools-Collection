@@ -115,5 +115,4 @@ echo.
 rem メモ帳で開く
 start notepad "%OUTPUT_FILE%"
 
-pause
 exit /b 0
