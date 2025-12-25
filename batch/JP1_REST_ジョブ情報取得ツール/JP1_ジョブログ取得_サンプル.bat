@@ -1,6 +1,6 @@
 @echo off
 title JP1 ジョブログ取得サンプル
-setlocal enabledelayedexpansion
+setlocal
 
 rem ============================================================================
 rem JP1 ジョブログ取得サンプル
@@ -30,57 +30,32 @@ echo.
 echo   対象: %UNIT_PATH%
 echo   出力: %OUTPUT_FILE%
 echo.
-
-rem JP1_REST_ジョブ情報取得ツール.bat を呼び出し
 echo ログを取得中...
 
-rem 一時ファイルに結果を保存
-set "TEMP_FILE=%TEMP%\jp1_log_%RANDOM%.txt"
-
-call "%SCRIPT_DIR%JP1_REST_ジョブ情報取得ツール.bat" "%UNIT_PATH%" > "%TEMP_FILE%" 2>&1
+rem JP1_REST_ジョブ情報取得ツール.bat を呼び出し、結果を直接ファイルに保存
+call "%SCRIPT_DIR%JP1_REST_ジョブ情報取得ツール.bat" "%UNIT_PATH%" > "%OUTPUT_FILE%" 2>&1
 set "EXIT_CODE=%ERRORLEVEL%"
 
-rem エラーチェック
+rem エラーコードでチェック
 if %EXIT_CODE% neq 0 (
     echo.
     echo [エラー] ログの取得に失敗しました（終了コード: %EXIT_CODE%）
     echo.
-    if exist "%TEMP_FILE%" (
-        echo エラー内容:
-        type "%TEMP_FILE%"
-        del "%TEMP_FILE%" >nul 2>&1
-    )
-    echo.
+    del "%OUTPUT_FILE%" >nul 2>&1
     pause
     exit /b %EXIT_CODE%
 )
 
 rem 結果が空かチェック
-for %%A in ("%TEMP_FILE%") do set "FILE_SIZE=%%~zA"
+for %%A in ("%OUTPUT_FILE%") do set "FILE_SIZE=%%~zA"
 if "%FILE_SIZE%"=="0" (
     echo.
     echo [警告] 取得結果が空です
     echo.
-    del "%TEMP_FILE%" >nul 2>&1
+    del "%OUTPUT_FILE%" >nul 2>&1
     pause
     exit /b 1
 )
-
-rem ERRORで始まる行があるかチェック
-findstr /B "ERROR:" "%TEMP_FILE%" >nul 2>&1
-if %ERRORLEVEL% equ 0 (
-    echo.
-    echo [エラー] API呼び出しでエラーが発生しました
-    echo.
-    type "%TEMP_FILE%"
-    echo.
-    del "%TEMP_FILE%" >nul 2>&1
-    pause
-    exit /b 1
-)
-
-rem 出力ファイルに保存
-copy /Y "%TEMP_FILE%" "%OUTPUT_FILE%" >nul
 
 echo.
 echo ================================================================
@@ -89,9 +64,6 @@ echo ================================================================
 echo.
 echo 出力ファイル: %OUTPUT_FILE%
 echo.
-
-rem 一時ファイルを削除
-del "%TEMP_FILE%" >nul 2>&1
 
 pause
 exit /b 0
