@@ -412,8 +412,6 @@ try {
         }
     }
 } catch {
-    # API呼び出しエラー
-    [Console]::WriteLine("ERROR: $($_.Exception.Message)")
     exit 1
 }
 
@@ -445,20 +443,15 @@ if ($execIdList.Count -gt 0) {
             $resultText = [System.Text.Encoding]::UTF8.GetString($resultBytes)
             $resultJson = $resultText | ConvertFrom-Json
 
-            # all フラグのチェック
-            # false の場合は、結果が5MBを超えて切り捨てられている
-            if ($resultJson.all -eq $false) {
-                [Console]::WriteLine("ERROR: Result truncated (exceeded 5MB limit) for $targetPath")
-                exit 1
-            }
+            # all フラグのチェック（falseの場合は5MB超過で切り捨て）
+            if ($resultJson.all -eq $false) { exit 1 }
 
             # 実行結果詳細を出力
             if ($resultJson.execResultDetails) {
                 [Console]::WriteLine($resultJson.execResultDetails)
             }
         } catch {
-            # 個別ジョブの詳細取得エラー
-            [Console]::WriteLine("ERROR: Failed to get details for $targetPath")
+            exit 1
         }
     }
 }
