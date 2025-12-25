@@ -1,35 +1,20 @@
 <# :
 @echo off
 chcp 65001 >nul
-title JP1 REST API ジョブ情報取得ツール
 setlocal
 
 rem 引数チェック
 if "%~1"=="" (
-    echo.
-    echo [エラー] ユニットパスを指定してください
-    echo.
-    echo 使い方:
-    echo   %~nx0 "/JobGroup/Jobnet"
-    echo.
-    pause
+    echo ERROR: ユニットパスを指定してください
+    echo 使い方: %~nx0 "/JobGroup/Jobnet"
     exit /b 1
 )
 
 rem 引数を環境変数に設定
 set "JP1_UNIT_PATH=%~1"
 
-rem 第2引数があればサイレントモード（他バッチからの呼び出し用）
-if not "%~2"=="" (
-    set "JP1_SILENT_MODE=1"
-)
-
 powershell -NoProfile -ExecutionPolicy Bypass -Command "$scriptDir=('%~dp0' -replace '\\$',''); iex ((gc '%~f0' -Encoding UTF8) -join \"`n\")"
-set EXITCODE=%ERRORLEVEL%
-
-rem サイレントモードでなければpause
-if not defined JP1_SILENT_MODE pause
-exit /b %EXITCODE%
+exit /b %ERRORLEVEL%
 : #>
 
 # ==============================================================================
@@ -37,12 +22,11 @@ exit /b %EXITCODE%
 #
 # 説明:
 #   JP1/AJS3 Web Console REST APIを使用して、ジョブ/ジョブネットの
-#   状態情報と実行結果詳細を取得します。
+#   実行結果詳細を取得します。
 #   ※ JP1/AJS3 - Web Consoleが必要です
 #
 # 使い方:
 #   JP1_REST_ジョブ情報取得ツール.bat "/JobGroup/Jobnet"
-#   JP1_REST_ジョブ情報取得ツール.bat "/JobGroup/Jobnet" silent  ← サイレントモード
 #
 # 参考:
 #   https://itpfdoc.hitachi.co.jp/manuals/3021/30213b1920/AJSO0280.HTM
@@ -93,27 +77,6 @@ $statusFilter = ""
 # ユニットパスを環境変数から取得
 $unitPath = $env:JP1_UNIT_PATH
 
-# サイレントモード判定
-$silentMode = $false
-if ($env:JP1_SILENT_MODE) {
-    $silentMode = $true
-}
-
-# 対話モードの場合のみヘッダー表示
-if (-not $silentMode) {
-    Write-Host ""
-    Write-Host "================================================================" -ForegroundColor Cyan
-    Write-Host "  JP1 REST API ジョブ情報取得ツール" -ForegroundColor Cyan
-    Write-Host "================================================================" -ForegroundColor Cyan
-    Write-Host ""
-    Write-Host "  対象: $unitPath"
-    Write-Host "  世代: $generation"
-    if ($statusFilter) {
-        Write-Host "  フィルタ: $statusFilter"
-    }
-    Write-Host ""
-}
-
 # プロトコル設定
 $protocol = if ($useHttps) { "https" } else { "http" }
 
@@ -150,10 +113,6 @@ if ($useHttps) {
 # ========================================
 $baseUrl = "${protocol}://${webConsoleHost}:${webConsolePort}/ajs/api/v1"
 
-if (-not $silentMode) {
-    Write-Host "ユニット一覧を取得中..." -ForegroundColor Cyan
-}
-
 # URLエンコード
 $encodedLocation = [System.Uri]::EscapeDataString($unitPath)
 
@@ -184,21 +143,12 @@ try {
     $jsonData = $responseText | ConvertFrom-Json
 
     if ($jsonData.statuses -and $jsonData.statuses.Count -gt 0) {
-        if (-not $silentMode) {
-            Write-Host ""
-            Write-Host "取得したユニット一覧:" -ForegroundColor Green
-            Write-Host "----------------------------------------"
-        }
         foreach ($unit in $jsonData.statuses) {
             $unitName = $unit.definition.unitName
             $unitType = $unit.definition.unitType
             $unitStatus = $unit.unitStatus
             $execId = if ($unitStatus) { $unitStatus.execID } else { $null }
             $status = if ($unitStatus) { $unitStatus.status } else { "N/A" }
-
-            if (-not $silentMode) {
-                Write-Host "  $unitName [$unitType] - $status"
-            }
 
             # ジョブでexecIDがある場合のみリストに追加
             if ($execId -and $unitType -match "JOB") {
@@ -210,22 +160,9 @@ try {
                 }
             }
         }
-        if (-not $silentMode) {
-            Write-Host "----------------------------------------"
-            Write-Host "ジョブ件数: $($execIdList.Count)" -ForegroundColor Cyan
-        }
-    } else {
-        if (-not $silentMode) {
-            Write-Host ""
-            Write-Host "[警告] 該当するユニットがありません" -ForegroundColor Yellow
-        }
     }
 } catch {
-    if ($silentMode) {
-        Write-Output "ERROR: $($_.Exception.Message)"
-    } else {
-        Write-Host "[エラー] $($_.Exception.Message)" -ForegroundColor Red
-    }
+    Write-Output "ERROR: $($_.Exception.Message)"
     exit 1
 }
 
@@ -233,23 +170,9 @@ try {
 # 実行結果詳細の取得
 # ========================================
 if ($execIdList.Count -gt 0) {
-    if (-not $silentMode) {
-        Write-Host ""
-        Write-Host "実行結果詳細を取得中..." -ForegroundColor Cyan
-        Write-Host ""
-    }
-
-    $jobIndex = 0
     foreach ($item in $execIdList) {
-        $jobIndex++
         $targetPath = $item.Path
         $targetExecId = $item.ExecId
-        $targetStatus = $item.Status
-
-        if (-not $silentMode) {
-            Write-Host "[$jobIndex/$($execIdList.Count)] $targetPath" -ForegroundColor Yellow
-            Write-Host "  実行ID: $targetExecId | 状態: $targetStatus" -ForegroundColor Gray
-        }
 
         # URLエンコード
         $encodedPath = [System.Uri]::EscapeDataString($targetPath)
@@ -267,39 +190,12 @@ if ($execIdList.Count -gt 0) {
             $resultJson = $resultText | ConvertFrom-Json
 
             if ($resultJson.execResultDetails) {
-                if ($silentMode) {
-                    # サイレントモード: 結果のみ標準出力
-                    Write-Output $resultJson.execResultDetails
-                } else {
-                    # 対話モード: 装飾付きで表示
-                    Write-Host "  ----------------------------------------" -ForegroundColor DarkGray
-                    $resultJson.execResultDetails -split "`n" | ForEach-Object {
-                        Write-Host "  $_"
-                    }
-                    Write-Host "  ----------------------------------------" -ForegroundColor DarkGray
-                }
-            } else {
-                if (-not $silentMode) {
-                    Write-Host "  (出力なし)" -ForegroundColor DarkGray
-                }
+                Write-Output $resultJson.execResultDetails
             }
         } catch {
-            if ($silentMode) {
-                Write-Output "ERROR: Failed to get details for $targetPath"
-            } else {
-                Write-Host "  [エラー] 詳細取得失敗" -ForegroundColor Red
-            }
-        }
-        if (-not $silentMode) {
-            Write-Host ""
+            Write-Output "ERROR: Failed to get details for $targetPath"
         }
     }
-}
-
-if (-not $silentMode) {
-    Write-Host "================================================================" -ForegroundColor Green
-    Write-Host "処理完了" -ForegroundColor Green
-    Write-Host "================================================================" -ForegroundColor Green
 }
 
 exit 0

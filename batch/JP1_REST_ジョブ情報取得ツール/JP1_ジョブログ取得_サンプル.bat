@@ -35,7 +35,7 @@ echo ログを取得中...
 rem 一時ファイルに結果を保存
 set "TEMP_FILE=%TEMP%\jp1_log_%RANDOM%.txt"
 
-call "%SCRIPT_DIR%JP1_REST_ジョブ情報取得ツール.bat" "%UNIT_PATH%" silent > "%TEMP_FILE%" 2>&1
+call "%SCRIPT_DIR%JP1_REST_ジョブ情報取得ツール.bat" "%UNIT_PATH%" > "%TEMP_FILE%" 2>&1
 set "EXIT_CODE=%ERRORLEVEL%"
 
 rem エラーチェック
