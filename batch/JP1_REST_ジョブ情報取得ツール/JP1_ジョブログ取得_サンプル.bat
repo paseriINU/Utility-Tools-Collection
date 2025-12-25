@@ -14,12 +14,15 @@ rem   1. 下記の UNIT_PATH を取得したいジョブのパスに変更
 rem      例: /JobGroup/Jobnet/Job1
 rem   2. このバッチをダブルクリックで実行
 rem
-rem 終了コード:
+rem 終了コード（実行順）:
 rem   0: 正常終了
 rem   1: 引数エラー
-rem   2: API接続エラー（ユニット一覧取得）
-rem   3: 5MB超過エラー（結果切り捨て）
-rem   4: 詳細取得エラー
+rem   2: ユニット未検出（STEP 1）
+rem   3: ユニット種別エラー（STEP 1）
+rem   4: 実行世代なし（STEP 2）
+rem   5: 5MB超過エラー（STEP 3）
+rem   6: 詳細取得エラー（STEP 3）
+rem   9: API接続エラー（各STEP）
 rem ============================================================================
 
 rem === ここを編集してください（ジョブのパスを指定）===
@@ -47,12 +50,15 @@ rem JP1_REST_ジョブ情報取得ツール.bat を呼び出し、結果を直�
 call "%SCRIPT_DIR%JP1_REST_ジョブ情報取得ツール.bat" "%UNIT_PATH%" > "%OUTPUT_FILE%" 2>&1
 set "EXIT_CODE=%ERRORLEVEL%"
 
-rem エラーコード別のハンドリング
+rem エラーコード別のハンドリング（実行順）
 if %EXIT_CODE% equ 0 goto :SUCCESS
 if %EXIT_CODE% equ 1 goto :ERR_ARGUMENT
-if %EXIT_CODE% equ 2 goto :ERR_API_CONNECTION
-if %EXIT_CODE% equ 3 goto :ERR_5MB_EXCEEDED
-if %EXIT_CODE% equ 4 goto :ERR_DETAIL_FETCH
+if %EXIT_CODE% equ 2 goto :ERR_UNIT_NOT_FOUND
+if %EXIT_CODE% equ 3 goto :ERR_UNIT_TYPE
+if %EXIT_CODE% equ 4 goto :ERR_NO_GENERATION
+if %EXIT_CODE% equ 5 goto :ERR_5MB_EXCEEDED
+if %EXIT_CODE% equ 6 goto :ERR_DETAIL_FETCH
+if %EXIT_CODE% equ 9 goto :ERR_API_CONNECTION
 goto :ERR_UNKNOWN
 
 :ERR_ARGUMENT
@@ -60,12 +66,25 @@ echo.
 echo [エラー] 引数エラー（ユニットパスが指定されていません）
 goto :ERROR_EXIT
 
-:ERR_API_CONNECTION
+:ERR_UNIT_NOT_FOUND
 echo.
-echo [エラー] API接続エラー（ユニット一覧の取得に失敗しました）
-echo          - Web Consoleが起動しているか確認してください
-echo          - 接続設定（ホスト名・ポート）を確認してください
-echo          - 認証情報（ユーザー名・パスワード）を確認してください
+echo [エラー] ユニット未検出（指定したユニットが存在しません）
+echo          - ユニットパスが正しいか確認してください: %UNIT_PATH%
+echo          - スケジューラーサービス名が正しいか確認してください
+goto :ERROR_EXIT
+
+:ERR_UNIT_TYPE
+echo.
+echo [エラー] ユニット種別エラー（指定したユニットがジョブではありません）
+echo          - 指定したパスはジョブネットまたはジョブグループの可能性があります
+echo          - ジョブのフルパスを指定してください
+goto :ERROR_EXIT
+
+:ERR_NO_GENERATION
+echo.
+echo [エラー] 実行世代なし（実行履歴が存在しません）
+echo          - ジョブが一度も実行されていない可能性があります
+echo          - 世代指定（generation）の設定を確認してください
 goto :ERROR_EXIT
 
 :ERR_5MB_EXCEEDED
@@ -77,8 +96,15 @@ goto :ERROR_EXIT
 :ERR_DETAIL_FETCH
 echo.
 echo [エラー] 詳細取得エラー（実行結果詳細の取得に失敗しました）
-echo          - ユニットパスが正しいか確認してください
-echo          - 実行履歴が存在するか確認してください
+echo          - execIDが正しいか確認してください
+goto :ERROR_EXIT
+
+:ERR_API_CONNECTION
+echo.
+echo [エラー] API接続エラー（Web Consoleへの接続に失敗しました）
+echo          - Web Consoleが起動しているか確認してください
+echo          - 接続設定（ホスト名・ポート）を確認してください
+echo          - 認証情報（ユーザー名・パスワード）を確認してください
 goto :ERROR_EXIT
 
 :ERR_UNKNOWN

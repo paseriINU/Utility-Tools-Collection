@@ -7,7 +7,7 @@ rem ============================================================================
 rem バッチファイル部分（PowerShellを起動するためのラッパー）
 rem ============================================================================
 rem このファイルはバッチファイルとPowerShellスクリプトの両方として動作します。
-rem ダブルクリックまたはコマンドラインから実行すると、以下の処理を行います。
+rem 引数にユニットパスを指定して実行してください。
 rem ============================================================================
 
 rem 引数チェック: 引数が空の場合はエラーコード1で終了
@@ -41,12 +41,20 @@ exit /b %ERRORLEVEL%
 #
 #   ※ 親パス（ジョブネット）を検索対象とし、ジョブ名でフィルタします
 #
-# 終了コード:
+# 処理フロー:
+#   STEP 1: DEFINITION で存在確認・ユニット種別確認
+#   STEP 2: DEFINITION_AND_STATUS で execID 取得
+#   STEP 3: 実行結果詳細取得
+#
+# 終了コード（実行順）:
 #   0: 正常終了
 #   1: 引数エラー（ユニットパスが指定されていません）
-#   2: API接続エラー（ユニット一覧の取得に失敗）
-#   3: 5MB超過エラー（実行結果が切り捨てられました）
-#   4: 詳細取得エラー（実行結果詳細の取得に失敗）
+#   2: ユニット未検出（STEP 1: 指定したユニットが存在しません）
+#   3: ユニット種別エラー（STEP 1: 指定したユニットがジョブではありません）
+#   4: 実行世代なし（STEP 2: 実行履歴が存在しません）
+#   5: 5MB超過エラー（STEP 3: 実行結果が切り捨てられました）
+#   6: 詳細取得エラー（STEP 3: 実行結果詳細の取得に失敗）
+#   9: API接続エラー（各STEPでの接続失敗）
 #
 # 参考:
 #   https://itpfdoc.hitachi.co.jp/manuals/3021/30213b1920/AJSO0280.HTM
@@ -111,21 +119,7 @@ $jp1Password = "password"
 # このセクションでは、ユニット一覧取得APIの検索条件を設定します。
 
 # ------------------------------------------------------------------------------
-# (1) SearchTargetType - 取得情報範囲
-# ------------------------------------------------------------------------------
-# 取得する情報の範囲を指定します。
-#
-# 指定可能な値:
-#   "DEFINITION"            - ユニットの定義情報のみを取得します
-#                             （実行状態は取得しない、高速）
-#   "DEFINITION_AND_STATUS" - ユニットの定義情報と実行状態を両方取得します
-#                             （execIDを取得するにはこちらが必要）
-#
-# ★ 実行結果詳細を取得する場合は "DEFINITION_AND_STATUS" が必要です
-$searchTarget = "DEFINITION_AND_STATUS"
-
-# ------------------------------------------------------------------------------
-# (2) GenerationType - 世代指定
+# (1) GenerationType - 世代指定
 # ------------------------------------------------------------------------------
 # 取得するユニットの世代を指定します。
 #
@@ -154,7 +148,7 @@ $periodEnd = "2025-12-25T23:59"
 $execID = ""
 
 # ------------------------------------------------------------------------------
-# (3) UnitStatus - ユニット状態フィルタ
+# (2) UnitStatus - ユニット状態フィルタ
 # ------------------------------------------------------------------------------
 # 取得するユニットの状態を指定します。
 #
@@ -201,7 +195,7 @@ $execID = ""
 $statusFilter = "NO"
 
 # ------------------------------------------------------------------------------
-# (4) DelayType - 遅延状態フィルタ
+# (3) DelayType - 遅延状態フィルタ
 # ------------------------------------------------------------------------------
 # 開始遅延または終了遅延の有無でフィルタします。
 #
@@ -213,7 +207,7 @@ $statusFilter = "NO"
 $delayStatus = "NO"
 
 # ------------------------------------------------------------------------------
-# (5) HoldPlan - 保留予定フィルタ
+# (4) HoldPlan - 保留予定フィルタ
 # ------------------------------------------------------------------------------
 # 保留予定の有無でフィルタします。
 #
@@ -279,14 +273,6 @@ if ($useHttps) {
     [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12
 }
 
-# ==============================================================================
-# STEP 1: ユニット一覧取得API
-# ==============================================================================
-# ジョブのパスを解析し、親パス（ジョブネット）を検索対象としてジョブ名でフィルタします。
-# 例: "/JobGroup/Jobnet/Job1" → location="/JobGroup/Jobnet", unitName="Job1"
-#
-# このAPIで取得したexecID（実行ID）を使用して、実行結果詳細を取得します。
-
 # ベースURLの構築
 $baseUrl = "${protocol}://${webConsoleHost}:${webConsolePort}/ajs/api/v1"
 
@@ -310,16 +296,66 @@ if (-not $jobName) {
 $encodedParentPath = [System.Uri]::EscapeDataString($parentPath)
 $encodedJobName = [System.Uri]::EscapeDataString($jobName)
 
-# ------------------------------------------------------------------------------
-# クエリパラメータの構築
-# ------------------------------------------------------------------------------
-# 親パスをlocationに設定し、ジョブ名で完全一致フィルタ
+# ==============================================================================
+# STEP 1: ユニット存在確認・種別確認（DEFINITION）
+# ==============================================================================
+# 最初に DEFINITION のみで呼び出し、以下を確認します：
+#   - 指定したユニットが存在するか
+#   - 指定したユニットがジョブ（JOB系）かどうか
+#   - 親ユニット（ジョブネット）の情報
+
+$defUrl = "${baseUrl}/objects/statuses?mode=search"
+$defUrl += "&manager=${managerHost}"
+$defUrl += "&serviceName=${schedulerService}"
+$defUrl += "&location=${encodedParentPath}"
+$defUrl += "&searchLowerUnits=NO"
+$defUrl += "&searchTarget=DEFINITION"
+$defUrl += "&unitName=${encodedJobName}"
+$defUrl += "&unitNameMatchMethods=EQ"
+
+$unitTypeValue = $null
+$unitFullName = $null
+
+try {
+    $defResponse = Invoke-WebRequest -Uri $defUrl -Method GET -Headers $headers -TimeoutSec 30 -UseBasicParsing
+
+    # UTF-8文字化け対策
+    $defBytes = $defResponse.RawContentStream.ToArray()
+    $defText = [System.Text.Encoding]::UTF8.GetString($defBytes)
+    $defJson = $defText | ConvertFrom-Json
+
+    # ユニット存在確認
+    if (-not $defJson.statuses -or $defJson.statuses.Count -eq 0) {
+        exit 2  # ユニット未検出
+    }
+
+    # 最初のユニットの情報を取得
+    $defUnit = $defJson.statuses[0]
+    $unitFullName = $defUnit.definition.unitName
+    $unitTypeValue = $defUnit.definition.unitType
+
+    # ユニット種別確認（JOB系かどうか）
+    # JOB系: JOB, PJOB, QJOB, EVWJB, FLWJB, MLWJB, MSWJB, LFWJB, TMWJB,
+    #        EVSJB, MLSJB, MSSJB, PWLJB, PWRJB, CJOB, HTPJOB, CPJOB, FXJOB, CUSTOM, JDJOB, ORJOB
+    if ($unitTypeValue -notmatch "JOB") {
+        exit 3  # ユニット種別エラー（ジョブではない）
+    }
+
+} catch {
+    exit 9  # API接続エラー（存在確認）
+}
+
+# ==============================================================================
+# STEP 2: 実行状態・execID取得（DEFINITION_AND_STATUS）
+# ==============================================================================
+# 存在確認・種別確認が成功したら、DEFINITION_AND_STATUS で execID を取得します。
+
 $statusUrl = "${baseUrl}/objects/statuses?mode=search"
 $statusUrl += "&manager=${managerHost}"
 $statusUrl += "&serviceName=${schedulerService}"
 $statusUrl += "&location=${encodedParentPath}"
 $statusUrl += "&searchLowerUnits=NO"
-$statusUrl += "&searchTarget=${searchTarget}"
+$statusUrl += "&searchTarget=DEFINITION_AND_STATUS"
 $statusUrl += "&unitName=${encodedJobName}"
 $statusUrl += "&unitNameMatchMethods=EQ"
 
@@ -352,17 +388,12 @@ if ($holdPlan -and $holdPlan -ne "NO") {
     $statusUrl += "&holdPlan=${holdPlan}"
 }
 
-# ------------------------------------------------------------------------------
-# API呼び出しとレスポンス処理
-# ------------------------------------------------------------------------------
 $execIdList = @()
 
 try {
-    # APIリクエストを送信（タイムアウト: 30秒）
     $response = Invoke-WebRequest -Uri $statusUrl -Method GET -Headers $headers -TimeoutSec 30 -UseBasicParsing
 
     # UTF-8文字化け対策
-    # PowerShellのデフォルトエンコーディングではなく、明示的にUTF-8でデコード
     $responseBytes = $response.RawContentStream.ToArray()
     $responseText = [System.Text.Encoding]::UTF8.GetString($responseBytes)
     $jsonData = $responseText | ConvertFrom-Json
@@ -371,17 +402,16 @@ try {
     if ($jsonData.statuses -and $jsonData.statuses.Count -gt 0) {
         foreach ($unit in $jsonData.statuses) {
             # ユニット定義情報
-            $unitFullName = $unit.definition.unitName      # ユニットのフルパス
-            $unitTypeValue = $unit.definition.unitType     # ユニット種別（ROOTNET, PCJOBなど）
+            $unitFullName = $unit.definition.unitName
+            $unitTypeValue = $unit.definition.unitType
 
             # ユニット状態情報
             $unitStatus = $unit.unitStatus
             $execIdValue = if ($unitStatus) { $unitStatus.execID } else { $null }
             $statusValue = if ($unitStatus) { $unitStatus.status } else { "N/A" }
 
-            # ジョブ（JOB）でexecIDがある場合のみリストに追加
-            # ジョブネット（NET）は実行結果詳細を持たないため除外
-            if ($execIdValue -and $unitTypeValue -match "JOB") {
+            # execIDがある場合のみリストに追加
+            if ($execIdValue) {
                 $execIdList += @{
                     Path = $unitFullName
                     ExecId = $execIdValue
@@ -391,14 +421,20 @@ try {
             }
         }
     }
+
+    # 実行世代が存在しない場合
+    if ($execIdList.Count -eq 0) {
+        exit 4  # 実行世代なし
+    }
+
 } catch {
-    exit 2  # API接続エラー（ユニット一覧取得）
+    exit 9  # API接続エラー（状態取得）
 }
 
 # ==============================================================================
-# STEP 2: 実行結果詳細取得API
+# STEP 3: 実行結果詳細取得API
 # ==============================================================================
-# STEP 1で取得した各ジョブについて、実行結果詳細を取得します。
+# STEP 2で取得した各ジョブについて、実行結果詳細を取得します。
 # 実行結果詳細には、標準出力・標準エラー出力の内容が含まれます。
 
 if ($execIdList.Count -gt 0) {
@@ -424,14 +460,14 @@ if ($execIdList.Count -gt 0) {
             $resultJson = $resultText | ConvertFrom-Json
 
             # all フラグのチェック（falseの場合は5MB超過で切り捨て）
-            if ($resultJson.all -eq $false) { exit 3 }  # 5MB超過エラー
+            if ($resultJson.all -eq $false) { exit 5 }  # 5MB超過エラー
 
             # 実行結果詳細を出力
             if ($resultJson.execResultDetails) {
                 [Console]::WriteLine($resultJson.execResultDetails)
             }
         } catch {
-            exit 4  # 詳細取得エラー
+            exit 6  # 詳細取得エラー
         }
     }
 }
