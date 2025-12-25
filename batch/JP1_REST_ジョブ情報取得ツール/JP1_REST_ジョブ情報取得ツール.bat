@@ -17,7 +17,11 @@ exit /b %ERRORLEVEL%
 #   ※ JP1/AJS3 - Web Consoleが必要です
 #
 # 使い方:
-#   JP1_REST_ジョブ情報取得ツール.bat "/JobGroup/Jobnet"
+#   ジョブネットのパスを指定（配下のジョブを全て取得）:
+#     JP1_REST_ジョブ情報取得ツール.bat "/JobGroup/Jobnet"
+#
+#   ジョブのパスを直接指定（特定のジョブのみ取得）:
+#     JP1_REST_ジョブ情報取得ツール.bat "/JobGroup/Jobnet/Job1"
 #
 # 終了コード:
 #   0: 正常終了
@@ -317,13 +321,31 @@ if ($useHttps) {
 # ==============================================================================
 # 指定したユニットパス配下のユニット情報を取得します。
 # このAPIで取得したexecID（実行ID）を使用して、実行結果詳細を取得します。
+#
+# ジョブのパスを直接指定した場合:
+#   親パスをlocationに設定し、ジョブ名でフィルタして検索します。
 
 # ベースURLの構築
 $baseUrl = "${protocol}://${webConsoleHost}:${webConsolePort}/ajs/api/v1"
 
+# ------------------------------------------------------------------------------
+# パスの解析（ジョブネット or ジョブ 両方に対応）
+# ------------------------------------------------------------------------------
+# 指定されたパスから親パスとユニット名を分離
+# 例: "/JobGroup/Jobnet/Job1" → 親: "/JobGroup/Jobnet", ユニット名: "Job1"
+$searchLocation = $unitPath
+$targetUnitName = ""
+
+# パスの最後のスラッシュ位置を取得
+$lastSlashIndex = $unitPath.LastIndexOf("/")
+if ($lastSlashIndex -gt 0) {
+    $parentPath = $unitPath.Substring(0, $lastSlashIndex)
+    $leafName = $unitPath.Substring($lastSlashIndex + 1)
+}
+
 # ユニットパスをURLエンコード
 # 例: "/JobGroup/Jobnet" → "%2FJobGroup%2FJobnet"
-$encodedLocation = [System.Uri]::EscapeDataString($unitPath)
+$encodedLocation = [System.Uri]::EscapeDataString($searchLocation)
 
 # ------------------------------------------------------------------------------
 # クエリパラメータの構築
@@ -420,6 +442,54 @@ try {
     }
 } catch {
     exit 2  # API接続エラー（ユニット一覧取得）
+}
+
+# ------------------------------------------------------------------------------
+# ジョブのパスを直接指定した場合の再検索
+# ------------------------------------------------------------------------------
+# 結果が空で、親パスが存在する場合、親パスで再検索
+if ($execIdList.Count -eq 0 -and $parentPath -and $leafName) {
+    # 親パスをlocationに設定し、ユニット名でフィルタ
+    $encodedParentPath = [System.Uri]::EscapeDataString($parentPath)
+    $encodedLeafName = [System.Uri]::EscapeDataString($leafName)
+
+    $retryUrl = "${baseUrl}/objects/statuses?mode=search"
+    $retryUrl += "&manager=${managerHost}"
+    $retryUrl += "&serviceName=${schedulerService}"
+    $retryUrl += "&location=${encodedParentPath}"
+    $retryUrl += "&searchLowerUnits=NO"
+    $retryUrl += "&searchTarget=${searchTarget}"
+    $retryUrl += "&unitName=${encodedLeafName}"
+    $retryUrl += "&unitNameMatchMethods=EQ"
+    $retryUrl += "&generation=${generation}"
+
+    try {
+        $retryResponse = Invoke-WebRequest -Uri $retryUrl -Method GET -Headers $headers -TimeoutSec 30 -UseBasicParsing
+        $retryBytes = $retryResponse.RawContentStream.ToArray()
+        $retryText = [System.Text.Encoding]::UTF8.GetString($retryBytes)
+        $retryJson = $retryText | ConvertFrom-Json
+
+        if ($retryJson.statuses -and $retryJson.statuses.Count -gt 0) {
+            foreach ($unit in $retryJson.statuses) {
+                $unitFullName = $unit.definition.unitName
+                $unitTypeValue = $unit.definition.unitType
+                $unitStatus = $unit.unitStatus
+                $execIdValue = if ($unitStatus) { $unitStatus.execID } else { $null }
+                $statusValue = if ($unitStatus) { $unitStatus.status } else { "N/A" }
+
+                if ($execIdValue -and $unitTypeValue -match "JOB") {
+                    $execIdList += @{
+                        Path = $unitFullName
+                        ExecId = $execIdValue
+                        Status = $statusValue
+                        UnitType = $unitTypeValue
+                    }
+                }
+            }
+        }
+    } catch {
+        # 再検索も失敗した場合は無視（元の結果を使用）
+    }
 }
 
 # ==============================================================================
