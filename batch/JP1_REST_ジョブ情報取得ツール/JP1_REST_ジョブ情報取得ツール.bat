@@ -304,10 +304,4 @@ Write-Host "================================================================" -F
 Write-Host "処理完了" -ForegroundColor Green
 Write-Host "================================================================" -ForegroundColor Green
 
-Write-Host ""
-Write-Host "注意:" -ForegroundColor Yellow
-Write-Host "  - execResultDetails API は実行結果詳細（標準エラー出力相当）を取得します"
-Write-Host "  - 標準出力の取得には ajsshow コマンド（WinRM経由）が必要です"
-Write-Host ""
-
 exit 0
