@@ -10,9 +10,9 @@ rem   JP1_REST_ジョブ情報取得ツール.bat を呼び出し、
 rem   取得したログをファイルに保存します。
 rem
 rem 使い方:
-rem   1. 下記の UNIT_PATH を取得したいジョブネットのパスに変更
-rem   2. 下記の OUTPUT_FILE を出力先ファイルパスに変更
-rem   3. このバッチをダブルクリックで実行
+rem   1. 下記の UNIT_PATH を取得したいジョブのパスに変更
+rem      例: /JobGroup/Jobnet/Job1
+rem   2. このバッチをダブルクリックで実行
 rem
 rem 終了コード:
 rem   0: 正常終了
@@ -22,8 +22,8 @@ rem   3: 5MB超過エラー（結果切り捨て）
 rem   4: 詳細取得エラー
 rem ============================================================================
 
-rem === ここを編集してください ===
-set "UNIT_PATH=/JobGroup/Jobnet"
+rem === ここを編集してください（ジョブのパスを指定）===
+set "UNIT_PATH=/JobGroup/Jobnet/Job1"
 
 rem 出力ファイル名（日付_時間形式）
 set "DATETIME=%date:~0,4%%date:~5,2%%date:~8,2%_%time:~0,2%%time:~3,2%%time:~6,2%"
