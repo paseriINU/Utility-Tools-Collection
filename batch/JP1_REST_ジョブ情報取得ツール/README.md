@@ -1,13 +1,20 @@
 # JP1 REST API ジョブ情報取得ツール
 
-JP1/AJS3 Web Console REST APIを使用して、ジョブ/ジョブネットの状態情報を取得するツールです。
+JP1/AJS3 Web Console REST APIを使用して、ジョブ/ジョブネットの実行結果詳細を取得するツールです。
 
 ## 概要
 
 以下の処理を実行します：
 
 1. **ユニット一覧取得** - statuses APIでユニット状態とexecIDを取得
-2. **実行結果詳細取得** - execResultDetails APIで標準エラー出力を取得
+2. **実行結果詳細取得** - execResultDetails APIで実行結果（標準出力・標準エラー出力）を取得
+
+## ファイル構成
+
+| ファイル | 説明 |
+|----------|------|
+| `JP1_REST_ジョブ情報取得ツール.bat` | メインツール（引数必須） |
+| `JP1_ジョブログ取得_サンプル.bat` | 呼び出しサンプル（ファイル保存） |
 
 ## 必要な環境
 
@@ -22,89 +29,50 @@ JP1/AJS3 Web Console REST APIを使用して、ジョブ/ジョブネットの�
 | 実行方式 | REST API（Web Console経由） |
 | 管理者権限 | 不要 |
 | WinRM | 不要 |
-| 取得情報 | ユニット状態、execID、標準エラー出力 |
+| 取得情報 | 実行結果詳細（標準出力・標準エラー出力） |
+| 出力形式 | Shift-JIS |
 
 ## 使い方
 
-### 1. 設定を編集
+### メインツール
 
-`JP1_REST_ジョブ情報取得ツール.bat` の設定セクションを編集します：
+引数にユニットパスを指定して実行します：
 
-```powershell
-# Web Consoleサーバーのホスト名またはIPアドレス
-$webConsoleHost = "localhost"
-
-# Web Consoleのポート番号（HTTP: 22252, HTTPS: 22253）
-$webConsolePort = "22252"
-
-# HTTPSを使用する場合は $true に設定
-$useHttps = $false
-
-# JP1/AJS3 Managerのホスト名
-$managerHost = "localhost"
-
-# スケジューラーサービス名
-$schedulerService = "AJSROOT1"
-
-# JP1ユーザー名
-$jp1User = "jp1admin"
-
-# JP1パスワード
-$jp1Password = "password"
-
-# 取得対象のユニットパス
-$unitPath = "/main_unit/jobgroup1/daily_batch"
+```batch
+JP1_REST_ジョブ情報取得ツール.bat "/JobGroup/Jobnet"
 ```
 
-### 2. 実行
+**注意**: 引数なしでは実行できません（エラーになります）。
 
-バッチファイルをダブルクリックで実行します。
+### サンプルバッチ
 
-### 3. 実行例
+1. `JP1_ジョブログ取得_サンプル.bat` を編集：
 
+```batch
+rem === ここを編集してください ===
+set "UNIT_PATH=/JobGroup/Jobnet"
+set "OUTPUT_FILE=%~dp0joblog_output.txt"
 ```
-================================================================
-  JP1 REST API ジョブ情報取得ツール
-================================================================
 
-設定内容:
-  Web Consoleサーバー : localhost:22252
-  Managerホスト       : localhost
-  スケジューラー      : AJSROOT1
-  JP1ユーザー         : jp1admin
-  ユニットパス        : /main_unit/jobgroup1/daily_batch
+2. ダブルクリックで実行
+3. 結果が `OUTPUT_FILE` に保存されます
 
-================================================================
-STEP 1: ユニット一覧取得API（execID取得）
-================================================================
+### 他バッチからの呼び出し
 
-リクエストURL:
-  http://localhost:22252/ajs/api/v1/objects/statuses?manager=localhost&serviceName=AJSROOT1&location=/main_unit/jobgroup1/daily_batch&mode=search
+```batch
+@echo off
+setlocal
 
-[OK] HTTPステータス: 200
+rem JP1_REST_ジョブ情報取得ツールを呼び出し
+call "C:\path\to\JP1_REST_ジョブ情報取得ツール.bat" "/JobGroup/Jobnet" > result.txt 2>&1
 
-取得したユニット一覧:
-  パス: /main_unit/jobgroup1/daily_batch/job1 | execID: @A001 | 状態: 正常終了
-
-================================================================
-STEP 2: 実行結果詳細取得API（execResultDetails）
-================================================================
-
-対象: /main_unit/jobgroup1/daily_batch/job1 (execID: @A001)
-
-[OK] HTTPステータス: 200
-
-実行結果詳細（標準エラー出力）:
-----------------------------------------
-(出力なし)
-----------------------------------------
-
-================================================================
-処理完了
-================================================================
+rem 結果を処理
+type result.txt
 ```
 
 ## 設定項目
+
+メインツール内の設定セクションを編集してください：
 
 | 設定項目 | 説明 | デフォルト値 |
 |---------|------|-------------|
@@ -115,30 +83,53 @@ STEP 2: 実行結果詳細取得API（execResultDetails）
 | `$schedulerService` | スケジューラーサービス名 | `AJSROOT1` |
 | `$jp1User` | JP1ユーザー名 | `jp1admin` |
 | `$jp1Password` | JP1パスワード | - |
-| `$unitPath` | 取得対象のユニットパス | - |
-| `$debugMode` | デバッグモード | `$true` |
+| `$generation` | 世代指定 | `RESULT` |
+| `$statusFilter` | ステータスフィルタ | （空欄=全件） |
+
+### 世代指定（generation）
+
+| 値 | 説明 |
+|----|------|
+| `RESULT` | 直近終了世代（デフォルト・推奨） |
+| `STATUS` | 最新世代 |
+| `PERIOD` | 期間指定（`$periodBegin`/`$periodEnd`を設定） |
+
+### ステータスフィルタ（statusFilter）
+
+| 値 | 説明 |
+|----|------|
+| （空欄） | 全件取得 |
+| `ABNORMAL` | 異常終了のみ |
+| `NORMAL` | 正常終了のみ |
+| `RUNNING` | 実行中のみ |
 
 ## 使用API
 
 | API | 用途 |
 |-----|------|
 | ユニット一覧取得API (7.1.1) | ユニット状態・execID取得 |
-| 実行結果詳細取得API (7.1.3) | 標準エラー出力取得 |
+| 実行結果詳細取得API (7.1.3) | 実行結果詳細取得 |
 
 詳細は [JP1_AJS3_REST_API.md](../../JP1_AJS3_REST_API.md) を参照してください。
+
+## 出力形式
+
+- **文字コード**: Shift-JIS
+- **形式**: 実行結果詳細のテキスト出力
+- **エラー時**: `ERROR:` で始まるメッセージを出力
 
 ## 注意事項
 
 - JP1/AJS3 - Web Console が必要です
-- execResultDetails API は標準エラー出力相当の情報を取得します
-- 標準出力の取得には ajsshow コマンド（WinRM経由）が必要です
 - パスワードはスクリプト内に平文で記載されます（セキュリティに注意）
+- メインツールは単体では実行できません（引数必須）
 
 ## 関連ツール
 
 | ツール | 説明 |
 |--------|------|
-| [JP1 ジョブツール](../JP1_ジョブツール/) | ajsshowコマンドでジョブ情報取得 |
+| [JP1 ジョブツール](../JP1_ジョブツール/) | ajsshowコマンドでジョブ情報取得（WinRM経由） |
+| [JP1 ジョブログ取得ツール](../JP1_ジョブログ取得ツール/) | jpqjobgetコマンドでスプール取得 |
 
 ## トラブルシューティング
 
@@ -157,6 +148,12 @@ STEP 2: 実行結果詳細取得API（execResultDetails）
 
 - ユニットパスが正しいか確認してください（`/`から始まるフルパス）
 - 実行履歴が存在するか確認してください
+- `generation=RESULT` で終了済みジョブを対象にしているか確認してください
+
+### 結果が空
+
+- 指定したユニットにジョブ（JOB）が含まれているか確認してください
+- ジョブネット直下のジョブのみが対象です
 
 ## ライセンス
 

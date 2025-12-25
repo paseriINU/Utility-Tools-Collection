@@ -103,9 +103,11 @@
 
 - **[JP1 REST API ジョブ情報取得ツール](batch/JP1_REST_ジョブ情報取得ツール/)**: JP1/AJS3 Web Console REST APIでジョブ情報を取得
   - statuses APIでユニット状態・execIDを取得
-  - execResultDetails APIで標準エラー出力を取得
+  - execResultDetails APIで実行結果詳細（標準出力・標準エラー出力）を取得
   - WinRM不要（Web Console経由）
-  - ダブルクリックで実行可能
+  - 引数にユニットパスを指定して実行
+  - 出力はShift-JIS形式
+  - サンプルバッチ付き（ファイル保存）
 
 - **[サーバ構成情報収集ツール](batch/サーバ構成情報収集ツール/)**: サーバ構成情報収集ツール
   - ネットワーク・セキュリティ設定をExcel出力
