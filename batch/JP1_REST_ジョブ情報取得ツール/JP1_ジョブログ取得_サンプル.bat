@@ -11,22 +11,12 @@ rem   JP1_REST_ジョブ情報取得ツール.bat を呼び出し、
 rem   取得したログをクリップボードにコピーします。
 rem
 rem 使い方:
-rem   JP1_ジョブログ取得_サンプル.bat "/JobGroup/Jobnet"
+rem   1. 下記の UNIT_PATH を取得したいジョブネットのパスに変更
+rem   2. このバッチをダブルクリックで実行
 rem ============================================================================
 
-rem 引数チェック
-if "%~1"=="" (
-    echo.
-    echo [エラー] ユニットパスを指定してください
-    echo.
-    echo 使い方:
-    echo   %~nx0 "/JobGroup/Jobnet"
-    echo.
-    pause
-    exit /b 1
-)
-
-set "UNIT_PATH=%~1"
+rem ★★★ ここを編集してください ★★★
+set "UNIT_PATH=/JobGroup/Jobnet"
 
 rem スクリプトのディレクトリを取得
 set "SCRIPT_DIR=%~dp0"
@@ -45,7 +35,7 @@ echo ログを取得中...
 rem 一時ファイルに結果を保存
 set "TEMP_FILE=%TEMP%\jp1_log_%RANDOM%.txt"
 
-call "%SCRIPT_DIR%JP1_REST_ジョブ情報取得ツール.bat" "%UNIT_PATH%" > "%TEMP_FILE%" 2>&1
+call "%SCRIPT_DIR%JP1_REST_ジョブ情報取得ツール.bat" "%UNIT_PATH%" silent > "%TEMP_FILE%" 2>&1
 set "EXIT_CODE=%ERRORLEVEL%"
 
 rem エラーチェック

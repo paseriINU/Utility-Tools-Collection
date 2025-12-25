@@ -4,9 +4,23 @@ chcp 65001 >nul
 title JP1 REST API ジョブ情報取得ツール
 setlocal
 
-rem 引数があれば環境変数に設定（他バッチからの呼び出し用）
-if not "%~1"=="" (
-    set "JP1_UNIT_PATH=%~1"
+rem 引数チェック
+if "%~1"=="" (
+    echo.
+    echo [エラー] ユニットパスを指定してください
+    echo.
+    echo 使い方:
+    echo   %~nx0 "/JobGroup/Jobnet"
+    echo.
+    pause
+    exit /b 1
+)
+
+rem 引数を環境変数に設定
+set "JP1_UNIT_PATH=%~1"
+
+rem 第2引数があればサイレントモード（他バッチからの呼び出し用）
+if not "%~2"=="" (
     set "JP1_SILENT_MODE=1"
 )
 
@@ -27,13 +41,8 @@ exit /b %EXITCODE%
 #   ※ JP1/AJS3 - Web Consoleが必要です
 #
 # 使い方:
-#   【対話モード】
-#     1. 下記の「設定セクション」を編集
-#     2. このファイルをダブルクリックで実行
-#
-#   【コマンドライン呼び出し】
-#     JP1_REST_ジョブ情報取得ツール.bat "/JobGroup/Jobnet"
-#     → 標準出力に実行結果詳細のみを出力
+#   JP1_REST_ジョブ情報取得ツール.bat "/JobGroup/Jobnet"
+#   JP1_REST_ジョブ情報取得ツール.bat "/JobGroup/Jobnet" silent  ← サイレントモード
 #
 # 参考:
 #   https://itpfdoc.hitachi.co.jp/manuals/3021/30213b1920/AJSO0280.HTM
@@ -64,10 +73,6 @@ $jp1User = "jp1admin"
 # JP1パスワード（★★★ ここにパスワードを入力 ★★★）
 $jp1Password = "password"
 
-# 取得対象のユニットパス（ジョブネット）※コマンドライン引数で上書き可能
-# 例: "/JobGroup/Jobnet"
-$unitPath = "/JobGroup/Jobnet"
-
 # 世代指定（RESULT: 直近終了世代, STATUS: 最新世代, PERIOD: 期間指定）
 # ※ RESULT を指定すると終了済みジョブの直近終了世代を取得
 $generation = "RESULT"
@@ -85,10 +90,12 @@ $statusFilter = ""
 # ■ メイン処理（以下は編集不要）
 # ==============================================================================
 
-# サイレントモード判定（コマンドライン引数がある場合）
+# ユニットパスを環境変数から取得
+$unitPath = $env:JP1_UNIT_PATH
+
+# サイレントモード判定
 $silentMode = $false
-if ($env:JP1_UNIT_PATH) {
-    $unitPath = $env:JP1_UNIT_PATH
+if ($env:JP1_SILENT_MODE) {
     $silentMode = $true
 }
 
