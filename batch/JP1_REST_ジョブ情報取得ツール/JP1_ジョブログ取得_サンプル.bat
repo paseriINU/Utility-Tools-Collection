@@ -10,9 +10,8 @@ rem   JP1_REST_ジョブ情報取得ツール.bat を呼び出し、
 rem   取得したログをファイルに保存します。
 rem
 rem 使い方:
-rem   1. 下記の UNIT_PATH を取得したいジョブのパスに変更
-rem      例: /JobGroup/Jobnet/Job1
-rem   2. このバッチをダブルクリックで実行
+rem   下記の UNIT_PATH を取得したいジョブのパスに変更して実行
+rem   例: /JobGroup/Jobnet/Job1
 rem
 rem 終了コード（実行順）:
 rem   0: 正常終了
