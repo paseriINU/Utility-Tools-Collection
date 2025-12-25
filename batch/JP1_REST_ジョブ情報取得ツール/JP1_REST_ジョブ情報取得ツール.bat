@@ -204,21 +204,13 @@ $encodedUnitName = [System.Uri]::EscapeDataString($targetUnitName)
 Write-Host "  エンコード後 location       : $encodedLocation"
 Write-Host ""
 
-# Step 1: statuses API でユニット一覧と execID を取得
-# ドキュメント仕様:
-#   - mode: 必須（固定で "search"）
-#   - manager: 必須
-#   - serviceName: 必須
-#   - location: 必須（取得したいユニットの上位ユニットのパス）
-#   - searchTarget: 任意（DEFINITION_AND_STATUS または DEFINITION）
-#   - generation: 任意（STATUS=最新世代, PERIOD=期間指定）
-#   - unitName: 任意（ユニット名でフィルタリング）
-#   - unitNameMatchMethods: 任意（EQ=完全一致, BW=前方一致, CO=部分一致等）
-$statusesUrl = "${baseUrl}/ajs/api/v1/objects/statuses?mode=search&manager=${managerHost}&serviceName=${schedulerService}&location=${encodedLocation}&searchTarget=${searchTarget}&generation=${generation}&unitName=${encodedUnitName}&unitNameMatchMethods=EQ"
+# Step 1: executions API でユニット一覧と execID を取得
+# ※ statuses API では取得できない場合、executions API を使用
+$executionsUrl = "${baseUrl}/ajs/api/v1/objects/executions?mode=search&manager=${managerHost}&serviceName=${schedulerService}&location=${encodedLocation}&searchTarget=${searchTarget}&generation=${generation}&unitName=${encodedUnitName}&unitNameMatchMethods=EQ"
 
 # 期間指定の場合、periodBegin/periodEndを追加
 if ($generation -eq "PERIOD" -and $periodBegin -and $periodEnd) {
-    $statusesUrl += "&periodBegin=${periodBegin}&periodEnd=${periodEnd}"
+    $executionsUrl += "&periodBegin=${periodBegin}&periodEnd=${periodEnd}"
 }
 
 Write-Host "[DEBUG] リクエストヘッダー:" -ForegroundColor Gray
@@ -227,13 +219,13 @@ Write-Host "  Accept-Language: ja" -ForegroundColor Gray
 
 Write-Host ""
 Write-Host "リクエストURL:" -ForegroundColor Cyan
-Write-Host "  $statusesUrl"
+Write-Host "  $executionsUrl"
 Write-Host ""
 
 $execIdList = @()
 
 try {
-    $response = Invoke-WebRequest -Uri $statusesUrl -Method GET -Headers $headers -TimeoutSec 30 -UseBasicParsing
+    $response = Invoke-WebRequest -Uri $executionsUrl -Method GET -Headers $headers -TimeoutSec 30 -UseBasicParsing
     Write-Host "[OK] HTTPステータス: $($response.StatusCode)" -ForegroundColor Green
 
     # UTF-8文字化け対策: RawContentStreamからUTF-8としてデコード
