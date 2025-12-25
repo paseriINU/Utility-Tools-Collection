@@ -58,8 +58,9 @@ $unitPath = "/JobGroup/Jobnet"
 # デバッグモード（$true でレスポンス詳細を表示）
 $debugMode = $true
 
-# 世代指定（STATUS: 最新世代, PERIOD: 期間指定）
-$generation = "PERIOD"
+# 世代指定（RESULT: 直近終了世代, STATUS: 最新世代, PERIOD: 期間指定）
+# ※ RESULT を指定すると終了済みジョブの直近終了世代を取得
+$generation = "RESULT"
 
 # 期間指定（generation=PERIOD の場合に使用）
 # 形式: YYYY-MM-DDThh:mm
