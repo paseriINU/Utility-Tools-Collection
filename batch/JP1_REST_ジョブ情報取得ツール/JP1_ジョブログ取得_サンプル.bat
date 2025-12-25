@@ -79,8 +79,8 @@ if %ERRORLEVEL% equ 0 (
     exit /b 1
 )
 
-rem 出力ファイルに保存（UTF-8からShift-JISに変換）
-powershell -NoProfile -Command "Get-Content '%TEMP_FILE%' -Encoding UTF8 | Set-Content '%OUTPUT_FILE%' -Encoding Default"
+rem 出力ファイルに保存
+copy /Y "%TEMP_FILE%" "%OUTPUT_FILE%" >nul
 
 echo.
 echo ================================================================

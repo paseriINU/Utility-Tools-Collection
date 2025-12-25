@@ -1,6 +1,5 @@
 <# :
 @echo off
-chcp 65001 >nul
 setlocal
 
 rem 引数チェック
@@ -31,6 +30,9 @@ exit /b %ERRORLEVEL%
 # 参考:
 #   https://itpfdoc.hitachi.co.jp/manuals/3021/30213b1920/AJSO0280.HTM
 # ==============================================================================
+
+# 出力をShift-JISに設定
+[Console]::OutputEncoding = [System.Text.Encoding]::GetEncoding(932)
 
 # ==============================================================================
 # ■ 設定セクション（ここを編集してください）
