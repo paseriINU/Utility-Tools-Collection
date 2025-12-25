@@ -4,7 +4,7 @@ setlocal
 chcp 932 >nul
 if "%~1"=="" exit /b 1
 set "JP1_UNIT_PATH=%~1"
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$scriptDir=('%~dp0' -replace '\\$',''); iex ((gc '%~f0' -Encoding UTF8) -join \"`n\")"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$scriptDir=('%~dp0' -replace '\\$',''); iex ((gc '%~f0' -Encoding Default) -join \"`n\")"
 exit /b %ERRORLEVEL%
 : #>
 
