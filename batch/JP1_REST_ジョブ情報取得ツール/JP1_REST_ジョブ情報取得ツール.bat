@@ -58,6 +58,10 @@ $unitPath = "/main_unit/jobgroup1/daily_batch"
 # デバッグモード（$true でレスポンス詳細を表示）
 $debugMode = $true
 
+# 検索対象（DEFINITION_AND_STATUS: 定義と状態, DEFINITION: 定義のみ）
+# ※ 実行登録されていないユニットを取得するには DEFINITION を指定
+$searchTarget = "DEFINITION_AND_STATUS"
+
 # ==============================================================================
 # ■ メイン処理（以下は編集不要）
 # ==============================================================================
@@ -74,6 +78,7 @@ Write-Host "  Managerホスト       : $managerHost"
 Write-Host "  スケジューラー      : $schedulerService"
 Write-Host "  JP1ユーザー         : $jp1User"
 Write-Host "  ユニットパス        : $unitPath"
+Write-Host "  検索対象            : $searchTarget"
 Write-Host ""
 
 # プロトコル設定
@@ -191,9 +196,14 @@ Write-Host ""
 #   - manager: 必須
 #   - serviceName: 必須
 #   - location: 必須（取得したいユニットの上位ユニットのパス）
+#   - searchTarget: 任意（DEFINITION_AND_STATUS または DEFINITION）
 #   - unitName: 任意（ユニット名でフィルタリング）
 #   - unitNameMatchMethods: 任意（EQ=完全一致, BW=前方一致, CO=部分一致等）
-$statusesUrl = "${baseUrl}/ajs/api/v1/objects/statuses?mode=search&manager=${managerHost}&serviceName=${schedulerService}&location=${encodedLocation}&unitName=${encodedUnitName}&unitNameMatchMethods=EQ"
+$statusesUrl = "${baseUrl}/ajs/api/v1/objects/statuses?mode=search&manager=${managerHost}&serviceName=${schedulerService}&location=${encodedLocation}&searchTarget=${searchTarget}&unitName=${encodedUnitName}&unitNameMatchMethods=EQ"
+
+Write-Host "[DEBUG] リクエストヘッダー:" -ForegroundColor Gray
+Write-Host "  X-AJS-Authorization: $($authBase64.Substring(0,10))..." -ForegroundColor Gray
+Write-Host "  Accept-Language: ja" -ForegroundColor Gray
 
 Write-Host ""
 Write-Host "リクエストURL:" -ForegroundColor Cyan
