@@ -17,11 +17,10 @@ exit /b %ERRORLEVEL%
 #   ※ JP1/AJS3 - Web Consoleが必要です
 #
 # 使い方:
-#   ジョブネットのパスを指定（配下のジョブを全て取得）:
-#     JP1_REST_ジョブ情報取得ツール.bat "/JobGroup/Jobnet"
-#
-#   ジョブのパスを直接指定（特定のジョブのみ取得）:
+#   ジョブのパスを指定して実行します:
 #     JP1_REST_ジョブ情報取得ツール.bat "/JobGroup/Jobnet/Job1"
+#
+#   ※ 親パス（ジョブネット）を検索対象とし、ジョブ名でフィルタします
 #
 # 終了コード:
 #   0: 正常終了
@@ -94,18 +93,11 @@ $jp1Password = "password"
 # 各設定項目の詳細は JP1_AJS3_REST_API.md の「7.4.2 定数」を参照してください。
 
 # ------------------------------------------------------------------------------
-# (1) LowerType - 配下ユニット取得範囲
+# (1) LowerType - 配下ユニット取得範囲（※ジョブパス指定時は未使用）
 # ------------------------------------------------------------------------------
-# ユニット配下のジョブを取得対象とするかを指定します。
-#
-# 指定可能な値:
-#   "YES" - ユニットの配下をすべて取得対象にします（サブフォルダ含む）
-#   "NO"  - ユニットの直下1階層にあるユニットだけを取得対象にします
-#
-# 例: /JobGroup/Jobnet 配下に job1, nested/job2 がある場合
-#   "YES" → job1, nested/job2 両方を取得
-#   "NO"  → job1 のみ取得（nested配下は取得しない）
-$searchLowerUnits = "YES"
+# ジョブパスを直接指定するため、searchLowerUnitsは"NO"（直下のみ）で固定されます。
+# この設定は現在の実装では使用されません。
+$searchLowerUnits = "NO"
 
 # ------------------------------------------------------------------------------
 # (2) SearchTargetType - 取得情報範囲
@@ -122,23 +114,10 @@ $searchLowerUnits = "YES"
 $searchTarget = "DEFINITION_AND_STATUS"
 
 # ------------------------------------------------------------------------------
-# (4) UnitType - ユニット種別フィルタ
+# (4) UnitType - ユニット種別フィルタ（※ジョブパス指定時は未使用）
 # ------------------------------------------------------------------------------
-# 取得するユニットの種別を指定します。
-#
-# 指定可能な値:
-#   "NO"    - ユニット種別を検索条件にしません（すべて取得）
-#   "GROUP" - ジョブグループのみ取得
-#             （ジョブグループ、プランニンググループ、マネージャージョブグループ）
-#   "ROOT"  - ルートジョブネットのみ取得
-#             （ルートジョブネット、ルートリモートジョブネット、ルートマネージャージョブネット）
-#   "NET"   - ジョブネットのみ取得
-#             （ルート/ネストジョブネット、リモートジョブネット、マネージャージョブネット）
-#   "JOB"   - ジョブのみ取得
-#             （標準ジョブ、イベントジョブ、アクションジョブ、カスタムジョブ、
-#               引き継ぎ情報設定ジョブ、HTTP接続ジョブ、フレキシブルジョブ）
-#
-# ★ 実行結果詳細を取得する場合は "JOB" または "NO" を推奨
+# ジョブパスを直接指定し、ジョブ名で完全一致フィルタするため、
+# unitTypeフィルタは使用されません。
 $unitType = "NO"
 
 # ------------------------------------------------------------------------------
@@ -241,24 +220,12 @@ $delayStatus = "NO"
 $holdPlan = "NO"
 
 # ------------------------------------------------------------------------------
-# ユニット名フィルタ（オプション）
+# ユニット名フィルタ（※ジョブパス指定時は未使用）
 # ------------------------------------------------------------------------------
-# 特定のユニット名でフィルタする場合に使用します。
-# 空欄の場合はフィルタしません。
-#
-# 例: "daily_job", "batch*", "*_backup"
+# ジョブパスから自動的にジョブ名を抽出して完全一致フィルタを行うため、
+# この設定は使用されません。
 $unitName = ""
-
-# ユニット名の比較方法（(3) MatchMethods）
-#   "NO" - この比較方法を検索条件にしません
-#   "EQ" - 完全一致
-#   "BW" - 前方一致（例: "daily*"）
-#   "EW" - 後方一致（例: "*_backup"）
-#   "NE" - 不一致
-#   "CO" - 部分一致（例: "*job*"）
-#   "NC" - 部分不一致
-#   "RE" - 正規表現（?, *, \ が使用可能）
-$unitNameMatchMethods = "NO"
+$unitNameMatchMethods = "EQ"
 
 # ==============================================================================
 # ■ メイン処理（以下は通常編集不要）
@@ -319,51 +286,46 @@ if ($useHttps) {
 # ==============================================================================
 # STEP 1: ユニット一覧取得API（7.1.1）
 # ==============================================================================
-# 指定したユニットパス配下のユニット情報を取得します。
-# このAPIで取得したexecID（実行ID）を使用して、実行結果詳細を取得します。
+# ジョブのパスを解析し、親パス（ジョブネット）を検索対象としてジョブ名でフィルタします。
+# 例: "/JobGroup/Jobnet/Job1" → location="/JobGroup/Jobnet", unitName="Job1"
 #
-# ジョブのパスを直接指定した場合:
-#   親パスをlocationに設定し、ジョブ名でフィルタして検索します。
+# このAPIで取得したexecID（実行ID）を使用して、実行結果詳細を取得します。
 
 # ベースURLの構築
 $baseUrl = "${protocol}://${webConsoleHost}:${webConsolePort}/ajs/api/v1"
 
 # ------------------------------------------------------------------------------
-# パスの解析（ジョブネット or ジョブ 両方に対応）
+# ジョブパスの解析
 # ------------------------------------------------------------------------------
-# 指定されたパスから親パスとユニット名を分離
-# 例: "/JobGroup/Jobnet/Job1" → 親: "/JobGroup/Jobnet", ユニット名: "Job1"
-$searchLocation = $unitPath
-$targetUnitName = ""
-
-# パスの最後のスラッシュ位置を取得
+# 指定されたジョブパスから親パス（ジョブネット）とジョブ名を分離
+# 例: "/JobGroup/Jobnet/Job1" → 親: "/JobGroup/Jobnet", ジョブ名: "Job1"
 $lastSlashIndex = $unitPath.LastIndexOf("/")
-if ($lastSlashIndex -gt 0) {
-    $parentPath = $unitPath.Substring(0, $lastSlashIndex)
-    $leafName = $unitPath.Substring($lastSlashIndex + 1)
+if ($lastSlashIndex -le 0) {
+    exit 1  # パス形式エラー（スラッシュがない、またはルートのみ）
+}
+$parentPath = $unitPath.Substring(0, $lastSlashIndex)
+$jobName = $unitPath.Substring($lastSlashIndex + 1)
+
+if (-not $jobName) {
+    exit 1  # ジョブ名が空
 }
 
-# ユニットパスをURLエンコード
-# 例: "/JobGroup/Jobnet" → "%2FJobGroup%2FJobnet"
-$encodedLocation = [System.Uri]::EscapeDataString($searchLocation)
+# パスとジョブ名をURLエンコード
+$encodedParentPath = [System.Uri]::EscapeDataString($parentPath)
+$encodedJobName = [System.Uri]::EscapeDataString($jobName)
 
 # ------------------------------------------------------------------------------
 # クエリパラメータの構築
 # ------------------------------------------------------------------------------
-# 必須パラメータ
+# 親パスをlocationに設定し、ジョブ名で完全一致フィルタ
 $statusUrl = "${baseUrl}/objects/statuses?mode=search"
 $statusUrl += "&manager=${managerHost}"
 $statusUrl += "&serviceName=${schedulerService}"
-$statusUrl += "&location=${encodedLocation}"
-
-# 検索範囲オプション
-$statusUrl += "&searchLowerUnits=${searchLowerUnits}"
+$statusUrl += "&location=${encodedParentPath}"
+$statusUrl += "&searchLowerUnits=NO"
 $statusUrl += "&searchTarget=${searchTarget}"
-
-# ユニット種別フィルタ
-if ($unitType -and $unitType -ne "NO") {
-    $statusUrl += "&unitType=${unitType}"
-}
+$statusUrl += "&unitName=${encodedJobName}"
+$statusUrl += "&unitNameMatchMethods=EQ"
 
 # 世代指定
 $statusUrl += "&generation=${generation}"
@@ -392,13 +354,6 @@ if ($delayStatus -and $delayStatus -ne "NO") {
 # 保留予定フィルタ
 if ($holdPlan -and $holdPlan -ne "NO") {
     $statusUrl += "&holdPlan=${holdPlan}"
-}
-
-# ユニット名フィルタ
-if ($unitName -and $unitNameMatchMethods -ne "NO") {
-    $encodedUnitName = [System.Uri]::EscapeDataString($unitName)
-    $statusUrl += "&unitName=${encodedUnitName}"
-    $statusUrl += "&unitNameMatchMethods=${unitNameMatchMethods}"
 }
 
 # ------------------------------------------------------------------------------
@@ -442,54 +397,6 @@ try {
     }
 } catch {
     exit 2  # API接続エラー（ユニット一覧取得）
-}
-
-# ------------------------------------------------------------------------------
-# ジョブのパスを直接指定した場合の再検索
-# ------------------------------------------------------------------------------
-# 結果が空で、親パスが存在する場合、親パスで再検索
-if ($execIdList.Count -eq 0 -and $parentPath -and $leafName) {
-    # 親パスをlocationに設定し、ユニット名でフィルタ
-    $encodedParentPath = [System.Uri]::EscapeDataString($parentPath)
-    $encodedLeafName = [System.Uri]::EscapeDataString($leafName)
-
-    $retryUrl = "${baseUrl}/objects/statuses?mode=search"
-    $retryUrl += "&manager=${managerHost}"
-    $retryUrl += "&serviceName=${schedulerService}"
-    $retryUrl += "&location=${encodedParentPath}"
-    $retryUrl += "&searchLowerUnits=NO"
-    $retryUrl += "&searchTarget=${searchTarget}"
-    $retryUrl += "&unitName=${encodedLeafName}"
-    $retryUrl += "&unitNameMatchMethods=EQ"
-    $retryUrl += "&generation=${generation}"
-
-    try {
-        $retryResponse = Invoke-WebRequest -Uri $retryUrl -Method GET -Headers $headers -TimeoutSec 30 -UseBasicParsing
-        $retryBytes = $retryResponse.RawContentStream.ToArray()
-        $retryText = [System.Text.Encoding]::UTF8.GetString($retryBytes)
-        $retryJson = $retryText | ConvertFrom-Json
-
-        if ($retryJson.statuses -and $retryJson.statuses.Count -gt 0) {
-            foreach ($unit in $retryJson.statuses) {
-                $unitFullName = $unit.definition.unitName
-                $unitTypeValue = $unit.definition.unitType
-                $unitStatus = $unit.unitStatus
-                $execIdValue = if ($unitStatus) { $unitStatus.execID } else { $null }
-                $statusValue = if ($unitStatus) { $unitStatus.status } else { "N/A" }
-
-                if ($execIdValue -and $unitTypeValue -match "JOB") {
-                    $execIdList += @{
-                        Path = $unitFullName
-                        ExecId = $execIdValue
-                        Status = $statusValue
-                        UnitType = $unitTypeValue
-                    }
-                }
-            }
-        }
-    } catch {
-        # 再検索も失敗した場合は無視（元の結果を使用）
-    }
 }
 
 # ==============================================================================
