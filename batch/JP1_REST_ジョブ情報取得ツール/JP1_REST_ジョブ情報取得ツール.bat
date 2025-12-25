@@ -6,30 +6,30 @@
 @rem ダブルクリックまたはコマンドラインから実行すると、以下の処理を行います。
 @rem ============================================================================
 
-@echo off
 @rem コマンドのエコーを無効化（実行コマンドを画面に表示しない）
+@echo off
 
-setlocal
 @rem 環境変数のローカル化（このバッチ内での変更が外部に影響しない）
+setlocal
 
-chcp 932 >nul
 @rem コードページをShift-JIS（932）に設定（日本語表示用）
+chcp 932 >nul
 
-if "%~1"=="" exit /b 1
 @rem 引数チェック: 引数が空の場合はエラーコード1で終了
+if "%~1"=="" exit /b 1
 
-set "JP1_UNIT_PATH=%~1"
 @rem 第1引数（ジョブパス）を環境変数に設定（PowerShellに渡すため）
+set "JP1_UNIT_PATH=%~1"
 
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$scriptDir=('%~dp0' -replace '\\$',''); iex ((gc '%~f0' -Encoding Default) -join \"`n\")"
 @rem PowerShellを起動し、このファイル自体をスクリプトとして実行
 @rem -NoProfile: プロファイルを読み込まない（高速化）
 @rem -ExecutionPolicy Bypass: 実行ポリシーを回避
 @rem gc '%~f0': このファイル自体を読み込む
 @rem iex: 読み込んだ内容をPowerShellスクリプトとして実行
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$scriptDir=('%~dp0' -replace '\\$',''); iex ((gc '%~f0' -Encoding Default) -join \"`n\")"
 
-exit /b %ERRORLEVEL%
 @rem PowerShellの終了コードをそのまま返す
+exit /b %ERRORLEVEL%
 : #>
 
 # ==============================================================================
