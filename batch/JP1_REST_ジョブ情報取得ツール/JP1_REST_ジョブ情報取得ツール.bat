@@ -4,9 +4,17 @@ chcp 65001 >nul
 title JP1 REST API ジョブ情報取得ツール
 setlocal
 
+rem 引数があれば環境変数に設定（他バッチからの呼び出し用）
+if not "%~1"=="" (
+    set "JP1_UNIT_PATH=%~1"
+    set "JP1_SILENT_MODE=1"
+)
+
 powershell -NoProfile -ExecutionPolicy Bypass -Command "$scriptDir=('%~dp0' -replace '\\$',''); iex ((gc '%~f0' -Encoding UTF8) -join \"`n\")"
 set EXITCODE=%ERRORLEVEL%
-pause
+
+rem サイレントモードでなければpause
+if not defined JP1_SILENT_MODE pause
 exit /b %EXITCODE%
 : #>
 
@@ -19,8 +27,13 @@ exit /b %EXITCODE%
 #   ※ JP1/AJS3 - Web Consoleが必要です
 #
 # 使い方:
-#   1. 下記の「設定セクション」を編集
-#   2. このファイルをダブルクリックで実行
+#   【対話モード】
+#     1. 下記の「設定セクション」を編集
+#     2. このファイルをダブルクリックで実行
+#
+#   【コマンドライン呼び出し】
+#     JP1_REST_ジョブ情報取得ツール.bat "/JobGroup/Jobnet"
+#     → 標準出力に実行結果詳細のみを出力
 #
 # 参考:
 #   https://itpfdoc.hitachi.co.jp/manuals/3021/30213b1920/AJSO0280.HTM
@@ -51,7 +64,7 @@ $jp1User = "jp1admin"
 # JP1パスワード（★★★ ここにパスワードを入力 ★★★）
 $jp1Password = "password"
 
-# 取得対象のユニットパス（ジョブネット）
+# 取得対象のユニットパス（ジョブネット）※コマンドライン引数で上書き可能
 # 例: "/JobGroup/Jobnet"
 $unitPath = "/JobGroup/Jobnet"
 
@@ -72,17 +85,27 @@ $statusFilter = ""
 # ■ メイン処理（以下は編集不要）
 # ==============================================================================
 
-Write-Host ""
-Write-Host "================================================================" -ForegroundColor Cyan
-Write-Host "  JP1 REST API ジョブ情報取得ツール" -ForegroundColor Cyan
-Write-Host "================================================================" -ForegroundColor Cyan
-Write-Host ""
-Write-Host "  対象: $unitPath"
-Write-Host "  世代: $generation"
-if ($statusFilter) {
-    Write-Host "  フィルタ: $statusFilter"
+# サイレントモード判定（コマンドライン引数がある場合）
+$silentMode = $false
+if ($env:JP1_UNIT_PATH) {
+    $unitPath = $env:JP1_UNIT_PATH
+    $silentMode = $true
 }
-Write-Host ""
+
+# 対話モードの場合のみヘッダー表示
+if (-not $silentMode) {
+    Write-Host ""
+    Write-Host "================================================================" -ForegroundColor Cyan
+    Write-Host "  JP1 REST API ジョブ情報取得ツール" -ForegroundColor Cyan
+    Write-Host "================================================================" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "  対象: $unitPath"
+    Write-Host "  世代: $generation"
+    if ($statusFilter) {
+        Write-Host "  フィルタ: $statusFilter"
+    }
+    Write-Host ""
+}
 
 # プロトコル設定
 $protocol = if ($useHttps) { "https" } else { "http" }
@@ -120,7 +143,9 @@ if ($useHttps) {
 # ========================================
 $baseUrl = "${protocol}://${webConsoleHost}:${webConsolePort}/ajs/api/v1"
 
-Write-Host "ユニット一覧を取得中..." -ForegroundColor Cyan
+if (-not $silentMode) {
+    Write-Host "ユニット一覧を取得中..." -ForegroundColor Cyan
+}
 
 # URLエンコード
 $encodedLocation = [System.Uri]::EscapeDataString($unitPath)
@@ -152,9 +177,11 @@ try {
     $jsonData = $responseText | ConvertFrom-Json
 
     if ($jsonData.statuses -and $jsonData.statuses.Count -gt 0) {
-        Write-Host ""
-        Write-Host "取得したユニット一覧:" -ForegroundColor Green
-        Write-Host "----------------------------------------"
+        if (-not $silentMode) {
+            Write-Host ""
+            Write-Host "取得したユニット一覧:" -ForegroundColor Green
+            Write-Host "----------------------------------------"
+        }
         foreach ($unit in $jsonData.statuses) {
             $unitName = $unit.definition.unitName
             $unitType = $unit.definition.unitType
@@ -162,7 +189,9 @@ try {
             $execId = if ($unitStatus) { $unitStatus.execID } else { $null }
             $status = if ($unitStatus) { $unitStatus.status } else { "N/A" }
 
-            Write-Host "  $unitName [$unitType] - $status"
+            if (-not $silentMode) {
+                Write-Host "  $unitName [$unitType] - $status"
+            }
 
             # ジョブでexecIDがある場合のみリストに追加
             if ($execId -and $unitType -match "JOB") {
@@ -174,14 +203,22 @@ try {
                 }
             }
         }
-        Write-Host "----------------------------------------"
-        Write-Host "ジョブ件数: $($execIdList.Count)" -ForegroundColor Cyan
+        if (-not $silentMode) {
+            Write-Host "----------------------------------------"
+            Write-Host "ジョブ件数: $($execIdList.Count)" -ForegroundColor Cyan
+        }
     } else {
-        Write-Host ""
-        Write-Host "[警告] 該当するユニットがありません" -ForegroundColor Yellow
+        if (-not $silentMode) {
+            Write-Host ""
+            Write-Host "[警告] 該当するユニットがありません" -ForegroundColor Yellow
+        }
     }
 } catch {
-    Write-Host "[エラー] $($_.Exception.Message)" -ForegroundColor Red
+    if ($silentMode) {
+        Write-Output "ERROR: $($_.Exception.Message)"
+    } else {
+        Write-Host "[エラー] $($_.Exception.Message)" -ForegroundColor Red
+    }
     exit 1
 }
 
@@ -189,9 +226,11 @@ try {
 # 実行結果詳細の取得
 # ========================================
 if ($execIdList.Count -gt 0) {
-    Write-Host ""
-    Write-Host "実行結果詳細を取得中..." -ForegroundColor Cyan
-    Write-Host ""
+    if (-not $silentMode) {
+        Write-Host ""
+        Write-Host "実行結果詳細を取得中..." -ForegroundColor Cyan
+        Write-Host ""
+    }
 
     $jobIndex = 0
     foreach ($item in $execIdList) {
@@ -200,9 +239,10 @@ if ($execIdList.Count -gt 0) {
         $targetExecId = $item.ExecId
         $targetStatus = $item.Status
 
-        # 見やすいヘッダー
-        Write-Host "[$jobIndex/$($execIdList.Count)] $targetPath" -ForegroundColor Yellow
-        Write-Host "  実行ID: $targetExecId | 状態: $targetStatus" -ForegroundColor Gray
+        if (-not $silentMode) {
+            Write-Host "[$jobIndex/$($execIdList.Count)] $targetPath" -ForegroundColor Yellow
+            Write-Host "  実行ID: $targetExecId | 状態: $targetStatus" -ForegroundColor Gray
+        }
 
         # URLエンコード
         $encodedPath = [System.Uri]::EscapeDataString($targetPath)
@@ -220,24 +260,39 @@ if ($execIdList.Count -gt 0) {
             $resultJson = $resultText | ConvertFrom-Json
 
             if ($resultJson.execResultDetails) {
-                Write-Host "  ----------------------------------------" -ForegroundColor DarkGray
-                # 各行にインデントを付けて表示
-                $resultJson.execResultDetails -split "`n" | ForEach-Object {
-                    Write-Host "  $_"
+                if ($silentMode) {
+                    # サイレントモード: 結果のみ標準出力
+                    Write-Output $resultJson.execResultDetails
+                } else {
+                    # 対話モード: 装飾付きで表示
+                    Write-Host "  ----------------------------------------" -ForegroundColor DarkGray
+                    $resultJson.execResultDetails -split "`n" | ForEach-Object {
+                        Write-Host "  $_"
+                    }
+                    Write-Host "  ----------------------------------------" -ForegroundColor DarkGray
                 }
-                Write-Host "  ----------------------------------------" -ForegroundColor DarkGray
             } else {
-                Write-Host "  (出力なし)" -ForegroundColor DarkGray
+                if (-not $silentMode) {
+                    Write-Host "  (出力なし)" -ForegroundColor DarkGray
+                }
             }
         } catch {
-            Write-Host "  [エラー] 詳細取得失敗" -ForegroundColor Red
+            if ($silentMode) {
+                Write-Output "ERROR: Failed to get details for $targetPath"
+            } else {
+                Write-Host "  [エラー] 詳細取得失敗" -ForegroundColor Red
+            }
         }
-        Write-Host ""
+        if (-not $silentMode) {
+            Write-Host ""
+        }
     }
 }
 
-Write-Host "================================================================" -ForegroundColor Green
-Write-Host "処理完了" -ForegroundColor Green
-Write-Host "================================================================" -ForegroundColor Green
+if (-not $silentMode) {
+    Write-Host "================================================================" -ForegroundColor Green
+    Write-Host "処理完了" -ForegroundColor Green
+    Write-Host "================================================================" -ForegroundColor Green
+}
 
 exit 0
