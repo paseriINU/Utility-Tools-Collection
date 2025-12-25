@@ -59,8 +59,18 @@ $unitPath = "/main_unit/jobgroup1/daily_batch"
 $debugMode = $true
 
 # 検索対象（DEFINITION_AND_STATUS: 定義と状態, DEFINITION: 定義のみ）
-# ※ 実行登録されていないユニットを取得するには DEFINITION を指定
-$searchTarget = "DEFINITION"
+# ※ execIDを取得するには DEFINITION_AND_STATUS を指定
+# ※ 実行登録されていないユニットの定義のみ取得するには DEFINITION を指定
+$searchTarget = "DEFINITION_AND_STATUS"
+
+# 世代指定（STATUS: 最新世代, PERIOD: 期間指定）
+# ※ 過去の実行履歴を取得するには PERIOD を指定し、periodBegin/periodEnd を設定
+$generation = "STATUS"
+
+# 期間指定（generation=PERIOD の場合のみ有効）
+# 形式: YYYY-MM-DDThh:mm（例: 2024-12-01T00:00）
+$periodBegin = ""
+$periodEnd = ""
 
 # ==============================================================================
 # ■ メイン処理（以下は編集不要）
@@ -79,6 +89,10 @@ Write-Host "  スケジューラー      : $schedulerService"
 Write-Host "  JP1ユーザー         : $jp1User"
 Write-Host "  ユニットパス        : $unitPath"
 Write-Host "  検索対象            : $searchTarget"
+Write-Host "  世代                : $generation"
+if ($generation -eq "PERIOD" -and $periodBegin -and $periodEnd) {
+    Write-Host "  期間                : $periodBegin ～ $periodEnd"
+}
 Write-Host ""
 
 # プロトコル設定
@@ -197,9 +211,15 @@ Write-Host ""
 #   - serviceName: 必須
 #   - location: 必須（取得したいユニットの上位ユニットのパス）
 #   - searchTarget: 任意（DEFINITION_AND_STATUS または DEFINITION）
+#   - generation: 任意（STATUS=最新世代, PERIOD=期間指定）
 #   - unitName: 任意（ユニット名でフィルタリング）
 #   - unitNameMatchMethods: 任意（EQ=完全一致, BW=前方一致, CO=部分一致等）
-$statusesUrl = "${baseUrl}/ajs/api/v1/objects/statuses?mode=search&manager=${managerHost}&serviceName=${schedulerService}&location=${encodedLocation}&searchTarget=${searchTarget}&unitName=${encodedUnitName}&unitNameMatchMethods=EQ"
+$statusesUrl = "${baseUrl}/ajs/api/v1/objects/statuses?mode=search&manager=${managerHost}&serviceName=${schedulerService}&location=${encodedLocation}&searchTarget=${searchTarget}&generation=${generation}&unitName=${encodedUnitName}&unitNameMatchMethods=EQ"
+
+# 期間指定の場合、periodBegin/periodEndを追加
+if ($generation -eq "PERIOD" -and $periodBegin -and $periodEnd) {
+    $statusesUrl += "&periodBegin=${periodBegin}&periodEnd=${periodEnd}"
+}
 
 Write-Host "[DEBUG] リクエストヘッダー:" -ForegroundColor Gray
 Write-Host "  X-AJS-Authorization: $($authBase64.Substring(0,10))..." -ForegroundColor Gray
