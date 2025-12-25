@@ -1,50 +1,51 @@
 @echo off
-chcp 65001 >nul
-title JP1 ジョブログ取得サンプル
+title JP1 Job Log Sample
 setlocal enabledelayedexpansion
 
 rem ============================================================================
-rem JP1 ジョブログ取得サンプル
+rem JP1 Job Log Sample
 rem
-rem 説明:
-rem   JP1_REST_ジョブ情報取得ツール.bat を呼び出し、
-rem   取得したログをクリップボードにコピーします。
+rem Description:
+rem   Call JP1_REST_Job_Info_Tool.bat and save the result to a file.
 rem
-rem 使い方:
-rem   1. 下記の UNIT_PATH を取得したいジョブネットのパスに変更
-rem   2. このバッチをダブルクリックで実行
+rem Usage:
+rem   1. Edit UNIT_PATH below
+rem   2. Edit OUTPUT_FILE below
+rem   3. Double-click to run
 rem ============================================================================
 
-rem ★★★ ここを編集してください ★★★
+rem === Edit here ===
 set "UNIT_PATH=/JobGroup/Jobnet"
+set "OUTPUT_FILE=%~dp0joblog_output.txt"
 
-rem スクリプトのディレクトリを取得
+rem Get script directory
 set "SCRIPT_DIR=%~dp0"
 
 echo.
 echo ================================================================
-echo   JP1 ジョブログ取得サンプル
+echo   JP1 Job Log Sample
 echo ================================================================
 echo.
-echo   対象: %UNIT_PATH%
+echo   Target: %UNIT_PATH%
+echo   Output: %OUTPUT_FILE%
 echo.
 
-rem JP1_REST_ジョブ情報取得ツール.bat を呼び出し
-echo ログを取得中...
+rem Call JP1_REST_Job_Info_Tool.bat
+echo Getting log...
 
-rem 一時ファイルに結果を保存
+rem Save result to temp file
 set "TEMP_FILE=%TEMP%\jp1_log_%RANDOM%.txt"
 
 call "%SCRIPT_DIR%JP1_REST_ジョブ情報取得ツール.bat" "%UNIT_PATH%" > "%TEMP_FILE%" 2>&1
 set "EXIT_CODE=%ERRORLEVEL%"
 
-rem エラーチェック
+rem Error check
 if %EXIT_CODE% neq 0 (
     echo.
-    echo [エラー] ログの取得に失敗しました（終了コード: %EXIT_CODE%）
+    echo [ERROR] Failed to get log (exit code: %EXIT_CODE%)
     echo.
     if exist "%TEMP_FILE%" (
-        echo エラー内容:
+        echo Error details:
         type "%TEMP_FILE%"
         del "%TEMP_FILE%" >nul 2>&1
     )
@@ -53,22 +54,22 @@ if %EXIT_CODE% neq 0 (
     exit /b %EXIT_CODE%
 )
 
-rem 結果が空かチェック
+rem Check if result is empty
 for %%A in ("%TEMP_FILE%") do set "FILE_SIZE=%%~zA"
 if "%FILE_SIZE%"=="0" (
     echo.
-    echo [警告] 取得結果が空です
+    echo [WARNING] Result is empty
     echo.
     del "%TEMP_FILE%" >nul 2>&1
     pause
     exit /b 1
 )
 
-rem ERRORで始まる行があるかチェック
+rem Check for ERROR lines
 findstr /B "ERROR:" "%TEMP_FILE%" >nul 2>&1
 if %ERRORLEVEL% equ 0 (
     echo.
-    echo [エラー] API呼び出しでエラーが発生しました
+    echo [ERROR] API call failed
     echo.
     type "%TEMP_FILE%"
     echo.
@@ -77,21 +78,23 @@ if %ERRORLEVEL% equ 0 (
     exit /b 1
 )
 
-rem クリップボードにコピー
-type "%TEMP_FILE%" | clip
+rem Save to output file
+copy /Y "%TEMP_FILE%" "%OUTPUT_FILE%" >nul
 
 echo.
 echo ================================================================
-echo   取得完了 - クリップボードにコピーしました
+echo   Complete - Saved to file
 echo ================================================================
 echo.
-echo 取得内容:
+echo Output file: %OUTPUT_FILE%
+echo.
+echo Content:
 echo ----------------------------------------
 type "%TEMP_FILE%"
 echo ----------------------------------------
 echo.
 
-rem 一時ファイルを削除
+rem Delete temp file
 del "%TEMP_FILE%" >nul 2>&1
 
 pause
