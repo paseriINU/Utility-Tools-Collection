@@ -46,15 +46,15 @@ exit /b %ERRORLEVEL%
 #   STEP 2: DEFINITION_AND_STATUS で execID 取得
 #   STEP 3: 実行結果詳細取得
 #
-# 終了コード:
+# 終了コード（実行順）:
 #   0: 正常終了
 #   1: 引数エラー（ユニットパスが指定されていません）
-#   2: API接続エラー（ユニット一覧の取得に失敗）
-#   3: 5MB超過エラー（実行結果が切り捨てられました）
-#   4: 詳細取得エラー（実行結果詳細の取得に失敗）
-#   5: ユニット未検出（指定したユニットが存在しません）
-#   6: ユニット種別エラー（指定したユニットがジョブではありません）
-#   7: 実行世代なし（実行履歴が存在しません）
+#   2: ユニット未検出（STEP 1: 指定したユニットが存在しません）
+#   3: ユニット種別エラー（STEP 1: 指定したユニットがジョブではありません）
+#   4: 実行世代なし（STEP 2: 実行履歴が存在しません）
+#   5: 5MB超過エラー（STEP 3: 実行結果が切り捨てられました）
+#   6: 詳細取得エラー（STEP 3: 実行結果詳細の取得に失敗）
+#   9: API接続エラー（各STEPでの接続失敗）
 #
 # 参考:
 #   https://itpfdoc.hitachi.co.jp/manuals/3021/30213b1920/AJSO0280.HTM
@@ -340,7 +340,7 @@ try {
 
     # ユニット存在確認
     if (-not $defJson.statuses -or $defJson.statuses.Count -eq 0) {
-        exit 5  # ユニット未検出
+        exit 2  # ユニット未検出
     }
 
     # 最初のユニットの情報を取得
@@ -352,11 +352,11 @@ try {
     # JOB系: JOB, PJOB, QJOB, EVWJB, FLWJB, MLWJB, MSWJB, LFWJB, TMWJB,
     #        EVSJB, MLSJB, MSSJB, PWLJB, PWRJB, CJOB, HTPJOB, CPJOB, FXJOB, CUSTOM, JDJOB, ORJOB
     if ($unitTypeValue -notmatch "JOB") {
-        exit 6  # ユニット種別エラー（ジョブではない）
+        exit 3  # ユニット種別エラー（ジョブではない）
     }
 
 } catch {
-    exit 2  # API接続エラー（存在確認）
+    exit 9  # API接続エラー（存在確認）
 }
 
 # ==============================================================================
@@ -438,11 +438,11 @@ try {
 
     # 実行世代が存在しない場合
     if ($execIdList.Count -eq 0) {
-        exit 7  # 実行世代なし
+        exit 4  # 実行世代なし
     }
 
 } catch {
-    exit 2  # API接続エラー（状態取得）
+    exit 9  # API接続エラー（状態取得）
 }
 
 # ==============================================================================
@@ -474,14 +474,14 @@ if ($execIdList.Count -gt 0) {
             $resultJson = $resultText | ConvertFrom-Json
 
             # all フラグのチェック（falseの場合は5MB超過で切り捨て）
-            if ($resultJson.all -eq $false) { exit 3 }  # 5MB超過エラー
+            if ($resultJson.all -eq $false) { exit 5 }  # 5MB超過エラー
 
             # 実行結果詳細を出力
             if ($resultJson.execResultDetails) {
                 [Console]::WriteLine($resultJson.execResultDetails)
             }
         } catch {
-            exit 4  # 詳細取得エラー
+            exit 6  # 詳細取得エラー
         }
     }
 }
