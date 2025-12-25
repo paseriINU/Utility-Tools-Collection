@@ -28,7 +28,7 @@ set "UNIT_PATH=/JobGroup/Jobnet"
 rem 出力ファイル名（日付_時間形式）
 set "DATETIME=%date:~0,4%%date:~5,2%%date:~8,2%_%time:~0,2%%time:~3,2%%time:~6,2%"
 set "DATETIME=%DATETIME: =0%"
-set "OUTPUT_FILE=%~dp0joblog_%DATETIME%.txt"
+set "OUTPUT_FILE=%~dp0%DATETIME%.txt"
 
 rem スクリプトのディレクトリを取得
 set "SCRIPT_DIR=%~dp0"
