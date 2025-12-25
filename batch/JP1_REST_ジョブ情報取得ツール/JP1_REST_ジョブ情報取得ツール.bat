@@ -191,6 +191,12 @@ if ($execIdList.Count -gt 0) {
             $resultText = [System.Text.Encoding]::UTF8.GetString($resultBytes)
             $resultJson = $resultText | ConvertFrom-Json
 
+            # all が false の場合はエラー（5MB超過で切り捨て）
+            if ($resultJson.all -eq $false) {
+                Write-Output "ERROR: Result truncated (exceeded 5MB limit) for $targetPath"
+                exit 1
+            }
+
             if ($resultJson.execResultDetails) {
                 Write-Output $resultJson.execResultDetails
             }
