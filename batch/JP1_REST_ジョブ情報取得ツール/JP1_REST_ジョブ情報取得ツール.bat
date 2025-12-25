@@ -2,8 +2,10 @@
 @echo off
 setlocal
 chcp 932 >nul
-if "%~1"=="" exit /b 1
-set "JP1_UNIT_PATH=%~1"
+rem 引数があれば環境変数に設定、なければ既存の環境変数を使用
+if not "%~1"=="" set "JP1_UNIT_PATH=%~1"
+rem 環境変数が未設定ならエラー終了
+if "%JP1_UNIT_PATH%"=="" exit /b 1
 powershell -NoProfile -ExecutionPolicy Bypass -Command "$scriptDir=('%~dp0' -replace '\\$',''); iex ((gc '%~f0' -Encoding Default) -join \"`n\")"
 exit /b %ERRORLEVEL%
 : #>
@@ -17,7 +19,12 @@ exit /b %ERRORLEVEL%
 #   ※ JP1/AJS3 - Web Consoleが必要です
 #
 # 使い方:
-#   JP1_REST_ジョブ情報取得ツール.bat "/JobGroup/Jobnet"
+#   方法1（コマンドライン引数）:
+#     JP1_REST_ジョブ情報取得ツール.bat "/JobGroup/Jobnet"
+#
+#   方法2（環境変数）:
+#     set "JP1_UNIT_PATH=/JobGroup/Jobnet"
+#     JP1_REST_ジョブ情報取得ツール.bat
 #
 # 終了コード:
 #   0: 正常終了

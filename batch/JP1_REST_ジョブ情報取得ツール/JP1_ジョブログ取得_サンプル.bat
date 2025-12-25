@@ -44,7 +44,9 @@ echo.
 echo ログを取得中...
 
 rem JP1_REST_ジョブ情報取得ツール.bat を呼び出し、結果を直接ファイルに保存
-call "%SCRIPT_DIR%JP1_REST_ジョブ情報取得ツール.bat" "%UNIT_PATH%" > "%OUTPUT_FILE%" 2>&1
+rem 環境変数経由で引数を渡す（callコマンド+リダイレクト時の引数問題を回避）
+set "JP1_UNIT_PATH=%UNIT_PATH%"
+call "%SCRIPT_DIR%JP1_REST_ジョブ情報取得ツール.bat" > "%OUTPUT_FILE%" 2>&1
 set "EXIT_CODE=%ERRORLEVEL%"
 
 rem エラーコード別のハンドリング
