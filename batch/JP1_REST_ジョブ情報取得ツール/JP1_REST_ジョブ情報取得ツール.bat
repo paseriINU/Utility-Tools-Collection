@@ -15,7 +15,7 @@ exit /b %EXITCODE%
 #
 # 説明:
 #   JP1/AJS3 Web Console REST APIを使用して、ジョブ/ジョブネットの
-#   状態情報を取得します。（ajsshow相当の情報をREST APIで取得）
+#   状態情報と実行結果詳細を取得します。
 #   ※ JP1/AJS3 - Web Consoleが必要です
 #
 # 使い方:
@@ -51,26 +51,24 @@ $jp1User = "jp1admin"
 # JP1パスワード（★★★ ここにパスワードを入力 ★★★）
 $jp1Password = "password"
 
-# 取得対象のユニットパス（ジョブネットまたはジョブ）
-# 例: "/main_unit/jobgroup1/daily_batch"
-$unitPath = "/main_unit/jobgroup1/daily_batch"
+# 取得対象のユニットパス（ジョブネット）
+# 例: "/JobGroup/Jobnet"
+$unitPath = "/JobGroup/Jobnet"
 
 # デバッグモード（$true でレスポンス詳細を表示）
 $debugMode = $true
 
-# 検索対象（DEFINITION_AND_STATUS: 定義と状態, DEFINITION: 定義のみ）
-# ※ execIDを取得するには DEFINITION_AND_STATUS を指定
-# ※ 実行登録されていないユニットの定義のみ取得するには DEFINITION を指定
-$searchTarget = "DEFINITION_AND_STATUS"
-
 # 世代指定（STATUS: 最新世代, PERIOD: 期間指定）
-# ※ 過去の実行履歴を取得するには PERIOD を指定し、periodBegin/periodEnd を設定
-$generation = "STATUS"
+$generation = "PERIOD"
 
-# 期間指定（generation=PERIOD の場合のみ有効）
-# 形式: YYYY-MM-DDThh:mm（例: 2024-12-01T00:00）
-$periodBegin = ""
-$periodEnd = ""
+# 期間指定（generation=PERIOD の場合に使用）
+# 形式: YYYY-MM-DDThh:mm
+$periodBegin = "2025-12-01T00:00"
+$periodEnd = "2025-12-25T23:59"
+
+# ステータスフィルタ（空欄で全件、ABNORMAL: 異常終了のみ、等）
+# 指定可能値: ABNORMAL, NORMAL, RUNNING, WAITING, etc.
+$statusFilter = ""
 
 # ==============================================================================
 # ■ メイン処理（以下は編集不要）
@@ -88,10 +86,12 @@ Write-Host "  Managerホスト       : $managerHost"
 Write-Host "  スケジューラー      : $schedulerService"
 Write-Host "  JP1ユーザー         : $jp1User"
 Write-Host "  ユニットパス        : $unitPath"
-Write-Host "  検索対象            : $searchTarget"
 Write-Host "  世代                : $generation"
-if ($generation -eq "PERIOD" -and $periodBegin -and $periodEnd) {
+if ($generation -eq "PERIOD") {
     Write-Host "  期間                : $periodBegin ～ $periodEnd"
+}
+if ($statusFilter) {
+    Write-Host "  ステータスフィルタ  : $statusFilter"
 }
 Write-Host ""
 
@@ -100,17 +100,15 @@ $protocol = if ($useHttps) { "https" } else { "http" }
 
 # 認証情報の作成（Base64エンコード）
 $authString = "${jp1User}:${jp1Password}"
-$authBytes = [System.Text.Encoding]::ASCII.GetBytes($authString)
+$authBytes = [System.Text.Encoding]::UTF8.GetBytes($authString)
 $authBase64 = [System.Convert]::ToBase64String($authBytes)
 
 Write-Host "[DEBUG] 認証文字列: ${jp1User}:***" -ForegroundColor Gray
 Write-Host "[DEBUG] Base64: $($authBase64.Substring(0,10))..." -ForegroundColor Gray
 Write-Host ""
 
-# 共通ヘッダー
+# 共通ヘッダー（Pythonサンプルに合わせてシンプルに）
 $headers = @{
-    "Content-Type" = "application/json"
-    "Accept" = "application/json"
     "Accept-Language" = "ja"
     "X-AJS-Authorization" = $authBase64
 }
@@ -133,84 +131,41 @@ if ($useHttps) {
 }
 
 # ========================================
-# API呼び出し関数
-# ========================================
-function Call-JP1Api {
-    param(
-        [string]$ApiName,
-        [string]$ApiUrl
-    )
-
-    Write-Host ""
-    Write-Host "========================================" -ForegroundColor Yellow
-    Write-Host "API: $ApiName" -ForegroundColor Yellow
-    Write-Host "========================================" -ForegroundColor Yellow
-    Write-Host ""
-    Write-Host "リクエストURL:" -ForegroundColor Cyan
-    Write-Host "  $ApiUrl"
-    Write-Host ""
-
-    try {
-        $webResponse = Invoke-WebRequest -Uri $ApiUrl -Method GET -Headers $headers -TimeoutSec 30 -UseBasicParsing
-        Write-Host "[OK] HTTPステータス: $($webResponse.StatusCode)" -ForegroundColor Green
-        Write-Host ""
-        Write-Host "レスポンスボディ:" -ForegroundColor Cyan
-        Write-Host $webResponse.Content
-        Write-Host ""
-        return $true
-    } catch {
-        $errMsg = $_.Exception.Message
-        Write-Host "[エラー] $errMsg" -ForegroundColor Red
-        if ($_.Exception.Response) {
-            $statusCode = [int]$_.Exception.Response.StatusCode
-            Write-Host "HTTPステータス: $statusCode" -ForegroundColor Red
-        }
-        Write-Host ""
-        return $false
-    }
-}
-
-# ========================================
 # メイン処理: 2段階でAPIを呼び出し
 # ========================================
-$baseUrl = "${protocol}://${webConsoleHost}:${webConsolePort}"
+$baseUrl = "${protocol}://${webConsoleHost}:${webConsolePort}/ajs/api/v1"
 
 Write-Host ""
 Write-Host "================================================================" -ForegroundColor Cyan
 Write-Host "STEP 1: ユニット一覧取得API（execID取得）" -ForegroundColor Cyan
 Write-Host "================================================================" -ForegroundColor Cyan
 
-# ユニットパスを親パスとユニット名に分割
-# 例: "/main_unit/jobgroup1/daily_batch" → location="/main_unit/jobgroup1", unitName="daily_batch"
-$lastSlashIndex = $unitPath.LastIndexOf('/')
-if ($lastSlashIndex -gt 0) {
-    $parentPath = $unitPath.Substring(0, $lastSlashIndex)
-    $targetUnitName = $unitPath.Substring($lastSlashIndex + 1)
-} else {
-    # ルート直下の場合
-    $parentPath = "/"
-    $targetUnitName = $unitPath.TrimStart('/')
-}
+# URLエンコード（Pythonの urllib.parse.quote(LOCATION, safe='') と同等）
+$encodedLocation = [System.Uri]::EscapeDataString($unitPath)
 
 Write-Host ""
 Write-Host "パス解析結果:" -ForegroundColor Cyan
-Write-Host "  上位ユニットパス (location) : $parentPath"
-Write-Host "  ユニット名 (unitName)       : $targetUnitName"
-
-# URLエンコード（/ → %2F）
-$encodedLocation = [System.Uri]::EscapeDataString($parentPath)
-$encodedUnitName = [System.Uri]::EscapeDataString($targetUnitName)
-
+Write-Host "  ユニットパス (location)     : $unitPath"
 Write-Host "  エンコード後 location       : $encodedLocation"
 Write-Host ""
 
-# Step 1: executions API でユニット一覧と execID を取得
-# ※ statuses API では取得できない場合、executions API を使用
-$executionsUrl = "${baseUrl}/ajs/api/v1/objects/executions?mode=search&manager=${managerHost}&serviceName=${schedulerService}&location=${encodedLocation}&searchTarget=${searchTarget}&generation=${generation}&unitName=${encodedUnitName}&unitNameMatchMethods=EQ"
+# Step 1: statuses API でユニット一覧と execID を取得
+# Pythonサンプルに準拠したURL構築
+$statusUrl = "${baseUrl}/objects/statuses?mode=search"
+$statusUrl += "&manager=${managerHost}"
+$statusUrl += "&serviceName=${schedulerService}"
+$statusUrl += "&location=${encodedLocation}"
+$statusUrl += "&generation=${generation}"
 
-# 期間指定の場合、periodBegin/periodEndを追加
-if ($generation -eq "PERIOD" -and $periodBegin -and $periodEnd) {
-    $executionsUrl += "&periodBegin=${periodBegin}&periodEnd=${periodEnd}"
+# 期間指定の場合
+if ($generation -eq "PERIOD") {
+    $statusUrl += "&periodBegin=${periodBegin}"
+    $statusUrl += "&periodEnd=${periodEnd}"
+}
+
+# ステータスフィルタがある場合
+if ($statusFilter) {
+    $statusUrl += "&status=${statusFilter}"
 }
 
 Write-Host "[DEBUG] リクエストヘッダー:" -ForegroundColor Gray
@@ -219,13 +174,13 @@ Write-Host "  Accept-Language: ja" -ForegroundColor Gray
 
 Write-Host ""
 Write-Host "リクエストURL:" -ForegroundColor Cyan
-Write-Host "  $executionsUrl"
+Write-Host "  $statusUrl"
 Write-Host ""
 
 $execIdList = @()
 
 try {
-    $response = Invoke-WebRequest -Uri $executionsUrl -Method GET -Headers $headers -TimeoutSec 30 -UseBasicParsing
+    $response = Invoke-WebRequest -Uri $statusUrl -Method GET -Headers $headers -TimeoutSec 30 -UseBasicParsing
     Write-Host "[OK] HTTPステータス: $($response.StatusCode)" -ForegroundColor Green
 
     # UTF-8文字化け対策: RawContentStreamからUTF-8としてデコード
@@ -240,26 +195,40 @@ try {
     }
 
     # statuses配列からexecIDを抽出
-    # レスポンス構造: statuses[].definition.unitName, statuses[].unitStatus.execID, statuses[].unitStatus.status
     if ($jsonData.statuses -and $jsonData.statuses.Count -gt 0) {
         Write-Host ""
         Write-Host "取得したユニット一覧:" -ForegroundColor Green
         foreach ($unit in $jsonData.statuses) {
-            # ドキュメントに基づく正しいパス取得
-            $path = $unit.definition.unitName
-            $execId = $unit.unitStatus.execID
-            $status = $unit.unitStatus.status
-            Write-Host "  パス: $path | execID: $execId | 状態: $status"
-            if ($execId) {
-                $execIdList += @{ Path = $path; ExecId = $execId }
+            $unitName = $unit.definition.unitName
+            $unitType = $unit.definition.unitType
+            $unitStatus = $unit.unitStatus
+            $execId = if ($unitStatus) { $unitStatus.execID } else { $null }
+            $status = if ($unitStatus) { $unitStatus.status } else { "N/A" }
+
+            Write-Host "  ユニット: $unitName | 種別: $unitType | execID: $execId | 状態: $status"
+
+            # ジョブ（PCJOB, UNIXJOB, QUEUEJOB等）でexecIDがある場合のみリストに追加
+            if ($execId -and $unitType -match "JOB") {
+                $execIdList += @{
+                    Path = $unitName
+                    ExecId = $execId
+                    Status = $status
+                    UnitType = $unitType
+                }
             }
         }
+        Write-Host ""
+        Write-Host "ジョブ件数（execIDあり）: $($execIdList.Count)" -ForegroundColor Cyan
     } else {
         Write-Host ""
         Write-Host "[警告] 該当するユニットがありません" -ForegroundColor Yellow
     }
 } catch {
     Write-Host "[エラー] $($_.Exception.Message)" -ForegroundColor Red
+    if ($_.Exception.Response) {
+        $statusCode = [int]$_.Exception.Response.StatusCode
+        Write-Host "HTTPステータス: $statusCode" -ForegroundColor Red
+    }
 }
 
 Write-Host ""
@@ -273,32 +242,36 @@ if ($execIdList.Count -eq 0) {
     Write-Host ""
     Write-Host "ヒント:" -ForegroundColor Cyan
     Write-Host "  - ユニットパスを確認してください"
+    Write-Host "  - 期間設定（periodBegin/periodEnd）を確認してください"
     Write-Host "  - 参照権限があるか確認してください"
 } else {
     foreach ($item in $execIdList) {
         $targetPath = $item.Path
         $targetExecId = $item.ExecId
+        $targetStatus = $item.Status
 
         Write-Host ""
-        Write-Host "----------------------------------------" -ForegroundColor Yellow
-        Write-Host "対象: $targetPath (execID: $targetExecId)" -ForegroundColor Yellow
-        Write-Host "----------------------------------------" -ForegroundColor Yellow
+        Write-Host "========================================" -ForegroundColor Yellow
+        Write-Host "ユニット: $targetPath" -ForegroundColor Yellow
+        Write-Host "実行ID  : $targetExecId" -ForegroundColor Yellow
+        Write-Host "状態    : $targetStatus" -ForegroundColor Yellow
+        Write-Host "========================================" -ForegroundColor Yellow
 
-        # URLエンコード（/ → %2F, @ → %40）
-        # ドキュメント例: /ajs/api/v1/objects/statuses/%2FJobGroup%2FJobnet%2FJob:%40A100/actions/execResultDetails/invoke
+        # URLエンコード（Pythonの urllib.parse.quote と同等）
         $encodedPath = [System.Uri]::EscapeDataString($targetPath)
-        $encodedExecId = [System.Uri]::EscapeDataString($targetExecId)
 
         # execResultDetails API を呼び出し
-        $execResultUrl = "${baseUrl}/ajs/api/v1/objects/statuses/${encodedPath}:${encodedExecId}/actions/execResultDetails/invoke?manager=${managerHost}&serviceName=${schedulerService}"
+        # Pythonサンプル: f"{base_url}/objects/statuses/{unit_encoded}:{exec_id}/actions/execResultDetails/invoke"
+        $detailUrl = "${baseUrl}/objects/statuses/${encodedPath}:${targetExecId}/actions/execResultDetails/invoke"
+        $detailUrl += "?manager=${managerHost}&serviceName=${schedulerService}"
 
         Write-Host ""
         Write-Host "リクエストURL:" -ForegroundColor Cyan
-        Write-Host "  $execResultUrl"
+        Write-Host "  $detailUrl"
         Write-Host ""
 
         try {
-            $resultResponse = Invoke-WebRequest -Uri $execResultUrl -Method GET -Headers $headers -TimeoutSec 30 -UseBasicParsing
+            $resultResponse = Invoke-WebRequest -Uri $detailUrl -Method GET -Headers $headers -TimeoutSec 30 -UseBasicParsing
             Write-Host "[OK] HTTPステータス: $($resultResponse.StatusCode)" -ForegroundColor Green
 
             # UTF-8文字化け対策
@@ -307,7 +280,7 @@ if ($execIdList.Count -eq 0) {
             $resultJson = $resultText | ConvertFrom-Json
 
             Write-Host ""
-            Write-Host "実行結果詳細（標準エラー出力）:" -ForegroundColor Green
+            Write-Host "実行結果詳細:" -ForegroundColor Green
             Write-Host "----------------------------------------"
             if ($resultJson.execResultDetails) {
                 Write-Host $resultJson.execResultDetails
