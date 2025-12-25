@@ -1,21 +1,9 @@
 <# :
 @echo off
-chcp 65001 >nul
 setlocal
-
-rem 引数チェック
-if "%~1"=="" (
-    echo ERROR: ユニットパスを指定してください
-    echo 使い方: %~nx0 "/JobGroup/Jobnet"
-    exit /b 1
-)
-
-rem 引数を環境変数に設定
-set "JP1_UNIT_PATH=%~1"
-
-rem PowerShell実行前にShift-JISに切り替え（出力がShift-JISのため）
 chcp 932 >nul
-
+if "%~1"=="" exit /b 1
+set "JP1_UNIT_PATH=%~1"
 powershell -NoProfile -ExecutionPolicy Bypass -Command "$scriptDir=('%~dp0' -replace '\\$',''); iex ((gc '%~f0' -Encoding UTF8) -join \"`n\")"
 exit /b %ERRORLEVEL%
 : #>
