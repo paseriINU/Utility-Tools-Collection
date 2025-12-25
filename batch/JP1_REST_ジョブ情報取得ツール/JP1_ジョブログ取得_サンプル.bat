@@ -1,4 +1,3 @@
-<# :
 @echo off
 chcp 65001 >nul
 title JP1 ジョブログ取得サンプル
@@ -12,12 +11,22 @@ rem   JP1_REST_ジョブ情報取得ツール.bat を呼び出し、
 rem   取得したログをクリップボードにコピーします。
 rem
 rem 使い方:
-rem   1. 下記の UNIT_PATH を編集
-rem   2. このファイルをダブルクリックで実行
+rem   JP1_ジョブログ取得_サンプル.bat "/JobGroup/Jobnet"
 rem ============================================================================
 
-rem 取得対象のユニットパス（ここを編集）
-set "UNIT_PATH=/JobGroup/Jobnet"
+rem 引数チェック
+if "%~1"=="" (
+    echo.
+    echo [エラー] ユニットパスを指定してください
+    echo.
+    echo 使い方:
+    echo   %~nx0 "/JobGroup/Jobnet"
+    echo.
+    pause
+    exit /b 1
+)
+
+set "UNIT_PATH=%~1"
 
 rem スクリプトのディレクトリを取得
 set "SCRIPT_DIR=%~dp0"
@@ -97,4 +106,3 @@ del "%TEMP_FILE%" >nul 2>&1
 
 pause
 exit /b 0
-: #>
