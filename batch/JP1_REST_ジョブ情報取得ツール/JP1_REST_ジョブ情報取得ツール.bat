@@ -412,7 +412,7 @@ try {
         }
     }
 } catch {
-    exit 1
+    exit 2  # API接続エラー（ユニット一覧取得）
 }
 
 # ==============================================================================
@@ -444,14 +444,14 @@ if ($execIdList.Count -gt 0) {
             $resultJson = $resultText | ConvertFrom-Json
 
             # all フラグのチェック（falseの場合は5MB超過で切り捨て）
-            if ($resultJson.all -eq $false) { exit 1 }
+            if ($resultJson.all -eq $false) { exit 3 }  # 5MB超過エラー
 
             # 実行結果詳細を出力
             if ($resultJson.execResultDetails) {
                 [Console]::WriteLine($resultJson.execResultDetails)
             }
         } catch {
-            exit 1
+            exit 4  # 詳細取得エラー
         }
     }
 }
