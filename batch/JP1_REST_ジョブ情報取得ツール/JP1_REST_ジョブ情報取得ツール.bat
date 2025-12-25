@@ -107,7 +107,7 @@ $jp1Password = "password"
 # 例: /JobGroup/Jobnet 配下に job1, nested/job2 がある場合
 #   "YES" → job1, nested/job2 両方を取得
 #   "NO"  → job1 のみ取得（nested配下は取得しない）
-$searchLowerUnits = "NO"
+# $searchLowerUnits = "NO"
 
 # ------------------------------------------------------------------------------
 # (2) SearchTargetType - 取得情報範囲
@@ -142,7 +142,7 @@ $searchTarget = "DEFINITION_AND_STATUS"
 #   "JOB"   - ジョブのみ取得
 #             （標準ジョブ、イベントジョブ、アクションジョブ、カスタムジョブ、
 #               引き継ぎ情報設定ジョブ、HTTP接続ジョブ、フレキシブルジョブ）
-$unitType = "NO"
+# $unitType = "NO"
 
 # ------------------------------------------------------------------------------
 # (5) GenerationType - 世代指定
@@ -258,6 +258,8 @@ $holdPlan = "NO"
 #   "CO" - 部分一致（例: "*job*"）
 #   "NC" - 部分不一致
 #   "RE" - 正規表現（?, *, \ が使用可能）
+# $unitName = ""
+# $unitNameMatchMethods = "EQ"
 
 # ==============================================================================
 # ■ メイン処理（以下は通常編集不要）
