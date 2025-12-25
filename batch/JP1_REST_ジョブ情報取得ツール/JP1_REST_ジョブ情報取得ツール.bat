@@ -2,10 +2,10 @@
 @echo off
 setlocal
 
-rem 引数チェック
+rem Argument check
 if "%~1"=="" (
-    echo ERROR: ユニットパスを指定してください
-    echo 使い方: %~nx0 "/JobGroup/Jobnet"
+    echo ERROR: Unit path is required
+    echo Usage: %~nx0 "/JobGroup/Jobnet"
     exit /b 1
 )
 
