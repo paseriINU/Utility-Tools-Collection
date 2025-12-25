@@ -72,9 +72,6 @@ $statusFilter = ""
 # ■ メイン処理（以下は編集不要）
 # ==============================================================================
 
-# 画面クリア
-Clear-Host
-
 Write-Host ""
 Write-Host "================================================================" -ForegroundColor Cyan
 Write-Host "  JP1 REST API ジョブ情報取得ツール" -ForegroundColor Cyan
