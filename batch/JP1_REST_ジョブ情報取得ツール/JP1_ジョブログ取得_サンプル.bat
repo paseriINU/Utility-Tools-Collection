@@ -112,5 +112,8 @@ echo.
 echo 出力ファイル: %OUTPUT_FILE%
 echo.
 
+rem メモ帳で開く
+start notepad "%OUTPUT_FILE%"
+
 pause
 exit /b 0
