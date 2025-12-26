@@ -2033,19 +2033,37 @@
               上記の方法で見つからない場合の最終手段
             --------------------------------------------------------------
             */
+            console.log('[extractBookmarks] 方法3チェック: 現在のbookmarks数:', bookmarks.length);
             if (bookmarks.length === 0) {
+                console.log('[extractBookmarks] 方法3: フォールバック検索開始');
                 // /Title に続く任意の文字列を抽出（括弧または<>）
                 const fallbackPattern = /\/Title\s*(?:\(([^)]*)\)|<([^>]+)>)/gi;
+                let method3Count = 0;
+                let method3Samples = [];
                 while ((match = fallbackPattern.exec(content)) !== null) {
+                    method3Count++;
                     let title = '';
                     if (match[1] !== undefined) {
                         // 括弧形式: 8進数エスケープをデコード後、バイト配列として処理
-                        const decoded = decodePDFString(match[1]);
+                        const rawMatch = match[1];
+                        const decoded = decodePDFString(rawMatch);
                         const titleBytes = new Uint8Array(decoded.length);
                         for (let i = 0; i < decoded.length; i++) {
                             titleBytes[i] = decoded.charCodeAt(i) & 0xFF;
                         }
+
                         title = decodeTitle(titleBytes);
+
+                        // デバッグ: 最初の5件の詳細を収集
+                        if (method3Samples.length < 5) {
+                            const hexDump = Array.from(titleBytes.slice(0, 20)).map(b => b.toString(16).padStart(2, '0')).join(' ');
+                            method3Samples.push({
+                                raw: rawMatch.substring(0, 30),
+                                hex: hexDump,
+                                len: titleBytes.length,
+                                decoded: title ? title.substring(0, 30) : '(空)'
+                            });
+                        }
                     } else if (match[2] !== undefined) {
                         // 16進数形式
                         const hexStr = match[2].replace(/\s+/g, '');
@@ -2077,6 +2095,19 @@
                         bookmarks.push({ title: title.trim(), page: '', level: 1 });
                     }
                 }
+
+                // 方法3デバッグサマリー
+                console.log('[方法3] === デバッグサマリー ===');
+                console.log('[方法3] マッチ数:', method3Count);
+                console.log('[方法3] 抽出成功:', bookmarks.length, '件');
+                if (method3Samples.length > 0) {
+                    console.log('[方法3] サンプルデータ（括弧形式）:');
+                    method3Samples.forEach((s, i) => {
+                        console.log('  ' + (i + 1) + '. raw="' + s.raw + '..." len=' + s.len);
+                        console.log('     hex: ' + s.hex);
+                        console.log('     decoded: "' + s.decoded + '"');
+                    });
+                }
             }
 
             /*
@@ -2086,7 +2117,9 @@
               Acrobatはしおり名をUTF-16BEで格納することが多い
             --------------------------------------------------------------
             */
+            console.log('[extractBookmarks] 方法4チェック: 現在のbookmarks数:', bookmarks.length);
             if (bookmarks.length === 0) {
+                console.log('[extractBookmarks] 方法4: オブジェクト走査開始');
                 // オブジェクト全体を走査してしおり関連のコンテンツを探す
                 const objPattern = /(\d+)\s+\d+\s+obj\s*([\s\S]*?)\s*endobj/g;
                 while ((match = objPattern.exec(content)) !== null) {
@@ -2144,7 +2177,9 @@
               圧縮されていないバイナリデータから直接しおりを探す
             --------------------------------------------------------------
             */
+            console.log('[extractBookmarks] 方法5チェック: 現在のbookmarks数:', bookmarks.length);
             if (bookmarks.length === 0) {
+                console.log('[extractBookmarks] 方法5: バイナリ直接検索開始');
                 // UTF-16BE BOM (FEFF) を探してしおり名を抽出
                 for (let i = 0; i < bytes.length - 4; i++) {
                     if (bytes[i] === 0xFE && bytes[i + 1] === 0xFF) {
@@ -2240,6 +2275,17 @@
 
             // 階層構造の解析を試みる
             analyzeHierarchy(content, bookmarks);
+
+            console.log('[extractBookmarks] === 最終結果 ===');
+            console.log('[extractBookmarks] 抽出件数:', bookmarks.length);
+            if (bookmarks.length > 0 && bookmarks.length <= 5) {
+                bookmarks.forEach((b, i) => console.log('  ' + (i+1) + '. ' + b.title.substring(0, 40)));
+            } else if (bookmarks.length > 5) {
+                for (let i = 0; i < 3; i++) {
+                    console.log('  ' + (i+1) + '. ' + bookmarks[i].title.substring(0, 40));
+                }
+                console.log('  ... (他 ' + (bookmarks.length - 3) + ' 件)');
+            }
 
             return bookmarks;
         }
