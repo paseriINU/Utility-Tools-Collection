@@ -883,8 +883,11 @@
         ======================================================================
         */
         function parsePDFBookmarks(arrayBuffer) {
+            console.log('[parsePDFBookmarks] 解析開始');
+
             // Uint8Array: バイト配列（0-255の数値の配列）
             const bytes = new Uint8Array(arrayBuffer);
+            console.log('[parsePDFBookmarks] PDFサイズ:', bytes.length, 'bytes');
 
             // バイナリをLatin-1文字列に変換（PDF内部の検索用）
             let content = latin1Decode(bytes);
@@ -922,7 +925,9 @@
             const pageObjects = buildPageMapping(content);
 
             // しおり情報を抽出
+            console.log('[parsePDFBookmarks] しおり抽出開始');
             const bookmarks = extractBookmarks(content, bytes, pageObjects);
+            console.log('[parsePDFBookmarks] 抽出完了:', bookmarks.length, '件');
 
             if (bookmarks.length === 0) {
                 // しおりの構造は見つかったが抽出できなかった場合
@@ -1472,14 +1477,17 @@
             if (processedBytes.length >= 2 &&
                 processedBytes[0] === 0xFE &&
                 processedBytes[1] === 0xFF) {
-                console.log('[decodeTitle] UTF-16BE BOM検出');
+                console.log('[decodeTitle] UTF-16BE BOM検出, バイト長:', processedBytes.length);
                 try {
-                    // BOMを含めてデコード
-                    const utf16Str = new TextDecoder('utf-16be').decode(processedBytes);
-                    if (utf16Str && utf16Str.trim()) {
-                        console.log('[decodeTitle] UTF-16BEデコード成功:', utf16Str.substring(0, 30));
-                        // BOMを除去して返す
-                        return utf16Str.replace(/^\uFEFF/, '');
+                    // BOMをスキップしてデコード（バイト2以降）
+                    const dataBytes = processedBytes.slice(2);
+                    if (dataBytes.length >= 2) {
+                        const utf16Str = new TextDecoder('utf-16be').decode(dataBytes);
+                        console.log('[decodeTitle] UTF-16BEデコード結果:', utf16Str.substring(0, 30));
+                        if (utf16Str && utf16Str.trim()) {
+                            // NUL文字を除去して返す
+                            return utf16Str.replace(/\x00/g, '').trim();
+                        }
                     }
                 } catch (e) {
                     console.log('[decodeTitle] UTF-16BEデコード失敗:', e.message);
@@ -1490,14 +1498,17 @@
             if (processedBytes.length >= 2 &&
                 processedBytes[0] === 0xFF &&
                 processedBytes[1] === 0xFE) {
-                console.log('[decodeTitle] UTF-16LE BOM検出');
+                console.log('[decodeTitle] UTF-16LE BOM検出, バイト長:', processedBytes.length);
                 try {
-                    // BOMを含めてデコード
-                    const utf16Str = new TextDecoder('utf-16le').decode(processedBytes);
-                    if (utf16Str && utf16Str.trim()) {
-                        console.log('[decodeTitle] UTF-16LEデコード成功:', utf16Str.substring(0, 30));
-                        // BOMを除去して返す
-                        return utf16Str.replace(/^\uFEFF/, '');
+                    // BOMをスキップしてデコード（バイト2以降）
+                    const dataBytes = processedBytes.slice(2);
+                    if (dataBytes.length >= 2) {
+                        const utf16Str = new TextDecoder('utf-16le').decode(dataBytes);
+                        console.log('[decodeTitle] UTF-16LEデコード結果:', utf16Str.substring(0, 30));
+                        if (utf16Str && utf16Str.trim()) {
+                            // NUL文字を除去して返す
+                            return utf16Str.replace(/\x00/g, '').trim();
+                        }
                     }
                 } catch (e) {
                     console.log('[decodeTitle] UTF-16LEデコード失敗:', e.message);
@@ -1780,6 +1791,7 @@
         ======================================================================
         */
         function extractBookmarks(content, bytes, pageObjects) {
+            console.log('[extractBookmarks] 抽出処理開始');
             const bookmarks = [];
             const originalContentLength = bytes.length;
 
@@ -1791,21 +1803,29 @@
             --------------------------------------------------------------
             */
             // バイナリから直接タイトルを抽出（ネストした括弧にも対応）
+            console.log('[extractBookmarks] 方法1: 括弧形式を検索');
             const titlePositions = findTitlePositions(content);
+            console.log('[extractBookmarks] 方法1: 検出位置数:', titlePositions.length);
 
-            for (const pos of titlePositions) {
+            for (let posIdx = 0; posIdx < titlePositions.length; posIdx++) {
+                const pos = titlePositions[posIdx];
                 let title = '';
+
+                console.log('[extractBookmarks] 方法1: 処理中 (' + (posIdx + 1) + '/' + titlePositions.length + ') 位置:', pos.start, '-', pos.end);
 
                 // 元のバイト配列の範囲内かチェック
                 if (pos.start < originalContentLength && pos.end <= originalContentLength) {
                     // 元のPDFデータから抽出
                     const titleBytes = extractTitleBytes(bytes, pos.start, pos.end);
                     if (titleBytes && titleBytes.length > 0) {
+                        console.log('[extractBookmarks] 方法1: 元データから抽出, バイト長:', titleBytes.length);
                         title = decodeTitle(titleBytes);
+                        console.log('[extractBookmarks] 方法1: デコード結果:', title ? title.substring(0, 30) : '(空)');
                     }
                 } else {
                     // 解凍されたコンテンツから抽出（文字列として処理）
                     const titleStr = content.substring(pos.start, pos.end);
+                    console.log('[extractBookmarks] 方法1: 解凍コンテンツから抽出, 文字列長:', titleStr.length);
                     // 8進数エスケープ等をデコード後、バイト配列として処理
                     const decoded = decodePDFString(titleStr);
                     const titleBytes = new Uint8Array(decoded.length);
@@ -1813,12 +1833,14 @@
                         titleBytes[i] = decoded.charCodeAt(i) & 0xFF;
                     }
                     title = decodeTitle(titleBytes);
+                    console.log('[extractBookmarks] 方法1: デコード結果:', title ? title.substring(0, 30) : '(空)');
                 }
 
                 if (title && title.trim()) {
                     // 重複チェック
                     if (!bookmarks.some(b => b.title === title.trim())) {
                         bookmarks.push({ title: title.trim(), page: '', level: 1 });
+                        console.log('[extractBookmarks] 方法1: しおり追加:', title.trim().substring(0, 30));
                     }
                 }
             }
@@ -1831,12 +1853,16 @@
               Acrobat JavaScript生成のしおりはBOMなしUTF-16BEの場合がある
             --------------------------------------------------------------
             */
+            console.log('[extractBookmarks] 方法2: 16進数形式を検索');
             let match;
+            let hexMatchCount = 0;
             // 16進数形式を検索（空白を含む可能性があるため柔軟なパターン）
             const hexPattern = /\/Title\s*<([0-9A-Fa-f\s]+)>/gi;
             while ((match = hexPattern.exec(content)) !== null) {
+                hexMatchCount++;
                 // 空白を除去して純粋な16進数文字列を取得
                 const hexStr = match[1].replace(/\s+/g, '');
+                console.log('[extractBookmarks] 方法2: 16進数検出 (' + hexMatchCount + '):', hexStr.substring(0, 40) + '...');
                 if (hexStr.length < 2) continue;
 
                 let title = '';
