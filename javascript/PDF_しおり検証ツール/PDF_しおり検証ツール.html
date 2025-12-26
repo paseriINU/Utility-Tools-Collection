@@ -1863,7 +1863,6 @@
                 hexMatchCount++;
                 // 空白を除去して純粋な16進数文字列を取得
                 const hexStr = match[1].replace(/\s+/g, '');
-                console.log('[extractBookmarks] 方法2: 16進数検出 (' + hexMatchCount + '):', hexStr.substring(0, 40) + '...');
                 if (hexStr.length < 2) continue;
 
                 let title = '';
@@ -2011,23 +2010,21 @@
                 }
             }
 
-            // 方法2のデバッグサマリー出力
-            if (hexMatchCount > 0) {
-                console.log('[方法2] === デバッグサマリー ===');
-                console.log('[方法2] 処理件数:', hexMatchCount);
-                console.log('[方法2] 抽出成功:', bookmarks.length, '件');
-                if (hexDebugSamples.length > 0) {
-                    console.log('[方法2] 成功サンプル:');
-                    hexDebugSamples.forEach((s, i) => {
-                        console.log('  ' + (i + 1) + '. hex=' + s.hex + '... enc=' + s.enc + ' → "' + s.result + '..."');
-                    });
-                }
-                if (hexFailedSamples.length > 0) {
-                    console.log('[方法2] 失敗サンプル:');
-                    hexFailedSamples.forEach((s, i) => {
-                        console.log('  ' + (i + 1) + '. hex=' + s.hex + ' 理由:' + s.reason);
-                    });
-                }
+            // 方法2のデバッグサマリー出力（常に出力）
+            console.log('[方法2] === デバッグサマリー ===');
+            console.log('[方法2] hexマッチ数:', hexMatchCount);
+            console.log('[方法2] 抽出成功:', bookmarks.length, '件');
+            console.log('[方法2] 成功サンプル数:', hexDebugSamples.length);
+            console.log('[方法2] 失敗サンプル数:', hexFailedSamples.length);
+            if (hexDebugSamples.length > 0) {
+                hexDebugSamples.forEach((s, i) => {
+                    console.log('  成功' + (i + 1) + '. hex=' + s.hex + '... enc=' + s.enc + ' → "' + s.result + '..."');
+                });
+            }
+            if (hexFailedSamples.length > 0) {
+                hexFailedSamples.forEach((s, i) => {
+                    console.log('  失敗' + (i + 1) + '. hex=' + s.hex + ' 理由:' + s.reason);
+                });
             }
 
             /*
