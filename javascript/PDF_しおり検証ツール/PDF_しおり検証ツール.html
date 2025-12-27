@@ -2218,6 +2218,11 @@
             console.log('[extractBookmarks] 方法5チェック: 現在のbookmarks数:', bookmarks.length);
             if (bookmarks.length === 0) {
                 console.log('[extractBookmarks] 方法5: バイナリ直接検索開始');
+                // デバッグ用カウンターとサンプル収集
+                let method5BECount = 0;
+                let method5LECount = 0;
+                let method5Samples = [];
+
                 // UTF-16BE BOM (FEFF) を探してしおり名を抽出
                 for (let i = 0; i < bytes.length - 4; i++) {
                     if (bytes[i] === 0xFE && bytes[i + 1] === 0xFF) {
@@ -2237,12 +2242,22 @@
 
                         if (endPos > i + 4) {
                             const titleBytes = bytes.slice(i, endPos);
+                            method5BECount++;
                             try {
                                 const title = new TextDecoder('utf-16be').decode(titleBytes);
                                 if (title && title.trim().length >= 2 && !bookmarks.some(b => b.title === title.trim())) {
                                     // 有効な文字列かチェック（制御文字が少ない）
                                     const controlChars = (title.match(/[\x00-\x1F]/g) || []).length;
                                     if (controlChars < title.length * 0.1) {
+                                        // デバッグサンプル収集
+                                        if (method5Samples.length < 5) {
+                                            const hexDump = Array.from(titleBytes.slice(0, 20)).map(b => b.toString(16).padStart(2, '0')).join(' ');
+                                            method5Samples.push({
+                                                type: 'UTF-16BE (FEFF)',
+                                                hex: hexDump,
+                                                decoded: title.trim().substring(0, 30)
+                                            });
+                                        }
                                         bookmarks.push({ title: title.trim(), page: '', level: 1 });
                                     }
                                 }
@@ -2269,12 +2284,22 @@
 
                         if (endPos > i + 4) {
                             const titleBytes = bytes.slice(i, endPos);
+                            method5LECount++;
                             try {
                                 const title = new TextDecoder('utf-16le').decode(titleBytes);
                                 if (title && title.trim().length >= 2 && !bookmarks.some(b => b.title === title.trim())) {
                                     // 有効な文字列かチェック（制御文字が少ない）
                                     const controlChars = (title.match(/[\x00-\x1F]/g) || []).length;
                                     if (controlChars < title.length * 0.1) {
+                                        // デバッグサンプル収集
+                                        if (method5Samples.length < 5) {
+                                            const hexDump = Array.from(titleBytes.slice(0, 20)).map(b => b.toString(16).padStart(2, '0')).join(' ');
+                                            method5Samples.push({
+                                                type: 'UTF-16LE (FFFE)',
+                                                hex: hexDump,
+                                                decoded: title.trim().substring(0, 30)
+                                            });
+                                        }
                                         bookmarks.push({ title: title.trim(), page: '', level: 1 });
                                     }
                                 }
@@ -2283,6 +2308,20 @@
                             }
                         }
                     }
+                }
+
+                // 方法5デバッグサマリー
+                console.log('[方法5] === デバッグサマリー ===');
+                console.log('[方法5] UTF-16BE (FEFF) 検出数:', method5BECount);
+                console.log('[方法5] UTF-16LE (FFFE) 検出数:', method5LECount);
+                console.log('[方法5] 抽出成功:', bookmarks.length, '件');
+                if (method5Samples.length > 0) {
+                    console.log('[方法5] サンプルデータ:');
+                    method5Samples.forEach((s, i) => {
+                        console.log('  ' + (i + 1) + '. type=' + s.type);
+                        console.log('     hex: ' + s.hex);
+                        console.log('     decoded: "' + s.decoded + '"');
+                    });
                 }
             }
 
