@@ -1346,13 +1346,24 @@
 
                     if (objData.includes('/Title')) {
                         titleCount++;
-                        // デバッグ: 最初の3件の/Titleオブジェクトの内容を表示
-                        if (results.length < 3) {
+                        // デバッグ: 最初の5件の/Titleオブジェクトの内容を表示
+                        if (results.length < 5) {
                             console.log('[ObjStm] /Title オブジェクト #' + (results.length + 1) + ':');
-                            console.log('  生データ: ' + objData.substring(0, 150));
-                            // hex表示
-                            const hexSample = Array.from(objData.substring(0, 50)).map(c => c.charCodeAt(0).toString(16).padStart(2, '0')).join(' ');
-                            console.log('  HEX: ' + hexSample);
+                            // /Titleの位置を特定
+                            const titleIdx = objData.indexOf('/Title');
+                            if (titleIdx >= 0) {
+                                // /Title以降の部分を取得
+                                const titlePart = objData.substring(titleIdx, titleIdx + 100);
+                                console.log('  /Title部分: ' + titlePart);
+                                // /Title後の括弧内データをHEX表示
+                                const parenStart = objData.indexOf('(', titleIdx);
+                                const parenEnd = objData.indexOf(')', parenStart + 1);
+                                if (parenStart > 0 && parenEnd > parenStart) {
+                                    const titleValue = objData.substring(parenStart + 1, Math.min(parenEnd, parenStart + 51));
+                                    const hexValue = Array.from(titleValue).map(c => c.charCodeAt(0).toString(16).padStart(2, '0')).join(' ');
+                                    console.log('  タイトル値HEX: ' + hexValue);
+                                }
+                            }
                         }
                         results.push(objData);
                     }
