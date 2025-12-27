@@ -2248,6 +2248,40 @@
                     }
                 }
 
+                // UTF-16デコード関数（Latin-1文字列からUTF-16バイトとして解釈）
+                function decodeUTF16FromLatin1(latin1Str, isLE) {
+                    try {
+                        const byteArray = new Uint8Array(latin1Str.length);
+                        for (let j = 0; j < latin1Str.length; j++) {
+                            byteArray[j] = latin1Str.charCodeAt(j) & 0xFF;
+                        }
+                        const encoding = isLE ? 'utf-16le' : 'utf-16be';
+                        return new TextDecoder(encoding).decode(byteArray);
+                    } catch (e) {
+                        return null;
+                    }
+                }
+
+                // バイトスワップしてUTF-16デコード（BOMと逆のエンディアン）
+                function decodeUTF16Swapped(latin1Str, bomIsLE) {
+                    try {
+                        const byteArray = new Uint8Array(latin1Str.length);
+                        // バイトを2バイトずつスワップ
+                        for (let j = 0; j < latin1Str.length - 1; j += 2) {
+                            byteArray[j] = latin1Str.charCodeAt(j + 1) & 0xFF;
+                            byteArray[j + 1] = latin1Str.charCodeAt(j) & 0xFF;
+                        }
+                        if (latin1Str.length % 2 === 1) {
+                            byteArray[latin1Str.length - 1] = latin1Str.charCodeAt(latin1Str.length - 1) & 0xFF;
+                        }
+                        // BOMがLEならスワップ後はBEとして解釈
+                        const encoding = bomIsLE ? 'utf-16be' : 'utf-16le';
+                        return new TextDecoder(encoding).decode(byteArray);
+                    } catch (e) {
+                        return null;
+                    }
+                }
+
                 // 日本語文字が含まれているかチェック
                 function hasJapanese(str) {
                     return /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]/.test(str);
@@ -2286,18 +2320,34 @@
                             const dataStr = content.substring(i + 2, endPos);
                             method5ContentCount++;
 
-                            // まずShift_JISとして試す
-                            let title = decodeShiftJIS(dataStr);
-                            let encoding = 'Shift_JIS';
+                            // 複数のエンコーディングを試行（日本語文字数が最も多いものを採用）
+                            let bestTitle = null;
+                            let bestEncoding = '';
+                            let bestJPCount = 0;
 
-                            // Shift_JISで日本語が取れなければUTF-8を試す
-                            if (!title || !hasJapanese(title)) {
-                                const utf8Title = decodeUTF8FromLatin1(dataStr);
-                                if (utf8Title && hasJapanese(utf8Title)) {
-                                    title = utf8Title;
-                                    encoding = 'UTF-8';
-                                }
+                            const candidates = [
+                                { fn: () => decodeUTF16FromLatin1(dataStr, bomType === 'LE'), name: 'UTF-16' + bomType },
+                                { fn: () => decodeUTF16Swapped(dataStr, bomType === 'LE'), name: 'UTF-16' + (bomType === 'LE' ? 'BE' : 'LE') + '-swap' },
+                                { fn: () => decodeShiftJIS(dataStr), name: 'Shift_JIS' },
+                                { fn: () => decodeUTF8FromLatin1(dataStr), name: 'UTF-8' }
+                            ];
+
+                            for (const cand of candidates) {
+                                try {
+                                    const decoded = cand.fn();
+                                    if (decoded) {
+                                        const jpMatches = decoded.match(/[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]/g) || [];
+                                        if (jpMatches.length > bestJPCount) {
+                                            bestJPCount = jpMatches.length;
+                                            bestTitle = decoded;
+                                            bestEncoding = cand.name;
+                                        }
+                                    }
+                                } catch (e) {}
                             }
+
+                            let title = bestTitle;
+                            let encoding = bestEncoding;
 
                             if (title && title.trim().length >= 2) {
                                 // 制御文字チェック
