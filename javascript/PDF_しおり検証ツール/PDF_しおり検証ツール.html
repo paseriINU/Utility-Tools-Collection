@@ -1082,30 +1082,51 @@
                 const rawData = data.slice(startOffset);
 
                 try {
-                    const ds = new DecompressionStream('deflate-raw');
-                    const writer = ds.writable.getWriter();
-                    writer.write(rawData);
-                    writer.close();
+                    const result = await new Promise((resolve, reject) => {
+                        try {
+                            const ds = new DecompressionStream('deflate-raw');
+                            const writer = ds.writable.getWriter();
+                            const reader = ds.readable.getReader();
+                            const chunks = [];
 
-                    const reader = ds.readable.getReader();
-                    const chunks = [];
+                            // エラーハンドリング
+                            let hasError = false;
 
-                    while (true) {
-                        const { done, value } = await reader.read();
-                        if (done) break;
-                        chunks.push(value);
-                    }
+                            // 読み取り処理
+                            const readChunks = async () => {
+                                try {
+                                    while (true) {
+                                        const { done, value } = await reader.read();
+                                        if (done) break;
+                                        chunks.push(value);
+                                    }
 
-                    // チャンクを結合
-                    const totalLength = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
-                    const result = new Uint8Array(totalLength);
-                    let offset = 0;
-                    for (const chunk of chunks) {
-                        result.set(chunk, offset);
-                        offset += chunk.length;
-                    }
+                                    // チャンクを結合
+                                    const totalLength = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+                                    const result = new Uint8Array(totalLength);
+                                    let offset = 0;
+                                    for (const chunk of chunks) {
+                                        result.set(chunk, offset);
+                                        offset += chunk.length;
+                                    }
+                                    resolve(result);
+                                } catch (readError) {
+                                    reject(readError);
+                                }
+                            };
 
-                    if (result.length > 0) {
+                            // 書き込みとクローズ
+                            writer.write(rawData).catch(reject);
+                            writer.close().catch(reject);
+
+                            // 読み取り開始
+                            readChunks();
+                        } catch (initError) {
+                            reject(initError);
+                        }
+                    });
+
+                    if (result && result.length > 0) {
                         return result;
                     }
                 } catch (e) {
