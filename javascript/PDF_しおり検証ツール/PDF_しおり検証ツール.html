@@ -697,8 +697,8 @@
                 // arrayBuffer(): ファイルをバイナリデータとして読み込む
                 const arrayBuffer = await selectedFile.arrayBuffer();
 
-                // PDF解析を実行
-                bookmarks = parsePDFBookmarks(arrayBuffer);
+                // PDF解析を実行（非同期）
+                bookmarks = await parsePDFBookmarks(arrayBuffer);
 
                 // 結果を表示
                 displayResults();
@@ -882,7 +882,7 @@
           PDFファイルのバイナリデータからしおり情報を抽出
         ======================================================================
         */
-        function parsePDFBookmarks(arrayBuffer) {
+        async function parsePDFBookmarks(arrayBuffer) {
             console.log('[parsePDFBookmarks] 解析開始');
 
             // Uint8Array: バイト配列（0-255の数値の配列）
@@ -907,10 +907,10 @@
                 // 解凍に失敗しても続行（非圧縮部分からしおりを探す）
             }
 
-            // Object Streams (ObjStm) からしおりを抽出
+            // Object Streams (ObjStm) からしおりを抽出（非同期処理）
             try {
                 console.log('[parsePDFBookmarks] Object Streams 解析開始');
-                const objStmContents = parseObjectStreams(content, bytes);
+                const objStmContents = await parseObjectStreamsAsync(content, bytes);
                 if (objStmContents.length > 0) {
                     console.log('[parsePDFBookmarks] ObjStm から ' + objStmContents.length + ' 個の /Title オブジェクトを発見');
                     content = content + '\n' + objStmContents.join('\n');
@@ -1067,13 +1067,51 @@
           - stream内: <obj1_num> <obj1_offset> <obj2_num> <obj2_offset> ... <data>
         ======================================================================
         */
-        function parseObjectStreams(content, bytes) {
-            const results = [];
-            let objStmCount = 0;
-            let objStmSuccess = 0;
+        // DecompressionStream APIを使用した非同期解凍（ブラウザ標準）
+        async function decompressWithDecompressionStream(data) {
+            // zlibヘッダー(78 xx)を検出してスキップ
+            let startOffset = 0;
+            if (data.length >= 2 && data[0] === 0x78) {
+                startOffset = 2;
+            }
 
-            // ObjStmオブジェクトを検索（より柔軟なパターン）
-            // 形式: X 0 obj << /Type /ObjStm /N Y /First Z /Filter /FlateDecode /Length W >> stream
+            const rawData = data.slice(startOffset);
+
+            try {
+                const ds = new DecompressionStream('deflate-raw');
+                const writer = ds.writable.getWriter();
+                writer.write(rawData);
+                writer.close();
+
+                const reader = ds.readable.getReader();
+                const chunks = [];
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    chunks.push(value);
+                }
+
+                // チャンクを結合
+                const totalLength = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+                const result = new Uint8Array(totalLength);
+                let offset = 0;
+                for (const chunk of chunks) {
+                    result.set(chunk, offset);
+                    offset += chunk.length;
+                }
+
+                return result;
+            } catch (e) {
+                throw new Error('DecompressionStream失敗: ' + e.message);
+            }
+        }
+
+        // 同期的なObject Streams解析（解凍は非同期で後処理）
+        function parseObjectStreams(content, bytes) {
+            // 解凍待ちのObjStm情報を収集
+            const objStmList = [];
+
             const objPattern = /(\d+)\s+0\s+obj\s*<<([\s\S]*?)>>\s*stream\r?\n/g;
             let match;
 
@@ -1081,98 +1119,121 @@
                 const objNum = match[1];
                 const dictContent = match[2];
 
-                // ObjStmかどうかを確認
                 if (!dictContent.match(/\/Type\s*\/ObjStm/)) continue;
 
-                objStmCount++;
-
-                // /N と /First を抽出
                 const nMatch = dictContent.match(/\/N\s+(\d+)/);
                 const firstMatch = dictContent.match(/\/First\s+(\d+)/);
                 const filterMatch = dictContent.match(/\/Filter\s*\/FlateDecode/);
 
-                if (!nMatch || !firstMatch) {
-                    console.log('[ObjStm] オブジェクト ' + objNum + ': /N または /First が見つかりません');
-                    continue;
-                }
+                if (!nMatch || !firstMatch) continue;
 
                 const numObjects = parseInt(nMatch[1], 10);
                 const firstOffset = parseInt(firstMatch[1], 10);
                 const hasFlate = !!filterMatch;
 
                 const streamStart = match.index + match[0].length;
-
-                console.log('[ObjStm] オブジェクト ' + objNum + ' を検出: N=' + numObjects + ', First=' + firstOffset + ', FlateDecode=' + hasFlate);
-
-                // endstreamを探す
                 const endstreamPos = content.indexOf('endstream', streamStart);
-                if (endstreamPos === -1) {
-                    console.log('[ObjStm] オブジェクト ' + objNum + ': endstream が見つかりません');
-                    continue;
-                }
+                if (endstreamPos === -1) continue;
 
-                // ストリームデータを取得
                 const streamData = content.substring(streamStart, endstreamPos);
-                console.log('[ObjStm] オブジェクト ' + objNum + ': ストリーム長 = ' + streamData.length + ' バイト');
+
+                objStmList.push({
+                    objNum,
+                    numObjects,
+                    firstOffset,
+                    hasFlate,
+                    streamData
+                });
+            }
+
+            console.log('[ObjStm] 検出したObjStm数: ' + objStmList.length);
+
+            // 同期版では空配列を返す（非同期版で処理）
+            return [];
+        }
+
+        // 非同期版Object Streams解析
+        async function parseObjectStreamsAsync(content, bytes) {
+            const results = [];
+            let objStmCount = 0;
+            let objStmSuccess = 0;
+
+            const objPattern = /(\d+)\s+0\s+obj\s*<<([\s\S]*?)>>\s*stream\r?\n/g;
+            let match;
+
+            while ((match = objPattern.exec(content)) !== null) {
+                const objNum = match[1];
+                const dictContent = match[2];
+
+                if (!dictContent.match(/\/Type\s*\/ObjStm/)) continue;
+
+                objStmCount++;
+
+                const nMatch = dictContent.match(/\/N\s+(\d+)/);
+                const firstMatch = dictContent.match(/\/First\s+(\d+)/);
+                const filterMatch = dictContent.match(/\/Filter\s*\/FlateDecode/);
+
+                if (!nMatch || !firstMatch) continue;
+
+                const numObjects = parseInt(nMatch[1], 10);
+                const firstOffset = parseInt(firstMatch[1], 10);
+                const hasFlate = !!filterMatch;
+
+                const streamStart = match.index + match[0].length;
+                const endstreamPos = content.indexOf('endstream', streamStart);
+                if (endstreamPos === -1) continue;
+
+                const streamData = content.substring(streamStart, endstreamPos);
 
                 // 解凍処理
                 let decompressedData = streamData;
 
                 if (hasFlate) {
-                    try {
-                        // バイト配列に変換
-                        const streamBytes = new Uint8Array(streamData.length);
-                        for (let i = 0; i < streamData.length; i++) {
-                            streamBytes[i] = streamData.charCodeAt(i) & 0xFF;
+                    // バイト配列に変換
+                    const streamBytes = new Uint8Array(streamData.length);
+                    for (let i = 0; i < streamData.length; i++) {
+                        streamBytes[i] = streamData.charCodeAt(i) & 0xFF;
+                    }
+
+                    let decompressed = null;
+
+                    // 方法1: DecompressionStream API（ブラウザ標準）
+                    if (typeof DecompressionStream !== 'undefined') {
+                        try {
+                            decompressed = await decompressWithDecompressionStream(streamBytes);
+                        } catch (e) {
+                            // DecompressionStreamが失敗した場合、カスタムinflateを試す
                         }
+                    }
 
-                        // 複数の開始位置で解凍を試みる（zlibヘッダーの有無に対応）
-                        let decompressed = null;
-                        const startOffsets = [0, 2];  // 0: 生のDeflate, 2: zlibヘッダーをスキップ
-
-                        // デバッグ: 最初の数バイトを表示
-                        const headerHex = Array.from(streamBytes.slice(0, 10)).map(b => b.toString(16).padStart(2, '0')).join(' ');
-                        console.log('[ObjStm] オブジェクト ' + objNum + ': ヘッダー = ' + headerHex);
-
+                    // 方法2: カスタムinflate関数
+                    if (!decompressed || decompressed.length === 0) {
+                        const startOffsets = [0, 2];
                         for (const offset of startOffsets) {
                             try {
                                 const dataToInflate = streamBytes.slice(offset);
                                 decompressed = inflate(dataToInflate);
-                                if (decompressed && decompressed.length > 0) {
-                                    console.log('[ObjStm] オブジェクト ' + objNum + ': 解凍成功 (オフセット=' + offset + '), サイズ=' + decompressed.length);
-                                    break;
-                                }
+                                if (decompressed && decompressed.length > 0) break;
                             } catch (e) {
-                                console.log('[ObjStm] オブジェクト ' + objNum + ': オフセット ' + offset + ' で失敗: ' + e.message);
+                                // 次のオフセットを試す
                             }
                         }
+                    }
 
-                        if (decompressed && decompressed.length > 0) {
-                            decompressedData = latin1Decode(decompressed);
-                        } else {
-                            // pako.js (zlib) がある場合はそちらを試す（将来の拡張用）
-                            // 現時点では失敗をログ出力
-                            console.log('[ObjStm] オブジェクト ' + objNum + ': 全ての解凍方法が失敗 - zlibストリームの可能性があります');
-                            continue;
-                        }
-                    } catch (e) {
-                        console.log('[ObjStm] オブジェクト ' + objNum + ': 解凍エラー:', e.message);
+                    if (decompressed && decompressed.length > 0) {
+                        decompressedData = latin1Decode(decompressed);
+                    } else {
                         continue;
                     }
                 }
 
                 // インデックス部分とデータ部分を分離
-                if (firstOffset > decompressedData.length) {
-                    console.log('[ObjStm] オブジェクト ' + objNum + ': First オフセットが範囲外 (' + firstOffset + ' > ' + decompressedData.length + ')');
-                    continue;
-                }
+                if (firstOffset > decompressedData.length) continue;
 
                 const indexPart = decompressedData.substring(0, firstOffset);
                 const dataPart = decompressedData.substring(firstOffset);
 
-                console.log('[ObjStm] オブジェクト ' + objNum + ': インデックス部=' + indexPart.length + 'バイト, データ部=' + dataPart.length + 'バイト');
-
-                // インデックスを解析（数値のペア: オブジェクト番号 オフセット）
+                // インデックスを解析
                 const indexNums = indexPart.trim().split(/\s+/).filter(s => s.length > 0).map(n => parseInt(n, 10));
                 const objects = [];
 
@@ -1184,8 +1245,6 @@
                     }
                 }
 
-                console.log('[ObjStm] オブジェクト ' + objNum + ': ' + objects.length + ' 個の内部オブジェクトを検出');
-
                 // 各オブジェクトのデータを抽出
                 let titleCount = 0;
                 for (let i = 0; i < objects.length; i++) {
@@ -1193,21 +1252,17 @@
                     const nextOffset = (i + 1 < objects.length) ? objects[i + 1].offset : dataPart.length;
                     const objData = dataPart.substring(obj.offset, nextOffset);
 
-                    // /Title を含むオブジェクトを探す
                     if (objData.includes('/Title')) {
                         titleCount++;
-                        console.log('[ObjStm] オブジェクト ' + obj.number + ' に /Title を発見');
                         results.push(objData);
                     }
                 }
 
                 if (titleCount > 0) {
                     objStmSuccess++;
-                    console.log('[ObjStm] オブジェクト ' + objNum + ': ' + titleCount + ' 個の /Title を発見');
                 }
             }
 
-            console.log('[ObjStm] === サマリー ===');
             console.log('[ObjStm] 検出したObjStm数: ' + objStmCount);
             console.log('[ObjStm] /Title を含むObjStm数: ' + objStmSuccess);
             console.log('[ObjStm] 抽出した /Title オブジェクト数: ' + results.length);
@@ -1735,17 +1790,10 @@
           ブラウザの組み込みTextDecoderを使用
         ======================================================================
         */
-        // decodeTitle呼び出しカウンター（デバッグ出力制限用）
-        let decodeTitleCallCount = 0;
-        const DECODE_TITLE_DEBUG_LIMIT = 3;
-
         function decodeTitle(titleBytes) {
             if (!titleBytes || titleBytes.length === 0) {
                 return '';
             }
-
-            decodeTitleCallCount++;
-            const showDebug = decodeTitleCallCount <= DECODE_TITLE_DEBUG_LIMIT;
 
             // PDFエスケープシーケンスを処理するためにまずLatin-1でデコード
             let rawStr = '';
@@ -1771,20 +1819,18 @@
             if (processedBytes.length >= 2 &&
                 processedBytes[0] === 0xFE &&
                 processedBytes[1] === 0xFF) {
-                if (showDebug) console.log('[decodeTitle] UTF-16BE BOM検出, バイト長:', processedBytes.length);
                 try {
                     // BOMをスキップしてデコード（バイト2以降）
                     const dataBytes = processedBytes.slice(2);
                     if (dataBytes.length >= 2) {
                         const utf16Str = new TextDecoder('utf-16be').decode(dataBytes);
-                        if (showDebug) console.log('[decodeTitle] UTF-16BEデコード結果:', utf16Str.substring(0, 30));
                         if (utf16Str && utf16Str.trim()) {
                             // NUL文字を除去して返す
                             return utf16Str.replace(/\x00/g, '').trim();
                         }
                     }
                 } catch (e) {
-                    if (showDebug) console.log('[decodeTitle] UTF-16BEデコード失敗:', e.message);
+                    // デコード失敗
                 }
             }
 
@@ -1792,20 +1838,18 @@
             if (processedBytes.length >= 2 &&
                 processedBytes[0] === 0xFF &&
                 processedBytes[1] === 0xFE) {
-                if (showDebug) console.log('[decodeTitle] UTF-16LE BOM検出, バイト長:', processedBytes.length);
                 try {
                     // BOMをスキップしてデコード（バイト2以降）
                     const dataBytes = processedBytes.slice(2);
                     if (dataBytes.length >= 2) {
                         const utf16Str = new TextDecoder('utf-16le').decode(dataBytes);
-                        if (showDebug) console.log('[decodeTitle] UTF-16LEデコード結果:', utf16Str.substring(0, 30));
                         if (utf16Str && utf16Str.trim()) {
                             // NUL文字を除去して返す
                             return utf16Str.replace(/\x00/g, '').trim();
                         }
                     }
                 } catch (e) {
-                    if (showDebug) console.log('[decodeTitle] UTF-16LEデコード失敗:', e.message);
+                    // デコード失敗
                 }
             }
 
@@ -1880,8 +1924,6 @@
                     ? ['utf-16le', 'utf-16be']
                     : ['utf-16be', 'utf-16le'];
 
-                if (showDebug) console.log('[decodeTitle] UTF-16スコア LE:', leScore, 'BE:', beScore, 'NULLバイト:', nullByteCount, '/', totalPairs);
-
                 // スコアがあるか、NULLバイトパターンがある場合にUTF-16を試す
                 if (leScore > 0 || beScore > 0 || hasNullBytePattern) {
                     for (const encoding of tryEncodings) {
@@ -1893,16 +1935,13 @@
                                 const controlChars = (utf16Str.match(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g) || []).length;
                                 const validChars = utf16Str.length - replacementChars - controlChars;
 
-                                if (showDebug) console.log('[decodeTitle]', encoding, '結果:', utf16Str.substring(0, 30), '有効:', validChars, '/', utf16Str.length);
-
                                 // 有効な文字が半分以上あれば採用
                                 if (validChars > utf16Str.length * 0.5 && replacementChars < utf16Str.length * 0.1) {
-                                    if (showDebug) console.log('[decodeTitle] 採用:', encoding);
                                     return utf16Str;
                                 }
                             }
                         } catch (e) {
-                            if (showDebug) console.log('[decodeTitle]', encoding, 'デコード失敗:', e.message);
+                            // デコード失敗
                         }
                     }
                 }
@@ -1914,7 +1953,6 @@
                 // 有効なUTF-8文字列かチェック（制御文字が多すぎないか）
                 const controlChars = (utf8Str.match(/[\x00-\x1F]/g) || []).length;
                 if (controlChars < utf8Str.length * 0.1) {
-                    if (showDebug) console.log('[decodeTitle] UTF-8採用:', utf8Str.substring(0, 30));
                     return utf8Str;
                 }
             } catch (e) {
@@ -1927,7 +1965,6 @@
                 // 置換文字が少なければ有効とみなす
                 const replacementChars = (shiftJisStr.match(/\uFFFD/g) || []).length;
                 if (replacementChars < shiftJisStr.length * 0.2) {
-                    if (showDebug) console.log('[decodeTitle] Shift_JIS採用:', shiftJisStr.substring(0, 30));
                     return shiftJisStr;
                 }
             } catch (e) {
@@ -1941,7 +1978,6 @@
                 if (pdfDocStr && pdfDocStr.trim()) {
                     const controlChars = (pdfDocStr.match(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g) || []).length;
                     if (controlChars < pdfDocStr.length * 0.1) {
-                        if (showDebug) console.log('[decodeTitle] PDFDocEncoding採用:', pdfDocStr.substring(0, 30));
                         return pdfDocStr;
                     }
                 }
@@ -1950,7 +1986,6 @@
             }
 
             // 最終手段: PDFエスケープをデコードした文字列をそのまま返す
-            if (showDebug) console.log('[decodeTitle] フォールバック（rawデコード文字列）:', decodedStr.substring(0, 30));
             return decodedStr;
         }
 
@@ -2085,12 +2120,10 @@
         ======================================================================
         */
         function extractBookmarks(content, bytes, pageObjects) {
-            console.log('[extractBookmarks] 抽出処理開始');
             const bookmarks = [];
             const originalContentLength = bytes.length;
 
             // ToUnicode/CMapテーブルを構築（CIDフォント対応）
-            console.log('[extractBookmarks] ToUnicode/CMapテーブル構築開始');
             const cidToUnicode = buildToUnicodeMap(content);
 
             /*
@@ -2101,29 +2134,22 @@
             --------------------------------------------------------------
             */
             // バイナリから直接タイトルを抽出（ネストした括弧にも対応）
-            console.log('[extractBookmarks] 方法1: 括弧形式を検索');
             const titlePositions = findTitlePositions(content);
-            console.log('[extractBookmarks] 方法1: 検出位置数:', titlePositions.length);
 
             for (let posIdx = 0; posIdx < titlePositions.length; posIdx++) {
                 const pos = titlePositions[posIdx];
                 let title = '';
-
-                console.log('[extractBookmarks] 方法1: 処理中 (' + (posIdx + 1) + '/' + titlePositions.length + ') 位置:', pos.start, '-', pos.end);
 
                 // 元のバイト配列の範囲内かチェック
                 if (pos.start < originalContentLength && pos.end <= originalContentLength) {
                     // 元のPDFデータから抽出
                     const titleBytes = extractTitleBytes(bytes, pos.start, pos.end);
                     if (titleBytes && titleBytes.length > 0) {
-                        console.log('[extractBookmarks] 方法1: 元データから抽出, バイト長:', titleBytes.length);
                         title = decodeTitle(titleBytes);
-                        console.log('[extractBookmarks] 方法1: デコード結果:', title ? title.substring(0, 30) : '(空)');
                     }
                 } else {
                     // 解凍されたコンテンツから抽出（文字列として処理）
                     const titleStr = content.substring(pos.start, pos.end);
-                    console.log('[extractBookmarks] 方法1: 解凍コンテンツから抽出, 文字列長:', titleStr.length);
                     // 8進数エスケープ等をデコード後、バイト配列として処理
                     const decoded = decodePDFString(titleStr);
                     const titleBytes = new Uint8Array(decoded.length);
@@ -2131,14 +2157,12 @@
                         titleBytes[i] = decoded.charCodeAt(i) & 0xFF;
                     }
                     title = decodeTitle(titleBytes);
-                    console.log('[extractBookmarks] 方法1: デコード結果:', title ? title.substring(0, 30) : '(空)');
                 }
 
                 if (title && title.trim()) {
                     // 重複チェック
                     if (!bookmarks.some(b => b.title === title.trim())) {
                         bookmarks.push({ title: title.trim(), page: '', level: 1 });
-                        console.log('[extractBookmarks] 方法1: しおり追加:', title.trim().substring(0, 30));
                     }
                 }
             }
@@ -2151,11 +2175,8 @@
               Acrobat JavaScript生成のしおりはBOMなしUTF-16BEの場合がある
             --------------------------------------------------------------
             */
-            console.log('[extractBookmarks] 方法2: 16進数形式を検索');
             let match;
             let hexMatchCount = 0;
-            let hexDebugSamples = [];  // デバッグ用サンプル収集（成功）
-            let hexFailedSamples = []; // デバッグ用サンプル収集（失敗）
             // 16進数形式を検索（空白を含む可能性があるため柔軟なパターン）
             const hexPattern = /\/Title\s*<([0-9A-Fa-f\s]+)>/gi;
             while ((match = hexPattern.exec(content)) !== null) {
@@ -2190,12 +2211,6 @@
                     const titleBytes = new Uint8Array(hexStr.length / 2);
                     for (let i = 0; i + 2 <= hexStr.length; i += 2) {
                         titleBytes[i / 2] = parseInt(hexStr.substring(i, i + 2), 16);
-                    }
-
-                    // デバッグ用: 最初の5件だけ詳細ログ
-                    const showDebug = (hexMatchCount <= 5);
-                    if (showDebug) {
-                        console.log('[方法2] BOMなし処理 #' + hexMatchCount + ' hex:', hexStr.substring(0, 40));
                     }
 
                     // BOMなしUTF-16の可能性をチェック（BE/LE両方）
@@ -2239,10 +2254,6 @@
                             }
                         }
 
-                        if (showDebug) {
-                            console.log('[方法2] スコア BE:', beScore, ' LE:', leScore);
-                        }
-
                         // スコアが高い方のエンディアンを優先（同点ならBE優先：Adobe JS標準）
                         const tryEncodings = beScore >= leScore
                             ? ['utf-16be', 'utf-16le']
@@ -2259,20 +2270,9 @@
                                 const controlChars = (cleanStr.match(/[\x01-\x08\x0B\x0C\x0E-\x1F]/g) || []).length;
                                 const validRatio = cleanStr.length > 0 ? (cleanStr.length - replacementCount - controlChars) / cleanStr.length : 0;
 
-                                if (showDebug) {
-                                    console.log('[方法2] ' + encoding + ':', cleanStr.substring(0, 30), '有効率:', Math.round(validRatio * 100) + '%');
-                                }
-
                                 // 有効な文字が70%以上あれば採用
                                 if (validRatio >= 0.7 && cleanStr.trim()) {
                                     title = cleanStr.trim();
-                                    if (showDebug) {
-                                        console.log('[方法2] 採用:', encoding);
-                                    }
-                                    // デバッグサンプル収集
-                                    if (hexDebugSamples.length < 5) {
-                                        hexDebugSamples.push({ hex: hexStr.substring(0, 20), enc: encoding, result: title.substring(0, 15) });
-                                    }
                                     break;
                                 }
                             } catch (e) {
@@ -2284,17 +2284,6 @@
                     // UTF-16として解釈できなかった場合は通常のデコード
                     if (!title) {
                         title = decodeTitle(titleBytes);
-                        if (showDebug) {
-                            console.log('[方法2] decodeTitle結果:', title ? title.substring(0, 30) : '(空)');
-                        }
-                        if (hexDebugSamples.length < 5 && title) {
-                            hexDebugSamples.push({ hex: hexStr.substring(0, 20), enc: 'decodeTitle', result: title.substring(0, 15) });
-                        }
-                    }
-
-                    // デコード失敗サンプルを収集
-                    if (!title && hexFailedSamples.length < 3) {
-                        hexFailedSamples.push({ hex: hexStr.substring(0, 40), reason: 'UTF-16とdecodeTitleの両方失敗' });
                     }
                 }
 
@@ -2303,27 +2292,7 @@
                     if (!bookmarks.some(b => b.title === title.trim())) {
                         bookmarks.push({ title: title.trim(), page: '', level: 1 });
                     }
-                } else if (hexFailedSamples.length < 3 && hexStr.length > 0) {
-                    // タイトルが取得できなかった場合もサンプル収集
-                    hexFailedSamples.push({ hex: hexStr.substring(0, 40), reason: 'タイトル空または無効' });
                 }
-            }
-
-            // 方法2のデバッグサマリー出力（常に出力）
-            console.log('[方法2] === デバッグサマリー ===');
-            console.log('[方法2] hexマッチ数:', hexMatchCount);
-            console.log('[方法2] 抽出成功:', bookmarks.length, '件');
-            console.log('[方法2] 成功サンプル数:', hexDebugSamples.length);
-            console.log('[方法2] 失敗サンプル数:', hexFailedSamples.length);
-            if (hexDebugSamples.length > 0) {
-                hexDebugSamples.forEach((s, i) => {
-                    console.log('  成功' + (i + 1) + '. hex=' + s.hex + '... enc=' + s.enc + ' → "' + s.result + '..."');
-                });
-            }
-            if (hexFailedSamples.length > 0) {
-                hexFailedSamples.forEach((s, i) => {
-                    console.log('  失敗' + (i + 1) + '. hex=' + s.hex + ' 理由:' + s.reason);
-                });
             }
 
             /*
@@ -2332,15 +2301,10 @@
               上記の方法で見つからない場合の最終手段
             --------------------------------------------------------------
             */
-            console.log('[extractBookmarks] 方法3チェック: 現在のbookmarks数:', bookmarks.length);
             if (bookmarks.length === 0) {
-                console.log('[extractBookmarks] 方法3: フォールバック検索開始');
                 // /Title に続く任意の文字列を抽出（括弧または<>）
                 const fallbackPattern = /\/Title\s*(?:\(([^)]*)\)|<([^>]+)>)/gi;
-                let method3Count = 0;
-                let method3Samples = [];
                 while ((match = fallbackPattern.exec(content)) !== null) {
-                    method3Count++;
                     let title = '';
                     if (match[1] !== undefined) {
                         // 括弧形式: 8進数エスケープをデコード後、バイト配列として処理
@@ -2352,17 +2316,6 @@
                         }
 
                         title = decodeTitle(titleBytes);
-
-                        // デバッグ: 最初の5件の詳細を収集
-                        if (method3Samples.length < 5) {
-                            const hexDump = Array.from(titleBytes.slice(0, 20)).map(b => b.toString(16).padStart(2, '0')).join(' ');
-                            method3Samples.push({
-                                raw: rawMatch.substring(0, 30),
-                                hex: hexDump,
-                                len: titleBytes.length,
-                                decoded: title ? title.substring(0, 30) : '(空)'
-                            });
-                        }
                     } else if (match[2] !== undefined) {
                         // 16進数形式
                         const hexStr = match[2].replace(/\s+/g, '');
@@ -2394,19 +2347,6 @@
                         bookmarks.push({ title: title.trim(), page: '', level: 1 });
                     }
                 }
-
-                // 方法3デバッグサマリー
-                console.log('[方法3] === デバッグサマリー ===');
-                console.log('[方法3] マッチ数:', method3Count);
-                console.log('[方法3] 抽出成功:', bookmarks.length, '件');
-                if (method3Samples.length > 0) {
-                    console.log('[方法3] サンプルデータ（括弧形式）:');
-                    method3Samples.forEach((s, i) => {
-                        console.log('  ' + (i + 1) + '. raw="' + s.raw + '..." len=' + s.len);
-                        console.log('     hex: ' + s.hex);
-                        console.log('     decoded: "' + s.decoded + '"');
-                    });
-                }
             }
 
             /*
@@ -2416,28 +2356,18 @@
               Acrobatはしおり名をUTF-16BEで格納することが多い
             --------------------------------------------------------------
             */
-            console.log('[extractBookmarks] 方法4チェック: 現在のbookmarks数:', bookmarks.length);
             if (bookmarks.length === 0) {
-                console.log('[extractBookmarks] 方法4: オブジェクト走査開始');
                 // オブジェクト全体を走査してしおり関連のコンテンツを探す
                 const objPattern = /(\d+)\s+\d+\s+obj\s*([\s\S]*?)\s*endobj/g;
-                let method4Count = 0;
-                let method4Samples = [];
                 while ((match = objPattern.exec(content)) !== null) {
                     const objContent = match[2];
 
                     // /Title を含むオブジェクトを探す
                     const titleMatch = objContent.match(/\/Title\s*(?:\(([^)]*(?:\([^)]*\)[^)]*)*)\)|<([0-9A-Fa-f\s]+)>)/);
                     if (titleMatch) {
-                        method4Count++;
                         let title = '';
-                        let matchType = '';
-                        let rawData = '';
-                        let hexDump = '';
 
                         if (titleMatch[1] !== undefined) {
-                            matchType = '括弧形式';
-                            rawData = titleMatch[1].substring(0, 30);
                             // 括弧形式: 8進数エスケープをデコード
                             const decoded = decodePDFString(titleMatch[1]);
                             // デコード結果をバイト配列に変換してdecodeTitle処理
@@ -2445,13 +2375,9 @@
                             for (let i = 0; i < decoded.length; i++) {
                                 titleBytes[i] = decoded.charCodeAt(i) & 0xFF;
                             }
-                            hexDump = Array.from(titleBytes.slice(0, 20)).map(b => b.toString(16).padStart(2, '0')).join(' ');
                             title = decodeTitle(titleBytes);
                         } else if (titleMatch[2] !== undefined) {
-                            matchType = '16進数形式';
                             const hexStr = titleMatch[2].replace(/\s+/g, '');
-                            rawData = hexStr.substring(0, 30);
-                            hexDump = hexStr.substring(0, 40);
                             if (hexStr.toUpperCase().startsWith('FEFF')) {
                                 // UTF-16BE BOM
                                 const dataHex = hexStr.substring(4);
@@ -2477,34 +2403,10 @@
                             }
                         }
 
-                        // デバッグサンプル収集
-                        if (method4Samples.length < 5) {
-                            method4Samples.push({
-                                type: matchType,
-                                raw: rawData,
-                                hex: hexDump,
-                                decoded: title ? title.substring(0, 30) : '(空)'
-                            });
-                        }
-
                         if (title && title.trim() && !bookmarks.some(b => b.title === title.trim())) {
                             bookmarks.push({ title: title.trim(), page: '', level: 1 });
                         }
                     }
-                }
-
-                // 方法4デバッグサマリー
-                console.log('[方法4] === デバッグサマリー ===');
-                console.log('[方法4] Titleマッチ数:', method4Count);
-                console.log('[方法4] 抽出成功:', bookmarks.length, '件');
-                if (method4Samples.length > 0) {
-                    console.log('[方法4] サンプルデータ:');
-                    method4Samples.forEach((s, i) => {
-                        console.log('  ' + (i + 1) + '. type=' + s.type);
-                        console.log('     raw: "' + s.raw + '..."');
-                        console.log('     hex: ' + s.hex);
-                        console.log('     decoded: "' + s.decoded + '"');
-                    });
                 }
             }
 
@@ -2515,44 +2417,26 @@
               後続のバイトをShift_JIS/UTF-8として解釈
             --------------------------------------------------------------
             */
-            console.log('[extractBookmarks] 方法5チェック: 現在のbookmarks数:', bookmarks.length);
             if (bookmarks.length === 0) {
-                console.log('[extractBookmarks] 方法5: 解凍済みcontent内BOM検索開始');
-
-                // デバッグ: 「第1部 共通」の各パターンをcontent内で検索
-                // パターン1: 半角数字(1)、半角スペース
+                // 「第1部 共通」の各パターンをcontent内で検索
                 const patterns = [
                     { name: '半角1+半角SP',
                       be: '\u007b\u002c\u0000\u0031\u0090\u00e8\u0000\u0020\u0051\u0071\u0090\u001a',
                       le: '\u002c\u007b\u0031\u0000\u00e8\u0090\u0020\u0000\u0071\u0051\u001a\u0090',
                       utf8: '\u00e7\u00ac\u00ac\u0031\u00e9\u0083\u00a8\u0020\u00e5\u0085\u00b1\u00e9\u0080\u009a' },
-                    // パターン2: 半角数字(1)、全角スペース
                     { name: '半角1+全角SP',
                       be: '\u007b\u002c\u0000\u0031\u0090\u00e8\u0030\u0000\u0051\u0071\u0090\u001a',
                       le: '\u002c\u007b\u0031\u0000\u00e8\u0090\u0000\u0030\u0071\u0051\u001a\u0090',
                       utf8: '\u00e7\u00ac\u00ac\u0031\u00e9\u0083\u00a8\u00e3\u0080\u0080\u00e5\u0085\u00b1\u00e9\u0080\u009a' },
-                    // パターン3: 全角数字(１)、半角スペース
                     { name: '全角1+半角SP',
                       be: '\u007b\u002c\u00ff\u0011\u0090\u00e8\u0000\u0020\u0051\u0071\u0090\u001a',
                       le: '\u002c\u007b\u0011\u00ff\u00e8\u0090\u0020\u0000\u0071\u0051\u001a\u0090',
                       utf8: '\u00e7\u00ac\u00ac\u00ef\u00bc\u0091\u00e9\u0083\u00a8\u0020\u00e5\u0085\u00b1\u00e9\u0080\u009a' },
-                    // パターン4: 全角数字(１)、全角スペース
                     { name: '全角1+全角SP',
                       be: '\u007b\u002c\u00ff\u0011\u0090\u00e8\u0030\u0000\u0051\u0071\u0090\u001a',
                       le: '\u002c\u007b\u0011\u00ff\u00e8\u0090\u0000\u0030\u0071\u0051\u001a\u0090',
                       utf8: '\u00e7\u00ac\u00ac\u00ef\u00bc\u0091\u00e9\u0083\u00a8\u00e3\u0080\u0080\u00e5\u0085\u00b1\u00e9\u0080\u009a' }
                 ];
-
-                console.log('[デバッグ] 「第1部 共通」パターン検索結果:');
-                for (const p of patterns) {
-                    const bePos = content.indexOf(p.be);
-                    const lePos = content.indexOf(p.le);
-                    const utf8Pos = content.indexOf(p.utf8);
-                    console.log('  ' + p.name + ':');
-                    console.log('    UTF-16BE:', bePos >= 0 ? bePos : '×');
-                    console.log('    UTF-16LE:', lePos >= 0 ? lePos : '×');
-                    console.log('    UTF-8:', utf8Pos >= 0 ? utf8Pos : '×');
-                }
 
                 // Shift_JISデコード関数（Latin-1文字列からShift_JISバイトとして解釈）
                 function decodeShiftJIS(latin1Str) {
@@ -2656,9 +2540,6 @@
                 // content内でBOMパターン（Latin-1文字として）を検索
                 // UTF-16LE BOM: \xFF\xFE → Latin-1では ÿþ (charCode 255, 254)
                 // UTF-16BE BOM: \xFE\xFF → Latin-1では þÿ (charCode 254, 255)
-                let method5ContentCount = 0;
-                let method5ContentSamples = [];
-
                 for (let i = 0; i < content.length - 4; i++) {
                     const c1 = content.charCodeAt(i);
                     const c2 = content.charCodeAt(i + 1);
@@ -2684,7 +2565,6 @@
 
                         if (endPos > i + 4) {
                             const dataStr = content.substring(i + 2, endPos);
-                            method5ContentCount++;
 
                             // 複数のエンコーディングを試行（日本語文字数が最も多いものを採用）
                             let bestTitle = null;
@@ -2729,37 +2609,12 @@
                                 const validJP = isValidJapaneseText(title);
                                 if (controlChars < title.length * 0.1 && validJP) {
                                     if (!bookmarks.some(b => b.title === title.trim())) {
-                                        // デバッグサンプル収集
-                                        if (method5ContentSamples.length < 5) {
-                                            const hexDump = [];
-                                            for (let h = 0; h < Math.min(dataStr.length, 20); h++) {
-                                                hexDump.push(dataStr.charCodeAt(h).toString(16).padStart(2, '0'));
-                                            }
-                                            method5ContentSamples.push({
-                                                type: encoding + ' (BOM ' + bomType + ')',
-                                                hex: hexDump.join(' '),
-                                                decoded: title.trim().substring(0, 30),
-                                                hasJP: hasJapanese(title),
-                                                validJP: validJP
-                                            });
-                                        }
                                         bookmarks.push({ title: title.trim(), page: '', level: 1 });
                                     }
                                 }
                             }
                         }
                     }
-                }
-
-                console.log('[方法5-content] BOM検出数:', method5ContentCount);
-                console.log('[方法5-content] 抽出成功:', bookmarks.length, '件');
-                if (method5ContentSamples.length > 0) {
-                    console.log('[方法5-content] サンプルデータ:');
-                    method5ContentSamples.forEach((s, i) => {
-                        console.log('  ' + (i + 1) + '. type=' + s.type + ' hasJP=' + s.hasJP);
-                        console.log('     hex: ' + s.hex);
-                        console.log('     decoded: "' + s.decoded + '"');
-                    });
                 }
             }
 
@@ -2769,15 +2624,7 @@
               圧縮されていないバイナリデータから直接しおりを探す
             --------------------------------------------------------------
             */
-            console.log('[extractBookmarks] 方法6チェック: 現在のbookmarks数:', bookmarks.length);
             if (bookmarks.length === 0) {
-                console.log('[extractBookmarks] 方法6: バイナリ直接検索開始');
-                // デバッグ用カウンターとサンプル収集
-                let method6BECount = 0;
-                let method6LECount = 0;
-                let method6UTF8Count = 0;
-                let method6CIDCount = 0;
-                let method6Samples = [];
 
                 // BOM後のバイトがUTF-8かどうかを判定する関数
                 function looksLikeUTF8(dataBytes) {
@@ -2931,21 +2778,6 @@
                     }
                 }
 
-                // 方法6デバッグサマリー
-                console.log('[方法6] === デバッグサマリー ===');
-                console.log('[方法6] UTF-16BE検出数:', method6BECount);
-                console.log('[方法6] UTF-16LE検出数:', method6LECount);
-                console.log('[方法6] UTF-8(BOMスキップ)検出数:', method6UTF8Count);
-                console.log('[方法6] CIDデコード使用数:', method6CIDCount);
-                console.log('[方法6] 抽出成功:', bookmarks.length, '件');
-                if (method6Samples.length > 0) {
-                    console.log('[方法6] サンプルデータ:');
-                    method6Samples.forEach((s, i) => {
-                        console.log('  ' + (i + 1) + '. type=' + s.type);
-                        console.log('     hex: ' + s.hex);
-                        console.log('     decoded: "' + s.decoded + '"');
-                    });
-                }
             }
 
             /*
@@ -2976,17 +2808,6 @@
             // 階層構造の解析を試みる
             analyzeHierarchy(content, bookmarks);
 
-            console.log('[extractBookmarks] === 最終結果 ===');
-            console.log('[extractBookmarks] 抽出件数:', bookmarks.length);
-            if (bookmarks.length > 0 && bookmarks.length <= 5) {
-                bookmarks.forEach((b, i) => console.log('  ' + (i+1) + '. ' + b.title.substring(0, 40)));
-            } else if (bookmarks.length > 5) {
-                for (let i = 0; i < 3; i++) {
-                    console.log('  ' + (i+1) + '. ' + bookmarks[i].title.substring(0, 40));
-                }
-                console.log('  ... (他 ' + (bookmarks.length - 3) + ' 件)');
-            }
-
             return bookmarks;
         }
 
@@ -3007,17 +2828,8 @@
             - 特殊文字: \n, \r, \t, \b, \f, \\, \(, \)
             */
 
-            // デバッグ: 入力文字列の最初の20バイトを16進数で出力
-            const debugBytes = [];
-            for (let d = 0; d < Math.min(str.length, 20); d++) {
-                debugBytes.push(str.charCodeAt(d).toString(16).padStart(2, '0'));
-            }
-            console.log('[decodePDFString] 入力バイト(先頭20):', debugBytes.join(' '));
-            console.log('[decodePDFString] 入力長:', str.length);
-
             let result = '';
             let i = 0;
-            let escapeCount = 0;
 
             while (i < str.length) {
                 if (str[i] === '\\' && i + 1 < str.length) {
@@ -3040,7 +2852,6 @@
                             i = j;
                         } else {
                             // 3桁で255超えの場合、2桁として解釈
-                            console.log('[decodePDFString] 8進数255超え:', octalStr, '-> 2桁解釈:', octalStr.substring(0, 2));
                             const twoDigitOctal = octalStr.substring(0, 2);
                             result += String.fromCharCode(parseInt(twoDigitOctal, 8));
                             i += 3; // \NN の分
@@ -3088,14 +2899,6 @@
                 result += str[i];
                 i++;
             }
-
-            // デバッグ: 結果を出力
-            const resultBytes = [];
-            for (let d = 0; d < Math.min(result.length, 20); d++) {
-                resultBytes.push(result.charCodeAt(d).toString(16).padStart(2, '0'));
-            }
-            console.log('[decodePDFString] 出力バイト(先頭20):', resultBytes.join(' '));
-            console.log('[decodePDFString] 出力長:', result.length, 'エスケープ処理数:', escapeCount);
 
             return result;
         }
