@@ -1230,10 +1230,14 @@
                     }
 
                     let decompressed = null;
+                    let decompressMethod = '';
 
                     // 方法1: DecompressionStream API（ブラウザ標準）
                     if (typeof DecompressionStream !== 'undefined') {
                         decompressed = await decompressWithDecompressionStream(streamBytes);
+                        if (decompressed && decompressed.length > 0) {
+                            decompressMethod = 'DecompressionStream';
+                        }
                     }
 
                     // 方法2: カスタムinflateRaw関数（DecompressionStreamが失敗した場合）
@@ -1243,9 +1247,23 @@
                             const inflated = inflateRaw(streamBytes);
                             if (inflated && inflated.length > 0) {
                                 decompressed = new Uint8Array(inflated);
+                                decompressMethod = 'inflateRaw';
                             }
                         } catch (e) {
-                            // 解凍失敗
+                            // 最初の5件のみエラーを表示
+                            if (objStmCount <= 5) {
+                                console.log('[ObjStm] オブジェクト ' + objNum + ' inflateRaw失敗: ' + e.message);
+                            }
+                        }
+                    }
+
+                    // 最初の5件のみ解凍結果を表示
+                    if (objStmCount <= 5) {
+                        const headerHex = Array.from(streamBytes.slice(0, 4)).map(b => b.toString(16).padStart(2, '0')).join(' ');
+                        if (decompressed && decompressed.length > 0) {
+                            console.log('[ObjStm] オブジェクト ' + objNum + ' 解凍成功 (' + decompressMethod + '): ' + decompressed.length + ' bytes, ヘッダー: ' + headerHex);
+                        } else {
+                            console.log('[ObjStm] オブジェクト ' + objNum + ' 解凍失敗, ヘッダー: ' + headerHex);
                         }
                     }
 
