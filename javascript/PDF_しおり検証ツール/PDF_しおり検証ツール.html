@@ -1130,6 +1130,10 @@
                         let decompressed = null;
                         const startOffsets = [0, 2];  // 0: 生のDeflate, 2: zlibヘッダーをスキップ
 
+                        // デバッグ: 最初の数バイトを表示
+                        const headerHex = Array.from(streamBytes.slice(0, 10)).map(b => b.toString(16).padStart(2, '0')).join(' ');
+                        console.log('[ObjStm] オブジェクト ' + objNum + ': ヘッダー = ' + headerHex);
+
                         for (const offset of startOffsets) {
                             try {
                                 const dataToInflate = streamBytes.slice(offset);
@@ -1139,14 +1143,16 @@
                                     break;
                                 }
                             } catch (e) {
-                                // このオフセットでは失敗、次を試す
+                                console.log('[ObjStm] オブジェクト ' + objNum + ': オフセット ' + offset + ' で失敗: ' + e.message);
                             }
                         }
 
                         if (decompressed && decompressed.length > 0) {
                             decompressedData = latin1Decode(decompressed);
                         } else {
-                            console.log('[ObjStm] オブジェクト ' + objNum + ': 全ての解凍方法が失敗');
+                            // pako.js (zlib) がある場合はそちらを試す（将来の拡張用）
+                            // 現時点では失敗をログ出力
+                            console.log('[ObjStm] オブジェクト ' + objNum + ': 全ての解凍方法が失敗 - zlibストリームの可能性があります');
                             continue;
                         }
                     } catch (e) {
