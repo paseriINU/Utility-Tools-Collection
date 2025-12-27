@@ -961,8 +961,24 @@
             if (objStmDecodedTitles.length > 0) {
                 // ObjStmからバイト直接抽出したタイトルを優先使用（文字化けなし）
                 console.log('[parsePDFBookmarks] ObjStmバイト直接抽出を優先使用:', objStmDecodedTitles.length, '件');
-                for (const title of objStmDecodedTitles) {
-                    bookmarks.push({ title: title, page: '', level: 1 });
+                for (const item of objStmDecodedTitles) {
+                    // itemは { title: string, pageRef: string } の形式
+                    let pageNum = '';
+                    if (item.pageRef) {
+                        // pageRefは "123 0 R" の形式なので、オブジェクト番号を抽出
+                        const objNumMatch = item.pageRef.match(/^(\d+)/);
+                        if (objNumMatch) {
+                            const objNum = objNumMatch[1];
+                            // pageObjectsマッピングでページ番号に変換
+                            if (pageObjects[objNum]) {
+                                pageNum = pageObjects[objNum];
+                            } else {
+                                // マッピングにない場合はオブジェクト番号をそのまま使用
+                                pageNum = parseInt(objNum) || '';
+                            }
+                        }
+                    }
+                    bookmarks.push({ title: item.title, page: pageNum, level: 1 });
                 }
 
                 // ObjStmから十分な数のタイトルが取得できた場合は、
@@ -1508,25 +1524,68 @@
                                     }
 
                                     if (title && title.trim()) {
+                                        // このタイトルを含むオブジェクトの範囲からページ参照を取得
+                                        // /Titleの位置から前後を検索してオブジェクトの範囲を特定
+                                        let pageRef = '';
+
+                                        // /Titleの前にある << を探す（オブジェクトの開始）
+                                        let objStart = i;
+                                        let depth = 0;
+                                        for (let s = i - 1; s >= Math.max(0, i - 500); s--) {
+                                            if (decompressed[s] === 0x3C && s > 0 && decompressed[s - 1] === 0x3C) { // '<<'
+                                                if (depth === 0) {
+                                                    objStart = s - 1;
+                                                    break;
+                                                }
+                                                depth--;
+                                            } else if (decompressed[s] === 0x3E && s > 0 && decompressed[s - 1] === 0x3E) { // '>>'
+                                                depth++;
+                                            }
+                                        }
+
+                                        // /Titleの後にある >> を探す（オブジェクトの終了）
+                                        let objEnd = parenEnd;
+                                        depth = 1; // << は既に1つ開いている
+                                        for (let e = parenEnd + 1; e < Math.min(decompressed.length, parenEnd + 500); e++) {
+                                            if (decompressed[e] === 0x3C && e + 1 < decompressed.length && decompressed[e + 1] === 0x3C) { // '<<'
+                                                depth++;
+                                                e++;
+                                            } else if (decompressed[e] === 0x3E && e + 1 < decompressed.length && decompressed[e + 1] === 0x3E) { // '>>'
+                                                depth--;
+                                                if (depth === 0) {
+                                                    objEnd = e + 2;
+                                                    break;
+                                                }
+                                                e++;
+                                            }
+                                        }
+
+                                        // オブジェクト範囲をlatin1Decodeして /Dest または /A を検索
+                                        const objBytes = decompressed.slice(objStart, objEnd);
+                                        const objStr = latin1Decode(objBytes);
+
+                                        // /Dest [N 0 R ...] パターンを検索
+                                        const destMatch = objStr.match(/\/Dest\s*\[\s*(\d+)\s+0\s+R/);
+                                        if (destMatch) {
+                                            pageRef = destMatch[1] + ' 0 R';
+                                        } else {
+                                            // /A <</S /GoTo /D [N 0 R ...]>> パターンを検索
+                                            const actionMatch = objStr.match(/\/A\s*<<[^>]*\/D\s*\[\s*(\d+)\s+0\s+R/);
+                                            if (actionMatch) {
+                                                pageRef = actionMatch[1] + ' 0 R';
+                                            }
+                                        }
+
                                         // デバッグ: 最初の5件（詳細）
                                         if (objStmTitleCount < 5) {
                                             console.log('[ObjStm] バイト直接抽出 #' + (objStmTitleCount + 1) + ':');
                                             console.log('  タイトル: ' + title.substring(0, 50));
-                                            console.log('  タイトル長: ' + title.length + '文字');
-                                            // エスケープデコード前のraw bytes
-                                            const rawHex = Array.from(rawTitleBytes.slice(0, 30)).map(b => b.toString(16).padStart(2, '0')).join(' ');
-                                            console.log('  RAW HEX(デコード前): ' + rawHex + (rawTitleBytes.length > 30 ? '...' : ''));
-                                            // エスケープデコード後
-                                            const hexAll = Array.from(titleBytes).map(b => b.toString(16).padStart(2, '0')).join(' ');
-                                            console.log('  HEX(デコード後): ' + hexAll);
-                                            // 各文字のコードポイントを表示
-                                            const codePoints = Array.from(title).map(c => 'U+' + c.charCodeAt(0).toString(16).toUpperCase().padStart(4, '0')).join(' ');
-                                            console.log('  コードポイント: ' + codePoints);
+                                            console.log('  ページ参照: ' + (pageRef || '(なし)'));
                                         }
                                         objStmTitleCount++;
                                         byteExtractedCount++;
-                                        // デコード済みタイトルを直接追加（再デコード不要）
-                                        decodedTitles.push(title.trim());
+                                        // デコード済みタイトルとページ参照を追加
+                                        decodedTitles.push({ title: title.trim(), pageRef: pageRef });
                                     }
                                 }
                             }
