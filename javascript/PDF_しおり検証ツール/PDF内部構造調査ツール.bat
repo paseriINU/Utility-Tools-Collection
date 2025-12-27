@@ -161,15 +161,91 @@ if ($bomSamples.Count -gt 0) {
 
 Write-Host ""
 Write-Host "================================================================" -ForegroundColor Cyan
-Write-Host "  3. ObjStm (Object Streams) 検索" -ForegroundColor Cyan
+Write-Host "  3. ObjStm (Object Streams) 詳細分析" -ForegroundColor Cyan
 Write-Host "================================================================" -ForegroundColor Cyan
 Write-Host ""
 
-$objStmMatches = [regex]::Matches($content, '/Type\s*/ObjStm')
+# ObjStmオブジェクトを検索してストリームヘッダーを分析
+$objStmPattern = '(\d+)\s+0\s+obj\s*<<([^>]*?/Type\s*/ObjStm[^>]*?)>>\s*stream\r?\n'
+$objStmMatches = [regex]::Matches($content, $objStmPattern)
 Write-Host "ObjStm検出数: $($objStmMatches.Count) 件" -ForegroundColor Yellow
+Write-Host ""
 
 if ($objStmMatches.Count -gt 0) {
     Write-Host "  -> しおりがObject Streams内に格納されている可能性があります" -ForegroundColor Yellow
+    Write-Host ""
+
+    # ストリームヘッダーの統計
+    $headerStats = @{}
+    $filterStats = @{}
+    $sampleCount = 0
+
+    foreach ($match in $objStmMatches) {
+        $objNum = $match.Groups[1].Value
+        $dictContent = $match.Groups[2].Value
+        $streamStartPos = $match.Index + $match.Length
+
+        # フィルター検出
+        $filterMatch = [regex]::Match($dictContent, '/Filter\s*(/\w+|\[.*?\])')
+        $filterType = if ($filterMatch.Success) { $filterMatch.Groups[1].Value } else { "なし" }
+
+        if (-not $filterStats.ContainsKey($filterType)) {
+            $filterStats[$filterType] = 0
+        }
+        $filterStats[$filterType]++
+
+        # ストリームの先頭バイトを取得
+        if ($streamStartPos -lt $bytes.Length - 10) {
+            $headerBytes = $bytes[$streamStartPos..($streamStartPos + 9)]
+            $headerHex = ($headerBytes[0..1] | ForEach-Object { "{0:X2}" -f $_ }) -join " "
+
+            if (-not $headerStats.ContainsKey($headerHex)) {
+                $headerStats[$headerHex] = 0
+            }
+            $headerStats[$headerHex]++
+
+            # サンプル表示（最初の5件）
+            if ($sampleCount -lt 5) {
+                $sampleCount++
+                $fullHeaderHex = ($headerBytes | ForEach-Object { "{0:X2}" -f $_ }) -join " "
+                Write-Host "[$sampleCount] オブジェクト $objNum" -ForegroundColor White
+                Write-Host "    フィルター: $filterType" -ForegroundColor Gray
+                Write-Host "    ストリームヘッダー: $fullHeaderHex" -ForegroundColor Gray
+
+                # ヘッダーの解釈
+                $interpretation = switch ($headerHex) {
+                    "78 9C" { "zlib (デフォルト圧縮)" }
+                    "78 DA" { "zlib (最高圧縮)" }
+                    "78 01" { "zlib (無圧縮)" }
+                    "78 5E" { "zlib (低圧縮)" }
+                    "1F 8B" { "gzip" }
+                    default { "不明な形式" }
+                }
+                Write-Host "    解釈: $interpretation" -ForegroundColor $(if ($interpretation -eq "不明な形式") { "Red" } else { "Green" })
+                Write-Host ""
+            }
+        }
+    }
+
+    # 統計サマリー
+    Write-Host "--- ストリームヘッダー統計 ---" -ForegroundColor Cyan
+    foreach ($key in $headerStats.Keys | Sort-Object) {
+        $interpretation = switch ($key) {
+            "78 9C" { "(zlib デフォルト)" }
+            "78 DA" { "(zlib 最高)" }
+            "78 01" { "(zlib 無圧縮)" }
+            "78 5E" { "(zlib 低圧縮)" }
+            "1F 8B" { "(gzip)" }
+            default { "(不明)" }
+        }
+        Write-Host "  $key $interpretation : $($headerStats[$key]) 件" -ForegroundColor $(if ($interpretation -eq "(不明)") { "Red" } else { "White" })
+    }
+
+    Write-Host ""
+    Write-Host "--- フィルター統計 ---" -ForegroundColor Cyan
+    foreach ($key in $filterStats.Keys | Sort-Object) {
+        Write-Host "  $key : $($filterStats[$key]) 件" -ForegroundColor White
+    }
 }
 
 Write-Host ""
@@ -230,6 +306,51 @@ foreach ($sp in $searchPatterns) {
     } else {
         Write-Host "$($sp.Name): 未検出" -ForegroundColor Red
     }
+}
+
+Write-Host ""
+Write-Host "================================================================" -ForegroundColor Cyan
+Write-Host "  7. Adobe JavaScript形式しおり検索" -ForegroundColor Cyan
+Write-Host "================================================================" -ForegroundColor Cyan
+Write-Host ""
+
+# JavaScriptアクション形式のしおりを検索
+$jsActionMatches = [regex]::Matches($content, '/S\s*/JavaScript\s*/JS\s*\([^)]{0,200}')
+Write-Host "JavaScript形式アクション検出数: $($jsActionMatches.Count) 件" -ForegroundColor Yellow
+
+if ($jsActionMatches.Count -gt 0) {
+    Write-Host "  -> Adobe JavaScriptで作成されたしおりの可能性があります" -ForegroundColor Yellow
+    Write-Host ""
+
+    $jsCount = 0
+    foreach ($match in $jsActionMatches) {
+        $jsCount++
+        if ($jsCount -gt 5) {
+            Write-Host "... 以下省略 (残り $($jsActionMatches.Count - 5) 件)" -ForegroundColor Gray
+            break
+        }
+        Write-Host "[$jsCount] $($match.Value.Substring(0, [Math]::Min(80, $match.Value.Length)))..." -ForegroundColor White
+    }
+}
+
+Write-Host ""
+Write-Host "================================================================" -ForegroundColor Cyan
+Write-Host "  8. XRef/XRefStm 検索" -ForegroundColor Cyan
+Write-Host "================================================================" -ForegroundColor Cyan
+Write-Host ""
+
+# XRef (通常の相互参照テーブル)
+$xrefMatches = [regex]::Matches($content, '\bxref\b')
+Write-Host "xref (通常形式) 検出数: $($xrefMatches.Count) 件" -ForegroundColor $(if ($xrefMatches.Count -gt 0) { 'Green' } else { 'Gray' })
+
+# XRefStm (圧縮相互参照ストリーム)
+$xrefStmMatches = [regex]::Matches($content, '/Type\s*/XRef')
+Write-Host "XRefStm (圧縮形式) 検出数: $($xrefStmMatches.Count) 件" -ForegroundColor $(if ($xrefStmMatches.Count -gt 0) { 'Yellow' } else { 'Gray' })
+
+if ($xrefStmMatches.Count -gt 0 -and $xrefMatches.Count -eq 0) {
+    Write-Host ""
+    Write-Host "  [重要] このPDFは圧縮XRefのみを使用しています" -ForegroundColor Red
+    Write-Host "  -> オブジェクトの多くがObjStm内に格納されている可能性が高いです" -ForegroundColor Red
 }
 
 Write-Host ""
