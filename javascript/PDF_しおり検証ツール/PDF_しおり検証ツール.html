@@ -2122,14 +2122,23 @@
                 console.log('[extractBookmarks] 方法4: オブジェクト走査開始');
                 // オブジェクト全体を走査してしおり関連のコンテンツを探す
                 const objPattern = /(\d+)\s+\d+\s+obj\s*([\s\S]*?)\s*endobj/g;
+                let method4Count = 0;
+                let method4Samples = [];
                 while ((match = objPattern.exec(content)) !== null) {
                     const objContent = match[2];
 
                     // /Title を含むオブジェクトを探す
                     const titleMatch = objContent.match(/\/Title\s*(?:\(([^)]*(?:\([^)]*\)[^)]*)*)\)|<([0-9A-Fa-f\s]+)>)/);
                     if (titleMatch) {
+                        method4Count++;
                         let title = '';
+                        let matchType = '';
+                        let rawData = '';
+                        let hexDump = '';
+
                         if (titleMatch[1] !== undefined) {
+                            matchType = '括弧形式';
+                            rawData = titleMatch[1].substring(0, 30);
                             // 括弧形式: 8進数エスケープをデコード
                             const decoded = decodePDFString(titleMatch[1]);
                             // デコード結果をバイト配列に変換してdecodeTitle処理
@@ -2137,9 +2146,13 @@
                             for (let i = 0; i < decoded.length; i++) {
                                 titleBytes[i] = decoded.charCodeAt(i) & 0xFF;
                             }
+                            hexDump = Array.from(titleBytes.slice(0, 20)).map(b => b.toString(16).padStart(2, '0')).join(' ');
                             title = decodeTitle(titleBytes);
                         } else if (titleMatch[2] !== undefined) {
+                            matchType = '16進数形式';
                             const hexStr = titleMatch[2].replace(/\s+/g, '');
+                            rawData = hexStr.substring(0, 30);
+                            hexDump = hexStr.substring(0, 40);
                             if (hexStr.toUpperCase().startsWith('FEFF')) {
                                 // UTF-16BE BOM
                                 const dataHex = hexStr.substring(4);
@@ -2164,10 +2177,35 @@
                                 title = decodeTitle(hexBytes);
                             }
                         }
+
+                        // デバッグサンプル収集
+                        if (method4Samples.length < 5) {
+                            method4Samples.push({
+                                type: matchType,
+                                raw: rawData,
+                                hex: hexDump,
+                                decoded: title ? title.substring(0, 30) : '(空)'
+                            });
+                        }
+
                         if (title && title.trim() && !bookmarks.some(b => b.title === title.trim())) {
                             bookmarks.push({ title: title.trim(), page: '', level: 1 });
                         }
                     }
+                }
+
+                // 方法4デバッグサマリー
+                console.log('[方法4] === デバッグサマリー ===');
+                console.log('[方法4] Titleマッチ数:', method4Count);
+                console.log('[方法4] 抽出成功:', bookmarks.length, '件');
+                if (method4Samples.length > 0) {
+                    console.log('[方法4] サンプルデータ:');
+                    method4Samples.forEach((s, i) => {
+                        console.log('  ' + (i + 1) + '. type=' + s.type);
+                        console.log('     raw: "' + s.raw + '..."');
+                        console.log('     hex: ' + s.hex);
+                        console.log('     decoded: "' + s.decoded + '"');
+                    });
                 }
             }
 
