@@ -1274,6 +1274,22 @@
                     }
                 }
 
+                // 解凍成功したObjStmの内容をサンプル出力（最初の3件）
+                if (objStmSuccess < 3 && decompressedData.length > 0) {
+                    console.log('[ObjStm] オブジェクト ' + objNum + ' 解凍データサンプル (先頭200文字):');
+                    console.log(decompressedData.substring(0, 200));
+                    // /Titleが含まれているか確認
+                    if (decompressedData.includes('/Title')) {
+                        console.log('[ObjStm] ★ /Title を発見!');
+                    }
+                    // しおり関連キーワードを検索
+                    const keywords = ['/Outlines', '/First', '/Last', '/Parent', '/Dest', '/A ', '/S '];
+                    const found = keywords.filter(k => decompressedData.includes(k));
+                    if (found.length > 0) {
+                        console.log('[ObjStm] 検出キーワード: ' + found.join(', '));
+                    }
+                }
+
                 // インデックス部分とデータ部分を分離
                 if (firstOffset > decompressedData.length) continue;
 
