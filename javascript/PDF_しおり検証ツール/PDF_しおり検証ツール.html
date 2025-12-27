@@ -953,22 +953,44 @@
             const pageObjects = buildPageMapping(content);
 
             // しおり情報を抽出
+            // ObjStmバイト直接抽出が成功している場合は、そちらを優先使用
             console.log('[parsePDFBookmarks] しおり抽出開始');
-            const bookmarks = extractBookmarks(content, bytes, pageObjects);
-            console.log('[parsePDFBookmarks] extractBookmarks抽出完了:', bookmarks.length, '件');
 
-            // ObjStmからバイト直接抽出したタイトルを追加（重複排除）
+            let bookmarks = [];
+
             if (objStmDecodedTitles.length > 0) {
-                const existingTitles = new Set(bookmarks.map(b => b.title));
-                let addedCount = 0;
+                // ObjStmからバイト直接抽出したタイトルを優先使用（文字化けなし）
+                console.log('[parsePDFBookmarks] ObjStmバイト直接抽出を優先使用:', objStmDecodedTitles.length, '件');
                 for (const title of objStmDecodedTitles) {
-                    if (!existingTitles.has(title)) {
-                        bookmarks.push({ title: title, page: '', level: 1 });
-                        existingTitles.add(title);
-                        addedCount++;
+                    bookmarks.push({ title: title, page: '', level: 1 });
+                }
+
+                // extractBookmarksからはObjStmで取得できなかったタイトルのみ追加
+                // （通常のストリームや非圧縮部分からのタイトル）
+                const extractedBookmarks = extractBookmarks(content, bytes, pageObjects);
+                const existingTitles = new Set(bookmarks.map(b => b.title));
+                let addedFromExtract = 0;
+
+                for (const bm of extractedBookmarks) {
+                    // ObjStmで取得済みのタイトルと類似していないもののみ追加
+                    // （文字化けしたタイトルは除外）
+                    if (!existingTitles.has(bm.title)) {
+                        // 文字化け判定: 制御文字や置換文字が含まれている場合は除外
+                        const hasGarbledChars = /[\uFFFD\u0000-\u001F]/.test(bm.title) ||
+                                               // 全角記号が連続している場合も文字化けの可能性
+                                               /[◆◇■□●○★☆]{2,}/.test(bm.title);
+                        if (!hasGarbledChars) {
+                            bookmarks.push(bm);
+                            existingTitles.add(bm.title);
+                            addedFromExtract++;
+                        }
                     }
                 }
-                console.log('[parsePDFBookmarks] ObjStmバイト直接抽出から追加:', addedCount, '件（重複除外）');
+                console.log('[parsePDFBookmarks] extractBookmarksから追加:', addedFromExtract, '件（重複・文字化け除外）');
+            } else {
+                // ObjStmバイト直接抽出がない場合は従来通り
+                bookmarks = extractBookmarks(content, bytes, pageObjects);
+                console.log('[parsePDFBookmarks] extractBookmarks抽出完了:', bookmarks.length, '件');
             }
 
             console.log('[parsePDFBookmarks] 最終しおり数:', bookmarks.length, '件');
