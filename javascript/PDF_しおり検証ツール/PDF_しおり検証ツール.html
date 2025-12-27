@@ -1582,8 +1582,8 @@
                     if (objData.includes('/Title')) {
                         titleCount++;
                         // デバッグ: 最初の5件の/Titleオブジェクトの内容を表示
-                        if (results.length < 5) {
-                            console.log('[ObjStm] /Title オブジェクト #' + (results.length + 1) + ':');
+                        if (rawContents.length < 5) {
+                            console.log('[ObjStm] /Title オブジェクト #' + (rawContents.length + 1) + ':');
                             // /Titleの位置を特定
                             const titleIdx = objData.indexOf('/Title');
                             if (titleIdx >= 0) {
