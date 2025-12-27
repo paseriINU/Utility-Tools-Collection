@@ -1069,42 +1069,53 @@
         */
         // DecompressionStream APIを使用した非同期解凍（ブラウザ標準）
         async function decompressWithDecompressionStream(data) {
-            // zlibヘッダー(78 xx)を検出してスキップ
-            let startOffset = 0;
+            // 複数の開始オフセットを試す
+            const offsets = [];
+
+            // zlibヘッダー(78 xx)を検出
             if (data.length >= 2 && data[0] === 0x78) {
-                startOffset = 2;
+                offsets.push(2);  // zlibヘッダーをスキップ
+            }
+            offsets.push(0);  // 生データも試す
+
+            for (const startOffset of offsets) {
+                const rawData = data.slice(startOffset);
+
+                try {
+                    const ds = new DecompressionStream('deflate-raw');
+                    const writer = ds.writable.getWriter();
+                    writer.write(rawData);
+                    writer.close();
+
+                    const reader = ds.readable.getReader();
+                    const chunks = [];
+
+                    while (true) {
+                        const { done, value } = await reader.read();
+                        if (done) break;
+                        chunks.push(value);
+                    }
+
+                    // チャンクを結合
+                    const totalLength = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+                    const result = new Uint8Array(totalLength);
+                    let offset = 0;
+                    for (const chunk of chunks) {
+                        result.set(chunk, offset);
+                        offset += chunk.length;
+                    }
+
+                    if (result.length > 0) {
+                        return result;
+                    }
+                } catch (e) {
+                    // このオフセットでは失敗、次を試す
+                    continue;
+                }
             }
 
-            const rawData = data.slice(startOffset);
-
-            try {
-                const ds = new DecompressionStream('deflate-raw');
-                const writer = ds.writable.getWriter();
-                writer.write(rawData);
-                writer.close();
-
-                const reader = ds.readable.getReader();
-                const chunks = [];
-
-                while (true) {
-                    const { done, value } = await reader.read();
-                    if (done) break;
-                    chunks.push(value);
-                }
-
-                // チャンクを結合
-                const totalLength = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
-                const result = new Uint8Array(totalLength);
-                let offset = 0;
-                for (const chunk of chunks) {
-                    result.set(chunk, offset);
-                    offset += chunk.length;
-                }
-
-                return result;
-            } catch (e) {
-                throw new Error('DecompressionStream失敗: ' + e.message);
-            }
+            // すべて失敗した場合はnullを返す
+            return null;
         }
 
         // 同期的なObject Streams解析（解凍は非同期で後処理）
@@ -1199,14 +1210,10 @@
 
                     // 方法1: DecompressionStream API（ブラウザ標準）
                     if (typeof DecompressionStream !== 'undefined') {
-                        try {
-                            decompressed = await decompressWithDecompressionStream(streamBytes);
-                        } catch (e) {
-                            // DecompressionStreamが失敗した場合、カスタムinflateを試す
-                        }
+                        decompressed = await decompressWithDecompressionStream(streamBytes);
                     }
 
-                    // 方法2: カスタムinflate関数
+                    // 方法2: カスタムinflate関数（DecompressionStreamが失敗した場合）
                     if (!decompressed || decompressed.length === 0) {
                         const startOffsets = [0, 2];
                         for (const offset of startOffsets) {
