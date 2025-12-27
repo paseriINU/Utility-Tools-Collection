@@ -2211,18 +2211,146 @@
 
             /*
             --------------------------------------------------------------
-              方法5: バイナリ直接検索（最終手段）
-              圧縮されていないバイナリデータから直接しおりを探す
+              方法5: 解凍済みcontent内のBOM検索
+              解凍後のLatin-1文字列内でBOMパターンを検索し、
+              後続のバイトをShift_JIS/UTF-8として解釈
             --------------------------------------------------------------
             */
             console.log('[extractBookmarks] 方法5チェック: 現在のbookmarks数:', bookmarks.length);
             if (bookmarks.length === 0) {
-                console.log('[extractBookmarks] 方法5: バイナリ直接検索開始');
+                console.log('[extractBookmarks] 方法5: 解凍済みcontent内BOM検索開始');
+
+                // Shift_JISデコード関数（Latin-1文字列からShift_JISバイトとして解釈）
+                function decodeShiftJIS(latin1Str) {
+                    try {
+                        // Latin-1文字列をバイト配列に変換
+                        const byteArray = new Uint8Array(latin1Str.length);
+                        for (let j = 0; j < latin1Str.length; j++) {
+                            byteArray[j] = latin1Str.charCodeAt(j) & 0xFF;
+                        }
+                        // Shift_JISとしてデコード
+                        return new TextDecoder('shift_jis').decode(byteArray);
+                    } catch (e) {
+                        return null;
+                    }
+                }
+
+                // UTF-8デコード関数（Latin-1文字列からUTF-8バイトとして解釈）
+                function decodeUTF8FromLatin1(latin1Str) {
+                    try {
+                        const byteArray = new Uint8Array(latin1Str.length);
+                        for (let j = 0; j < latin1Str.length; j++) {
+                            byteArray[j] = latin1Str.charCodeAt(j) & 0xFF;
+                        }
+                        return new TextDecoder('utf-8').decode(byteArray);
+                    } catch (e) {
+                        return null;
+                    }
+                }
+
+                // 日本語文字が含まれているかチェック
+                function hasJapanese(str) {
+                    return /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]/.test(str);
+                }
+
+                // content内でBOMパターン（Latin-1文字として）を検索
+                // UTF-16LE BOM: \xFF\xFE → Latin-1では ÿþ (charCode 255, 254)
+                // UTF-16BE BOM: \xFE\xFF → Latin-1では þÿ (charCode 254, 255)
+                let method5ContentCount = 0;
+                let method5ContentSamples = [];
+
+                for (let i = 0; i < content.length - 4; i++) {
+                    const c1 = content.charCodeAt(i);
+                    const c2 = content.charCodeAt(i + 1);
+
+                    let bomType = null;
+                    if (c1 === 0xFF && c2 === 0xFE) {
+                        bomType = 'LE';
+                    } else if (c1 === 0xFE && c2 === 0xFF) {
+                        bomType = 'BE';
+                    }
+
+                    if (bomType) {
+                        // BOM後のデータを抽出（最大200文字）
+                        let endPos = i + 2;
+                        while (endPos < content.length && endPos < i + 200) {
+                            const c = content.charCodeAt(endPos);
+                            // 終端文字を検出
+                            if (c === 0 || c === 0x29 || c === 0x3E || c === 0x3C) break;
+                            // 改行
+                            if (c === 0x0A || c === 0x0D) break;
+                            endPos++;
+                        }
+
+                        if (endPos > i + 4) {
+                            const dataStr = content.substring(i + 2, endPos);
+                            method5ContentCount++;
+
+                            // まずShift_JISとして試す
+                            let title = decodeShiftJIS(dataStr);
+                            let encoding = 'Shift_JIS';
+
+                            // Shift_JISで日本語が取れなければUTF-8を試す
+                            if (!title || !hasJapanese(title)) {
+                                const utf8Title = decodeUTF8FromLatin1(dataStr);
+                                if (utf8Title && hasJapanese(utf8Title)) {
+                                    title = utf8Title;
+                                    encoding = 'UTF-8';
+                                }
+                            }
+
+                            if (title && title.trim().length >= 2) {
+                                // 制御文字チェック
+                                const controlChars = (title.match(/[\x00-\x1F]/g) || []).length;
+                                if (controlChars < title.length * 0.1) {
+                                    if (!bookmarks.some(b => b.title === title.trim())) {
+                                        // デバッグサンプル収集
+                                        if (method5ContentSamples.length < 5) {
+                                            const hexDump = [];
+                                            for (let h = 0; h < Math.min(dataStr.length, 20); h++) {
+                                                hexDump.push(dataStr.charCodeAt(h).toString(16).padStart(2, '0'));
+                                            }
+                                            method5ContentSamples.push({
+                                                type: encoding + ' (BOM ' + bomType + ')',
+                                                hex: hexDump.join(' '),
+                                                decoded: title.trim().substring(0, 30),
+                                                hasJP: hasJapanese(title)
+                                            });
+                                        }
+                                        bookmarks.push({ title: title.trim(), page: '', level: 1 });
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                console.log('[方法5-content] BOM検出数:', method5ContentCount);
+                console.log('[方法5-content] 抽出成功:', bookmarks.length, '件');
+                if (method5ContentSamples.length > 0) {
+                    console.log('[方法5-content] サンプルデータ:');
+                    method5ContentSamples.forEach((s, i) => {
+                        console.log('  ' + (i + 1) + '. type=' + s.type + ' hasJP=' + s.hasJP);
+                        console.log('     hex: ' + s.hex);
+                        console.log('     decoded: "' + s.decoded + '"');
+                    });
+                }
+            }
+
+            /*
+            --------------------------------------------------------------
+              方法6: バイナリ直接検索（最終手段）
+              圧縮されていないバイナリデータから直接しおりを探す
+            --------------------------------------------------------------
+            */
+            console.log('[extractBookmarks] 方法6チェック: 現在のbookmarks数:', bookmarks.length);
+            if (bookmarks.length === 0) {
+                console.log('[extractBookmarks] 方法6: バイナリ直接検索開始');
                 // デバッグ用カウンターとサンプル収集
-                let method5BECount = 0;
-                let method5LECount = 0;
-                let method5UTF8Count = 0;
-                let method5Samples = [];
+                let method6BECount = 0;
+                let method6LECount = 0;
+                let method6UTF8Count = 0;
+                let method6Samples = [];
 
                 // BOM後のバイトがUTF-8かどうかを判定する関数
                 function looksLikeUTF8(dataBytes) {
@@ -2283,15 +2411,15 @@
                             const endPos = findUTF8End(bytes, dataStart, 512);
                             if (endPos > dataStart + 2) {
                                 const titleBytes = bytes.slice(dataStart, endPos);
-                                method5UTF8Count++;
+                                method6UTF8Count++;
                                 try {
                                     const title = new TextDecoder('utf-8').decode(titleBytes);
                                     if (title && title.trim().length >= 2 && !bookmarks.some(b => b.title === title.trim())) {
                                         const controlChars = (title.match(/[\x00-\x1F]/g) || []).length;
                                         if (controlChars < title.length * 0.1) {
-                                            if (method5Samples.length < 5) {
+                                            if (method6Samples.length < 5) {
                                                 const hexDump = Array.from(bytes.slice(i, Math.min(i + 20, bytes.length))).map(b => b.toString(16).padStart(2, '0')).join(' ');
-                                                method5Samples.push({
+                                                method6Samples.push({
                                                     type: 'UTF-8 (BOM ' + bomType + ' skipped)',
                                                     hex: hexDump,
                                                     decoded: title.trim().substring(0, 30)
@@ -2308,7 +2436,7 @@
                             // 従来のUTF-16デコード
                             let endPos = i + 2;
                             if (bomType === 'BE') {
-                                method5BECount++;
+                                method6BECount++;
                                 while (endPos < bytes.length - 1 && endPos < i + 512) {
                                     const high = bytes[endPos];
                                     const low = bytes[endPos + 1];
@@ -2319,7 +2447,7 @@
                                     endPos += 2;
                                 }
                             } else {
-                                method5LECount++;
+                                method6LECount++;
                                 while (endPos < bytes.length - 1 && endPos < i + 512) {
                                     const low = bytes[endPos];
                                     const high = bytes[endPos + 1];
@@ -2339,9 +2467,9 @@
                                     if (title && title.trim().length >= 2 && !bookmarks.some(b => b.title === title.trim())) {
                                         const controlChars = (title.match(/[\x00-\x1F]/g) || []).length;
                                         if (controlChars < title.length * 0.1) {
-                                            if (method5Samples.length < 5) {
+                                            if (method6Samples.length < 5) {
                                                 const hexDump = Array.from(titleBytes.slice(0, 20)).map(b => b.toString(16).padStart(2, '0')).join(' ');
-                                                method5Samples.push({
+                                                method6Samples.push({
                                                     type: 'UTF-16' + bomType,
                                                     hex: hexDump,
                                                     decoded: title.trim().substring(0, 30)
@@ -2358,15 +2486,15 @@
                     }
                 }
 
-                // 方法5デバッグサマリー
-                console.log('[方法5] === デバッグサマリー ===');
-                console.log('[方法5] UTF-16BE検出数:', method5BECount);
-                console.log('[方法5] UTF-16LE検出数:', method5LECount);
-                console.log('[方法5] UTF-8(BOMスキップ)検出数:', method5UTF8Count);
-                console.log('[方法5] 抽出成功:', bookmarks.length, '件');
-                if (method5Samples.length > 0) {
-                    console.log('[方法5] サンプルデータ:');
-                    method5Samples.forEach((s, i) => {
+                // 方法6デバッグサマリー
+                console.log('[方法6] === デバッグサマリー ===');
+                console.log('[方法6] UTF-16BE検出数:', method6BECount);
+                console.log('[方法6] UTF-16LE検出数:', method6LECount);
+                console.log('[方法6] UTF-8(BOMスキップ)検出数:', method6UTF8Count);
+                console.log('[方法6] 抽出成功:', bookmarks.length, '件');
+                if (method6Samples.length > 0) {
+                    console.log('[方法6] サンプルデータ:');
+                    method6Samples.forEach((s, i) => {
                         console.log('  ' + (i + 1) + '. type=' + s.type);
                         console.log('     hex: ' + s.hex);
                         console.log('     decoded: "' + s.decoded + '"');
