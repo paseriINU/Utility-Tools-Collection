@@ -1346,6 +1346,14 @@
 
                     if (objData.includes('/Title')) {
                         titleCount++;
+                        // デバッグ: 最初の3件の/Titleオブジェクトの内容を表示
+                        if (results.length < 3) {
+                            console.log('[ObjStm] /Title オブジェクト #' + (results.length + 1) + ':');
+                            console.log('  生データ: ' + objData.substring(0, 150));
+                            // hex表示
+                            const hexSample = Array.from(objData.substring(0, 50)).map(c => c.charCodeAt(0).toString(16).padStart(2, '0')).join(' ');
+                            console.log('  HEX: ' + hexSample);
+                        }
                         results.push(objData);
                     }
                 }
