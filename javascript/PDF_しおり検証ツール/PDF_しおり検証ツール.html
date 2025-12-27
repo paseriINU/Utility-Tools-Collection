@@ -965,28 +965,35 @@
                     bookmarks.push({ title: title, page: '', level: 1 });
                 }
 
-                // extractBookmarksからはObjStmで取得できなかったタイトルのみ追加
-                // （通常のストリームや非圧縮部分からのタイトル）
-                const extractedBookmarks = extractBookmarks(content, bytes, pageObjects);
-                const existingTitles = new Set(bookmarks.map(b => b.title));
-                let addedFromExtract = 0;
+                // ObjStmから十分な数のタイトルが取得できた場合は、
+                // extractBookmarksからの追加をスキップ（文字化けデータの混入を防ぐ）
+                // 閾値: 10件以上あれば十分と判断
+                if (objStmDecodedTitles.length < 10) {
+                    // extractBookmarksからはObjStmで取得できなかったタイトルのみ追加
+                    // （通常のストリームや非圧縮部分からのタイトル）
+                    const extractedBookmarks = extractBookmarks(content, bytes, pageObjects);
+                    const existingTitles = new Set(bookmarks.map(b => b.title));
+                    let addedFromExtract = 0;
 
-                for (const bm of extractedBookmarks) {
-                    // ObjStmで取得済みのタイトルと類似していないもののみ追加
-                    // （文字化けしたタイトルは除外）
-                    if (!existingTitles.has(bm.title)) {
-                        // 文字化け判定: 制御文字や置換文字が含まれている場合は除外
-                        const hasGarbledChars = /[\uFFFD\u0000-\u001F]/.test(bm.title) ||
-                                               // 全角記号が連続している場合も文字化けの可能性
-                                               /[◆◇■□●○★☆]{2,}/.test(bm.title);
-                        if (!hasGarbledChars) {
-                            bookmarks.push(bm);
-                            existingTitles.add(bm.title);
-                            addedFromExtract++;
+                    for (const bm of extractedBookmarks) {
+                        // ObjStmで取得済みのタイトルと類似していないもののみ追加
+                        // （文字化けしたタイトルは除外）
+                        if (!existingTitles.has(bm.title)) {
+                            // 文字化け判定: 制御文字や置換文字が含まれている場合は除外
+                            const hasGarbledChars = /[\uFFFD\u0000-\u001F]/.test(bm.title) ||
+                                                   // 全角記号が連続している場合も文字化けの可能性
+                                                   /[◆◇■□●○★☆]{2,}/.test(bm.title);
+                            if (!hasGarbledChars) {
+                                bookmarks.push(bm);
+                                existingTitles.add(bm.title);
+                                addedFromExtract++;
+                            }
                         }
                     }
+                    console.log('[parsePDFBookmarks] extractBookmarksから追加:', addedFromExtract, '件（重複・文字化け除外）');
+                } else {
+                    console.log('[parsePDFBookmarks] ObjStmから十分なタイトルを取得済み、extractBookmarksをスキップ');
                 }
-                console.log('[parsePDFBookmarks] extractBookmarksから追加:', addedFromExtract, '件（重複・文字化け除外）');
             } else {
                 // ObjStmバイト直接抽出がない場合は従来通り
                 bookmarks = extractBookmarks(content, bytes, pageObjects);
