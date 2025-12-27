@@ -2221,90 +2221,138 @@
                 // デバッグ用カウンターとサンプル収集
                 let method5BECount = 0;
                 let method5LECount = 0;
+                let method5UTF8Count = 0;
                 let method5Samples = [];
 
-                // UTF-16BE BOM (FEFF) を探してしおり名を抽出
-                for (let i = 0; i < bytes.length - 4; i++) {
-                    if (bytes[i] === 0xFE && bytes[i + 1] === 0xFF) {
-                        // UTF-16BE文字列の開始を検出
-                        let endPos = i + 2;
-                        // 終端を探す（NULLまたは非UTF-16文字）
-                        while (endPos < bytes.length - 1 && endPos < i + 512) {
-                            const high = bytes[endPos];
-                            const low = bytes[endPos + 1];
-                            // 印刷可能なUnicode範囲内かチェック
-                            const charCode = (high << 8) | low;
-                            if (charCode === 0 || (high === 0 && low < 0x20 && low !== 0x09 && low !== 0x0A && low !== 0x0D)) {
-                                break;
-                            }
-                            endPos += 2;
-                        }
-
-                        if (endPos > i + 4) {
-                            const titleBytes = bytes.slice(i, endPos);
-                            method5BECount++;
-                            try {
-                                const title = new TextDecoder('utf-16be').decode(titleBytes);
-                                if (title && title.trim().length >= 2 && !bookmarks.some(b => b.title === title.trim())) {
-                                    // 有効な文字列かチェック（制御文字が少ない）
-                                    const controlChars = (title.match(/[\x00-\x1F]/g) || []).length;
-                                    if (controlChars < title.length * 0.1) {
-                                        // デバッグサンプル収集
-                                        if (method5Samples.length < 5) {
-                                            const hexDump = Array.from(titleBytes.slice(0, 20)).map(b => b.toString(16).padStart(2, '0')).join(' ');
-                                            method5Samples.push({
-                                                type: 'UTF-16BE (FEFF)',
-                                                hex: hexDump,
-                                                decoded: title.trim().substring(0, 30)
-                                            });
-                                        }
-                                        bookmarks.push({ title: title.trim(), page: '', level: 1 });
-                                    }
-                                }
-                            } catch (e) {
-                                // デコードエラーは無視
-                            }
-                        }
+                // BOM後のバイトがUTF-8かどうかを判定する関数
+                function looksLikeUTF8(dataBytes) {
+                    // UTF-8の特徴: 0xE0-0xEF (3バイト文字の先頭), 0x80-0xBF (継続バイト)
+                    let utf8Score = 0;
+                    let utf16Score = 0;
+                    for (let j = 0; j < Math.min(dataBytes.length, 20); j++) {
+                        const b = dataBytes[j];
+                        // UTF-8の3バイト文字開始 (日本語)
+                        if (b >= 0xE0 && b <= 0xEF) utf8Score += 3;
+                        // UTF-8継続バイト
+                        else if (b >= 0x80 && b <= 0xBF) utf8Score += 1;
+                        // UTF-16日本語範囲 (ひらがな: 30xx, カタカナ: 30xx, 漢字: 4Exx-9Fxx)
+                        else if (b >= 0x30 && b <= 0x9F) utf16Score += 2;
+                        // ASCII
+                        else if (b >= 0x20 && b <= 0x7E) { utf8Score += 0.5; utf16Score += 0.5; }
                     }
-                    // UTF-16LE BOM (FFFE) を探してしおり名を抽出 - Acrobat JavaScript対応
-                    else if (bytes[i] === 0xFF && bytes[i + 1] === 0xFE) {
-                        // UTF-16LE文字列の開始を検出
-                        let endPos = i + 2;
-                        // 終端を探す（NULLまたは非UTF-16文字）
-                        while (endPos < bytes.length - 1 && endPos < i + 512) {
-                            const low = bytes[endPos];
-                            const high = bytes[endPos + 1];
-                            // 印刷可能なUnicode範囲内かチェック（LE形式）
-                            const charCode = (high << 8) | low;
-                            if (charCode === 0 || (high === 0 && low < 0x20 && low !== 0x09 && low !== 0x0A && low !== 0x0D)) {
-                                break;
-                            }
-                            endPos += 2;
-                        }
+                    return utf8Score > utf16Score;
+                }
 
-                        if (endPos > i + 4) {
-                            const titleBytes = bytes.slice(i, endPos);
-                            method5LECount++;
-                            try {
-                                const title = new TextDecoder('utf-16le').decode(titleBytes);
-                                if (title && title.trim().length >= 2 && !bookmarks.some(b => b.title === title.trim())) {
-                                    // 有効な文字列かチェック（制御文字が少ない）
-                                    const controlChars = (title.match(/[\x00-\x1F]/g) || []).length;
-                                    if (controlChars < title.length * 0.1) {
-                                        // デバッグサンプル収集
-                                        if (method5Samples.length < 5) {
-                                            const hexDump = Array.from(titleBytes.slice(0, 20)).map(b => b.toString(16).padStart(2, '0')).join(' ');
-                                            method5Samples.push({
-                                                type: 'UTF-16LE (FFFE)',
-                                                hex: hexDump,
-                                                decoded: title.trim().substring(0, 30)
-                                            });
+                // UTF-8文字列の終端を探す関数
+                function findUTF8End(data, startPos, maxLen) {
+                    let pos = startPos;
+                    while (pos < data.length && pos < startPos + maxLen) {
+                        const b = data[pos];
+                        // NULL終端または制御文字
+                        if (b === 0 || (b < 0x20 && b !== 0x09 && b !== 0x0A && b !== 0x0D)) {
+                            break;
+                        }
+                        // 閉じ括弧やPDF区切り文字
+                        if (b === 0x29 || b === 0x3E || b === 0x3C) { // ) > <
+                            break;
+                        }
+                        pos++;
+                    }
+                    return pos;
+                }
+
+                // UTF-16BE BOM (FEFF) または UTF-16LE BOM (FFFE) を探す
+                for (let i = 0; i < bytes.length - 4; i++) {
+                    let bomType = null;
+                    if (bytes[i] === 0xFE && bytes[i + 1] === 0xFF) {
+                        bomType = 'BE';
+                    } else if (bytes[i] === 0xFF && bytes[i + 1] === 0xFE) {
+                        bomType = 'LE';
+                    }
+
+                    if (bomType) {
+                        // BOM後のデータを取得
+                        const dataStart = i + 2;
+                        const dataBytes = bytes.slice(dataStart, Math.min(dataStart + 30, bytes.length));
+
+                        // UTF-8っぽいかチェック
+                        const isUTF8 = looksLikeUTF8(dataBytes);
+
+                        if (isUTF8) {
+                            // UTF-8としてデコード（BOMをスキップ）
+                            const endPos = findUTF8End(bytes, dataStart, 512);
+                            if (endPos > dataStart + 2) {
+                                const titleBytes = bytes.slice(dataStart, endPos);
+                                method5UTF8Count++;
+                                try {
+                                    const title = new TextDecoder('utf-8').decode(titleBytes);
+                                    if (title && title.trim().length >= 2 && !bookmarks.some(b => b.title === title.trim())) {
+                                        const controlChars = (title.match(/[\x00-\x1F]/g) || []).length;
+                                        if (controlChars < title.length * 0.1) {
+                                            if (method5Samples.length < 5) {
+                                                const hexDump = Array.from(bytes.slice(i, Math.min(i + 20, bytes.length))).map(b => b.toString(16).padStart(2, '0')).join(' ');
+                                                method5Samples.push({
+                                                    type: 'UTF-8 (BOM ' + bomType + ' skipped)',
+                                                    hex: hexDump,
+                                                    decoded: title.trim().substring(0, 30)
+                                                });
+                                            }
+                                            bookmarks.push({ title: title.trim(), page: '', level: 1 });
                                         }
-                                        bookmarks.push({ title: title.trim(), page: '', level: 1 });
                                     }
+                                } catch (e) {
+                                    // デコードエラーは無視
                                 }
-                            } catch (e) {
-                                // デコードエラーは無視
+                            }
+                        } else {
+                            // 従来のUTF-16デコード
+                            let endPos = i + 2;
+                            if (bomType === 'BE') {
+                                method5BECount++;
+                                while (endPos < bytes.length - 1 && endPos < i + 512) {
+                                    const high = bytes[endPos];
+                                    const low = bytes[endPos + 1];
+                                    const charCode = (high << 8) | low;
+                                    if (charCode === 0 || (high === 0 && low < 0x20 && low !== 0x09 && low !== 0x0A && low !== 0x0D)) {
+                                        break;
+                                    }
+                                    endPos += 2;
+                                }
+                            } else {
+                                method5LECount++;
+                                while (endPos < bytes.length - 1 && endPos < i + 512) {
+                                    const low = bytes[endPos];
+                                    const high = bytes[endPos + 1];
+                                    const charCode = (high << 8) | low;
+                                    if (charCode === 0 || (high === 0 && low < 0x20 && low !== 0x09 && low !== 0x0A && low !== 0x0D)) {
+                                        break;
+                                    }
+                                    endPos += 2;
+                                }
+                            }
+
+                            if (endPos > i + 4) {
+                                const titleBytes = bytes.slice(i, endPos);
+                                try {
+                                    const encoding = bomType === 'BE' ? 'utf-16be' : 'utf-16le';
+                                    const title = new TextDecoder(encoding).decode(titleBytes);
+                                    if (title && title.trim().length >= 2 && !bookmarks.some(b => b.title === title.trim())) {
+                                        const controlChars = (title.match(/[\x00-\x1F]/g) || []).length;
+                                        if (controlChars < title.length * 0.1) {
+                                            if (method5Samples.length < 5) {
+                                                const hexDump = Array.from(titleBytes.slice(0, 20)).map(b => b.toString(16).padStart(2, '0')).join(' ');
+                                                method5Samples.push({
+                                                    type: 'UTF-16' + bomType,
+                                                    hex: hexDump,
+                                                    decoded: title.trim().substring(0, 30)
+                                                });
+                                            }
+                                            bookmarks.push({ title: title.trim(), page: '', level: 1 });
+                                        }
+                                    }
+                                } catch (e) {
+                                    // デコードエラーは無視
+                                }
                             }
                         }
                     }
@@ -2312,8 +2360,9 @@
 
                 // 方法5デバッグサマリー
                 console.log('[方法5] === デバッグサマリー ===');
-                console.log('[方法5] UTF-16BE (FEFF) 検出数:', method5BECount);
-                console.log('[方法5] UTF-16LE (FFFE) 検出数:', method5LECount);
+                console.log('[方法5] UTF-16BE検出数:', method5BECount);
+                console.log('[方法5] UTF-16LE検出数:', method5LECount);
+                console.log('[方法5] UTF-8(BOMスキップ)検出数:', method5UTF8Count);
                 console.log('[方法5] 抽出成功:', bookmarks.length, '件');
                 if (method5Samples.length > 0) {
                     console.log('[方法5] サンプルデータ:');
