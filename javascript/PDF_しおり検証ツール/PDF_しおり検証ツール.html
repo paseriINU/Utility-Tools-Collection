@@ -1173,6 +1173,105 @@
             return null;
         }
 
+        /*
+        ======================================================================
+          PDFエスケープシーケンスをバイト配列としてデコード
+
+          PDF文字列内の特殊エスケープシーケンスをデコード
+          - \NNN: 8進数（000-377）
+          - \\: バックスラッシュ
+          - \(, \): 括弧
+          - \n, \r, \t: 制御文字
+        ======================================================================
+        */
+        function decodePDFEscapeBytes(inputBytes) {
+            const result = [];
+            let i = 0;
+
+            while (i < inputBytes.length) {
+                if (inputBytes[i] === 0x5C && i + 1 < inputBytes.length) { // バックスラッシュ '\'
+                    const nextByte = inputBytes[i + 1];
+
+                    // 8進数エスケープ: \0 - \377
+                    if (nextByte >= 0x30 && nextByte <= 0x37) { // '0'-'7'
+                        // 最大3桁の8進数を取得
+                        let octalValue = 0;
+                        let digits = 0;
+                        let j = i + 1;
+                        while (j < inputBytes.length && digits < 3) {
+                            const digit = inputBytes[j];
+                            if (digit >= 0x30 && digit <= 0x37) { // '0'-'7'
+                                octalValue = octalValue * 8 + (digit - 0x30);
+                                digits++;
+                                j++;
+                            } else {
+                                break;
+                            }
+                        }
+                        result.push(octalValue & 0xFF);
+                        i = j;
+                        continue;
+                    }
+
+                    // 特殊文字エスケープ
+                    switch (nextByte) {
+                        case 0x6E: // \n
+                            result.push(0x0A);
+                            i += 2;
+                            continue;
+                        case 0x72: // \r
+                            result.push(0x0D);
+                            i += 2;
+                            continue;
+                        case 0x74: // \t
+                            result.push(0x09);
+                            i += 2;
+                            continue;
+                        case 0x62: // \b
+                            result.push(0x08);
+                            i += 2;
+                            continue;
+                        case 0x66: // \f
+                            result.push(0x0C);
+                            i += 2;
+                            continue;
+                        case 0x28: // \(
+                            result.push(0x28);
+                            i += 2;
+                            continue;
+                        case 0x29: // \)
+                            result.push(0x29);
+                            i += 2;
+                            continue;
+                        case 0x5C: // \\
+                            result.push(0x5C);
+                            i += 2;
+                            continue;
+                        case 0x0D: // \<CR> - 行継続（無視）
+                            i += 2;
+                            if (i < inputBytes.length && inputBytes[i] === 0x0A) {
+                                i++; // \<CR><LF>
+                            }
+                            continue;
+                        case 0x0A: // \<LF> - 行継続（無視）
+                            i += 2;
+                            continue;
+                        default:
+                            // 未知のエスケープは文字そのものとして扱う
+                            result.push(nextByte);
+                            i += 2;
+                            continue;
+                    }
+                }
+
+                // 通常のバイト
+                result.push(inputBytes[i]);
+                i++;
+            }
+
+            return new Uint8Array(result);
+        }
+
         // 同期的なObject Streams解析（解凍は非同期で後処理）
         function parseObjectStreams(content, bytes) {
             // 解凍待ちのObjStm情報を収集
@@ -1357,7 +1456,11 @@
 
                                 if (parenEnd > parenStart) {
                                     // タイトルバイトを抽出
-                                    const titleBytes = decompressed.slice(parenStart, parenEnd);
+                                    const rawTitleBytes = decompressed.slice(parenStart, parenEnd);
+
+                                    // PDFエスケープシーケンスをデコード（\NNN形式の8進数）
+                                    // PDF内では 00 バイトは \000 などとエスケープされている
+                                    const titleBytes = decodePDFEscapeBytes(rawTitleBytes);
 
                                     // UTF-16BE BOM (FE FF) をチェック
                                     let title = '';
@@ -1381,9 +1484,12 @@
                                             console.log('[ObjStm] バイト直接抽出 #' + (objStmTitleCount + 1) + ':');
                                             console.log('  タイトル: ' + title.substring(0, 50));
                                             console.log('  タイトル長: ' + title.length + '文字');
-                                            console.log('  バイト長: ' + titleBytes.length + 'bytes');
+                                            // エスケープデコード前のraw bytes
+                                            const rawHex = Array.from(rawTitleBytes.slice(0, 30)).map(b => b.toString(16).padStart(2, '0')).join(' ');
+                                            console.log('  RAW HEX(デコード前): ' + rawHex + (rawTitleBytes.length > 30 ? '...' : ''));
+                                            // エスケープデコード後
                                             const hexAll = Array.from(titleBytes).map(b => b.toString(16).padStart(2, '0')).join(' ');
-                                            console.log('  HEX全体: ' + hexAll);
+                                            console.log('  HEX(デコード後): ' + hexAll);
                                             // 各文字のコードポイントを表示
                                             const codePoints = Array.from(title).map(c => 'U+' + c.charCodeAt(0).toString(16).toUpperCase().padStart(4, '0')).join(' ');
                                             console.log('  コードポイント: ' + codePoints);
