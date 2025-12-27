@@ -1376,11 +1376,17 @@
                                     }
 
                                     if (title && title.trim()) {
-                                        // デバッグ: 最初の3件
-                                        if (objStmTitleCount < 3) {
-                                            console.log('[ObjStm] バイト直接抽出 #' + (objStmTitleCount + 1) + ': ' + title.substring(0, 50));
-                                            const hexSample = Array.from(titleBytes.slice(0, 20)).map(b => b.toString(16).padStart(2, '0')).join(' ');
-                                            console.log('  HEX: ' + hexSample);
+                                        // デバッグ: 最初の5件（詳細）
+                                        if (objStmTitleCount < 5) {
+                                            console.log('[ObjStm] バイト直接抽出 #' + (objStmTitleCount + 1) + ':');
+                                            console.log('  タイトル: ' + title.substring(0, 50));
+                                            console.log('  タイトル長: ' + title.length + '文字');
+                                            console.log('  バイト長: ' + titleBytes.length + 'bytes');
+                                            const hexAll = Array.from(titleBytes).map(b => b.toString(16).padStart(2, '0')).join(' ');
+                                            console.log('  HEX全体: ' + hexAll);
+                                            // 各文字のコードポイントを表示
+                                            const codePoints = Array.from(title).map(c => 'U+' + c.charCodeAt(0).toString(16).toUpperCase().padStart(4, '0')).join(' ');
+                                            console.log('  コードポイント: ' + codePoints);
                                         }
                                         objStmTitleCount++;
                                         byteExtractedCount++;
