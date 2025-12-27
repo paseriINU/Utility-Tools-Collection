@@ -1199,6 +1199,7 @@
             const results = [];
             let objStmCount = 0;
             let objStmSuccess = 0;
+            let objStmTitleCount = 0;  // バイト直接抽出したタイトル数
 
             const objPattern = /(\d+)\s+0\s+obj\s*<<([\s\S]*?)>>\s*stream\r?\n/g;
             let match;
@@ -1297,6 +1298,78 @@
                     }
 
                     if (decompressed && decompressed.length > 0) {
+                        // バイト配列から直接 /Title( を検索してタイトルを抽出
+                        // これにより文字列変換による00バイト問題を回避
+                        let byteExtractedCount = 0;  // このObjStmから抽出したタイトル数
+                        const titlePattern = [0x2F, 0x54, 0x69, 0x74, 0x6C, 0x65, 0x28]; // "/Title("
+                        for (let i = 0; i <= decompressed.length - titlePattern.length; i++) {
+                            let found = true;
+                            for (let j = 0; j < titlePattern.length; j++) {
+                                if (decompressed[i + j] !== titlePattern[j]) {
+                                    found = false;
+                                    break;
+                                }
+                            }
+                            if (found) {
+                                // 括弧の開始位置
+                                const parenStart = i + titlePattern.length;
+                                // 括弧の終了位置を探す（ネストした括弧に対応）
+                                let depth = 1;
+                                let parenEnd = parenStart;
+                                while (parenEnd < decompressed.length && depth > 0) {
+                                    // エスケープされていない括弧のみカウント
+                                    const prevByte = parenEnd > 0 ? decompressed[parenEnd - 1] : 0;
+                                    if (decompressed[parenEnd] === 0x28 && prevByte !== 0x5C) { // '(' not escaped
+                                        depth++;
+                                    } else if (decompressed[parenEnd] === 0x29 && prevByte !== 0x5C) { // ')' not escaped
+                                        depth--;
+                                    }
+                                    if (depth > 0) parenEnd++;
+                                }
+
+                                if (parenEnd > parenStart) {
+                                    // タイトルバイトを抽出
+                                    const titleBytes = decompressed.slice(parenStart, parenEnd);
+
+                                    // UTF-16BE BOM (FE FF) をチェック
+                                    let title = '';
+                                    if (titleBytes.length >= 2 && titleBytes[0] === 0xFE && titleBytes[1] === 0xFF) {
+                                        // UTF-16BE
+                                        for (let k = 2; k + 1 < titleBytes.length; k += 2) {
+                                            const charCode = (titleBytes[k] << 8) | titleBytes[k + 1];
+                                            if (charCode > 0) title += String.fromCharCode(charCode);
+                                        }
+                                    } else if (titleBytes.length >= 2 && titleBytes[0] === 0xFF && titleBytes[1] === 0xFE) {
+                                        // UTF-16LE
+                                        for (let k = 2; k + 1 < titleBytes.length; k += 2) {
+                                            const charCode = titleBytes[k] | (titleBytes[k + 1] << 8);
+                                            if (charCode > 0) title += String.fromCharCode(charCode);
+                                        }
+                                    }
+
+                                    if (title && title.trim()) {
+                                        // デバッグ: 最初の3件
+                                        if (objStmTitleCount < 3) {
+                                            console.log('[ObjStm] バイト直接抽出 #' + (objStmTitleCount + 1) + ': ' + title.substring(0, 50));
+                                            const hexSample = Array.from(titleBytes.slice(0, 20)).map(b => b.toString(16).padStart(2, '0')).join(' ');
+                                            console.log('  HEX: ' + hexSample);
+                                        }
+                                        objStmTitleCount++;
+                                        byteExtractedCount++;
+                                        // PDFオブジェクト形式でresultsに追加（extractBookmarksで処理できる形式）
+                                        results.push('<</Title(' + title + ')>>');
+                                    }
+                                }
+                            }
+                        }
+
+                        // バイト直接抽出が成功した場合、このObjStmは成功としてカウント
+                        if (byteExtractedCount > 0) {
+                            objStmSuccess++;
+                            // バイト直接抽出が成功したので、古いlatin1Decode方式はスキップ
+                            continue;
+                        }
+
                         decompressedData = latin1Decode(decompressed);
                     } else {
                         continue;
@@ -1376,7 +1449,8 @@
 
             console.log('[ObjStm] 検出したObjStm数: ' + objStmCount);
             console.log('[ObjStm] /Title を含むObjStm数: ' + objStmSuccess);
-            console.log('[ObjStm] 抽出した /Title オブジェクト数: ' + results.length);
+            console.log('[ObjStm] バイト直接抽出タイトル数: ' + objStmTitleCount);
+            console.log('[ObjStm] 抽出した /Title オブジェクト総数: ' + results.length);
 
             return results;
         }
