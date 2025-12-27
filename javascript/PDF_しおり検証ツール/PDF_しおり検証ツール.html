@@ -35,6 +35,9 @@
     <!-- ブラウザのタブに表示されるタイトル -->
     <title>PDF しおり検証ツール</title>
 
+    <!-- pako: zlib圧縮/解凍ライブラリ（ObjStm解凍用） -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
+
     <!--
     ==========================================================================
       <style>セクション - CSS（スタイルシート）
@@ -1232,25 +1235,46 @@
                     let decompressed = null;
                     let decompressMethod = '';
 
-                    // 方法1: DecompressionStream API（ブラウザ標準）
-                    if (typeof DecompressionStream !== 'undefined') {
+                    // 方法1: pako ライブラリ（最も信頼性が高い）
+                    if (typeof pako !== 'undefined') {
+                        try {
+                            // pako.inflate はzlibヘッダー付きデータを解凍
+                            decompressed = pako.inflate(streamBytes);
+                            if (decompressed && decompressed.length > 0) {
+                                decompressMethod = 'pako';
+                            }
+                        } catch (e) {
+                            // pako失敗時は生データ（zlibヘッダーなし）として試す
+                            try {
+                                decompressed = pako.inflateRaw(streamBytes.slice(2));
+                                if (decompressed && decompressed.length > 0) {
+                                    decompressMethod = 'pako.inflateRaw';
+                                }
+                            } catch (e2) {
+                                if (objStmCount <= 5) {
+                                    console.log('[ObjStm] オブジェクト ' + objNum + ' pako失敗: ' + e.message);
+                                }
+                            }
+                        }
+                    }
+
+                    // 方法2: DecompressionStream API（pakoが使えない場合）
+                    if ((!decompressed || decompressed.length === 0) && typeof DecompressionStream !== 'undefined') {
                         decompressed = await decompressWithDecompressionStream(streamBytes);
                         if (decompressed && decompressed.length > 0) {
                             decompressMethod = 'DecompressionStream';
                         }
                     }
 
-                    // 方法2: カスタムinflateRaw関数（DecompressionStreamが失敗した場合）
+                    // 方法3: カスタムinflateRaw関数（フォールバック）
                     if (!decompressed || decompressed.length === 0) {
                         try {
-                            // inflateRawは内部でzlibヘッダー(0x68/0x78)を自動スキップする
                             const inflated = inflateRaw(streamBytes);
                             if (inflated && inflated.length > 0) {
                                 decompressed = new Uint8Array(inflated);
                                 decompressMethod = 'inflateRaw';
                             }
                         } catch (e) {
-                            // 最初の5件のみエラーを表示
                             if (objStmCount <= 5) {
                                 console.log('[ObjStm] オブジェクト ' + objNum + ' inflateRaw失敗: ' + e.message);
                             }
