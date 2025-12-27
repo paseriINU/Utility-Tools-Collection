@@ -2220,20 +2220,20 @@
             if (bookmarks.length === 0) {
                 console.log('[extractBookmarks] 方法5: 解凍済みcontent内BOM検索開始');
 
-                // デバッグ: 「第一部　共通」のパターンをcontent内で検索
-                const targetText = '第一部\u3000共通'; // U+3000は全角スペース
-                // UTF-16BE: 7b 2c 4e 00 90 e8 30 00 51 71 90 1a
-                const utf16bePattern = '\u007b\u002c\u004e\u0000\u0090\u00e8\u0030\u0000\u0051\u0071\u0090\u001a';
-                // UTF-16LE: 2c 7b 00 4e e8 90 00 30 71 51 1a 90
-                const utf16lePattern = '\u002c\u007b\u0000\u004e\u00e8\u0090\u0000\u0030\u0071\u0051\u001a\u0090';
-                // UTF-8: e7 ac ac e4 b8 80 e9 83 a8 e3 80 80 e5 85 b1 e9 80 9a
-                const utf8Pattern = '\u00e7\u00ac\u00ac\u00e4\u00b8\u0080\u00e9\u0083\u00a8\u00e3\u0080\u0080\u00e5\u0085\u00b1\u00e9\u0080\u009a';
+                // デバッグ: 「第1部　共通」のパターンをcontent内で検索
+                const targetText = '第1部\u3000共通'; // U+3000は全角スペース、1は半角数字
+                // UTF-16BE: 7b 2c 00 31 90 e8 30 00 51 71 90 1a
+                const utf16bePattern = '\u007b\u002c\u0000\u0031\u0090\u00e8\u0030\u0000\u0051\u0071\u0090\u001a';
+                // UTF-16LE: 2c 7b 31 00 e8 90 00 30 71 51 1a 90
+                const utf16lePattern = '\u002c\u007b\u0031\u0000\u00e8\u0090\u0000\u0030\u0071\u0051\u001a\u0090';
+                // UTF-8: e7 ac ac 31 e9 83 a8 e3 80 80 e5 85 b1 e9 80 9a
+                const utf8Pattern = '\u00e7\u00ac\u00ac\u0031\u00e9\u0083\u00a8\u00e3\u0080\u0080\u00e5\u0085\u00b1\u00e9\u0080\u009a';
 
                 const bePos = content.indexOf(utf16bePattern);
                 const lePos = content.indexOf(utf16lePattern);
                 const utf8Pos = content.indexOf(utf8Pattern);
 
-                console.log('[デバッグ] 「第一部　共通」パターン検索結果:');
+                console.log('[デバッグ] 「第1部　共通」パターン検索結果:');
                 console.log('  UTF-16BE位置:', bePos >= 0 ? bePos : '見つからず');
                 console.log('  UTF-16LE位置:', lePos >= 0 ? lePos : '見つからず');
                 console.log('  UTF-8位置:', utf8Pos >= 0 ? utf8Pos : '見つからず');
