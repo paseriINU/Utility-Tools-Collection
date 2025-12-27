@@ -916,12 +916,20 @@
             }
 
             // Object Streams (ObjStm) からしおりを抽出（非同期処理）
+            let objStmDecodedTitles = [];
             try {
                 console.log('[parsePDFBookmarks] Object Streams 解析開始');
-                const objStmContents = await parseObjectStreamsAsync(content, bytes);
-                if (objStmContents.length > 0) {
-                    console.log('[parsePDFBookmarks] ObjStm から ' + objStmContents.length + ' 個の /Title オブジェクトを発見');
-                    content = content + '\n' + objStmContents.join('\n');
+                const objStmResult = await parseObjectStreamsAsync(content, bytes);
+                // バイト直接抽出で取得したデコード済みタイトル
+                objStmDecodedTitles = objStmResult.decodedTitles || [];
+                // 従来方式（latin1Decode）で取得したコンテンツ
+                const rawContents = objStmResult.rawContents || [];
+                if (rawContents.length > 0) {
+                    console.log('[parsePDFBookmarks] ObjStm から ' + rawContents.length + ' 個の /Title オブジェクトを発見');
+                    content = content + '\n' + rawContents.join('\n');
+                }
+                if (objStmDecodedTitles.length > 0) {
+                    console.log('[parsePDFBookmarks] ObjStm からバイト直接抽出で ' + objStmDecodedTitles.length + ' 個のタイトルを取得');
                 }
             } catch (e) {
                 console.log('[parsePDFBookmarks] ObjStm 解析エラー:', e.message);
@@ -947,7 +955,23 @@
             // しおり情報を抽出
             console.log('[parsePDFBookmarks] しおり抽出開始');
             const bookmarks = extractBookmarks(content, bytes, pageObjects);
-            console.log('[parsePDFBookmarks] 抽出完了:', bookmarks.length, '件');
+            console.log('[parsePDFBookmarks] extractBookmarks抽出完了:', bookmarks.length, '件');
+
+            // ObjStmからバイト直接抽出したタイトルを追加（重複排除）
+            if (objStmDecodedTitles.length > 0) {
+                const existingTitles = new Set(bookmarks.map(b => b.title));
+                let addedCount = 0;
+                for (const title of objStmDecodedTitles) {
+                    if (!existingTitles.has(title)) {
+                        bookmarks.push({ title: title, page: '', level: 1 });
+                        existingTitles.add(title);
+                        addedCount++;
+                    }
+                }
+                console.log('[parsePDFBookmarks] ObjStmバイト直接抽出から追加:', addedCount, '件（重複除外）');
+            }
+
+            console.log('[parsePDFBookmarks] 最終しおり数:', bookmarks.length, '件');
 
             if (bookmarks.length === 0) {
                 // しおりの構造は見つかったが抽出できなかった場合
@@ -1195,8 +1219,12 @@
         }
 
         // 非同期版Object Streams解析
+        // 戻り値: { rawContents: [...], decodedTitles: [...] }
+        // - rawContents: latin1Decode処理された文字列（従来の方式用）
+        // - decodedTitles: バイト直接抽出でデコード済みのタイトル文字列
         async function parseObjectStreamsAsync(content, bytes) {
-            const results = [];
+            const rawContents = [];
+            const decodedTitles = [];
             let objStmCount = 0;
             let objStmSuccess = 0;
             let objStmTitleCount = 0;  // バイト直接抽出したタイトル数
@@ -1356,8 +1384,8 @@
                                         }
                                         objStmTitleCount++;
                                         byteExtractedCount++;
-                                        // PDFオブジェクト形式でresultsに追加（extractBookmarksで処理できる形式）
-                                        results.push('<</Title(' + title + ')>>');
+                                        // デコード済みタイトルを直接追加（再デコード不要）
+                                        decodedTitles.push(title.trim());
                                     }
                                 }
                             }
@@ -1438,7 +1466,7 @@
                                 }
                             }
                         }
-                        results.push(objData);
+                        rawContents.push(objData);
                     }
                 }
 
@@ -1450,9 +1478,9 @@
             console.log('[ObjStm] 検出したObjStm数: ' + objStmCount);
             console.log('[ObjStm] /Title を含むObjStm数: ' + objStmSuccess);
             console.log('[ObjStm] バイト直接抽出タイトル数: ' + objStmTitleCount);
-            console.log('[ObjStm] 抽出した /Title オブジェクト総数: ' + results.length);
+            console.log('[ObjStm] latin1Decode方式タイトル数: ' + rawContents.length);
 
-            return results;
+            return { rawContents, decodedTitles };
         }
 
         /*
@@ -3023,7 +3051,6 @@
 
                     // 8進数エスケープ: \0 - \377
                     if (nextChar >= '0' && nextChar <= '7') {
-                        escapeCount++;
                         // 最大3桁の8進数を取得
                         let octalStr = '';
                         let j = i + 1;
