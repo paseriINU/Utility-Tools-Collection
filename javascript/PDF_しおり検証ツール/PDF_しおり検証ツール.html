@@ -2220,51 +2220,39 @@
             if (bookmarks.length === 0) {
                 console.log('[extractBookmarks] 方法5: 解凍済みcontent内BOM検索開始');
 
-                // デバッグ: 「第1部　共通」のパターンをcontent内で検索
-                const targetText = '第1部\u3000共通'; // U+3000は全角スペース、1は半角数字
-                // UTF-16BE: 7b 2c 00 31 90 e8 30 00 51 71 90 1a
-                const utf16bePattern = '\u007b\u002c\u0000\u0031\u0090\u00e8\u0030\u0000\u0051\u0071\u0090\u001a';
-                // UTF-16LE: 2c 7b 31 00 e8 90 00 30 71 51 1a 90
-                const utf16lePattern = '\u002c\u007b\u0031\u0000\u00e8\u0090\u0000\u0030\u0071\u0051\u001a\u0090';
-                // UTF-8: e7 ac ac 31 e9 83 a8 e3 80 80 e5 85 b1 e9 80 9a
-                const utf8Pattern = '\u00e7\u00ac\u00ac\u0031\u00e9\u0083\u00a8\u00e3\u0080\u0080\u00e5\u0085\u00b1\u00e9\u0080\u009a';
+                // デバッグ: 「第1部 共通」の各パターンをcontent内で検索
+                // パターン1: 半角数字(1)、半角スペース
+                const patterns = [
+                    { name: '半角1+半角SP',
+                      be: '\u007b\u002c\u0000\u0031\u0090\u00e8\u0000\u0020\u0051\u0071\u0090\u001a',
+                      le: '\u002c\u007b\u0031\u0000\u00e8\u0090\u0020\u0000\u0071\u0051\u001a\u0090',
+                      utf8: '\u00e7\u00ac\u00ac\u0031\u00e9\u0083\u00a8\u0020\u00e5\u0085\u00b1\u00e9\u0080\u009a' },
+                    // パターン2: 半角数字(1)、全角スペース
+                    { name: '半角1+全角SP',
+                      be: '\u007b\u002c\u0000\u0031\u0090\u00e8\u0030\u0000\u0051\u0071\u0090\u001a',
+                      le: '\u002c\u007b\u0031\u0000\u00e8\u0090\u0000\u0030\u0071\u0051\u001a\u0090',
+                      utf8: '\u00e7\u00ac\u00ac\u0031\u00e9\u0083\u00a8\u00e3\u0080\u0080\u00e5\u0085\u00b1\u00e9\u0080\u009a' },
+                    // パターン3: 全角数字(１)、半角スペース
+                    { name: '全角1+半角SP',
+                      be: '\u007b\u002c\u00ff\u0011\u0090\u00e8\u0000\u0020\u0051\u0071\u0090\u001a',
+                      le: '\u002c\u007b\u0011\u00ff\u00e8\u0090\u0020\u0000\u0071\u0051\u001a\u0090',
+                      utf8: '\u00e7\u00ac\u00ac\u00ef\u00bc\u0091\u00e9\u0083\u00a8\u0020\u00e5\u0085\u00b1\u00e9\u0080\u009a' },
+                    // パターン4: 全角数字(１)、全角スペース
+                    { name: '全角1+全角SP',
+                      be: '\u007b\u002c\u00ff\u0011\u0090\u00e8\u0030\u0000\u0051\u0071\u0090\u001a',
+                      le: '\u002c\u007b\u0011\u00ff\u00e8\u0090\u0000\u0030\u0071\u0051\u001a\u0090',
+                      utf8: '\u00e7\u00ac\u00ac\u00ef\u00bc\u0091\u00e9\u0083\u00a8\u00e3\u0080\u0080\u00e5\u0085\u00b1\u00e9\u0080\u009a' }
+                ];
 
-                const bePos = content.indexOf(utf16bePattern);
-                const lePos = content.indexOf(utf16lePattern);
-                const utf8Pos = content.indexOf(utf8Pattern);
-
-                console.log('[デバッグ] 「第1部　共通」パターン検索結果:');
-                console.log('  UTF-16BE位置:', bePos >= 0 ? bePos : '見つからず');
-                console.log('  UTF-16LE位置:', lePos >= 0 ? lePos : '見つからず');
-                console.log('  UTF-8位置:', utf8Pos >= 0 ? utf8Pos : '見つからず');
-
-                // 見つかった場合、周辺のバイトを表示
-                if (bePos >= 0) {
-                    const contextStart = Math.max(0, bePos - 10);
-                    const contextEnd = Math.min(content.length, bePos + 30);
-                    const contextHex = [];
-                    for (let c = contextStart; c < contextEnd; c++) {
-                        contextHex.push(content.charCodeAt(c).toString(16).padStart(2, '0'));
-                    }
-                    console.log('  UTF-16BE周辺hex:', contextHex.join(' '));
-                }
-                if (lePos >= 0) {
-                    const contextStart = Math.max(0, lePos - 10);
-                    const contextEnd = Math.min(content.length, lePos + 30);
-                    const contextHex = [];
-                    for (let c = contextStart; c < contextEnd; c++) {
-                        contextHex.push(content.charCodeAt(c).toString(16).padStart(2, '0'));
-                    }
-                    console.log('  UTF-16LE周辺hex:', contextHex.join(' '));
-                }
-                if (utf8Pos >= 0) {
-                    const contextStart = Math.max(0, utf8Pos - 10);
-                    const contextEnd = Math.min(content.length, utf8Pos + 30);
-                    const contextHex = [];
-                    for (let c = contextStart; c < contextEnd; c++) {
-                        contextHex.push(content.charCodeAt(c).toString(16).padStart(2, '0'));
-                    }
-                    console.log('  UTF-8周辺hex:', contextHex.join(' '));
+                console.log('[デバッグ] 「第1部 共通」パターン検索結果:');
+                for (const p of patterns) {
+                    const bePos = content.indexOf(p.be);
+                    const lePos = content.indexOf(p.le);
+                    const utf8Pos = content.indexOf(p.utf8);
+                    console.log('  ' + p.name + ':');
+                    console.log('    UTF-16BE:', bePos >= 0 ? bePos : '×');
+                    console.log('    UTF-16LE:', lePos >= 0 ? lePos : '×');
+                    console.log('    UTF-8:', utf8Pos >= 0 ? utf8Pos : '×');
                 }
 
                 // Shift_JISデコード関数（Latin-1文字列からShift_JISバイトとして解釈）
