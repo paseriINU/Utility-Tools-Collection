@@ -1330,6 +1330,126 @@
 
         /*
         ======================================================================
+          ToUnicode/CMap解析関数
+
+          PDFのCIDフォント用ToUnicodeストリームを解析して、
+          CID（グリフID）→Unicode変換テーブルを構築する
+          Adobe Acrobat JavaScriptで生成されたしおりのデコードに使用
+        ======================================================================
+        */
+        function buildToUnicodeMap(content) {
+            const cidToUnicode = {};
+
+            // ToUnicodeストリームを検索
+            // /ToUnicode オブジェクト参照を探す
+            const toUnicodeRefs = content.match(/\/ToUnicode\s+(\d+)\s+(\d+)\s+R/g);
+            if (toUnicodeRefs) {
+                console.log('[ToUnicode] 参照検出:', toUnicodeRefs.length, '件');
+            }
+
+            // beginbfchar/endbfchar ブロックを解析
+            // 形式: <CID> <Unicode>
+            // 例: <0001> <3042>  → CID 1 = U+3042 (あ)
+            const bfcharPattern = /beginbfchar\s*([\s\S]*?)\s*endbfchar/gi;
+            let bfcharMatch;
+            while ((bfcharMatch = bfcharPattern.exec(content)) !== null) {
+                const block = bfcharMatch[1];
+                // <xxxx> <yyyy> パターンを抽出
+                const entries = block.match(/<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>/g);
+                if (entries) {
+                    for (const entry of entries) {
+                        const m = entry.match(/<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>/);
+                        if (m) {
+                            const cid = parseInt(m[1], 16);
+                            const unicode = parseInt(m[2], 16);
+                            cidToUnicode[cid] = String.fromCharCode(unicode);
+                        }
+                    }
+                }
+            }
+
+            // beginbfrange/endbfrange ブロックを解析
+            // 形式: <CID開始> <CID終了> <Unicode開始>
+            // 例: <0020> <007E> <0020>  → CID 0x20-0x7E = U+0020-U+007E
+            const bfrangePattern = /beginbfrange\s*([\s\S]*?)\s*endbfrange/gi;
+            let bfrangeMatch;
+            while ((bfrangeMatch = bfrangePattern.exec(content)) !== null) {
+                const block = bfrangeMatch[1];
+                // <xxxx> <yyyy> <zzzz> または <xxxx> <yyyy> [<zzzz> <wwww> ...] パターン
+                const lines = block.split(/[\r\n]+/);
+                for (const line of lines) {
+                    // 配列形式: <start> <end> [<u1> <u2> ...]
+                    const arrayMatch = line.match(/<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>\s*\[([\s\S]*)\]/);
+                    if (arrayMatch) {
+                        const start = parseInt(arrayMatch[1], 16);
+                        const end = parseInt(arrayMatch[2], 16);
+                        const unicodes = arrayMatch[3].match(/<([0-9A-Fa-f]+)>/g);
+                        if (unicodes) {
+                            for (let i = 0; i <= end - start && i < unicodes.length; i++) {
+                                const uMatch = unicodes[i].match(/<([0-9A-Fa-f]+)>/);
+                                if (uMatch) {
+                                    cidToUnicode[start + i] = String.fromCharCode(parseInt(uMatch[1], 16));
+                                }
+                            }
+                        }
+                    } else {
+                        // 範囲形式: <start> <end> <unicode_start>
+                        const rangeMatch = line.match(/<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>/);
+                        if (rangeMatch) {
+                            const start = parseInt(rangeMatch[1], 16);
+                            const end = parseInt(rangeMatch[2], 16);
+                            const unicodeStart = parseInt(rangeMatch[3], 16);
+                            for (let i = 0; i <= end - start; i++) {
+                                cidToUnicode[start + i] = String.fromCharCode(unicodeStart + i);
+                            }
+                        }
+                    }
+                }
+            }
+
+            const mapSize = Object.keys(cidToUnicode).length;
+            if (mapSize > 0) {
+                console.log('[ToUnicode] CID→Unicode変換テーブル構築完了:', mapSize, 'エントリ');
+                // サンプル表示
+                const sampleCIDs = Object.keys(cidToUnicode).slice(0, 5);
+                console.log('[ToUnicode] サンプル:', sampleCIDs.map(cid => {
+                    const char = cidToUnicode[cid];
+                    return 'CID ' + cid + ' → "' + char + '" (U+' + char.charCodeAt(0).toString(16).toUpperCase().padStart(4, '0') + ')';
+                }).join(', '));
+            }
+
+            return cidToUnicode;
+        }
+
+        // CIDフォントのグリフIDをUnicodeに変換
+        function decodeCIDText(bytes, cidToUnicode) {
+            if (!cidToUnicode || Object.keys(cidToUnicode).length === 0) {
+                return null;
+            }
+
+            let result = '';
+            let decoded = false;
+
+            // 2バイトずつCIDとして解釈
+            for (let i = 0; i + 1 < bytes.length; i += 2) {
+                const cid = (bytes[i] << 8) | bytes[i + 1];
+                if (cidToUnicode[cid]) {
+                    result += cidToUnicode[cid];
+                    decoded = true;
+                } else if (cid >= 0x20 && cid <= 0x7E) {
+                    // ASCII範囲はそのまま
+                    result += String.fromCharCode(cid);
+                } else {
+                    // 未知のCIDは□で表示
+                    result += '\uFFFD';
+                }
+            }
+
+            return decoded ? result : null;
+        }
+
+        /*
+        ======================================================================
           Latin-1デコード関数
 
           バイト配列を Latin-1（ISO-8859-1）文字列に変換
@@ -1793,6 +1913,10 @@
             console.log('[extractBookmarks] 抽出処理開始');
             const bookmarks = [];
             const originalContentLength = bytes.length;
+
+            // ToUnicode/CMapテーブルを構築（CIDフォント対応）
+            console.log('[extractBookmarks] ToUnicode/CMapテーブル構築開始');
+            const cidToUnicode = buildToUnicodeMap(content);
 
             /*
             --------------------------------------------------------------
@@ -2360,9 +2484,16 @@
                             let bestEncoding = '';
                             let bestJPCount = 0;
 
+                            // CIDデコード用のバイト配列を準備
+                            const cidBytes = new Uint8Array(dataStr.length);
+                            for (let j = 0; j < dataStr.length; j++) {
+                                cidBytes[j] = dataStr.charCodeAt(j) & 0xFF;
+                            }
+
                             const candidates = [
                                 { fn: () => decodeUTF16FromLatin1(dataStr, bomType === 'LE'), name: 'UTF-16' + bomType },
                                 { fn: () => decodeUTF16Swapped(dataStr, bomType === 'LE'), name: 'UTF-16' + (bomType === 'LE' ? 'BE' : 'LE') + '-swap' },
+                                { fn: () => decodeCIDText(cidBytes, cidToUnicode), name: 'CID' },
                                 { fn: () => decodeShiftJIS(dataStr), name: 'Shift_JIS' },
                                 { fn: () => decodeUTF8FromLatin1(dataStr), name: 'UTF-8' }
                             ];
@@ -2435,6 +2566,7 @@
                 let method6BECount = 0;
                 let method6LECount = 0;
                 let method6UTF8Count = 0;
+                let method6CIDCount = 0;
                 let method6Samples = [];
 
                 // BOM後のバイトがUTF-8かどうかを判定する関数
@@ -2546,25 +2678,43 @@
 
                             if (endPos > i + 4) {
                                 const titleBytes = bytes.slice(i, endPos);
+                                const dataBytesForCID = bytes.slice(i + 2, endPos);  // BOMを除いたデータ
+                                let title = '';
+                                let decodedType = 'UTF-16' + bomType;
+                                let hasJapanese = false;
+
+                                // まずUTF-16を試す
                                 try {
                                     const encoding = bomType === 'BE' ? 'utf-16be' : 'utf-16le';
-                                    const title = new TextDecoder(encoding).decode(titleBytes);
-                                    if (title && title.trim().length >= 2 && !bookmarks.some(b => b.title === title.trim())) {
-                                        const controlChars = (title.match(/[\x00-\x1F]/g) || []).length;
-                                        if (controlChars < title.length * 0.1) {
-                                            if (method6Samples.length < 5) {
-                                                const hexDump = Array.from(titleBytes.slice(0, 20)).map(b => b.toString(16).padStart(2, '0')).join(' ');
-                                                method6Samples.push({
-                                                    type: 'UTF-16' + bomType,
-                                                    hex: hexDump,
-                                                    decoded: title.trim().substring(0, 30)
-                                                });
-                                            }
-                                            bookmarks.push({ title: title.trim(), page: '', level: 1 });
-                                        }
-                                    }
+                                    title = new TextDecoder(encoding).decode(titleBytes);
+                                    hasJapanese = /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]/.test(title);
                                 } catch (e) {
-                                    // デコードエラーは無視
+                                    title = '';
+                                }
+
+                                // UTF-16で日本語が含まれなければCIDを試す
+                                if (title && !hasJapanese && Object.keys(cidToUnicode).length > 0) {
+                                    const cidDecoded = decodeCIDText(dataBytesForCID, cidToUnicode);
+                                    if (cidDecoded && /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]/.test(cidDecoded)) {
+                                        title = cidDecoded;
+                                        decodedType = 'CID';
+                                        method6CIDCount++;
+                                    }
+                                }
+
+                                if (title && title.trim().length >= 2 && !bookmarks.some(b => b.title === title.trim())) {
+                                    const controlChars = (title.match(/[\x00-\x1F]/g) || []).length;
+                                    if (controlChars < title.length * 0.1) {
+                                        if (method6Samples.length < 5) {
+                                            const hexDump = Array.from(titleBytes.slice(0, 20)).map(b => b.toString(16).padStart(2, '0')).join(' ');
+                                            method6Samples.push({
+                                                type: decodedType,
+                                                hex: hexDump,
+                                                decoded: title.trim().substring(0, 30)
+                                            });
+                                        }
+                                        bookmarks.push({ title: title.trim(), page: '', level: 1 });
+                                    }
                                 }
                             }
                         }
@@ -2576,6 +2726,7 @@
                 console.log('[方法6] UTF-16BE検出数:', method6BECount);
                 console.log('[方法6] UTF-16LE検出数:', method6LECount);
                 console.log('[方法6] UTF-8(BOMスキップ)検出数:', method6UTF8Count);
+                console.log('[方法6] CIDデコード使用数:', method6CIDCount);
                 console.log('[方法6] 抽出成功:', bookmarks.length, '件');
                 if (method6Samples.length > 0) {
                     console.log('[方法6] サンプルデータ:');
