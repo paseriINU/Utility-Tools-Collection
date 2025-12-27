@@ -1069,28 +1069,30 @@
         */
         // DecompressionStream APIを使用した非同期解凍（ブラウザ標準）
         async function decompressWithDecompressionStream(data) {
-            // 複数の開始オフセットを試す
-            const offsets = [];
+            // zlibヘッダーを判定（0x68または0x78で始まる場合）
+            // 0x68: 16KBウィンドウ, 0x78: 32KBウィンドウ
+            const isZlibHeader = data.length >= 2 && (data[0] === 0x78 || data[0] === 0x68);
 
-            // zlibヘッダー(78 xx)を検出
-            if (data.length >= 2 && data[0] === 0x78) {
-                offsets.push(2);  // zlibヘッダーをスキップ
+            // 複数の方法を試す
+            // 1. deflate（zlibラッパー付き）- zlibヘッダーがある場合に有効
+            // 2. deflate-raw（生deflate）- zlibヘッダーをスキップした場合に有効
+            const methods = [];
+            if (isZlibHeader) {
+                methods.push({ format: 'deflate', offset: 0 });      // zlibラッパー付きで全体を解凍
+                methods.push({ format: 'deflate-raw', offset: 2 });  // zlibヘッダーをスキップ
             }
-            offsets.push(0);  // 生データも試す
+            methods.push({ format: 'deflate-raw', offset: 0 });  // 生データ
 
-            for (const startOffset of offsets) {
-                const rawData = data.slice(startOffset);
+            for (const method of methods) {
+                const rawData = data.slice(method.offset);
 
                 try {
                     const result = await new Promise((resolve, reject) => {
                         try {
-                            const ds = new DecompressionStream('deflate-raw');
+                            const ds = new DecompressionStream(method.format);
                             const writer = ds.writable.getWriter();
                             const reader = ds.readable.getReader();
                             const chunks = [];
-
-                            // エラーハンドリング
-                            let hasError = false;
 
                             // 読み取り処理
                             const readChunks = async () => {
@@ -1130,7 +1132,7 @@
                         return result;
                     }
                 } catch (e) {
-                    // このオフセットでは失敗、次を試す
+                    // このメソッドでは失敗、次を試す
                     continue;
                 }
             }
