@@ -1069,30 +1069,54 @@
         */
         function parseObjectStreams(content, bytes) {
             const results = [];
+            let objStmCount = 0;
+            let objStmSuccess = 0;
 
-            // ObjStmオブジェクトを検索
-            const objStmPattern = /(\d+)\s+\d+\s+obj[\s\S]*?\/Type\s*\/ObjStm[\s\S]*?\/N\s+(\d+)[\s\S]*?\/First\s+(\d+)[\s\S]*?stream\r?\n/g;
+            // ObjStmオブジェクトを検索（より柔軟なパターン）
+            // 形式: X 0 obj << /Type /ObjStm /N Y /First Z /Filter /FlateDecode /Length W >> stream
+            const objPattern = /(\d+)\s+0\s+obj\s*<<([\s\S]*?)>>\s*stream\r?\n/g;
             let match;
 
-            while ((match = objStmPattern.exec(content)) !== null) {
+            while ((match = objPattern.exec(content)) !== null) {
                 const objNum = match[1];
-                const numObjects = parseInt(match[2], 10);
-                const firstOffset = parseInt(match[3], 10);
+                const dictContent = match[2];
+
+                // ObjStmかどうかを確認
+                if (!dictContent.match(/\/Type\s*\/ObjStm/)) continue;
+
+                objStmCount++;
+
+                // /N と /First を抽出
+                const nMatch = dictContent.match(/\/N\s+(\d+)/);
+                const firstMatch = dictContent.match(/\/First\s+(\d+)/);
+                const filterMatch = dictContent.match(/\/Filter\s*\/FlateDecode/);
+
+                if (!nMatch || !firstMatch) {
+                    console.log('[ObjStm] オブジェクト ' + objNum + ': /N または /First が見つかりません');
+                    continue;
+                }
+
+                const numObjects = parseInt(nMatch[1], 10);
+                const firstOffset = parseInt(firstMatch[1], 10);
+                const hasFlate = !!filterMatch;
+
                 const streamStart = match.index + match[0].length;
 
-                console.log('[ObjStm] オブジェクト ' + objNum + ' を検出: N=' + numObjects + ', First=' + firstOffset);
+                console.log('[ObjStm] オブジェクト ' + objNum + ' を検出: N=' + numObjects + ', First=' + firstOffset + ', FlateDecode=' + hasFlate);
 
                 // endstreamを探す
                 const endstreamPos = content.indexOf('endstream', streamStart);
-                if (endstreamPos === -1) continue;
+                if (endstreamPos === -1) {
+                    console.log('[ObjStm] オブジェクト ' + objNum + ': endstream が見つかりません');
+                    continue;
+                }
 
                 // ストリームデータを取得
                 const streamData = content.substring(streamStart, endstreamPos);
+                console.log('[ObjStm] オブジェクト ' + objNum + ': ストリーム長 = ' + streamData.length + ' バイト');
 
-                // まず解凍を試みる（ObjStmは通常FlateDecodeで圧縮されている）
+                // 解凍処理
                 let decompressedData = streamData;
-                const beforeStream = content.substring(Math.max(0, match.index - 200), match.index);
-                const hasFlate = beforeStream.match(/\/Filter\s*(?:\/FlateDecode|\[\s*(?:\/[A-Za-z]+Decode\s+)*\/FlateDecode)/);
 
                 if (hasFlate) {
                     try {
@@ -1101,32 +1125,63 @@
                         for (let i = 0; i < streamData.length; i++) {
                             streamBytes[i] = streamData.charCodeAt(i) & 0xFF;
                         }
-                        const decompressed = inflate(streamBytes);
+
+                        // 複数の開始位置で解凍を試みる（zlibヘッダーの有無に対応）
+                        let decompressed = null;
+                        const startOffsets = [0, 2];  // 0: 生のDeflate, 2: zlibヘッダーをスキップ
+
+                        for (const offset of startOffsets) {
+                            try {
+                                const dataToInflate = streamBytes.slice(offset);
+                                decompressed = inflate(dataToInflate);
+                                if (decompressed && decompressed.length > 0) {
+                                    console.log('[ObjStm] オブジェクト ' + objNum + ': 解凍成功 (オフセット=' + offset + '), サイズ=' + decompressed.length);
+                                    break;
+                                }
+                            } catch (e) {
+                                // このオフセットでは失敗、次を試す
+                            }
+                        }
+
                         if (decompressed && decompressed.length > 0) {
                             decompressedData = latin1Decode(decompressed);
-                            console.log('[ObjStm] 解凍成功: ' + decompressedData.length + ' バイト');
+                        } else {
+                            console.log('[ObjStm] オブジェクト ' + objNum + ': 全ての解凍方法が失敗');
+                            continue;
                         }
                     } catch (e) {
-                        console.log('[ObjStm] 解凍失敗:', e.message);
+                        console.log('[ObjStm] オブジェクト ' + objNum + ': 解凍エラー:', e.message);
                         continue;
                     }
                 }
 
                 // インデックス部分とデータ部分を分離
+                if (firstOffset > decompressedData.length) {
+                    console.log('[ObjStm] オブジェクト ' + objNum + ': First オフセットが範囲外 (' + firstOffset + ' > ' + decompressedData.length + ')');
+                    continue;
+                }
+
                 const indexPart = decompressedData.substring(0, firstOffset);
                 const dataPart = decompressedData.substring(firstOffset);
 
+                console.log('[ObjStm] オブジェクト ' + objNum + ': インデックス部=' + indexPart.length + 'バイト, データ部=' + dataPart.length + 'バイト');
+
                 // インデックスを解析（数値のペア: オブジェクト番号 オフセット）
-                const indexNums = indexPart.trim().split(/\s+/).map(n => parseInt(n, 10));
+                const indexNums = indexPart.trim().split(/\s+/).filter(s => s.length > 0).map(n => parseInt(n, 10));
                 const objects = [];
 
                 for (let i = 0; i < indexNums.length - 1; i += 2) {
                     const objNumber = indexNums[i];
                     const objOffset = indexNums[i + 1];
-                    objects.push({ number: objNumber, offset: objOffset });
+                    if (!isNaN(objNumber) && !isNaN(objOffset)) {
+                        objects.push({ number: objNumber, offset: objOffset });
+                    }
                 }
 
+                console.log('[ObjStm] オブジェクト ' + objNum + ': ' + objects.length + ' 個の内部オブジェクトを検出');
+
                 // 各オブジェクトのデータを抽出
+                let titleCount = 0;
                 for (let i = 0; i < objects.length; i++) {
                     const obj = objects[i];
                     const nextOffset = (i + 1 < objects.length) ? objects[i + 1].offset : dataPart.length;
@@ -1134,11 +1189,22 @@
 
                     // /Title を含むオブジェクトを探す
                     if (objData.includes('/Title')) {
+                        titleCount++;
                         console.log('[ObjStm] オブジェクト ' + obj.number + ' に /Title を発見');
                         results.push(objData);
                     }
                 }
+
+                if (titleCount > 0) {
+                    objStmSuccess++;
+                    console.log('[ObjStm] オブジェクト ' + objNum + ': ' + titleCount + ' 個の /Title を発見');
+                }
             }
+
+            console.log('[ObjStm] === サマリー ===');
+            console.log('[ObjStm] 検出したObjStm数: ' + objStmCount);
+            console.log('[ObjStm] /Title を含むObjStm数: ' + objStmSuccess);
+            console.log('[ObjStm] 抽出した /Title オブジェクト数: ' + results.length);
 
             return results;
         }
