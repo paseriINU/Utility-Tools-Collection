@@ -1236,17 +1236,16 @@
                         decompressed = await decompressWithDecompressionStream(streamBytes);
                     }
 
-                    // 方法2: カスタムinflate関数（DecompressionStreamが失敗した場合）
+                    // 方法2: カスタムinflateRaw関数（DecompressionStreamが失敗した場合）
                     if (!decompressed || decompressed.length === 0) {
-                        const startOffsets = [0, 2];
-                        for (const offset of startOffsets) {
-                            try {
-                                const dataToInflate = streamBytes.slice(offset);
-                                decompressed = inflate(dataToInflate);
-                                if (decompressed && decompressed.length > 0) break;
-                            } catch (e) {
-                                // 次のオフセットを試す
+                        try {
+                            // inflateRawは内部でzlibヘッダー(0x68/0x78)を自動スキップする
+                            const inflated = inflateRaw(streamBytes);
+                            if (inflated && inflated.length > 0) {
+                                decompressed = new Uint8Array(inflated);
                             }
+                        } catch (e) {
+                            // 解凍失敗
                         }
                     }
 
@@ -1429,9 +1428,10 @@
 
         // Deflate解凍メイン関数
         function inflateRaw(data) {
-            // zlibヘッダーのスキップ（0x78で始まる場合）
+            // zlibヘッダーのスキップ（0x68または0x78で始まる場合）
+            // 0x68: 16KBウィンドウ, 0x78: 32KBウィンドウ
             let startOffset = 0;
-            if (data.length >= 2 && data[0] === 0x78) {
+            if (data.length >= 2 && (data[0] === 0x78 || data[0] === 0x68)) {
                 startOffset = 2;  // CMF + FLG をスキップ
             }
 
