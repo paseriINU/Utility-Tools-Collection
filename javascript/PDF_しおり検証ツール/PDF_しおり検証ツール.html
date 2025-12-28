@@ -2404,6 +2404,11 @@
 
             console.log('[extractPageTexts] 総ページ数: ' + pageOrder.length);
 
+            // ToUnicodeマップを構築（CIDフォント対応）
+            const cidToUnicode = buildToUnicodeMap(content);
+            const cidMapSize = Object.keys(cidToUnicode).length;
+            console.log('[extractPageTexts] ToUnicodeマップエントリ数: ' + cidMapSize);
+
             // 各ページオブジェクトを処理
             let pageNum = 1;
             let contentsFoundCount = 0;
@@ -2464,9 +2469,9 @@
                         }
                     }
 
-                    // テキスト演算子からテキストを抽出
+                    // テキスト演算子からテキストを抽出（ToUnicodeマップ使用）
                     if (streamContent) {
-                        const extractedText = extractTextFromStream(streamContent);
+                        const extractedText = extractTextFromStream(streamContent, cidToUnicode);
                         if (extractedText) {
                             pageText += extractedText + ' ';
                         }
@@ -2506,9 +2511,10 @@
 
           PDFコンテンツストリームからテキストを抽出
           BT...ET 内の Tj, TJ 演算子を解析
+          ToUnicodeマップを使用してCIDフォントのテキストをデコード
         ======================================================================
         */
-        function extractTextFromStream(streamContent) {
+        function extractTextFromStream(streamContent, cidToUnicode = {}) {
             let text = '';
 
             // BT (Begin Text) と ET (End Text) の間を抽出
@@ -2522,7 +2528,8 @@
                 const tjPattern = /\(([^)]*)\)\s*Tj/g;
                 let tjMatch;
                 while ((tjMatch = tjPattern.exec(textBlock)) !== null) {
-                    text += decodePDFStringSimple(tjMatch[1]) + ' ';
+                    const decoded = decodeTextWithCMap(tjMatch[1], cidToUnicode);
+                    text += decoded + ' ';
                 }
 
                 // TJ 演算子: [(text) num (text) ...] TJ
@@ -2534,13 +2541,97 @@
                     const stringPattern = /\(([^)]*)\)/g;
                     let stringMatch;
                     while ((stringMatch = stringPattern.exec(arrayContent)) !== null) {
-                        text += decodePDFStringSimple(stringMatch[1]);
+                        const decoded = decodeTextWithCMap(stringMatch[1], cidToUnicode);
+                        text += decoded;
                     }
                     text += ' ';
+                }
+
+                // 16進数文字列も処理: <hexstring> Tj
+                const hexTjPattern = /<([0-9A-Fa-f]+)>\s*Tj/g;
+                let hexTjMatch;
+                while ((hexTjMatch = hexTjPattern.exec(textBlock)) !== null) {
+                    const decoded = decodeHexStringWithCMap(hexTjMatch[1], cidToUnicode);
+                    text += decoded + ' ';
+                }
+
+                // 16進数配列も処理: [<hex> num <hex> ...] TJ
+                const hexTjArrayPattern = /\[([\s\S]*?)\]\s*TJ/g;
+                hexTjArrayPattern.lastIndex = 0;
+                let hexTjArrayMatch;
+                while ((hexTjArrayMatch = hexTjArrayPattern.exec(textBlock)) !== null) {
+                    const arrayContent = hexTjArrayMatch[1];
+                    const hexPattern = /<([0-9A-Fa-f]+)>/g;
+                    let hexMatch;
+                    while ((hexMatch = hexPattern.exec(arrayContent)) !== null) {
+                        const decoded = decodeHexStringWithCMap(hexMatch[1], cidToUnicode);
+                        text += decoded;
+                    }
                 }
             }
 
             return text.trim();
+        }
+
+        // ToUnicodeマップを使用してテキストをデコード
+        function decodeTextWithCMap(str, cidToUnicode) {
+            // まずPDFエスケープをデコード
+            const decoded = decodePDFStringSimple(str);
+
+            // ToUnicodeマップがある場合はCIDとして解釈を試みる
+            if (cidToUnicode && Object.keys(cidToUnicode).length > 0) {
+                let result = '';
+                for (let i = 0; i < decoded.length; i++) {
+                    const code = decoded.charCodeAt(i);
+                    // 2バイトCIDとして解釈
+                    if (i + 1 < decoded.length) {
+                        const cid = (code << 8) | decoded.charCodeAt(i + 1);
+                        if (cidToUnicode[cid]) {
+                            result += cidToUnicode[cid];
+                            i++; // 2バイト消費
+                            continue;
+                        }
+                    }
+                    // 1バイトCIDとして解釈
+                    if (cidToUnicode[code]) {
+                        result += cidToUnicode[code];
+                    } else if (code >= 0x20 && code <= 0x7E) {
+                        // ASCII範囲はそのまま
+                        result += decoded[i];
+                    } else {
+                        result += decoded[i];
+                    }
+                }
+                if (result.length > 0) {
+                    return result;
+                }
+            }
+
+            return decoded;
+        }
+
+        // 16進数文字列をToUnicodeマップでデコード
+        function decodeHexStringWithCMap(hexStr, cidToUnicode) {
+            let result = '';
+            // 2バイト（4桁）ずつCIDとして解釈
+            for (let i = 0; i + 3 < hexStr.length; i += 4) {
+                const cid = parseInt(hexStr.substring(i, i + 4), 16);
+                if (cidToUnicode && cidToUnicode[cid]) {
+                    result += cidToUnicode[cid];
+                } else if (cid >= 0x20 && cid <= 0x7E) {
+                    result += String.fromCharCode(cid);
+                }
+            }
+            // 残りがある場合（2桁）
+            if (hexStr.length % 4 === 2) {
+                const lastCid = parseInt(hexStr.substring(hexStr.length - 2), 16);
+                if (cidToUnicode && cidToUnicode[lastCid]) {
+                    result += cidToUnicode[lastCid];
+                } else if (lastCid >= 0x20 && lastCid <= 0x7E) {
+                    result += String.fromCharCode(lastCid);
+                }
+            }
+            return result;
         }
 
         /*
