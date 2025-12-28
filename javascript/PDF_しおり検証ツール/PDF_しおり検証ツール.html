@@ -1084,10 +1084,13 @@
                 console.log('[タイトル検証] ページテキストMap件数: ' + pageTexts.size);
 
                 // 各しおりについて判定
+                // 注: PDF.jsはページ番号を1始まりで返すが、しおりのページ参照は0始まりの場合がある
                 let verifyDebugCount = 0;
                 for (const bm of bookmarks) {
-                    if (bm.page && pageTexts.has(bm.page)) {
-                        const pageText = pageTexts.get(bm.page);
+                    // ページ番号を調整（0始まりの場合は+1して1始まりに変換）
+                    const adjustedPage = typeof bm.page === 'number' ? bm.page + 1 : bm.page;
+                    if (adjustedPage && pageTexts.has(adjustedPage)) {
+                        const pageText = pageTexts.get(adjustedPage);
                         const normalizedTitle = bm.title.replace(/\s+/g, '').toLowerCase();
                         const normalizedPageText = pageText.replace(/\s+/g, '').toLowerCase();
 
@@ -1102,7 +1105,7 @@
 
                         // 最初の5件のデバッグ出力
                         if (verifyDebugCount < 5) {
-                            console.log('[タイトル検証] しおり: "' + bm.title.substring(0, 30) + '..." → ページ ' + bm.page);
+                            console.log('[タイトル検証] しおり: "' + bm.title.substring(0, 30) + '..." → ページ ' + bm.page + ' (調整後: ' + adjustedPage + ')');
                             console.log('[タイトル検証]   正規化タイトル: "' + normalizedTitle.substring(0, 50) + '"');
                             console.log('[タイトル検証]   ページテキスト先頭: "' + normalizedPageText.substring(0, 100) + '..."');
                             console.log('[タイトル検証]   完全一致: ' + fullMatch + ', 部分一致: ' + partialMatch + ' → 結果: ' + (bm.verified ? 'OK' : 'NG'));
