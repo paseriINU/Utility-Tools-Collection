@@ -2383,15 +2383,27 @@
             }
 
             // 2. ObjStmからページオブジェクトを検索
+            // デバッグ: ObjStm内のオブジェクトからサンプル出力（最初の5件）
+            let sampleCount = 0;
+            let typePageCount = 0;
             for (const [objNum, objData] of objStmObjectsMap.entries()) {
-                if (objData.includes('/Type') && objData.includes('/Page') && !objData.includes('/Pages')) {
+                // /Type と /Page を含むオブジェクトを検出（スペースの有無に関わらず）
+                const hasTypePage = objData.match(/\/Type\s*\/Page(?![s\w])/);
+                if (hasTypePage) {
+                    typePageCount++;
                     pageObjectsList.push({ objNum: String(objNum), objContent: objData, source: 'ObjStm' });
                     pageCountObjStm++;
+                }
+                // デバッグ用：最初の5件のオブジェクトをサンプル出力
+                if (sampleCount < 5) {
+                    console.log('[DEBUG] ObjStmサンプル obj#' + objNum + ': ' + objData.substring(0, 200));
+                    sampleCount++;
                 }
             }
 
             console.log('[DEBUG] PDF本体ページオブジェクト: ' + pageCount);
             console.log('[DEBUG] ObjStmページオブジェクト: ' + pageCountObjStm);
+            console.log('[DEBUG] ObjStm /Type/Page検出数: ' + typePageCount);
 
             // ページ番号順にソート（オブジェクト番号ベースで推測）
             pageObjectsList.sort((a, b) => parseInt(a.objNum) - parseInt(b.objNum));
