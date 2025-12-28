@@ -965,16 +965,21 @@
                     // itemは { title: string, pageRef: string } の形式
                     let pageNum = '';
                     if (item.pageRef) {
-                        // pageRefは "123 0 R" の形式なので、オブジェクト番号を抽出
-                        const objNumMatch = item.pageRef.match(/^(\d+)/);
-                        if (objNumMatch) {
-                            const objNum = objNumMatch[1];
-                            // pageObjectsマッピングでページ番号に変換
-                            if (pageObjects[objNum]) {
-                                pageNum = pageObjects[objNum];
-                            } else {
-                                // マッピングにない場合はオブジェクト番号をそのまま使用
-                                pageNum = parseInt(objNum) || '';
+                        // PAGE:N 形式（JavaScriptアクションから取得）の場合
+                        if (item.pageRef.startsWith('PAGE:')) {
+                            pageNum = parseInt(item.pageRef.substring(5), 10) || '';
+                        } else {
+                            // pageRefは "123 0 R" の形式なので、オブジェクト番号を抽出
+                            const objNumMatch = item.pageRef.match(/^(\d+)/);
+                            if (objNumMatch) {
+                                const objNum = objNumMatch[1];
+                                // pageObjectsマッピングでページ番号に変換
+                                if (pageObjects[objNum]) {
+                                    pageNum = pageObjects[objNum];
+                                } else {
+                                    // マッピングにない場合はオブジェクト番号をそのまま使用
+                                    pageNum = parseInt(objNum) || '';
+                                }
                             }
                         }
                     }
@@ -1554,6 +1559,17 @@
                                         if (localNoDMatch.length < 3) {
                                             localNoDMatch.push({ num: obj.number, data: objData.substring(0, 300) });
                                         }
+                                    }
+                                }
+                                // /S /JavaScript 形式のアクションオブジェクトを検出
+                                // 形式: <</S(this.pageNum =-12)/S/JavaScript>>
+                                if (objData.includes('/JavaScript')) {
+                                    const pageNumMatch = objData.match(/this\.pageNum\s*=\s*(-?\d+)/);
+                                    if (pageNumMatch) {
+                                        // 負の値の場合は絶対値を取る（PDF内部表現の可能性）
+                                        const pageNum = Math.abs(parseInt(pageNumMatch[1], 10));
+                                        globalActionObjectMap.set(obj.number, 'PAGE:' + pageNum);
+                                        localActionCount++;
                                     }
                                 }
                             }
