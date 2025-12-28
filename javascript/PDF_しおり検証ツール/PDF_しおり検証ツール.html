@@ -2262,12 +2262,23 @@
             if (Object.keys(cidToUnicode).length === 0) {
                 console.log('[buildToUnicodeMap] ToUnicode未検出、/Encodingから構築を試みる');
 
-                // /Encoding /Identity-H または /Identity-V を検索
-                // Identity-Hの場合、CIDがそのままUnicodeになることが多い
+                // 日本語CIDフォント関連のエンコーディングを検索
                 const hasIdentityH = content.includes('/Identity-H') || content.includes('/Identity-V');
-                console.log('[buildToUnicodeMap] Identity-H/V検出: ' + hasIdentityH);
+                const has90msRKSJ = content.includes('/90ms-RKSJ-H') || content.includes('/90ms-RKSJ-V') ||
+                                    content.includes('/90msp-RKSJ-H') || content.includes('/90msp-RKSJ-V');
+                const hasUniJIS = content.includes('/UniJIS-UCS2-H') || content.includes('/UniJIS-UCS2-V') ||
+                                  content.includes('/UniJIS-UTF16-H') || content.includes('/UniJIS-UTF16-V');
+                const hasAdobeJapan1 = content.includes('/Adobe-Japan1');
+                const hasCIDFont = content.includes('/CIDFont') || content.includes('/CIDSystemInfo');
 
-                if (hasIdentityH) {
+                console.log('[buildToUnicodeMap] Identity-H/V検出: ' + hasIdentityH);
+                console.log('[buildToUnicodeMap] 90ms-RKSJ検出: ' + has90msRKSJ);
+                console.log('[buildToUnicodeMap] UniJIS検出: ' + hasUniJIS);
+                console.log('[buildToUnicodeMap] Adobe-Japan1検出: ' + hasAdobeJapan1);
+                console.log('[buildToUnicodeMap] CIDFont検出: ' + hasCIDFont);
+
+                // 日本語CIDフォントが検出された場合、Unicode直接マッピングを適用
+                if (hasIdentityH || has90msRKSJ || hasUniJIS || hasAdobeJapan1 || hasCIDFont) {
                     // Identity-Hの場合、よく使われるCID範囲をUnicodeとしてマッピング
                     // ASCII範囲
                     for (let i = 0x20; i <= 0x7E; i++) {
@@ -2294,7 +2305,7 @@
                     for (let i = 0x3000; i <= 0x303F; i++) {
                         cidToUnicode[i] = String.fromCharCode(i);
                     }
-                    console.log('[buildToUnicodeMap] Identity-Hフォールバックマッピング適用');
+                    console.log('[buildToUnicodeMap] 日本語CIDフォントフォールバックマッピング適用');
                 }
 
                 // /Encoding /WinAnsiEncoding の場合
