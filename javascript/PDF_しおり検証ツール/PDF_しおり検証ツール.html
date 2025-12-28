@@ -949,11 +949,14 @@
 
             // Object Streams (ObjStm) からしおりを抽出（非同期処理）
             let objStmDecodedTitles = [];
+            let objStmObjectsMap = new Map();
             try {
                 console.log('[parsePDFBookmarks] Object Streams 解析開始');
                 const objStmResult = await parseObjectStreamsAsync(content, bytes);
                 // バイト直接抽出で取得したデコード済みタイトル
                 objStmDecodedTitles = objStmResult.decodedTitles || [];
+                // ObjStm内の全オブジェクトマップ（ページテキスト抽出用）
+                objStmObjectsMap = objStmResult.objStmObjectsMap || new Map();
                 // 従来方式（latin1Decode）で取得したコンテンツ
                 const rawContents = objStmResult.rawContents || [];
                 if (rawContents.length > 0) {
@@ -1058,7 +1061,7 @@
             // ページテキストを抽出して、しおりタイトルがリンク先ページに存在するか判定
             console.log('[parsePDFBookmarks] ページテキスト抽出開始');
             try {
-                const pageTexts = await extractPageTexts(content, bytes);
+                const pageTexts = await extractPageTexts(content, bytes, objStmObjectsMap);
                 console.log('[parsePDFBookmarks] ページテキスト抽出完了:', pageTexts.size, 'ページ');
 
                 // 各しおりについて判定
@@ -1884,7 +1887,7 @@
                 }
             }
 
-            return { rawContents, decodedTitles };
+            return { rawContents, decodedTitles, objStmObjectsMap };
         }
 
         /*
@@ -2351,76 +2354,130 @@
           ページ番号 → テキスト文字列 のマップを返す
         ======================================================================
         */
-        async function extractPageTexts(content, bytes) {
+        async function extractPageTexts(content, bytes, objStmObjectsMap = new Map()) {
             const pageTexts = new Map();
+            console.log('[DEBUG] ===== ページテキスト抽出開始 =====');
+            console.log('[DEBUG] ObjStmオブジェクトマップサイズ: ' + objStmObjectsMap.size);
 
-            // ページオブジェクトを見つける
+            // 統計カウンター
+            let pageCount = 0;
+            let pageCountObjStm = 0;
+            let contentsFound = 0;
+            let streamFound = 0;
+            let textExtracted = 0;
+
+            // PDF本体とObjStmの両方からページオブジェクトを収集
+            const pageObjectsList = [];
+
+            // 1. PDF本体からページオブジェクトを検索
             const pageObjPattern = /(\d+)\s+0\s+obj\s*<<([\s\S]*?)>>/g;
             let pageMatch;
-            let pageNum = 1;
-
             while ((pageMatch = pageObjPattern.exec(content)) !== null) {
                 const objNum = pageMatch[1];
                 const objContent = pageMatch[2];
-
                 // /Type /Page を確認（/Pages は除外）
-                if (!objContent.match(/\/Type\s*\/Page[^s]/)) continue;
+                if (objContent.match(/\/Type\s*\/Page[^s]/)) {
+                    pageObjectsList.push({ objNum, objContent, source: 'body' });
+                    pageCount++;
+                }
+            }
 
-                // /Contents を探す
-                const contentsMatch = objContent.match(/\/Contents\s+(\d+)\s+0\s+R/);
-                if (!contentsMatch) {
+            // 2. ObjStmからページオブジェクトを検索
+            for (const [objNum, objData] of objStmObjectsMap.entries()) {
+                if (objData.includes('/Type') && objData.includes('/Page') && !objData.includes('/Pages')) {
+                    pageObjectsList.push({ objNum: String(objNum), objContent: objData, source: 'ObjStm' });
+                    pageCountObjStm++;
+                }
+            }
+
+            console.log('[DEBUG] PDF本体ページオブジェクト: ' + pageCount);
+            console.log('[DEBUG] ObjStmページオブジェクト: ' + pageCountObjStm);
+
+            // ページ番号順にソート（オブジェクト番号ベースで推測）
+            pageObjectsList.sort((a, b) => parseInt(a.objNum) - parseInt(b.objNum));
+
+            // 各ページオブジェクトを処理
+            let pageNum = 1;
+            for (const pageObj of pageObjectsList) {
+                // /Contents を探す（単一参照または配列参照）
+                let contentsObjNums = [];
+                const singleContentsMatch = pageObj.objContent.match(/\/Contents\s+(\d+)\s+0\s+R/);
+                const arrayContentsMatch = pageObj.objContent.match(/\/Contents\s*\[([\s\S]*?)\]/);
+
+                if (singleContentsMatch) {
+                    contentsObjNums.push(singleContentsMatch[1]);
+                } else if (arrayContentsMatch) {
+                    const refs = arrayContentsMatch[1].match(/(\d+)\s+0\s+R/g) || [];
+                    for (const ref of refs) {
+                        const numMatch = ref.match(/(\d+)/);
+                        if (numMatch) contentsObjNums.push(numMatch[1]);
+                    }
+                }
+
+                if (contentsObjNums.length === 0) {
                     pageNum++;
                     continue;
                 }
+                contentsFound++;
 
-                const contentsObjNum = contentsMatch[1];
+                // 各コンテンツストリームからテキストを抽出
+                let pageText = '';
+                for (const contentsObjNum of contentsObjNums) {
+                    let streamContent = '';
 
-                // コンテンツストリームを取得
-                const streamPattern = new RegExp(contentsObjNum + '\\s+0\\s+obj\\s*<<([\\s\\S]*?)>>\\s*stream\\r?\\n([\\s\\S]*?)\\r?\\nendstream', 'g');
-                const streamMatch = streamPattern.exec(content);
+                    // PDF本体からストリームを検索
+                    const streamPattern = new RegExp(contentsObjNum + '\\s+0\\s+obj\\s*<<([\\s\\S]*?)>>\\s*stream\\r?\\n([\\s\\S]*?)\\r?\\nendstream', 'g');
+                    const streamMatch = streamPattern.exec(content);
 
-                if (streamMatch) {
-                    const dictContent = streamMatch[1];
-                    const streamData = streamMatch[2];
+                    if (streamMatch) {
+                        streamFound++;
+                        const dictContent = streamMatch[1];
+                        const streamData = streamMatch[2];
 
-                    let textContent = '';
-
-                    // FlateDecode の場合は解凍
-                    if (dictContent.includes('/FlateDecode')) {
-                        try {
-                            // バイト配列に変換
-                            const streamBytes = new Uint8Array(streamData.length);
-                            for (let i = 0; i < streamData.length; i++) {
-                                streamBytes[i] = streamData.charCodeAt(i) & 0xFF;
-                            }
-
-                            // pako で解凍
-                            if (typeof pako !== 'undefined') {
-                                try {
-                                    const decompressed = pako.inflate(streamBytes);
-                                    textContent = latin1Decode(decompressed);
-                                } catch (e) {
-                                    // 解凍失敗
+                        // FlateDecode の場合は解凍
+                        if (dictContent.includes('/FlateDecode')) {
+                            try {
+                                const streamBytes = new Uint8Array(streamData.length);
+                                for (let i = 0; i < streamData.length; i++) {
+                                    streamBytes[i] = streamData.charCodeAt(i) & 0xFF;
                                 }
-                            }
-                        } catch (e) {
-                            // エラー時は空
+                                if (typeof pako !== 'undefined') {
+                                    try {
+                                        const decompressed = pako.inflate(streamBytes);
+                                        streamContent = latin1Decode(decompressed);
+                                    } catch (e) { /* 解凍失敗 */ }
+                                }
+                            } catch (e) { /* エラー */ }
+                        } else {
+                            streamContent = streamData;
                         }
-                    } else {
-                        textContent = streamData;
                     }
 
                     // テキスト演算子からテキストを抽出
-                    if (textContent) {
-                        const extractedText = extractTextFromStream(textContent);
+                    if (streamContent) {
+                        const extractedText = extractTextFromStream(streamContent);
                         if (extractedText) {
-                            pageTexts.set(pageNum, extractedText);
+                            pageText += extractedText + ' ';
                         }
                     }
+                }
+
+                if (pageText.trim()) {
+                    pageTexts.set(pageNum, pageText.trim());
+                    textExtracted++;
                 }
 
                 pageNum++;
             }
+
+            console.log('[DEBUG] ===== ページテキスト抽出サマリー =====');
+            console.log('[DEBUG] PDF本体ページ数: ' + pageCount);
+            console.log('[DEBUG] ObjStmページ数: ' + pageCountObjStm);
+            console.log('[DEBUG] 総ページ数: ' + pageObjectsList.length);
+            console.log('[DEBUG] /Contents参照あり: ' + contentsFound);
+            console.log('[DEBUG] ストリーム取得成功: ' + streamFound);
+            console.log('[DEBUG] テキスト抽出成功: ' + textExtracted);
+            console.log('[DEBUG] 結果Map件数: ' + pageTexts.size);
 
             return pageTexts;
         }
