@@ -1562,12 +1562,11 @@
                                     }
                                 }
                                 // /S /JavaScript 形式のアクションオブジェクトを検出
-                                // 形式: <</S(this.pageNum =-12)/S/JavaScript>>
+                                // 形式: <</S(this.pageNum =12)/S/JavaScript>>
                                 if (objData.includes('/JavaScript')) {
-                                    const pageNumMatch = objData.match(/this\.pageNum\s*=\s*(-?\d+)/);
+                                    const pageNumMatch = objData.match(/this\.pageNum\s*=\s*(\d+)/);
                                     if (pageNumMatch) {
-                                        // 負の値の場合は絶対値を取る（PDF内部表現の可能性）
-                                        const pageNum = Math.abs(parseInt(pageNumMatch[1], 10));
+                                        const pageNum = parseInt(pageNumMatch[1], 10);
                                         globalActionObjectMap.set(obj.number, 'PAGE:' + pageNum);
                                         localActionCount++;
                                     }
