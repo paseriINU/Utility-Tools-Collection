@@ -1379,10 +1379,8 @@
 
             // PDF本体からアクションオブジェクト（ストリーム外）を抽出
             // 形式: N 0 obj <<...>> endobj （streamを含まないオブジェクト）
-            // [\s\S]*? で >> も含む任意の文字にマッチ（最短マッチ）
             const actionObjPattern = /(\d+)\s+0\s+obj\s*<<([\s\S]*?)>>\s*endobj/g;
             let actionMatch;
-            let directActionCount = 0;
             while ((actionMatch = actionObjPattern.exec(content)) !== null) {
                 const actionObjNum = parseInt(actionMatch[1], 10);
                 const actionContent = actionMatch[2];
@@ -1391,15 +1389,8 @@
                     const dMatch = actionContent.match(/\/D\s*\[\s*(\d+)\s+0\s+R/);
                     if (dMatch) {
                         globalActionObjectMap.set(actionObjNum, dMatch[1] + ' 0 R');
-                        directActionCount++;
-                        if (directActionCount <= 5) {
-                            console.log('[PDF本体] アクションオブジェクト ' + actionObjNum + ' → ページ参照: ' + dMatch[1] + ' 0 R');
-                        }
                     }
                 }
-            }
-            if (directActionCount > 0) {
-                console.log('[PDF本体] ストリーム外アクションオブジェクト: ' + directActionCount + '件');
             }
 
             const objPattern = /(\d+)\s+0\s+obj\s*<<([\s\S]*?)>>\s*stream\r?\n/g;
@@ -1458,9 +1449,7 @@
                                     decompressMethod = 'pako.inflateRaw';
                                 }
                             } catch (e2) {
-                                if (objStmCount <= 5) {
-                                    console.log('[ObjStm] オブジェクト ' + objNum + ' pako失敗: ' + e.message);
-                                }
+                                // 解凍失敗
                             }
                         }
                     }
@@ -1482,19 +1471,7 @@
                                 decompressMethod = 'inflateRaw';
                             }
                         } catch (e) {
-                            if (objStmCount <= 5) {
-                                console.log('[ObjStm] オブジェクト ' + objNum + ' inflateRaw失敗: ' + e.message);
-                            }
-                        }
-                    }
-
-                    // 最初の5件のみ解凍結果を表示
-                    if (objStmCount <= 5) {
-                        const headerHex = Array.from(streamBytes.slice(0, 4)).map(b => b.toString(16).padStart(2, '0')).join(' ');
-                        if (decompressed && decompressed.length > 0) {
-                            console.log('[ObjStm] オブジェクト ' + objNum + ' 解凍成功 (' + decompressMethod + '): ' + decompressed.length + ' bytes, ヘッダー: ' + headerHex);
-                        } else {
-                            console.log('[ObjStm] オブジェクト ' + objNum + ' 解凍失敗, ヘッダー: ' + headerHex);
+                            // 解凍失敗
                         }
                     }
 
@@ -1535,18 +1512,11 @@
                                     if (dMatch) {
                                         globalActionObjectMap.set(obj.number, dMatch[1] + ' 0 R');
                                         localActionCount++;
-                                        if (globalActionObjectMap.size <= 5) {
-                                            console.log('[ObjStm] アクションオブジェクト ' + obj.number + ' → ページ参照: ' + dMatch[1] + ' 0 R');
-                                        }
                                     }
                                 }
                             }
-
-                            if (localActionCount > 0) {
-                                console.log('[ObjStm] ObjStm ' + objNum + ' からアクションオブジェクト ' + localActionCount + '件追加 (累計: ' + globalActionObjectMap.size + '件)');
-                            }
                         } catch (e) {
-                            console.log('[ObjStm] アクションオブジェクトマップ作成エラー: ' + e.message);
+                            // アクションオブジェクトマップ作成エラー
                         }
 
                         // バイト配列から直接 /Title( を検索してタイトルを抽出
@@ -1663,15 +1633,9 @@
                                                     // グローバルアクションオブジェクトマップからページ参照を取得
                                                     if (globalActionObjectMap.has(actionObjNum)) {
                                                         pageRef = globalActionObjectMap.get(actionObjNum);
-                                                        if (objStmTitleCount < 5) {
-                                                            console.log('[ObjStm] 間接参照解決: /A ' + actionObjNum + ' 0 R → ' + pageRef);
-                                                        }
                                                     } else {
                                                         // マップにまだ存在しない場合、アクションオブジェクト番号を記録して後で解決
                                                         pageRef = '__UNRESOLVED__' + actionObjNum;
-                                                        if (objStmTitleCount < 5) {
-                                                            console.log('[ObjStm] 間接参照を後で解決: /A ' + actionObjNum + ' 0 R');
-                                                        }
                                                     }
                                                 } else {
                                                     // /D [N 0 R ...] パターンを直接検索（/A 外にある場合）
@@ -1683,14 +1647,6 @@
                                             }
                                         }
 
-                                        // デバッグ: 最初の5件（詳細）
-                                        if (objStmTitleCount < 5) {
-                                            console.log('[ObjStm] バイト直接抽出 #' + (objStmTitleCount + 1) + ':');
-                                            console.log('  タイトル: ' + title.substring(0, 50));
-                                            console.log('  オブジェクト範囲: ' + objStart + ' - ' + objEnd + ' (' + (objEnd - objStart) + 'bytes)');
-                                            console.log('  オブジェクト内容: ' + objStr.substring(0, 300));
-                                            console.log('  ページ参照: ' + (pageRef || '(なし)'));
-                                        }
                                         objStmTitleCount++;
                                         byteExtractedCount++;
                                         // デコード済みタイトルとページ参照を追加
@@ -1710,22 +1666,6 @@
                         decompressedData = latin1Decode(decompressed);
                     } else {
                         continue;
-                    }
-                }
-
-                // 解凍成功したObjStmの内容をサンプル出力（最初の3件）
-                if (objStmSuccess < 3 && decompressedData.length > 0) {
-                    console.log('[ObjStm] オブジェクト ' + objNum + ' 解凍データサンプル (先頭200文字):');
-                    console.log(decompressedData.substring(0, 200));
-                    // /Titleが含まれているか確認
-                    if (decompressedData.includes('/Title')) {
-                        console.log('[ObjStm] ★ /Title を発見!');
-                    }
-                    // しおり関連キーワードを検索
-                    const keywords = ['/Outlines', '/First', '/Last', '/Parent', '/Dest', '/A ', '/S '];
-                    const found = keywords.filter(k => decompressedData.includes(k));
-                    if (found.length > 0) {
-                        console.log('[ObjStm] 検出キーワード: ' + found.join(', '));
                     }
                 }
 
@@ -1756,25 +1696,6 @@
 
                     if (objData.includes('/Title')) {
                         titleCount++;
-                        // デバッグ: 最初の5件の/Titleオブジェクトの内容を表示
-                        if (rawContents.length < 5) {
-                            console.log('[ObjStm] /Title オブジェクト #' + (rawContents.length + 1) + ':');
-                            // /Titleの位置を特定
-                            const titleIdx = objData.indexOf('/Title');
-                            if (titleIdx >= 0) {
-                                // /Title以降の部分を取得
-                                const titlePart = objData.substring(titleIdx, titleIdx + 100);
-                                console.log('  /Title部分: ' + titlePart);
-                                // /Title後の括弧内データをHEX表示
-                                const parenStart = objData.indexOf('(', titleIdx);
-                                const parenEnd = objData.indexOf(')', parenStart + 1);
-                                if (parenStart > 0 && parenEnd > parenStart) {
-                                    const titleValue = objData.substring(parenStart + 1, Math.min(parenEnd, parenStart + 51));
-                                    const hexValue = Array.from(titleValue).map(c => c.charCodeAt(0).toString(16).padStart(2, '0')).join(' ');
-                                    console.log('  タイトル値HEX: ' + hexValue);
-                                }
-                            }
-                        }
                         rawContents.push(objData);
                     }
                 }
@@ -1784,33 +1705,18 @@
                 }
             }
 
-            console.log('[ObjStm] 検出したObjStm数: ' + objStmCount);
-            console.log('[ObjStm] /Title を含むObjStm数: ' + objStmSuccess);
-            console.log('[ObjStm] バイト直接抽出タイトル数: ' + objStmTitleCount);
-            console.log('[ObjStm] latin1Decode方式タイトル数: ' + rawContents.length);
-            console.log('[ObjStm] アクションオブジェクトマップ総数: ' + globalActionObjectMap.size);
-
             // 未解決の間接参照を解決
-            let resolvedCount = 0;
             for (let i = 0; i < decodedTitles.length; i++) {
                 const item = decodedTitles[i];
                 if (item.pageRef && item.pageRef.startsWith('__UNRESOLVED__')) {
                     const actionObjNum = parseInt(item.pageRef.substring(14), 10);
                     if (globalActionObjectMap.has(actionObjNum)) {
                         decodedTitles[i].pageRef = globalActionObjectMap.get(actionObjNum);
-                        resolvedCount++;
-                        if (resolvedCount <= 5) {
-                            console.log('[ObjStm] 遅延解決: ' + item.title.substring(0, 30) + ' → /A ' + actionObjNum + ' 0 R → ' + decodedTitles[i].pageRef);
-                        }
                     } else {
                         // 解決できなかった場合は空文字に
                         decodedTitles[i].pageRef = '';
-                        console.log('[ObjStm] 解決失敗: ' + item.title.substring(0, 30) + ' → /A ' + actionObjNum + ' 0 R (マップに存在しない)');
                     }
                 }
-            }
-            if (resolvedCount > 0) {
-                console.log('[ObjStm] 遅延解決した間接参照数: ' + resolvedCount);
             }
 
             return { rawContents, decodedTitles };
