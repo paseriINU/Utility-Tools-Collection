@@ -2109,21 +2109,71 @@
           PDFのCIDフォント用ToUnicodeストリームを解析して、
           CID（グリフID）→Unicode変換テーブルを構築する
           Adobe Acrobat JavaScriptで生成されたしおりのデコードに使用
+          圧縮されたToUnicodeストリームも解凍して解析
         ======================================================================
         */
         function buildToUnicodeMap(content) {
             const cidToUnicode = {};
+            let allCMapContent = '';
 
-            // ToUnicodeストリームを検索
-            // /ToUnicode オブジェクト参照を探す
-            const toUnicodeRefs = content.match(/\/ToUnicode\s+(\d+)\s+(\d+)\s+R/g);
+            // 1. ToUnicodeストリーム参照を探し、圧縮されている場合は解凍
+            const toUnicodeRefPattern = /\/ToUnicode\s+(\d+)\s+\d+\s+R/g;
+            let toUnicodeRefMatch;
+            const processedRefs = new Set();
+
+            while ((toUnicodeRefMatch = toUnicodeRefPattern.exec(content)) !== null) {
+                const objNum = toUnicodeRefMatch[1];
+                if (processedRefs.has(objNum)) continue;
+                processedRefs.add(objNum);
+
+                // このオブジェクトのストリームを取得
+                const streamPattern = new RegExp(objNum + '\\s+0\\s+obj\\s*<<([\\s\\S]*?)>>\\s*stream\\r?\\n([\\s\\S]*?)\\r?\\nendstream', 'g');
+                const streamMatch = streamPattern.exec(content);
+
+                if (streamMatch) {
+                    const dictContent = streamMatch[1];
+                    const streamData = streamMatch[2];
+
+                    let cmapContent = '';
+
+                    // FlateDecode の場合は解凍
+                    if (dictContent.includes('/FlateDecode')) {
+                        try {
+                            const streamBytes = new Uint8Array(streamData.length);
+                            for (let i = 0; i < streamData.length; i++) {
+                                streamBytes[i] = streamData.charCodeAt(i) & 0xFF;
+                            }
+                            if (typeof pako !== 'undefined') {
+                                try {
+                                    const decompressed = pako.inflate(streamBytes);
+                                    cmapContent = latin1Decode(decompressed);
+                                } catch (e) {
+                                    try {
+                                        const decompressed = pako.inflateRaw(streamBytes.slice(2));
+                                        cmapContent = latin1Decode(decompressed);
+                                    } catch (e2) { /* 解凍失敗 */ }
+                                }
+                            }
+                        } catch (e) { /* エラー */ }
+                    } else {
+                        cmapContent = streamData;
+                    }
+
+                    if (cmapContent) {
+                        allCMapContent += cmapContent + '\n';
+                    }
+                }
+            }
+
+            // 2. 非圧縮のCMapデータも含めて検索（PDF本体から直接）
+            allCMapContent += content;
 
             // beginbfchar/endbfchar ブロックを解析
             // 形式: <CID> <Unicode>
             // 例: <0001> <3042>  → CID 1 = U+3042 (あ)
             const bfcharPattern = /beginbfchar\s*([\s\S]*?)\s*endbfchar/gi;
             let bfcharMatch;
-            while ((bfcharMatch = bfcharPattern.exec(content)) !== null) {
+            while ((bfcharMatch = bfcharPattern.exec(allCMapContent)) !== null) {
                 const block = bfcharMatch[1];
                 // <xxxx> <yyyy> パターンを抽出
                 const entries = block.match(/<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>/g);
@@ -2132,8 +2182,19 @@
                         const m = entry.match(/<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>/);
                         if (m) {
                             const cid = parseInt(m[1], 16);
-                            const unicode = parseInt(m[2], 16);
-                            cidToUnicode[cid] = String.fromCharCode(unicode);
+                            // Unicodeが4桁以上の場合はサロゲートペア処理
+                            const unicodeHex = m[2];
+                            if (unicodeHex.length > 4) {
+                                // UTF-16BEとして解釈（例: D842DE1C → 𠀜）
+                                let str = '';
+                                for (let i = 0; i < unicodeHex.length; i += 4) {
+                                    const code = parseInt(unicodeHex.substring(i, i + 4), 16);
+                                    str += String.fromCharCode(code);
+                                }
+                                cidToUnicode[cid] = str;
+                            } else {
+                                cidToUnicode[cid] = String.fromCharCode(parseInt(unicodeHex, 16));
+                            }
                         }
                     }
                 }
@@ -2144,7 +2205,7 @@
             // 例: <0020> <007E> <0020>  → CID 0x20-0x7E = U+0020-U+007E
             const bfrangePattern = /beginbfrange\s*([\s\S]*?)\s*endbfrange/gi;
             let bfrangeMatch;
-            while ((bfrangeMatch = bfrangePattern.exec(content)) !== null) {
+            while ((bfrangeMatch = bfrangePattern.exec(allCMapContent)) !== null) {
                 const block = bfrangeMatch[1];
                 // <xxxx> <yyyy> <zzzz> または <xxxx> <yyyy> [<zzzz> <wwww> ...] パターン
                 const lines = block.split(/[\r\n]+/);
