@@ -977,7 +977,7 @@
             }
 
             // ページオブジェクトとページ番号のマッピングを作成
-            const pageObjects = buildPageMapping(content);
+            const pageObjects = buildPageMapping(content, objStmObjectsMap);
 
             // しおり情報を抽出
             // ObjStmバイト直接抽出が成功している場合は、そちらを優先使用
@@ -2233,21 +2233,79 @@
           PDFのページオブジェクト番号と実際のページ番号の対応表を作成
         ======================================================================
         */
-        function buildPageMapping(content) {
+        function buildPageMapping(content, objStmObjectsMap = new Map()) {
             // オブジェクト（連想配列）: キーと値のペアを格納
             const pageObjects = {};
 
-            // 正規表現: /パターン/フラグ
-            // g フラグ: グローバル（すべてのマッチを検索）
-            // [\s\S]*?: 任意の文字（最短マッチ）
-            const pageObjPattern = /(\d+)\s+\d+\s+obj[\s\S]*?\/Type\s*\/Page[^s]/g;
+            // すべてのオブジェクトをマップに格納（PDF本体 + ObjStm）
+            const allObjects = new Map();
 
-            let match;
+            // PDF本体からオブジェクトを収集
+            const objPattern = /(\d+)\s+0\s+obj\s*([\s\S]*?)endobj/g;
+            let objMatch;
+            while ((objMatch = objPattern.exec(content)) !== null) {
+                allObjects.set(objMatch[1], objMatch[2]);
+            }
+
+            // ObjStmからオブジェクトを追加
+            for (const [objNum, objData] of objStmObjectsMap.entries()) {
+                allObjects.set(String(objNum), objData);
+            }
+
+            // /Pages ツリーからページ順序を取得
+            const pageOrder = [];
+
+            // /Catalog を探して /Pages への参照を取得
+            let pagesObjNum = null;
+            for (const [objNum, objContent] of allObjects.entries()) {
+                if (objContent.match(/\/Type\s*\/Catalog/)) {
+                    const pagesRef = objContent.match(/\/Pages\s+(\d+)\s+0\s+R/);
+                    if (pagesRef) {
+                        pagesObjNum = pagesRef[1];
+                        break;
+                    }
+                }
+            }
+
+            // /Pages ツリーを再帰的に辿ってページ順序を取得
+            function collectPagesFromTree(pagesObjNum, depth = 0) {
+                if (depth > 100) return;
+                const pagesContent = allObjects.get(pagesObjNum);
+                if (!pagesContent) return;
+
+                const kidsMatch = pagesContent.match(/\/Kids\s*\[([\s\S]*?)\]/);
+                if (!kidsMatch) return;
+
+                const kidsRefs = kidsMatch[1].match(/(\d+)\s+0\s+R/g) || [];
+                for (const ref of kidsRefs) {
+                    const kidObjNum = ref.match(/(\d+)/)[1];
+                    const kidContent = allObjects.get(kidObjNum);
+                    if (!kidContent) continue;
+
+                    if (kidContent.match(/\/Type\s*\/Page(?![s\w])/)) {
+                        pageOrder.push(kidObjNum);
+                    } else if (kidContent.match(/\/Type\s*\/Pages/)) {
+                        collectPagesFromTree(kidObjNum, depth + 1);
+                    }
+                }
+            }
+
+            if (pagesObjNum) {
+                collectPagesFromTree(pagesObjNum);
+            }
+
+            // /Pages ツリーから取得できなかった場合はフォールバック
+            if (pageOrder.length === 0) {
+                const pageObjPattern = /(\d+)\s+\d+\s+obj[\s\S]*?\/Type\s*\/Page[^s]/g;
+                let match;
+                while ((match = pageObjPattern.exec(content)) !== null) {
+                    pageOrder.push(match[1]);
+                }
+            }
+
+            // ページ番号を割り当て
             let pageNum = 1;
-
-            // exec(): 正規表現でマッチを1つずつ取得（ループで全取得）
-            while ((match = pageObjPattern.exec(content)) !== null) {
-                const objNum = match[1];  // キャプチャグループ（括弧内）の値
+            for (const objNum of pageOrder) {
                 pageObjects[objNum] = pageNum;
                 pageNum++;
             }
