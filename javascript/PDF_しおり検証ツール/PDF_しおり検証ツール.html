@@ -1470,6 +1470,56 @@
                     }
 
                     if (decompressed && decompressed.length > 0) {
+                        // アクションオブジェクトマップを作成（/A N 0 R 間接参照解決用）
+                        // ObjStmのインデックスを解析して各オブジェクトのページ参照を取得
+                        const actionObjectMap = new Map(); // オブジェクト番号 → ページ参照
+
+                        try {
+                            // ObjStm全体をlatin1Decodeしてインデックスを解析
+                            const fullObjStmStr = latin1Decode(decompressed);
+
+                            // インデックス部分を取得（firstOffsetまで）
+                            const indexPart = fullObjStmStr.substring(0, firstOffset);
+                            const indexNums = indexPart.trim().split(/\s+/).filter(s => s.length > 0).map(n => parseInt(n, 10));
+
+                            // オブジェクト番号とオフセットのペアを解析
+                            const objOffsets = [];
+                            for (let idx = 0; idx < indexNums.length - 1; idx += 2) {
+                                const objNumber = indexNums[idx];
+                                const objOffset = indexNums[idx + 1];
+                                if (!isNaN(objNumber) && !isNaN(objOffset)) {
+                                    objOffsets.push({ number: objNumber, offset: objOffset });
+                                }
+                            }
+
+                            // データ部分
+                            const dataPart = fullObjStmStr.substring(firstOffset);
+
+                            // 各オブジェクトを解析してアクションオブジェクト（/S /GoTo）を探す
+                            for (let idx = 0; idx < objOffsets.length; idx++) {
+                                const obj = objOffsets[idx];
+                                const nextOffset = (idx + 1 < objOffsets.length) ? objOffsets[idx + 1].offset : dataPart.length;
+                                const objData = dataPart.substring(obj.offset, nextOffset);
+
+                                // /S /GoTo と /D [N 0 R ...] を含むアクションオブジェクトを検出
+                                if (objData.includes('/S') && objData.includes('/GoTo')) {
+                                    const dMatch = objData.match(/\/D\s*\[\s*(\d+)\s+0\s+R/);
+                                    if (dMatch) {
+                                        actionObjectMap.set(obj.number, dMatch[1] + ' 0 R');
+                                        if (actionObjectMap.size <= 3) {
+                                            console.log('[ObjStm] アクションオブジェクト ' + obj.number + ' → ページ参照: ' + dMatch[1] + ' 0 R');
+                                        }
+                                    }
+                                }
+                            }
+
+                            if (actionObjectMap.size > 0) {
+                                console.log('[ObjStm] アクションオブジェクトマップ作成完了: ' + actionObjectMap.size + '件');
+                            }
+                        } catch (e) {
+                            console.log('[ObjStm] アクションオブジェクトマップ作成エラー: ' + e.message);
+                        }
+
                         // バイト配列から直接 /Title( を検索してタイトルを抽出
                         // これにより文字列変換による00バイト問題を回避
                         let byteExtractedCount = 0;  // このObjStmから抽出したタイトル数
@@ -1577,10 +1627,23 @@
                                             if (actionMatch) {
                                                 pageRef = actionMatch[1] + ' 0 R';
                                             } else {
-                                                // /D [N 0 R ...] パターンを直接検索（/A 外にある場合）
-                                                const dMatch = objStr.match(/\/D\s*\[\s*(\d+)\s+0\s+R/);
-                                                if (dMatch) {
-                                                    pageRef = dMatch[1] + ' 0 R';
+                                                // /A N 0 R パターン（間接参照）を検索
+                                                const actionRefMatch = objStr.match(/\/A\s+(\d+)\s+0\s+R/);
+                                                if (actionRefMatch) {
+                                                    const actionObjNum = parseInt(actionRefMatch[1], 10);
+                                                    // アクションオブジェクトマップからページ参照を取得
+                                                    if (actionObjectMap.has(actionObjNum)) {
+                                                        pageRef = actionObjectMap.get(actionObjNum);
+                                                        if (objStmTitleCount < 3) {
+                                                            console.log('[ObjStm] 間接参照解決: /A ' + actionObjNum + ' 0 R → ' + pageRef);
+                                                        }
+                                                    }
+                                                } else {
+                                                    // /D [N 0 R ...] パターンを直接検索（/A 外にある場合）
+                                                    const dMatch = objStr.match(/\/D\s*\[\s*(\d+)\s+0\s+R/);
+                                                    if (dMatch) {
+                                                        pageRef = dMatch[1] + ' 0 R';
+                                                    }
                                                 }
                                             }
                                         }
