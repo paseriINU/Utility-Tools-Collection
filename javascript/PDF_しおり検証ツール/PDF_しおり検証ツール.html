@@ -923,11 +923,8 @@
         ======================================================================
         */
         async function parsePDFBookmarks(arrayBuffer) {
-            console.log('[parsePDFBookmarks] 解析開始');
-
             // Uint8Array: バイト配列（0-255の数値の配列）
             const bytes = new Uint8Array(arrayBuffer);
-            console.log('[parsePDFBookmarks] PDFサイズ:', bytes.length, 'bytes');
 
             // バイナリをLatin-1文字列に変換（PDF内部の検索用）
             let content = latin1Decode(bytes);
@@ -951,7 +948,6 @@
             let objStmDecodedTitles = [];
             let objStmObjectsMap = new Map();
             try {
-                console.log('[parsePDFBookmarks] Object Streams 解析開始');
                 const objStmResult = await parseObjectStreamsAsync(content, bytes);
                 // バイト直接抽出で取得したデコード済みタイトル
                 objStmDecodedTitles = objStmResult.decodedTitles || [];
@@ -960,14 +956,10 @@
                 // 従来方式（latin1Decode）で取得したコンテンツ
                 const rawContents = objStmResult.rawContents || [];
                 if (rawContents.length > 0) {
-                    console.log('[parsePDFBookmarks] ObjStm から ' + rawContents.length + ' 個の /Title オブジェクトを発見');
                     content = content + '\n' + rawContents.join('\n');
                 }
-                if (objStmDecodedTitles.length > 0) {
-                    console.log('[parsePDFBookmarks] ObjStm からバイト直接抽出で ' + objStmDecodedTitles.length + ' 個のタイトルを取得');
-                }
             } catch (e) {
-                console.log('[parsePDFBookmarks] ObjStm 解析エラー:', e.message);
+                // ObjStm解析エラー（無視して続行）
             }
 
             // しおり（Outlines）の存在確認
@@ -989,13 +981,10 @@
 
             // しおり情報を抽出
             // ObjStmバイト直接抽出が成功している場合は、そちらを優先使用
-            console.log('[parsePDFBookmarks] しおり抽出開始');
-
             let bookmarks = [];
 
             if (objStmDecodedTitles.length > 0) {
                 // ObjStmからバイト直接抽出したタイトルを優先使用（文字化けなし）
-                console.log('[parsePDFBookmarks] ObjStmバイト直接抽出を優先使用:', objStmDecodedTitles.length, '件');
                 for (const item of objStmDecodedTitles) {
                     // itemは { title: string, pageRef: string } の形式
                     let pageNum = '';
@@ -1029,7 +1018,6 @@
                     // （通常のストリームや非圧縮部分からのタイトル）
                     const extractedBookmarks = extractBookmarks(content, bytes, pageObjects);
                     const existingTitles = new Set(bookmarks.map(b => b.title));
-                    let addedFromExtract = 0;
 
                     for (const bm of extractedBookmarks) {
                         // ObjStmで取得済みのタイトルと類似していないもののみ追加
@@ -1042,34 +1030,23 @@
                             if (!hasGarbledChars) {
                                 bookmarks.push(bm);
                                 existingTitles.add(bm.title);
-                                addedFromExtract++;
                             }
                         }
                     }
-                    console.log('[parsePDFBookmarks] extractBookmarksから追加:', addedFromExtract, '件（重複・文字化け除外）');
-                } else {
-                    console.log('[parsePDFBookmarks] ObjStmから十分なタイトルを取得済み、extractBookmarksをスキップ');
                 }
             } else {
                 // ObjStmバイト直接抽出がない場合は従来通り
                 bookmarks = extractBookmarks(content, bytes, pageObjects);
-                console.log('[parsePDFBookmarks] extractBookmarks抽出完了:', bookmarks.length, '件');
             }
 
-            console.log('[parsePDFBookmarks] 最終しおり数:', bookmarks.length, '件');
-
             // ページテキストを抽出して、しおりタイトルがリンク先ページに存在するか判定
-            console.log('[parsePDFBookmarks] ページテキスト抽出開始');
             try {
                 const pageTexts = await extractPageTexts(content, bytes, objStmObjectsMap);
-                console.log('[parsePDFBookmarks] ページテキスト抽出完了:', pageTexts.size, 'ページ');
 
                 // 各しおりについて判定
                 for (const bm of bookmarks) {
                     if (bm.page && pageTexts.has(bm.page)) {
                         const pageText = pageTexts.get(bm.page);
-                        // タイトルの一部がページテキストに含まれているか確認
-                        // タイトルを正規化（空白除去、小文字化）して比較
                         const normalizedTitle = bm.title.replace(/\s+/g, '').toLowerCase();
                         const normalizedPageText = pageText.replace(/\s+/g, '').toLowerCase();
 
@@ -1085,7 +1062,6 @@
                     }
                 }
             } catch (e) {
-                console.log('[parsePDFBookmarks] ページテキスト抽出エラー:', e.message);
                 // エラー時は全て不明とする
                 for (const bm of bookmarks) {
                     bm.verified = null;
@@ -1430,8 +1406,6 @@
                 });
             }
 
-            console.log('[ObjStm] 検出したObjStm数: ' + objStmList.length);
-
             // 同期版では空配列を返す（非同期版で処理）
             return [];
         }
@@ -1453,41 +1427,19 @@
 
             // PDF本体からアクションオブジェクト（ストリーム外）を抽出
             // 形式: N 0 obj <<...>> endobj （streamを含まないオブジェクト）
-            console.log('[DEBUG] ===== PDF本体からアクションオブジェクト抽出開始 =====');
             const actionObjPattern = /(\d+)\s+0\s+obj\s*<<([\s\S]*?)>>\s*endobj/g;
             let actionMatch;
-            let debugTotalObj = 0;
-            let debugGoToObj = 0;
-            let debugDMatchObj = 0;
-            let debugNoDMatch = [];
             while ((actionMatch = actionObjPattern.exec(content)) !== null) {
-                debugTotalObj++;
                 const actionObjNum = parseInt(actionMatch[1], 10);
                 const actionContent = actionMatch[2];
                 // /S /GoTo と /D [N 0 R ...] を含むアクションオブジェクトを検出
                 if (actionContent.includes('/S') && actionContent.includes('/GoTo')) {
-                    debugGoToObj++;
                     const dMatch = actionContent.match(/\/D\s*\[\s*(\d+)\s+0\s+R/);
                     if (dMatch) {
                         globalActionObjectMap.set(actionObjNum, dMatch[1] + ' 0 R');
-                        debugDMatchObj++;
-                    } else {
-                        if (debugNoDMatch.length < 5) {
-                            debugNoDMatch.push({ num: actionObjNum, content: actionContent.substring(0, 300) });
-                        }
                     }
                 }
             }
-            console.log('[DEBUG] PDF本体 総オブジェクト数: ' + debugTotalObj);
-            console.log('[DEBUG] PDF本体 /S /GoTo含む: ' + debugGoToObj);
-            console.log('[DEBUG] PDF本体 /D [N 0 R]マッチ: ' + debugDMatchObj);
-            if (debugNoDMatch.length > 0) {
-                console.log('[DEBUG] PDF本体 /Dマッチなしサンプル:');
-                debugNoDMatch.forEach(item => {
-                    console.log('  オブジェクト ' + item.num + ': ' + item.content);
-                });
-            }
-            console.log('[DEBUG] PDF本体 マップサイズ: ' + globalActionObjectMap.size);
 
             // 未解決アクションオブジェクト番号を収集（後で検索用）
             const unresolvedActionObjNums = new Set();
@@ -1601,14 +1553,6 @@
                             const dataPart = fullObjStmStr.substring(firstOffset);
 
                             // 各オブジェクトを解析してアクションオブジェクト（/S /GoTo）を探す
-                            let localActionCount = 0;
-                            let localGoToCount = 0;
-                            let localNoDMatch = [];
-                            // ObjStm内のオブジェクト番号の範囲を確認
-                            const objNumbers = objOffsets.map(o => o.number).sort((a, b) => a - b);
-                            const minObjNum = objNumbers.length > 0 ? objNumbers[0] : 0;
-                            const maxObjNum = objNumbers.length > 0 ? objNumbers[objNumbers.length - 1] : 0;
-                            console.log('[DEBUG] ObjStm ' + objNum + ' オブジェクト数: ' + objOffsets.length + ', 番号範囲: ' + minObjNum + '〜' + maxObjNum);
                             for (let idx = 0; idx < objOffsets.length; idx++) {
                                 const obj = objOffsets[idx];
                                 const nextOffset = (idx + 1 < objOffsets.length) ? objOffsets[idx + 1].offset : dataPart.length;
@@ -1619,15 +1563,9 @@
 
                                 // /S /GoTo と /D [N 0 R ...] を含むアクションオブジェクトを検出
                                 if (objData.includes('/S') && objData.includes('/GoTo')) {
-                                    localGoToCount++;
                                     const dMatch = objData.match(/\/D\s*\[\s*(\d+)\s+0\s+R/);
                                     if (dMatch) {
                                         globalActionObjectMap.set(obj.number, dMatch[1] + ' 0 R');
-                                        localActionCount++;
-                                    } else {
-                                        if (localNoDMatch.length < 3) {
-                                            localNoDMatch.push({ num: obj.number, data: objData.substring(0, 300) });
-                                        }
                                     }
                                 }
                                 // /S /JavaScript 形式のアクションオブジェクトを検出
@@ -1637,17 +1575,11 @@
                                     if (pageNumMatch) {
                                         const pageNum = parseInt(pageNumMatch[1], 10);
                                         globalActionObjectMap.set(obj.number, 'PAGE:' + pageNum);
-                                        localActionCount++;
                                     }
                                 }
                             }
-                            console.log('[DEBUG] ObjStm ' + objNum + ' /S /GoTo含む: ' + localGoToCount + '件, /D[]マッチ: ' + localActionCount + '件');
-                            if (localNoDMatch.length > 0) {
-                                console.log('[DEBUG] ObjStm ' + objNum + ' /Dマッチなしサンプル:');
-                                localNoDMatch.forEach((s, idx) => console.log('  ' + idx + ': obj#' + s.num + ' = ' + s.data));
-                            }
                         } catch (e) {
-                            console.log('[DEBUG] ObjStm ' + objNum + ' アクションマップエラー: ' + e.message);
+                            // ObjStm解析エラー（無視して続行）
                         }
 
                         // バイト配列から直接 /Title( を検索してタイトルを抽出
@@ -1838,52 +1770,16 @@
             }
 
             // 未解決の間接参照を解決
-            console.log('[DEBUG] ===== 未解決参照の解決開始 =====');
-            console.log('[DEBUG] globalActionObjectMapサイズ: ' + globalActionObjectMap.size);
-            console.log('[DEBUG] decodedTitles数: ' + decodedTitles.length);
-            let unresolvedCount = 0;
-            let resolvedCount = 0;
-            let failedCount = 0;
             for (let i = 0; i < decodedTitles.length; i++) {
                 const item = decodedTitles[i];
                 if (item.pageRef && item.pageRef.startsWith('__UNRESOLVED__')) {
-                    unresolvedCount++;
                     const actionObjNum = parseInt(item.pageRef.substring(14), 10);
                     if (globalActionObjectMap.has(actionObjNum)) {
                         decodedTitles[i].pageRef = globalActionObjectMap.get(actionObjNum);
-                        resolvedCount++;
                     } else {
                         // 解決できなかった場合は空文字に
                         decodedTitles[i].pageRef = '';
-                        failedCount++;
                     }
-                }
-            }
-            console.log('[DEBUG] 未解決参照: ' + unresolvedCount + '件, 解決成功: ' + resolvedCount + '件, 解決失敗: ' + failedCount + '件');
-
-            // 未解決のアクションオブジェクト番号をPDF本体とObjStmから検索して内容を確認
-            if (unresolvedActionObjNums.size > 0) {
-                console.log('[DEBUG] ===== 未解決アクションオブジェクトの直接検索 =====');
-                console.log('[DEBUG] ObjStm内オブジェクト総数: ' + objStmObjectsMap.size);
-                let searchCount = 0;
-                for (const objNum of unresolvedActionObjNums) {
-                    if (searchCount >= 5) break; // 最大5件まで
-                    // まずObjStmマップから検索
-                    if (objStmObjectsMap.has(objNum)) {
-                        console.log('[DEBUG] オブジェクト ' + objNum + ' がObjStm内に発見:');
-                        console.log('  ' + objStmObjectsMap.get(objNum));
-                    } else {
-                        // PDF本体から検索
-                        const objDefPattern = new RegExp(objNum + '\\s+0\\s+obj[\\s\\S]{0,500}', 'g');
-                        const objDefMatch = content.match(objDefPattern);
-                        if (objDefMatch) {
-                            console.log('[DEBUG] オブジェクト ' + objNum + ' がPDF本体に発見:');
-                            console.log('  ' + objDefMatch[0].substring(0, 400));
-                        } else {
-                            console.log('[DEBUG] オブジェクト ' + objNum + ' がPDF本体にもObjStmにも見つからない');
-                        }
-                    }
-                    searchCount++;
                 }
             }
 
@@ -2194,9 +2090,6 @@
             // ToUnicodeストリームを検索
             // /ToUnicode オブジェクト参照を探す
             const toUnicodeRefs = content.match(/\/ToUnicode\s+(\d+)\s+(\d+)\s+R/g);
-            if (toUnicodeRefs) {
-                console.log('[ToUnicode] 参照検出:', toUnicodeRefs.length, '件');
-            }
 
             // beginbfchar/endbfchar ブロックを解析
             // 形式: <CID> <Unicode>
@@ -2256,17 +2149,6 @@
                         }
                     }
                 }
-            }
-
-            const mapSize = Object.keys(cidToUnicode).length;
-            if (mapSize > 0) {
-                console.log('[ToUnicode] CID→Unicode変換テーブル構築完了:', mapSize, 'エントリ');
-                // サンプル表示
-                const sampleCIDs = Object.keys(cidToUnicode).slice(0, 5);
-                console.log('[ToUnicode] サンプル:', sampleCIDs.map(cid => {
-                    const char = cidToUnicode[cid];
-                    return 'CID ' + cid + ' → "' + char + '" (U+' + char.charCodeAt(0).toString(16).toUpperCase().padStart(4, '0') + ')';
-                }).join(', '));
             }
 
             return cidToUnicode;
@@ -2356,54 +2238,32 @@
         */
         async function extractPageTexts(content, bytes, objStmObjectsMap = new Map()) {
             const pageTexts = new Map();
-            console.log('[DEBUG] ===== ページテキスト抽出開始 =====');
-            console.log('[DEBUG] ObjStmオブジェクトマップサイズ: ' + objStmObjectsMap.size);
-
-            // 統計カウンター
-            let pageCount = 0;
-            let pageCountObjStm = 0;
-            let contentsFound = 0;
-            let streamFound = 0;
-            let textExtracted = 0;
 
             // PDF本体とObjStmの両方からページオブジェクトを収集
             const pageObjectsList = [];
 
             // 1. PDF本体からページオブジェクトを検索
-            const pageObjPattern = /(\d+)\s+0\s+obj\s*<<([\s\S]*?)>>/g;
+            // endobj まで取得してネストしたディクショナリも含める
+            const pageObjPattern = /(\d+)\s+0\s+obj\s*([\s\S]*?)endobj/g;
             let pageMatch;
             while ((pageMatch = pageObjPattern.exec(content)) !== null) {
                 const objNum = pageMatch[1];
                 const objContent = pageMatch[2];
                 // /Type /Page を確認（/Pages は除外）
-                if (objContent.match(/\/Type\s*\/Page[^s]/)) {
+                // スペースの有無、改行の有無に対応
+                if (objContent.match(/\/Type\s*\/Page(?![s\w])/)) {
                     pageObjectsList.push({ objNum, objContent, source: 'body' });
-                    pageCount++;
                 }
             }
 
             // 2. ObjStmからページオブジェクトを検索
-            // デバッグ: ObjStm内のオブジェクトからサンプル出力（最初の5件）
-            let sampleCount = 0;
-            let typePageCount = 0;
             for (const [objNum, objData] of objStmObjectsMap.entries()) {
                 // /Type と /Page を含むオブジェクトを検出（スペースの有無に関わらず）
                 const hasTypePage = objData.match(/\/Type\s*\/Page(?![s\w])/);
                 if (hasTypePage) {
-                    typePageCount++;
                     pageObjectsList.push({ objNum: String(objNum), objContent: objData, source: 'ObjStm' });
-                    pageCountObjStm++;
-                }
-                // デバッグ用：最初の5件のオブジェクトをサンプル出力
-                if (sampleCount < 5) {
-                    console.log('[DEBUG] ObjStmサンプル obj#' + objNum + ': ' + objData.substring(0, 200));
-                    sampleCount++;
                 }
             }
-
-            console.log('[DEBUG] PDF本体ページオブジェクト: ' + pageCount);
-            console.log('[DEBUG] ObjStmページオブジェクト: ' + pageCountObjStm);
-            console.log('[DEBUG] ObjStm /Type/Page検出数: ' + typePageCount);
 
             // ページ番号順にソート（オブジェクト番号ベースで推測）
             pageObjectsList.sort((a, b) => parseInt(a.objNum) - parseInt(b.objNum));
@@ -2430,7 +2290,6 @@
                     pageNum++;
                     continue;
                 }
-                contentsFound++;
 
                 // 各コンテンツストリームからテキストを抽出
                 let pageText = '';
@@ -2442,7 +2301,6 @@
                     const streamMatch = streamPattern.exec(content);
 
                     if (streamMatch) {
-                        streamFound++;
                         const dictContent = streamMatch[1];
                         const streamData = streamMatch[2];
 
@@ -2476,20 +2334,10 @@
 
                 if (pageText.trim()) {
                     pageTexts.set(pageNum, pageText.trim());
-                    textExtracted++;
                 }
 
                 pageNum++;
             }
-
-            console.log('[DEBUG] ===== ページテキスト抽出サマリー =====');
-            console.log('[DEBUG] PDF本体ページ数: ' + pageCount);
-            console.log('[DEBUG] ObjStmページ数: ' + pageCountObjStm);
-            console.log('[DEBUG] 総ページ数: ' + pageObjectsList.length);
-            console.log('[DEBUG] /Contents参照あり: ' + contentsFound);
-            console.log('[DEBUG] ストリーム取得成功: ' + streamFound);
-            console.log('[DEBUG] テキスト抽出成功: ' + textExtracted);
-            console.log('[DEBUG] 結果Map件数: ' + pageTexts.size);
 
             return pageTexts;
         }
