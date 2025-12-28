@@ -2304,10 +2304,14 @@
                         cidToUnicode[i] = String.fromCharCode(i);
                     }
                     // 特殊文字のマッピング（一部）
-                    cidToUnicode[0x80] = '€'; cidToUnicode[0x85] = '…';
-                    cidToUnicode[0x91] = '''; cidToUnicode[0x92] = ''';
-                    cidToUnicode[0x93] = '"'; cidToUnicode[0x94] = '"';
-                    cidToUnicode[0x96] = '–'; cidToUnicode[0x97] = '—';
+                    cidToUnicode[0x80] = '\u20AC'; // €
+                    cidToUnicode[0x85] = '\u2026'; // …
+                    cidToUnicode[0x91] = '\u2018'; // '
+                    cidToUnicode[0x92] = '\u2019'; // '
+                    cidToUnicode[0x93] = '\u201C'; // "
+                    cidToUnicode[0x94] = '\u201D'; // "
+                    cidToUnicode[0x96] = '\u2013'; // –
+                    cidToUnicode[0x97] = '\u2014'; // —
                     console.log('[buildToUnicodeMap] WinAnsiEncodingマッピング適用');
                 }
 
