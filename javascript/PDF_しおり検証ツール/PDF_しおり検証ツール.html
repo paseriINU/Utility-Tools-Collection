@@ -1564,15 +1564,24 @@
                                         const objBytes = decompressed.slice(objStart, objEnd);
                                         const objStr = latin1Decode(objBytes);
 
-                                        // /Dest [N 0 R ...] パターンを検索
+                                        // /Dest [N 0 R ...] パターンを検索（複数の形式に対応）
+                                        // 形式1: /Dest [N 0 R /XYZ ...]
+                                        // 形式2: /Dest[N 0 R ...]（スペースなし）
                                         const destMatch = objStr.match(/\/Dest\s*\[\s*(\d+)\s+0\s+R/);
                                         if (destMatch) {
                                             pageRef = destMatch[1] + ' 0 R';
                                         } else {
                                             // /A <</S /GoTo /D [N 0 R ...]>> パターンを検索
-                                            const actionMatch = objStr.match(/\/A\s*<<[^>]*\/D\s*\[\s*(\d+)\s+0\s+R/);
+                                            // [^>]* では >> に対応できないので、[\s\S]*? で最短マッチ
+                                            const actionMatch = objStr.match(/\/A\s*<<[\s\S]*?\/D\s*\[\s*(\d+)\s+0\s+R/);
                                             if (actionMatch) {
                                                 pageRef = actionMatch[1] + ' 0 R';
+                                            } else {
+                                                // /D [N 0 R ...] パターンを直接検索（/A 外にある場合）
+                                                const dMatch = objStr.match(/\/D\s*\[\s*(\d+)\s+0\s+R/);
+                                                if (dMatch) {
+                                                    pageRef = dMatch[1] + ' 0 R';
+                                                }
                                             }
                                         }
 
@@ -1580,6 +1589,8 @@
                                         if (objStmTitleCount < 5) {
                                             console.log('[ObjStm] バイト直接抽出 #' + (objStmTitleCount + 1) + ':');
                                             console.log('  タイトル: ' + title.substring(0, 50));
+                                            console.log('  オブジェクト範囲: ' + objStart + ' - ' + objEnd + ' (' + (objEnd - objStart) + 'bytes)');
+                                            console.log('  オブジェクト内容: ' + objStr.substring(0, 300));
                                             console.log('  ページ参照: ' + (pageRef || '(なし)'));
                                         }
                                         objStmTitleCount++;
