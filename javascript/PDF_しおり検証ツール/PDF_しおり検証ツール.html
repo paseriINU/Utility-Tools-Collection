@@ -840,8 +840,15 @@
             // テーブルの中身をクリア
             resultBody.innerHTML = '';
 
+            // ページ番号の昇順でソート
+            const sortedBookmarks = [...bookmarks].sort((a, b) => {
+                const pageA = parseInt(a.page) || 0;
+                const pageB = parseInt(b.page) || 0;
+                return pageA - pageB;
+            });
+
             // 各しおりに対してテーブル行を生成
-            bookmarks.forEach((bm, i) => {
+            sortedBookmarks.forEach((bm, i) => {
                 // 新しいtr要素を作成
                 const tr = document.createElement('tr');
                 const status = bm.page ? 'OK' : '確認要';
