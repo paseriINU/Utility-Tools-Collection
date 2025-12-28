@@ -1379,19 +1379,41 @@
 
             // PDF本体からアクションオブジェクト（ストリーム外）を抽出
             // 形式: N 0 obj <<...>> endobj （streamを含まないオブジェクト）
+            console.log('[DEBUG] ===== PDF本体からアクションオブジェクト抽出開始 =====');
             const actionObjPattern = /(\d+)\s+0\s+obj\s*<<([\s\S]*?)>>\s*endobj/g;
             let actionMatch;
+            let debugTotalObj = 0;
+            let debugGoToObj = 0;
+            let debugDMatchObj = 0;
+            let debugNoDMatch = [];
             while ((actionMatch = actionObjPattern.exec(content)) !== null) {
+                debugTotalObj++;
                 const actionObjNum = parseInt(actionMatch[1], 10);
                 const actionContent = actionMatch[2];
                 // /S /GoTo と /D [N 0 R ...] を含むアクションオブジェクトを検出
                 if (actionContent.includes('/S') && actionContent.includes('/GoTo')) {
+                    debugGoToObj++;
                     const dMatch = actionContent.match(/\/D\s*\[\s*(\d+)\s+0\s+R/);
                     if (dMatch) {
                         globalActionObjectMap.set(actionObjNum, dMatch[1] + ' 0 R');
+                        debugDMatchObj++;
+                    } else {
+                        if (debugNoDMatch.length < 5) {
+                            debugNoDMatch.push({ num: actionObjNum, content: actionContent.substring(0, 300) });
+                        }
                     }
                 }
             }
+            console.log('[DEBUG] PDF本体 総オブジェクト数: ' + debugTotalObj);
+            console.log('[DEBUG] PDF本体 /S /GoTo含む: ' + debugGoToObj);
+            console.log('[DEBUG] PDF本体 /D [N 0 R]マッチ: ' + debugDMatchObj);
+            if (debugNoDMatch.length > 0) {
+                console.log('[DEBUG] PDF本体 /Dマッチなしサンプル:');
+                debugNoDMatch.forEach(item => {
+                    console.log('  オブジェクト ' + item.num + ': ' + item.content);
+                });
+            }
+            console.log('[DEBUG] PDF本体 マップサイズ: ' + globalActionObjectMap.size);
 
             const objPattern = /(\d+)\s+0\s+obj\s*<<([\s\S]*?)>>\s*stream\r?\n/g;
             let match;
@@ -1501,6 +1523,9 @@
 
                             // 各オブジェクトを解析してアクションオブジェクト（/S /GoTo）を探す
                             let localActionCount = 0;
+                            let localGoToCount = 0;
+                            let localNoDMatch = [];
+                            console.log('[DEBUG] ObjStm ' + objNum + ' オブジェクト数: ' + objOffsets.length);
                             for (let idx = 0; idx < objOffsets.length; idx++) {
                                 const obj = objOffsets[idx];
                                 const nextOffset = (idx + 1 < objOffsets.length) ? objOffsets[idx + 1].offset : dataPart.length;
@@ -1508,15 +1533,25 @@
 
                                 // /S /GoTo と /D [N 0 R ...] を含むアクションオブジェクトを検出
                                 if (objData.includes('/S') && objData.includes('/GoTo')) {
+                                    localGoToCount++;
                                     const dMatch = objData.match(/\/D\s*\[\s*(\d+)\s+0\s+R/);
                                     if (dMatch) {
                                         globalActionObjectMap.set(obj.number, dMatch[1] + ' 0 R');
                                         localActionCount++;
+                                    } else {
+                                        if (localNoDMatch.length < 3) {
+                                            localNoDMatch.push({ num: obj.number, data: objData.substring(0, 300) });
+                                        }
                                     }
                                 }
                             }
+                            console.log('[DEBUG] ObjStm ' + objNum + ' /S /GoTo含む: ' + localGoToCount + '件, /D[]マッチ: ' + localActionCount + '件');
+                            if (localNoDMatch.length > 0) {
+                                console.log('[DEBUG] ObjStm ' + objNum + ' /Dマッチなしサンプル:');
+                                localNoDMatch.forEach((s, idx) => console.log('  ' + idx + ': obj#' + s.num + ' = ' + s.data));
+                            }
                         } catch (e) {
-                            // アクションオブジェクトマップ作成エラー
+                            console.log('[DEBUG] ObjStm ' + objNum + ' アクションマップエラー: ' + e.message);
                         }
 
                         // バイト配列から直接 /Title( を検索してタイトルを抽出
@@ -1619,29 +1654,37 @@
                                         const destMatch = objStr.match(/\/Dest\s*\[\s*(\d+)\s+0\s+R/);
                                         if (destMatch) {
                                             pageRef = destMatch[1] + ' 0 R';
+                                            console.log('[DEBUG] /Dest直接参照発見: ' + pageRef + ' ← タイトル: ' + title.substring(0, 30));
                                         } else {
                                             // /A <</S /GoTo /D [N 0 R ...]>> パターンを検索
                                             // [^>]* では >> に対応できないので、[\s\S]*? で最短マッチ
                                             const actionMatch = objStr.match(/\/A\s*<<[\s\S]*?\/D\s*\[\s*(\d+)\s+0\s+R/);
                                             if (actionMatch) {
                                                 pageRef = actionMatch[1] + ' 0 R';
+                                                console.log('[DEBUG] /A直接参照発見: ' + pageRef + ' ← タイトル: ' + title.substring(0, 30));
                                             } else {
                                                 // /A N 0 R パターン（間接参照）を検索
                                                 const actionRefMatch = objStr.match(/\/A\s+(\d+)\s+0\s+R/);
                                                 if (actionRefMatch) {
                                                     const actionObjNum = parseInt(actionRefMatch[1], 10);
+                                                    console.log('[DEBUG] /A間接参照発見: ' + actionObjNum + ' 0 R ← タイトル: ' + title.substring(0, 30));
                                                     // グローバルアクションオブジェクトマップからページ参照を取得
                                                     if (globalActionObjectMap.has(actionObjNum)) {
                                                         pageRef = globalActionObjectMap.get(actionObjNum);
+                                                        console.log('[DEBUG] マップから解決: ' + pageRef);
                                                     } else {
                                                         // マップにまだ存在しない場合、アクションオブジェクト番号を記録して後で解決
                                                         pageRef = '__UNRESOLVED__' + actionObjNum;
+                                                        console.log('[DEBUG] マップに未登録、後で解決: __UNRESOLVED__' + actionObjNum);
                                                     }
                                                 } else {
                                                     // /D [N 0 R ...] パターンを直接検索（/A 外にある場合）
                                                     const dMatch = objStr.match(/\/D\s*\[\s*(\d+)\s+0\s+R/);
                                                     if (dMatch) {
                                                         pageRef = dMatch[1] + ' 0 R';
+                                                        console.log('[DEBUG] /D直接参照発見: ' + pageRef + ' ← タイトル: ' + title.substring(0, 30));
+                                                    } else {
+                                                        console.log('[DEBUG] ページ参照パターン不一致 タイトル: ' + title.substring(0, 30) + ' objStr: ' + objStr.substring(0, 200));
                                                     }
                                                 }
                                             }
@@ -1706,18 +1749,30 @@
             }
 
             // 未解決の間接参照を解決
+            console.log('[DEBUG] ===== 未解決参照の解決開始 =====');
+            console.log('[DEBUG] globalActionObjectMapサイズ: ' + globalActionObjectMap.size);
+            console.log('[DEBUG] decodedTitles数: ' + decodedTitles.length);
+            let unresolvedCount = 0;
+            let resolvedCount = 0;
+            let failedCount = 0;
             for (let i = 0; i < decodedTitles.length; i++) {
                 const item = decodedTitles[i];
                 if (item.pageRef && item.pageRef.startsWith('__UNRESOLVED__')) {
+                    unresolvedCount++;
                     const actionObjNum = parseInt(item.pageRef.substring(14), 10);
                     if (globalActionObjectMap.has(actionObjNum)) {
                         decodedTitles[i].pageRef = globalActionObjectMap.get(actionObjNum);
+                        resolvedCount++;
+                        console.log('[DEBUG] 解決成功: アクション' + actionObjNum + ' → ' + decodedTitles[i].pageRef);
                     } else {
                         // 解決できなかった場合は空文字に
                         decodedTitles[i].pageRef = '';
+                        failedCount++;
+                        console.log('[DEBUG] 解決失敗: アクション' + actionObjNum + ' はマップに存在しない');
                     }
                 }
             }
+            console.log('[DEBUG] 未解決参照: ' + unresolvedCount + '件, 解決成功: ' + resolvedCount + '件, 解決失敗: ' + failedCount + '件');
 
             return { rawContents, decodedTitles };
         }
