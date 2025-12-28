@@ -1042,26 +1042,53 @@
             // ページテキストを抽出して、しおりタイトルがリンク先ページに存在するか判定
             try {
                 const pageTexts = await extractPageTexts(content, bytes, objStmObjectsMap);
+                console.log('[タイトル検証] ===== しおりタイトル検証開始 =====');
+                console.log('[タイトル検証] しおり数: ' + bookmarks.length);
+                console.log('[タイトル検証] ページテキストMap件数: ' + pageTexts.size);
 
                 // 各しおりについて判定
+                let verifyDebugCount = 0;
                 for (const bm of bookmarks) {
                     if (bm.page && pageTexts.has(bm.page)) {
                         const pageText = pageTexts.get(bm.page);
                         const normalizedTitle = bm.title.replace(/\s+/g, '').toLowerCase();
                         const normalizedPageText = pageText.replace(/\s+/g, '').toLowerCase();
 
-                        if (normalizedPageText.includes(normalizedTitle) ||
-                            normalizedTitle.length > 3 && normalizedPageText.includes(normalizedTitle.substring(0, Math.min(10, normalizedTitle.length)))) {
+                        const fullMatch = normalizedPageText.includes(normalizedTitle);
+                        const partialMatch = normalizedTitle.length > 3 && normalizedPageText.includes(normalizedTitle.substring(0, Math.min(10, normalizedTitle.length)));
+
+                        if (fullMatch || partialMatch) {
                             bm.verified = true;
                         } else {
                             bm.verified = false;
                         }
+
+                        // 最初の5件のデバッグ出力
+                        if (verifyDebugCount < 5) {
+                            console.log('[タイトル検証] しおり: "' + bm.title.substring(0, 30) + '..." → ページ ' + bm.page);
+                            console.log('[タイトル検証]   正規化タイトル: "' + normalizedTitle.substring(0, 50) + '"');
+                            console.log('[タイトル検証]   ページテキスト先頭: "' + normalizedPageText.substring(0, 100) + '..."');
+                            console.log('[タイトル検証]   完全一致: ' + fullMatch + ', 部分一致: ' + partialMatch + ' → 結果: ' + (bm.verified ? 'OK' : 'NG'));
+                            verifyDebugCount++;
+                        }
                     } else {
                         // ページテキストが取得できなかった場合は不明
                         bm.verified = null;
+                        if (verifyDebugCount < 5) {
+                            console.log('[タイトル検証] しおり: "' + bm.title.substring(0, 30) + '..." → ページ ' + bm.page + ' (テキストなし → 不明)');
+                            verifyDebugCount++;
+                        }
                     }
                 }
+
+                // 検証結果サマリー
+                const okCount = bookmarks.filter(b => b.verified === true).length;
+                const ngCount = bookmarks.filter(b => b.verified === false).length;
+                const unknownCount = bookmarks.filter(b => b.verified === null).length;
+                console.log('[タイトル検証] ===== 検証結果サマリー =====');
+                console.log('[タイトル検証] OK: ' + okCount + ', NG: ' + ngCount + ', 不明: ' + unknownCount);
             } catch (e) {
+                console.log('[タイトル検証] エラー: ' + e.message);
                 // エラー時は全て不明とする
                 for (const bm of bookmarks) {
                     bm.verified = null;
@@ -2238,6 +2265,7 @@
         */
         async function extractPageTexts(content, bytes, objStmObjectsMap = new Map()) {
             const pageTexts = new Map();
+            console.log('[extractPageTexts] ===== ページテキスト抽出開始 =====');
 
             // PDF本体とObjStmの両方からページオブジェクトを収集
             const pageObjectsList = [];
@@ -2257,19 +2285,28 @@
             }
 
             // 2. ObjStmからページオブジェクトを検索
+            let objStmPageCount = 0;
             for (const [objNum, objData] of objStmObjectsMap.entries()) {
                 // /Type と /Page を含むオブジェクトを検出（スペースの有無に関わらず）
                 const hasTypePage = objData.match(/\/Type\s*\/Page(?![s\w])/);
                 if (hasTypePage) {
                     pageObjectsList.push({ objNum: String(objNum), objContent: objData, source: 'ObjStm' });
+                    objStmPageCount++;
                 }
             }
+
+            console.log('[extractPageTexts] PDF本体ページ数: ' + (pageObjectsList.length - objStmPageCount));
+            console.log('[extractPageTexts] ObjStmページ数: ' + objStmPageCount);
+            console.log('[extractPageTexts] 総ページ数: ' + pageObjectsList.length);
 
             // ページ番号順にソート（オブジェクト番号ベースで推測）
             pageObjectsList.sort((a, b) => parseInt(a.objNum) - parseInt(b.objNum));
 
             // 各ページオブジェクトを処理
             let pageNum = 1;
+            let contentsFoundCount = 0;
+            let streamFoundCount = 0;
+            let textExtractedCount = 0;
             for (const pageObj of pageObjectsList) {
                 // /Contents を探す（単一参照または配列参照）
                 let contentsObjNums = [];
@@ -2290,6 +2327,7 @@
                     pageNum++;
                     continue;
                 }
+                contentsFoundCount++;
 
                 // 各コンテンツストリームからテキストを抽出
                 let pageText = '';
@@ -2301,6 +2339,7 @@
                     const streamMatch = streamPattern.exec(content);
 
                     if (streamMatch) {
+                        streamFoundCount++;
                         const dictContent = streamMatch[1];
                         const streamData = streamMatch[2];
 
@@ -2334,9 +2373,26 @@
 
                 if (pageText.trim()) {
                     pageTexts.set(pageNum, pageText.trim());
+                    textExtractedCount++;
                 }
 
                 pageNum++;
+            }
+
+            console.log('[extractPageTexts] /Contents参照あり: ' + contentsFoundCount);
+            console.log('[extractPageTexts] ストリーム取得成功: ' + streamFoundCount);
+            console.log('[extractPageTexts] テキスト抽出成功: ' + textExtractedCount);
+            console.log('[extractPageTexts] 結果Map件数: ' + pageTexts.size);
+
+            // サンプル出力（最初の3ページ）
+            if (pageTexts.size > 0) {
+                console.log('[extractPageTexts] ===== 抽出テキストサンプル =====');
+                let sampleCount = 0;
+                for (const [pn, text] of pageTexts.entries()) {
+                    if (sampleCount >= 3) break;
+                    console.log('[extractPageTexts] ページ ' + pn + ': ' + text.substring(0, 100) + '...');
+                    sampleCount++;
+                }
             }
 
             return pageTexts;
