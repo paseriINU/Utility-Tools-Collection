@@ -2116,6 +2116,8 @@
             const cidToUnicode = {};
             let allCMapContent = '';
 
+            console.log('[buildToUnicodeMap] ===== ToUnicodeマップ構築開始 =====');
+
             // 1. ToUnicodeストリーム参照を探し、圧縮されている場合は解凍
             const toUnicodeRefPattern = /\/ToUnicode\s+(\d+)\s+\d+\s+R/g;
             let toUnicodeRefMatch;
@@ -2125,12 +2127,19 @@
                 const objNum = toUnicodeRefMatch[1];
                 if (processedRefs.has(objNum)) continue;
                 processedRefs.add(objNum);
+            }
+            console.log('[buildToUnicodeMap] /ToUnicode参照数: ' + processedRefs.size);
 
+            // 各ToUnicodeオブジェクトを処理
+            let streamFoundCount = 0;
+            let decompressedCount = 0;
+            for (const objNum of processedRefs) {
                 // このオブジェクトのストリームを取得
                 const streamPattern = new RegExp(objNum + '\\s+0\\s+obj\\s*<<([\\s\\S]*?)>>\\s*stream\\r?\\n([\\s\\S]*?)\\r?\\nendstream', 'g');
                 const streamMatch = streamPattern.exec(content);
 
                 if (streamMatch) {
+                    streamFoundCount++;
                     const dictContent = streamMatch[1];
                     const streamData = streamMatch[2];
 
@@ -2147,16 +2156,19 @@
                                 try {
                                     const decompressed = pako.inflate(streamBytes);
                                     cmapContent = latin1Decode(decompressed);
+                                    decompressedCount++;
                                 } catch (e) {
                                     try {
                                         const decompressed = pako.inflateRaw(streamBytes.slice(2));
                                         cmapContent = latin1Decode(decompressed);
+                                        decompressedCount++;
                                     } catch (e2) { /* 解凍失敗 */ }
                                 }
                             }
                         } catch (e) { /* エラー */ }
                     } else {
                         cmapContent = streamData;
+                        decompressedCount++;
                     }
 
                     if (cmapContent) {
@@ -2164,9 +2176,16 @@
                     }
                 }
             }
+            console.log('[buildToUnicodeMap] ストリーム取得成功: ' + streamFoundCount);
+            console.log('[buildToUnicodeMap] 解凍成功: ' + decompressedCount);
 
             // 2. 非圧縮のCMapデータも含めて検索（PDF本体から直接）
-            allCMapContent += content;
+            // 注: contentは非常に大きいため、解凍済みCMapがあればそれを優先
+            if (allCMapContent.length === 0) {
+                allCMapContent = content;
+            }
+
+            console.log('[buildToUnicodeMap] CMap検索対象サイズ: ' + allCMapContent.length);
 
             // beginbfchar/endbfchar ブロックを解析
             // 形式: <CID> <Unicode>
@@ -2239,6 +2258,7 @@
                 }
             }
 
+            console.log('[buildToUnicodeMap] 構築完了、エントリ数: ' + Object.keys(cidToUnicode).length);
             return cidToUnicode;
         }
 
