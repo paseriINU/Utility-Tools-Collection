@@ -274,10 +274,17 @@
             font-weight: bold;                    /* 太字 */
         }
 
-        /* 確認要判定（黄色系） */
+        /* NG判定（赤系） */
         .status-warning {
-            background-color: #ffeb9c !important;
-            color: #9c5700;                       /* 茶色っぽい文字 */
+            background-color: #ffc7ce !important;
+            color: #9c0006;                       /* 濃い赤の文字 */
+            font-weight: bold;
+        }
+
+        /* 不明判定（グレー系） */
+        .status-unknown {
+            background-color: #e0e0e0 !important;
+            color: #666;                          /* グレーの文字 */
             font-weight: bold;
         }
 
@@ -758,8 +765,15 @@
             bookmarks.forEach((bm, i) => {
                 // ダブルクォートをエスケープ（""に変換）
                 const title = bm.title.replace(/"/g, '""');
-                // 三項演算子: 条件 ? 真の場合 : 偽の場合
-                const status = bm.page ? 'OK' : '確認要';
+                // 判定結果
+                let status;
+                if (bm.verified === true) {
+                    status = 'OK';
+                } else if (bm.verified === false) {
+                    status = 'NG';
+                } else {
+                    status = '不明';
+                }
                 // CSVの1行を追加
                 csv += `${i + 1},"${title}",${bm.level},${bm.page || ''},${status}\n`;
             });
@@ -826,15 +840,16 @@
             }
 
             // filter: 条件に合う要素だけを抽出
-            // b => b.page は b.page が真（値がある）なら true
-            const okCount = bookmarks.filter(b => b.page).length;
-            const warningCount = bookmarks.length - okCount;
+            const okCount = bookmarks.filter(b => b.verified === true).length;
+            const ngCount = bookmarks.filter(b => b.verified === false).length;
+            const unknownCount = bookmarks.filter(b => b.verified === null).length;
 
             // サマリーを更新（innerHTML: HTML文字列を設定）
             summary.innerHTML = `
                 <span><strong>総しおり数:</strong> ${bookmarks.length}</span>
                 <span style="color: #006100;"><strong>OK:</strong> ${okCount}</span>
-                <span style="color: #9c5700;"><strong>確認要:</strong> ${warningCount}</span>
+                <span style="color: #c00;"><strong>NG:</strong> ${ngCount}</span>
+                <span style="color: #666;"><strong>不明:</strong> ${unknownCount}</span>
             `;
 
             // テーブルの中身をクリア
@@ -851,8 +866,18 @@
             sortedBookmarks.forEach((bm, i) => {
                 // 新しいtr要素を作成
                 const tr = document.createElement('tr');
-                const status = bm.page ? 'OK' : '確認要';
-                const statusClass = bm.page ? 'status-ok' : 'status-warning';
+                // 判定: verified が true ならOK、false ならNG、null なら不明
+                let status, statusClass;
+                if (bm.verified === true) {
+                    status = 'OK';
+                    statusClass = 'status-ok';
+                } else if (bm.verified === false) {
+                    status = 'NG';
+                    statusClass = 'status-warning';
+                } else {
+                    status = '不明';
+                    statusClass = 'status-unknown';
+                }
                 // repeat(): 文字列を指定回数繰り返す（インデント用）
                 const indent = '　'.repeat(bm.level - 1);
 
@@ -1029,6 +1054,40 @@
             }
 
             console.log('[parsePDFBookmarks] 最終しおり数:', bookmarks.length, '件');
+
+            // ページテキストを抽出して、しおりタイトルがリンク先ページに存在するか判定
+            console.log('[parsePDFBookmarks] ページテキスト抽出開始');
+            try {
+                const pageTexts = await extractPageTexts(content, bytes);
+                console.log('[parsePDFBookmarks] ページテキスト抽出完了:', pageTexts.size, 'ページ');
+
+                // 各しおりについて判定
+                for (const bm of bookmarks) {
+                    if (bm.page && pageTexts.has(bm.page)) {
+                        const pageText = pageTexts.get(bm.page);
+                        // タイトルの一部がページテキストに含まれているか確認
+                        // タイトルを正規化（空白除去、小文字化）して比較
+                        const normalizedTitle = bm.title.replace(/\s+/g, '').toLowerCase();
+                        const normalizedPageText = pageText.replace(/\s+/g, '').toLowerCase();
+
+                        if (normalizedPageText.includes(normalizedTitle) ||
+                            normalizedTitle.length > 3 && normalizedPageText.includes(normalizedTitle.substring(0, Math.min(10, normalizedTitle.length)))) {
+                            bm.verified = true;
+                        } else {
+                            bm.verified = false;
+                        }
+                    } else {
+                        // ページテキストが取得できなかった場合は不明
+                        bm.verified = null;
+                    }
+                }
+            } catch (e) {
+                console.log('[parsePDFBookmarks] ページテキスト抽出エラー:', e.message);
+                // エラー時は全て不明とする
+                for (const bm of bookmarks) {
+                    bm.verified = null;
+                }
+            }
 
             if (bookmarks.length === 0) {
                 // しおりの構造は見つかったが抽出できなかった場合
@@ -2282,6 +2341,149 @@
             }
 
             return pageObjects;
+        }
+
+        /*
+        ======================================================================
+          ページテキスト抽出関数
+
+          PDFの各ページからテキストを抽出してマッピングを作成
+          ページ番号 → テキスト文字列 のマップを返す
+        ======================================================================
+        */
+        async function extractPageTexts(content, bytes) {
+            const pageTexts = new Map();
+
+            // ページオブジェクトを見つける
+            const pageObjPattern = /(\d+)\s+0\s+obj\s*<<([\s\S]*?)>>/g;
+            let pageMatch;
+            let pageNum = 1;
+
+            while ((pageMatch = pageObjPattern.exec(content)) !== null) {
+                const objNum = pageMatch[1];
+                const objContent = pageMatch[2];
+
+                // /Type /Page を確認（/Pages は除外）
+                if (!objContent.match(/\/Type\s*\/Page[^s]/)) continue;
+
+                // /Contents を探す
+                const contentsMatch = objContent.match(/\/Contents\s+(\d+)\s+0\s+R/);
+                if (!contentsMatch) {
+                    pageNum++;
+                    continue;
+                }
+
+                const contentsObjNum = contentsMatch[1];
+
+                // コンテンツストリームを取得
+                const streamPattern = new RegExp(contentsObjNum + '\\s+0\\s+obj\\s*<<([\\s\\S]*?)>>\\s*stream\\r?\\n([\\s\\S]*?)\\r?\\nendstream', 'g');
+                const streamMatch = streamPattern.exec(content);
+
+                if (streamMatch) {
+                    const dictContent = streamMatch[1];
+                    const streamData = streamMatch[2];
+
+                    let textContent = '';
+
+                    // FlateDecode の場合は解凍
+                    if (dictContent.includes('/FlateDecode')) {
+                        try {
+                            // バイト配列に変換
+                            const streamBytes = new Uint8Array(streamData.length);
+                            for (let i = 0; i < streamData.length; i++) {
+                                streamBytes[i] = streamData.charCodeAt(i) & 0xFF;
+                            }
+
+                            // pako で解凍
+                            if (typeof pako !== 'undefined') {
+                                try {
+                                    const decompressed = pako.inflate(streamBytes);
+                                    textContent = latin1Decode(decompressed);
+                                } catch (e) {
+                                    // 解凍失敗
+                                }
+                            }
+                        } catch (e) {
+                            // エラー時は空
+                        }
+                    } else {
+                        textContent = streamData;
+                    }
+
+                    // テキスト演算子からテキストを抽出
+                    if (textContent) {
+                        const extractedText = extractTextFromStream(textContent);
+                        if (extractedText) {
+                            pageTexts.set(pageNum, extractedText);
+                        }
+                    }
+                }
+
+                pageNum++;
+            }
+
+            return pageTexts;
+        }
+
+        /*
+        ======================================================================
+          ストリームからテキスト抽出
+
+          PDFコンテンツストリームからテキストを抽出
+          BT...ET 内の Tj, TJ 演算子を解析
+        ======================================================================
+        */
+        function extractTextFromStream(streamContent) {
+            let text = '';
+
+            // BT (Begin Text) と ET (End Text) の間を抽出
+            const btEtPattern = /BT([\s\S]*?)ET/g;
+            let btMatch;
+
+            while ((btMatch = btEtPattern.exec(streamContent)) !== null) {
+                const textBlock = btMatch[1];
+
+                // Tj 演算子: (text) Tj
+                const tjPattern = /\(([^)]*)\)\s*Tj/g;
+                let tjMatch;
+                while ((tjMatch = tjPattern.exec(textBlock)) !== null) {
+                    text += decodePDFStringSimple(tjMatch[1]) + ' ';
+                }
+
+                // TJ 演算子: [(text) num (text) ...] TJ
+                const tjArrayPattern = /\[([\s\S]*?)\]\s*TJ/g;
+                let tjArrayMatch;
+                while ((tjArrayMatch = tjArrayPattern.exec(textBlock)) !== null) {
+                    const arrayContent = tjArrayMatch[1];
+                    // 配列内の文字列を抽出
+                    const stringPattern = /\(([^)]*)\)/g;
+                    let stringMatch;
+                    while ((stringMatch = stringPattern.exec(arrayContent)) !== null) {
+                        text += decodePDFStringSimple(stringMatch[1]);
+                    }
+                    text += ' ';
+                }
+            }
+
+            return text.trim();
+        }
+
+        /*
+        ======================================================================
+          簡易PDF文字列デコード
+
+          PDFエスケープシーケンスをデコード（簡易版）
+        ======================================================================
+        */
+        function decodePDFStringSimple(str) {
+            return str
+                .replace(/\\n/g, '\n')
+                .replace(/\\r/g, '\r')
+                .replace(/\\t/g, '\t')
+                .replace(/\\\(/g, '(')
+                .replace(/\\\)/g, ')')
+                .replace(/\\\\/g, '\\')
+                .replace(/\\(\d{1,3})/g, (match, oct) => String.fromCharCode(parseInt(oct, 8)));
         }
 
         /*
