@@ -1373,6 +1373,10 @@
             let objStmSuccess = 0;
             let objStmTitleCount = 0;  // バイト直接抽出したタイトル数
 
+            // アクションオブジェクトマップ（全ObjStmで共有）
+            // オブジェクト番号 → ページ参照
+            const globalActionObjectMap = new Map();
+
             const objPattern = /(\d+)\s+0\s+obj\s*<<([\s\S]*?)>>\s*stream\r?\n/g;
             let match;
 
@@ -1470,10 +1474,8 @@
                     }
 
                     if (decompressed && decompressed.length > 0) {
-                        // アクションオブジェクトマップを作成（/A N 0 R 間接参照解決用）
+                        // アクションオブジェクトをグローバルマップに追加（/A N 0 R 間接参照解決用）
                         // ObjStmのインデックスを解析して各オブジェクトのページ参照を取得
-                        const actionObjectMap = new Map(); // オブジェクト番号 → ページ参照
-
                         try {
                             // ObjStm全体をlatin1Decodeしてインデックスを解析
                             const fullObjStmStr = latin1Decode(decompressed);
@@ -1496,6 +1498,7 @@
                             const dataPart = fullObjStmStr.substring(firstOffset);
 
                             // 各オブジェクトを解析してアクションオブジェクト（/S /GoTo）を探す
+                            let localActionCount = 0;
                             for (let idx = 0; idx < objOffsets.length; idx++) {
                                 const obj = objOffsets[idx];
                                 const nextOffset = (idx + 1 < objOffsets.length) ? objOffsets[idx + 1].offset : dataPart.length;
@@ -1505,16 +1508,17 @@
                                 if (objData.includes('/S') && objData.includes('/GoTo')) {
                                     const dMatch = objData.match(/\/D\s*\[\s*(\d+)\s+0\s+R/);
                                     if (dMatch) {
-                                        actionObjectMap.set(obj.number, dMatch[1] + ' 0 R');
-                                        if (actionObjectMap.size <= 3) {
+                                        globalActionObjectMap.set(obj.number, dMatch[1] + ' 0 R');
+                                        localActionCount++;
+                                        if (globalActionObjectMap.size <= 5) {
                                             console.log('[ObjStm] アクションオブジェクト ' + obj.number + ' → ページ参照: ' + dMatch[1] + ' 0 R');
                                         }
                                     }
                                 }
                             }
 
-                            if (actionObjectMap.size > 0) {
-                                console.log('[ObjStm] アクションオブジェクトマップ作成完了: ' + actionObjectMap.size + '件');
+                            if (localActionCount > 0) {
+                                console.log('[ObjStm] ObjStm ' + objNum + ' からアクションオブジェクト ' + localActionCount + '件追加 (累計: ' + globalActionObjectMap.size + '件)');
                             }
                         } catch (e) {
                             console.log('[ObjStm] アクションオブジェクトマップ作成エラー: ' + e.message);
@@ -1631,11 +1635,17 @@
                                                 const actionRefMatch = objStr.match(/\/A\s+(\d+)\s+0\s+R/);
                                                 if (actionRefMatch) {
                                                     const actionObjNum = parseInt(actionRefMatch[1], 10);
-                                                    // アクションオブジェクトマップからページ参照を取得
-                                                    if (actionObjectMap.has(actionObjNum)) {
-                                                        pageRef = actionObjectMap.get(actionObjNum);
-                                                        if (objStmTitleCount < 3) {
+                                                    // グローバルアクションオブジェクトマップからページ参照を取得
+                                                    if (globalActionObjectMap.has(actionObjNum)) {
+                                                        pageRef = globalActionObjectMap.get(actionObjNum);
+                                                        if (objStmTitleCount < 5) {
                                                             console.log('[ObjStm] 間接参照解決: /A ' + actionObjNum + ' 0 R → ' + pageRef);
+                                                        }
+                                                    } else {
+                                                        // マップにまだ存在しない場合、アクションオブジェクト番号を記録して後で解決
+                                                        pageRef = '__UNRESOLVED__' + actionObjNum;
+                                                        if (objStmTitleCount < 5) {
+                                                            console.log('[ObjStm] 間接参照を後で解決: /A ' + actionObjNum + ' 0 R');
                                                         }
                                                     }
                                                 } else {
@@ -1753,6 +1763,30 @@
             console.log('[ObjStm] /Title を含むObjStm数: ' + objStmSuccess);
             console.log('[ObjStm] バイト直接抽出タイトル数: ' + objStmTitleCount);
             console.log('[ObjStm] latin1Decode方式タイトル数: ' + rawContents.length);
+            console.log('[ObjStm] アクションオブジェクトマップ総数: ' + globalActionObjectMap.size);
+
+            // 未解決の間接参照を解決
+            let resolvedCount = 0;
+            for (let i = 0; i < decodedTitles.length; i++) {
+                const item = decodedTitles[i];
+                if (item.pageRef && item.pageRef.startsWith('__UNRESOLVED__')) {
+                    const actionObjNum = parseInt(item.pageRef.substring(14), 10);
+                    if (globalActionObjectMap.has(actionObjNum)) {
+                        decodedTitles[i].pageRef = globalActionObjectMap.get(actionObjNum);
+                        resolvedCount++;
+                        if (resolvedCount <= 5) {
+                            console.log('[ObjStm] 遅延解決: ' + item.title.substring(0, 30) + ' → /A ' + actionObjNum + ' 0 R → ' + decodedTitles[i].pageRef);
+                        }
+                    } else {
+                        // 解決できなかった場合は空文字に
+                        decodedTitles[i].pageRef = '';
+                        console.log('[ObjStm] 解決失敗: ' + item.title.substring(0, 30) + ' → /A ' + actionObjNum + ' 0 R (マップに存在しない)');
+                    }
+                }
+            }
+            if (resolvedCount > 0) {
+                console.log('[ObjStm] 遅延解決した間接参照数: ' + resolvedCount);
+            }
 
             return { rawContents, decodedTitles };
         }
