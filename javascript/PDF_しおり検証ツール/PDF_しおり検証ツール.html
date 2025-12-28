@@ -1415,6 +1415,9 @@
             }
             console.log('[DEBUG] PDF本体 マップサイズ: ' + globalActionObjectMap.size);
 
+            // 未解決アクションオブジェクト番号を収集（後で検索用）
+            const unresolvedActionObjNums = new Set();
+
             const objPattern = /(\d+)\s+0\s+obj\s*<<([\s\S]*?)>>\s*stream\r?\n/g;
             let match;
 
@@ -1675,6 +1678,7 @@
                                                     } else {
                                                         // マップにまだ存在しない場合、アクションオブジェクト番号を記録して後で解決
                                                         pageRef = '__UNRESOLVED__' + actionObjNum;
+                                                        unresolvedActionObjNums.add(actionObjNum);
                                                         console.log('[DEBUG] マップに未登録、後で解決: __UNRESOLVED__' + actionObjNum);
                                                     }
                                                 } else {
@@ -1773,6 +1777,25 @@
                 }
             }
             console.log('[DEBUG] 未解決参照: ' + unresolvedCount + '件, 解決成功: ' + resolvedCount + '件, 解決失敗: ' + failedCount + '件');
+
+            // 未解決のアクションオブジェクト番号をPDF本体から直接検索して内容を確認
+            if (unresolvedActionObjNums.size > 0) {
+                console.log('[DEBUG] ===== 未解決アクションオブジェクトの直接検索 =====');
+                let searchCount = 0;
+                for (const objNum of unresolvedActionObjNums) {
+                    if (searchCount >= 5) break; // 最大5件まで
+                    // オブジェクト定義を検索: "N 0 obj"
+                    const objDefPattern = new RegExp(objNum + '\\s+0\\s+obj[\\s\\S]{0,500}', 'g');
+                    const objDefMatch = content.match(objDefPattern);
+                    if (objDefMatch) {
+                        console.log('[DEBUG] オブジェクト ' + objNum + ' の定義発見:');
+                        console.log('  ' + objDefMatch[0].substring(0, 400));
+                    } else {
+                        console.log('[DEBUG] オブジェクト ' + objNum + ' の定義がPDF本体に見つからない');
+                    }
+                    searchCount++;
+                }
+            }
 
             return { rawContents, decodedTitles };
         }
