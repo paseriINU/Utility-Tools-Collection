@@ -1417,6 +1417,8 @@
 
             // 未解決アクションオブジェクト番号を収集（後で検索用）
             const unresolvedActionObjNums = new Set();
+            // ObjStm内の全オブジェクトを保存（後で検索用）
+            const objStmObjectsMap = new Map();
 
             const objPattern = /(\d+)\s+0\s+obj\s*<<([\s\S]*?)>>\s*stream\r?\n/g;
             let match;
@@ -1528,11 +1530,18 @@
                             let localActionCount = 0;
                             let localGoToCount = 0;
                             let localNoDMatch = [];
-                            console.log('[DEBUG] ObjStm ' + objNum + ' オブジェクト数: ' + objOffsets.length);
+                            // ObjStm内のオブジェクト番号の範囲を確認
+                            const objNumbers = objOffsets.map(o => o.number).sort((a, b) => a - b);
+                            const minObjNum = objNumbers.length > 0 ? objNumbers[0] : 0;
+                            const maxObjNum = objNumbers.length > 0 ? objNumbers[objNumbers.length - 1] : 0;
+                            console.log('[DEBUG] ObjStm ' + objNum + ' オブジェクト数: ' + objOffsets.length + ', 番号範囲: ' + minObjNum + '〜' + maxObjNum);
                             for (let idx = 0; idx < objOffsets.length; idx++) {
                                 const obj = objOffsets[idx];
                                 const nextOffset = (idx + 1 < objOffsets.length) ? objOffsets[idx + 1].offset : dataPart.length;
                                 const objData = dataPart.substring(obj.offset, nextOffset);
+
+                                // ObjStm内の全オブジェクトをマップに保存（後で検索用）
+                                objStmObjectsMap.set(obj.number, objData.substring(0, 500));
 
                                 // /S /GoTo と /D [N 0 R ...] を含むアクションオブジェクトを検出
                                 if (objData.includes('/S') && objData.includes('/GoTo')) {
@@ -1768,20 +1777,27 @@
             }
             console.log('[DEBUG] 未解決参照: ' + unresolvedCount + '件, 解決成功: ' + resolvedCount + '件, 解決失敗: ' + failedCount + '件');
 
-            // 未解決のアクションオブジェクト番号をPDF本体から直接検索して内容を確認
+            // 未解決のアクションオブジェクト番号をPDF本体とObjStmから検索して内容を確認
             if (unresolvedActionObjNums.size > 0) {
                 console.log('[DEBUG] ===== 未解決アクションオブジェクトの直接検索 =====');
+                console.log('[DEBUG] ObjStm内オブジェクト総数: ' + objStmObjectsMap.size);
                 let searchCount = 0;
                 for (const objNum of unresolvedActionObjNums) {
                     if (searchCount >= 5) break; // 最大5件まで
-                    // オブジェクト定義を検索: "N 0 obj"
-                    const objDefPattern = new RegExp(objNum + '\\s+0\\s+obj[\\s\\S]{0,500}', 'g');
-                    const objDefMatch = content.match(objDefPattern);
-                    if (objDefMatch) {
-                        console.log('[DEBUG] オブジェクト ' + objNum + ' の定義発見:');
-                        console.log('  ' + objDefMatch[0].substring(0, 400));
+                    // まずObjStmマップから検索
+                    if (objStmObjectsMap.has(objNum)) {
+                        console.log('[DEBUG] オブジェクト ' + objNum + ' がObjStm内に発見:');
+                        console.log('  ' + objStmObjectsMap.get(objNum));
                     } else {
-                        console.log('[DEBUG] オブジェクト ' + objNum + ' の定義がPDF本体に見つからない');
+                        // PDF本体から検索
+                        const objDefPattern = new RegExp(objNum + '\\s+0\\s+obj[\\s\\S]{0,500}', 'g');
+                        const objDefMatch = content.match(objDefPattern);
+                        if (objDefMatch) {
+                            console.log('[DEBUG] オブジェクト ' + objNum + ' がPDF本体に発見:');
+                            console.log('  ' + objDefMatch[0].substring(0, 400));
+                        } else {
+                            console.log('[DEBUG] オブジェクト ' + objNum + ' がPDF本体にもObjStmにも見つからない');
+                        }
                     }
                     searchCount++;
                 }
