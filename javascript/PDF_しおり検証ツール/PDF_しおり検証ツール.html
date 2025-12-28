@@ -2267,47 +2267,91 @@
             const pageTexts = new Map();
             console.log('[extractPageTexts] ===== ページテキスト抽出開始 =====');
 
-            // PDF本体とObjStmの両方からページオブジェクトを収集
-            const pageObjectsList = [];
+            // すべてのオブジェクトをマップに格納（PDF本体 + ObjStm）
+            const allObjects = new Map();
 
-            // 1. PDF本体からページオブジェクトを検索
-            // endobj まで取得してネストしたディクショナリも含める
-            const pageObjPattern = /(\d+)\s+0\s+obj\s*([\s\S]*?)endobj/g;
-            let pageMatch;
-            while ((pageMatch = pageObjPattern.exec(content)) !== null) {
-                const objNum = pageMatch[1];
-                const objContent = pageMatch[2];
-                // /Type /Page を確認（/Pages は除外）
-                // スペースの有無、改行の有無に対応
-                if (objContent.match(/\/Type\s*\/Page(?![s\w])/)) {
-                    pageObjectsList.push({ objNum, objContent, source: 'body' });
-                }
+            // 1. PDF本体からオブジェクトを収集
+            const objPattern = /(\d+)\s+0\s+obj\s*([\s\S]*?)endobj/g;
+            let objMatch;
+            while ((objMatch = objPattern.exec(content)) !== null) {
+                allObjects.set(objMatch[1], objMatch[2]);
             }
 
-            // 2. ObjStmからページオブジェクトを検索
-            let objStmPageCount = 0;
+            // 2. ObjStmからオブジェクトを追加
             for (const [objNum, objData] of objStmObjectsMap.entries()) {
-                // /Type と /Page を含むオブジェクトを検出（スペースの有無に関わらず）
-                const hasTypePage = objData.match(/\/Type\s*\/Page(?![s\w])/);
-                if (hasTypePage) {
-                    pageObjectsList.push({ objNum: String(objNum), objContent: objData, source: 'ObjStm' });
-                    objStmPageCount++;
+                allObjects.set(String(objNum), objData);
+            }
+
+            console.log('[extractPageTexts] 総オブジェクト数: ' + allObjects.size);
+
+            // /Pages ツリーからページ順序を取得
+            const pageOrder = [];
+
+            // ルートの /Pages オブジェクトを探す
+            // まず /Catalog を探して /Pages への参照を取得
+            let pagesObjNum = null;
+            for (const [objNum, objContent] of allObjects.entries()) {
+                if (objContent.match(/\/Type\s*\/Catalog/)) {
+                    const pagesRef = objContent.match(/\/Pages\s+(\d+)\s+0\s+R/);
+                    if (pagesRef) {
+                        pagesObjNum = pagesRef[1];
+                        console.log('[extractPageTexts] Catalog発見、/Pages参照: ' + pagesObjNum);
+                        break;
+                    }
                 }
             }
 
-            console.log('[extractPageTexts] PDF本体ページ数: ' + (pageObjectsList.length - objStmPageCount));
-            console.log('[extractPageTexts] ObjStmページ数: ' + objStmPageCount);
-            console.log('[extractPageTexts] 総ページ数: ' + pageObjectsList.length);
+            // /Pages ツリーを再帰的に辿ってページ順序を取得
+            function collectPagesFromTree(pagesObjNum, depth = 0) {
+                if (depth > 100) return; // 無限ループ防止
+                const pagesContent = allObjects.get(pagesObjNum);
+                if (!pagesContent) return;
 
-            // ページ番号順にソート（オブジェクト番号ベースで推測）
-            pageObjectsList.sort((a, b) => parseInt(a.objNum) - parseInt(b.objNum));
+                // /Kids 配列を取得
+                const kidsMatch = pagesContent.match(/\/Kids\s*\[([\s\S]*?)\]/);
+                if (!kidsMatch) return;
+
+                // Kids内の参照を順番に処理
+                const kidsRefs = kidsMatch[1].match(/(\d+)\s+0\s+R/g) || [];
+                for (const ref of kidsRefs) {
+                    const kidObjNum = ref.match(/(\d+)/)[1];
+                    const kidContent = allObjects.get(kidObjNum);
+                    if (!kidContent) continue;
+
+                    if (kidContent.match(/\/Type\s*\/Page(?![s\w])/)) {
+                        // これは /Page オブジェクト
+                        pageOrder.push({ objNum: kidObjNum, objContent: kidContent });
+                    } else if (kidContent.match(/\/Type\s*\/Pages/)) {
+                        // これは /Pages ノード、再帰的に処理
+                        collectPagesFromTree(kidObjNum, depth + 1);
+                    }
+                }
+            }
+
+            if (pagesObjNum) {
+                collectPagesFromTree(pagesObjNum);
+                console.log('[extractPageTexts] /Pagesツリーからページ順序取得: ' + pageOrder.length + '件');
+            }
+
+            // /Pages ツリーから取得できなかった場合はフォールバック
+            if (pageOrder.length === 0) {
+                console.log('[extractPageTexts] /Pagesツリー取得失敗、オブジェクト番号順にフォールバック');
+                for (const [objNum, objContent] of allObjects.entries()) {
+                    if (objContent.match(/\/Type\s*\/Page(?![s\w])/)) {
+                        pageOrder.push({ objNum, objContent });
+                    }
+                }
+                pageOrder.sort((a, b) => parseInt(a.objNum) - parseInt(b.objNum));
+            }
+
+            console.log('[extractPageTexts] 総ページ数: ' + pageOrder.length);
 
             // 各ページオブジェクトを処理
             let pageNum = 1;
             let contentsFoundCount = 0;
             let streamFoundCount = 0;
             let textExtractedCount = 0;
-            for (const pageObj of pageObjectsList) {
+            for (const pageObj of pageOrder) {
                 // /Contents を探す（単一参照または配列参照）
                 let contentsObjNums = [];
                 const singleContentsMatch = pageObj.objContent.match(/\/Contents\s+(\d+)\s+0\s+R/);
