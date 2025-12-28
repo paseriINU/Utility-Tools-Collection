@@ -2258,8 +2258,124 @@
                 }
             }
 
+            // 3. ToUnicodeマップが構築できなかった場合、/Encodingから構築を試みる
+            if (Object.keys(cidToUnicode).length === 0) {
+                console.log('[buildToUnicodeMap] ToUnicode未検出、/Encodingから構築を試みる');
+
+                // /Encoding /Identity-H または /Identity-V を検索
+                // Identity-Hの場合、CIDがそのままUnicodeになることが多い
+                const hasIdentityH = content.includes('/Identity-H') || content.includes('/Identity-V');
+                console.log('[buildToUnicodeMap] Identity-H/V検出: ' + hasIdentityH);
+
+                if (hasIdentityH) {
+                    // Identity-Hの場合、よく使われるCID範囲をUnicodeとしてマッピング
+                    // ASCII範囲
+                    for (let i = 0x20; i <= 0x7E; i++) {
+                        cidToUnicode[i] = String.fromCharCode(i);
+                    }
+                    // 日本語の主要な範囲（CIDがUnicodeに対応している場合）
+                    // ひらがな (U+3040-U+309F)
+                    for (let i = 0x3040; i <= 0x309F; i++) {
+                        cidToUnicode[i] = String.fromCharCode(i);
+                    }
+                    // カタカナ (U+30A0-U+30FF)
+                    for (let i = 0x30A0; i <= 0x30FF; i++) {
+                        cidToUnicode[i] = String.fromCharCode(i);
+                    }
+                    // CJK統合漢字 (U+4E00-U+9FFF) - 基本的な漢字
+                    for (let i = 0x4E00; i <= 0x9FFF; i++) {
+                        cidToUnicode[i] = String.fromCharCode(i);
+                    }
+                    // 全角英数・記号 (U+FF00-U+FFEF)
+                    for (let i = 0xFF00; i <= 0xFFEF; i++) {
+                        cidToUnicode[i] = String.fromCharCode(i);
+                    }
+                    // CJK記号・句読点 (U+3000-U+303F)
+                    for (let i = 0x3000; i <= 0x303F; i++) {
+                        cidToUnicode[i] = String.fromCharCode(i);
+                    }
+                    console.log('[buildToUnicodeMap] Identity-Hフォールバックマッピング適用');
+                }
+
+                // /Encoding /WinAnsiEncoding の場合
+                if (content.includes('/WinAnsiEncoding')) {
+                    // WinAnsiEncoding（Windows-1252）のマッピング
+                    for (let i = 0x20; i <= 0x7E; i++) {
+                        cidToUnicode[i] = String.fromCharCode(i);
+                    }
+                    // 特殊文字のマッピング（一部）
+                    cidToUnicode[0x80] = '€'; cidToUnicode[0x85] = '…';
+                    cidToUnicode[0x91] = '''; cidToUnicode[0x92] = ''';
+                    cidToUnicode[0x93] = '"'; cidToUnicode[0x94] = '"';
+                    cidToUnicode[0x96] = '–'; cidToUnicode[0x97] = '—';
+                    console.log('[buildToUnicodeMap] WinAnsiEncodingマッピング適用');
+                }
+
+                // /Differences 配列を解析
+                const diffPattern = /\/Differences\s*\[([\s\S]*?)\]/g;
+                let diffMatch;
+                while ((diffMatch = diffPattern.exec(content)) !== null) {
+                    const diffContent = diffMatch[1];
+                    // 数字と名前を交互に解析
+                    const tokens = diffContent.match(/(\d+|\/\w+)/g);
+                    if (tokens) {
+                        let currentCode = 0;
+                        for (const token of tokens) {
+                            if (/^\d+$/.test(token)) {
+                                currentCode = parseInt(token, 10);
+                            } else if (token.startsWith('/')) {
+                                const glyphName = token.substring(1);
+                                const unicode = glyphNameToUnicode(glyphName);
+                                if (unicode) {
+                                    cidToUnicode[currentCode] = unicode;
+                                }
+                                currentCode++;
+                            }
+                        }
+                    }
+                }
+            }
+
             console.log('[buildToUnicodeMap] 構築完了、エントリ数: ' + Object.keys(cidToUnicode).length);
             return cidToUnicode;
+        }
+
+        // グリフ名からUnicodeへの変換（一般的なグリフ名のみ）
+        function glyphNameToUnicode(name) {
+            const glyphMap = {
+                'space': ' ', 'exclam': '!', 'quotedbl': '"', 'numbersign': '#',
+                'dollar': '$', 'percent': '%', 'ampersand': '&', 'quotesingle': "'",
+                'parenleft': '(', 'parenright': ')', 'asterisk': '*', 'plus': '+',
+                'comma': ',', 'hyphen': '-', 'period': '.', 'slash': '/',
+                'zero': '0', 'one': '1', 'two': '2', 'three': '3', 'four': '4',
+                'five': '5', 'six': '6', 'seven': '7', 'eight': '8', 'nine': '9',
+                'colon': ':', 'semicolon': ';', 'less': '<', 'equal': '=',
+                'greater': '>', 'question': '?', 'at': '@',
+                'A': 'A', 'B': 'B', 'C': 'C', 'D': 'D', 'E': 'E', 'F': 'F',
+                'G': 'G', 'H': 'H', 'I': 'I', 'J': 'J', 'K': 'K', 'L': 'L',
+                'M': 'M', 'N': 'N', 'O': 'O', 'P': 'P', 'Q': 'Q', 'R': 'R',
+                'S': 'S', 'T': 'T', 'U': 'U', 'V': 'V', 'W': 'W', 'X': 'X',
+                'Y': 'Y', 'Z': 'Z',
+                'bracketleft': '[', 'backslash': '\\', 'bracketright': ']',
+                'asciicircum': '^', 'underscore': '_', 'grave': '`',
+                'a': 'a', 'b': 'b', 'c': 'c', 'd': 'd', 'e': 'e', 'f': 'f',
+                'g': 'g', 'h': 'h', 'i': 'i', 'j': 'j', 'k': 'k', 'l': 'l',
+                'm': 'm', 'n': 'n', 'o': 'o', 'p': 'p', 'q': 'q', 'r': 'r',
+                's': 's', 't': 't', 'u': 'u', 'v': 'v', 'w': 'w', 'x': 'x',
+                'y': 'y', 'z': 'z',
+                'braceleft': '{', 'bar': '|', 'braceright': '}', 'asciitilde': '~',
+                // 日本語
+                'uni3000': '　', 'uni3001': '、', 'uni3002': '。',
+            };
+            // uniXXXX形式の名前を処理
+            if (name.startsWith('uni') && name.length >= 7) {
+                const hex = name.substring(3, 7);
+                const code = parseInt(hex, 16);
+                if (!isNaN(code)) {
+                    return String.fromCharCode(code);
+                }
+            }
+            return glyphMap[name] || null;
         }
 
         // CIDフォントのグリフIDをUnicodeに変換
