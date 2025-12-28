@@ -2264,16 +2264,35 @@
 
                 // PDFに含まれるフォント情報をログ出力（デバッグ用）
                 const fontMatches = content.match(/\/Type\s*\/Font[\s\S]{0,500}/g);
-                if (fontMatches) {
-                    console.log('[buildToUnicodeMap] フォント定義数: ' + fontMatches.length);
+                console.log('[buildToUnicodeMap] フォント定義数(/Type /Font): ' + (fontMatches ? fontMatches.length : 0));
+                if (fontMatches && fontMatches.length > 0) {
                     fontMatches.slice(0, 3).forEach((m, i) => {
                         console.log('[buildToUnicodeMap] フォント' + (i+1) + ': ' + m.substring(0, 200).replace(/\s+/g, ' '));
                     });
                 }
 
+                // フォントサブタイプを検出
+                const type1Matches = content.match(/\/Subtype\s*\/Type1[^C]/g);
+                const truetypeMatches = content.match(/\/Subtype\s*\/TrueType/g);
+                const type0Matches = content.match(/\/Subtype\s*\/Type0/g);
+                const type3Matches = content.match(/\/Subtype\s*\/Type3/g);
+                console.log('[buildToUnicodeMap] Type1フォント数: ' + (type1Matches ? type1Matches.length : 0));
+                console.log('[buildToUnicodeMap] TrueTypeフォント数: ' + (truetypeMatches ? truetypeMatches.length : 0));
+                console.log('[buildToUnicodeMap] Type0フォント数: ' + (type0Matches ? type0Matches.length : 0));
+                console.log('[buildToUnicodeMap] Type3フォント数: ' + (type3Matches ? type3Matches.length : 0));
+
                 // /Subtype /CIDFontType0 または /CIDFontType2 を検索
                 const cidFontTypeMatches = content.match(/\/Subtype\s*\/CIDFontType[02]/g);
                 console.log('[buildToUnicodeMap] CIDFontType検出数: ' + (cidFontTypeMatches ? cidFontTypeMatches.length : 0));
+
+                // /BaseFont を検出してフォント名を取得
+                const baseFontMatches = content.match(/\/BaseFont\s*\/([^\s\/\]>]+)/g);
+                if (baseFontMatches && baseFontMatches.length > 0) {
+                    console.log('[buildToUnicodeMap] BaseFont数: ' + baseFontMatches.length);
+                    baseFontMatches.slice(0, 5).forEach((m, i) => {
+                        console.log('[buildToUnicodeMap] BaseFont' + (i+1) + ': ' + m);
+                    });
+                }
 
                 // 日本語CIDフォント関連のエンコーディングを検索
                 const hasIdentityH = content.includes('/Identity-H') || content.includes('/Identity-V');
