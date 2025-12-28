@@ -1378,19 +1378,23 @@
             const globalActionObjectMap = new Map();
 
             // PDF本体からアクションオブジェクト（ストリーム外）を抽出
-            // 形式: N 0 obj <</S /GoTo /D [M 0 R ...]>> endobj
-            const actionObjPattern = /(\d+)\s+0\s+obj\s*<<([^>]*\/S\s*\/GoTo[^>]*)>>\s*endobj/g;
+            // 形式: N 0 obj <<...>> endobj （streamを含まないオブジェクト）
+            // [\s\S]*? で >> も含む任意の文字にマッチ（最短マッチ）
+            const actionObjPattern = /(\d+)\s+0\s+obj\s*<<([\s\S]*?)>>\s*endobj/g;
             let actionMatch;
             let directActionCount = 0;
             while ((actionMatch = actionObjPattern.exec(content)) !== null) {
                 const actionObjNum = parseInt(actionMatch[1], 10);
                 const actionContent = actionMatch[2];
-                const dMatch = actionContent.match(/\/D\s*\[\s*(\d+)\s+0\s+R/);
-                if (dMatch) {
-                    globalActionObjectMap.set(actionObjNum, dMatch[1] + ' 0 R');
-                    directActionCount++;
-                    if (directActionCount <= 5) {
-                        console.log('[PDF本体] アクションオブジェクト ' + actionObjNum + ' → ページ参照: ' + dMatch[1] + ' 0 R');
+                // /S /GoTo と /D [N 0 R ...] を含むアクションオブジェクトを検出
+                if (actionContent.includes('/S') && actionContent.includes('/GoTo')) {
+                    const dMatch = actionContent.match(/\/D\s*\[\s*(\d+)\s+0\s+R/);
+                    if (dMatch) {
+                        globalActionObjectMap.set(actionObjNum, dMatch[1] + ' 0 R');
+                        directActionCount++;
+                        if (directActionCount <= 5) {
+                            console.log('[PDF本体] アクションオブジェクト ' + actionObjNum + ' → ページ参照: ' + dMatch[1] + ' 0 R');
+                        }
                     }
                 }
             }
