@@ -3027,6 +3027,12 @@
                 }
             }
 
+            console.log('[findTitlePositions] 合計: ' + positions.length + '件');
+            // 最初の10件の内容をログ出力
+            positions.slice(0, 10).forEach((pos, idx) => {
+                const rawContent = content.substring(pos.start, pos.end);
+                console.log('[findTitlePositions] #' + (idx + 1) + ': "' + rawContent.substring(0, 60) + '"');
+            });
             return positions;
         }
 
@@ -3386,6 +3392,13 @@
             const bookmarks = [];
             const originalContentLength = bytes.length;
 
+            console.log('[extractBookmarks] ===== 抽出開始 =====');
+            console.log('[extractBookmarks] コンテンツ長: ' + content.length + ', バイト長: ' + bytes.length);
+
+            // 「1-1」が含まれているかを事前に確認
+            const has11 = content.includes('1-1') || content.includes('１-１') || content.includes('1－1');
+            console.log('[extractBookmarks] コンテンツに「1-1」系文字列: ' + has11);
+
             // ToUnicode/CMapテーブルを構築（CIDフォント対応）
             const cidToUnicode = buildToUnicodeMap(content);
 
@@ -3398,6 +3411,7 @@
             */
             // バイナリから直接タイトルを抽出（ネストした括弧にも対応）
             const titlePositions = findTitlePositions(content);
+            console.log('[extractBookmarks] 方法1: findTitlePositions結果: ' + titlePositions.length + '件');
 
             for (let posIdx = 0; posIdx < titlePositions.length; posIdx++) {
                 const pos = titlePositions[posIdx];
@@ -3424,11 +3438,22 @@
 
                 if (title && title.trim()) {
                     // 重複チェック
-                    if (!bookmarks.some(b => b.title === title.trim())) {
-                        bookmarks.push({ title: title.trim(), page: '', level: 1, source: 'manual' });
+                    const trimmedTitle = title.trim();
+                    const isDuplicate = bookmarks.some(b => b.title === trimmedTitle);
+                    if (!isDuplicate) {
+                        bookmarks.push({ title: trimmedTitle, page: '', level: 1, source: 'manual' });
+                        // 「1-1」「業務」を含むタイトルは特別にログ出力
+                        if (trimmedTitle.includes('1-1') || trimmedTitle.includes('業務')) {
+                            console.log('[extractBookmarks] 方法1で追加: "' + trimmedTitle + '"');
+                        }
+                    } else {
+                        if (trimmedTitle.includes('1-1') || trimmedTitle.includes('業務')) {
+                            console.log('[extractBookmarks] 方法1で重複スキップ: "' + trimmedTitle + '"');
+                        }
                     }
                 }
             }
+            console.log('[extractBookmarks] 方法1後のしおり数: ' + bookmarks.length);
 
             /*
             --------------------------------------------------------------
@@ -3552,11 +3577,22 @@
 
                 if (title && title.trim()) {
                     // 重複チェック
-                    if (!bookmarks.some(b => b.title === title.trim())) {
-                        bookmarks.push({ title: title.trim(), page: '', level: 1, source: 'manual' });
+                    const trimmedTitle = title.trim();
+                    const isDuplicate = bookmarks.some(b => b.title === trimmedTitle);
+                    if (!isDuplicate) {
+                        bookmarks.push({ title: trimmedTitle, page: '', level: 1, source: 'manual' });
+                        // 「1-1」「業務」を含むタイトルは特別にログ出力
+                        if (trimmedTitle.includes('1-1') || trimmedTitle.includes('業務')) {
+                            console.log('[extractBookmarks] 方法2で追加: "' + trimmedTitle + '"');
+                        }
+                    } else {
+                        if (trimmedTitle.includes('1-1') || trimmedTitle.includes('業務')) {
+                            console.log('[extractBookmarks] 方法2で重複スキップ: "' + trimmedTitle + '"');
+                        }
                     }
                 }
             }
+            console.log('[extractBookmarks] 方法2: hexマッチ数: ' + hexMatchCount + ', しおり合計: ' + bookmarks.length);
 
             /*
             --------------------------------------------------------------
@@ -4070,6 +4106,19 @@
 
             // 階層構造の解析を試みる
             analyzeHierarchy(content, bookmarks);
+
+            console.log('[extractBookmarks] ===== 抽出完了 =====');
+            console.log('[extractBookmarks] 最終しおり数: ' + bookmarks.length);
+            // 「1-1」「業務」を含むしおりがあるかチェック
+            const has11Bookmark = bookmarks.some(b => b.title.includes('1-1') || b.title.includes('業務'));
+            console.log('[extractBookmarks] 「1-1」「業務」を含むしおり: ' + has11Bookmark);
+            if (!has11Bookmark) {
+                console.log('[extractBookmarks] 警告: 「1-1」または「業務」を含むしおりが見つかりませんでした');
+                // 最初の10件のしおりタイトルを出力
+                bookmarks.slice(0, 10).forEach((b, i) => {
+                    console.log('[extractBookmarks]   ' + (i + 1) + ': "' + b.title.substring(0, 50) + '"');
+                });
+            }
 
             return bookmarks;
         }
