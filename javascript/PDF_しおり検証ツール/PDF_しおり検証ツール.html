@@ -942,6 +942,46 @@
 
         /*
         ======================================================================
+          全角・半角正規化関数
+
+          全角数字・英字・記号を半角に変換し、テキスト比較の精度を向上させる
+          例: 「第２部」→「第2部」、「ＡＢＣＤ」→「ABCD」
+        ======================================================================
+        */
+        function normalizeFullWidthToHalfWidth(text) {
+            if (!text) return '';
+
+            // 全角数字→半角数字 (０-９ → 0-9)
+            let result = text.replace(/[０-９]/g, function(char) {
+                return String.fromCharCode(char.charCodeAt(0) - 0xFEE0);
+            });
+
+            // 全角英字→半角英字 (Ａ-Ｚ, ａ-ｚ → A-Z, a-z)
+            result = result.replace(/[Ａ-Ｚａ-ｚ]/g, function(char) {
+                return String.fromCharCode(char.charCodeAt(0) - 0xFEE0);
+            });
+
+            // 全角スペース→半角スペース
+            result = result.replace(/　/g, ' ');
+
+            // 全角記号→半角記号（よく使われるもの）
+            const symbolMap = {
+                '！': '!', '？': '?', '（': '(', '）': ')', '［': '[', '］': ']',
+                '｛': '{', '｝': '}', '＜': '<', '＞': '>', '＝': '=', '＋': '+',
+                '－': '-', '＊': '*', '／': '/', '＼': '\\', '％': '%', '＆': '&',
+                '＃': '#', '＠': '@', '＄': '$', '＾': '^', '｜': '|', '～': '~',
+                '：': ':', '；': ';', '，': ',', '．': '.', '＿': '_', '｀': '`',
+                '"': '"', '"': '"', ''': "'", ''': "'", '・': '･'
+            };
+            for (const [full, half] of Object.entries(symbolMap)) {
+                result = result.split(full).join(half);
+            }
+
+            return result;
+        }
+
+        /*
+        ======================================================================
           HTMLエスケープ関数
 
           特殊文字（<, >, &など）をエスケープして、
@@ -1096,8 +1136,10 @@
                     const adjustedPage = typeof bm.page === 'number' ? bm.page + 1 : bm.page;
                     if (adjustedPage && pageTexts.has(adjustedPage)) {
                         const pageText = pageTexts.get(adjustedPage);
-                        const normalizedTitle = bm.title.replace(/\s+/g, '').toLowerCase();
-                        const normalizedPageText = pageText.replace(/\s+/g, '').toLowerCase();
+                        // 全角・半角正規化 + 空白除去 + 小文字化で比較精度を向上
+                        // 例: 「第２部」と「第2部」を一致させる
+                        const normalizedTitle = normalizeFullWidthToHalfWidth(bm.title).replace(/\s+/g, '').toLowerCase();
+                        const normalizedPageText = normalizeFullWidthToHalfWidth(pageText).replace(/\s+/g, '').toLowerCase();
 
                         const fullMatch = normalizedPageText.includes(normalizedTitle);
                         const partialMatch = normalizedTitle.length > 3 && normalizedPageText.includes(normalizedTitle.substring(0, Math.min(10, normalizedTitle.length)));
