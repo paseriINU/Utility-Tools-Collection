@@ -811,9 +811,9 @@
                 } else {
                     status = '不明';
                 }
-                // ページ番号を調整（JS作成PDFの場合のみ+1）
+                // ページ番号を調整（ObjStm/pdfjs抽出の場合のみ0始まりから1始まりに変換）
                 const csvPage = typeof bm.page === 'number'
-                    ? (bm.isJsPdf ? bm.page + 1 : bm.page)
+                    ? (bm.source === 'pdfjs' ? bm.page + 1 : bm.page)
                     : (bm.page || '');
                 // CSVの1行を追加
                 csv += `${i + 1},"${title}",${bm.level},${csvPage},${status}\n`;
@@ -922,9 +922,9 @@
                 // repeat(): 文字列を指定回数繰り返す（インデント用）
                 const indent = '　'.repeat(bm.level - 1);
 
-                // ページ番号を調整（JS作成PDFの場合のみ+1）
+                // ページ番号を調整（ObjStm/pdfjs抽出の場合のみ0始まりから1始まりに変換）
                 const displayPage = typeof bm.page === 'number'
-                    ? (bm.isJsPdf ? bm.page + 1 : bm.page)
+                    ? (bm.source === 'pdfjs' ? bm.page + 1 : bm.page)
                     : (bm.page || '-');
 
                 // tr要素の中身（セル）をHTML文字列で設定
@@ -1062,37 +1062,57 @@
                 throw new Error('このPDFにはしおりがありません。');
             }
 
-            // 通常PDFかJS作成PDFかを自動判別
-            // 通常PDF: しおりが /Dest や /GoTo を使用（ブラウザでしおりが機能する）
-            // JS作成PDF: しおりが /S /JavaScript を使用（ブラウザでしおりが機能しない）
-            // 通常PDFのしおり構造が見つからない場合はJS作成PDFとして扱う
-            const hasNormalBookmarkDest = content.match(/\/Dest\s*[\[\(]/) ||      // /Dest [ref] または /Dest (name)
-                                          content.match(/\/A\s*<<[^>]*\/S\s*\/GoTo/) ||  // /A << /S /GoTo
-                                          content.match(/\/D\s*\[\s*\d+\s+\d+\s+R/);     // /D [ 123 0 R
-            const isJsPdf = !hasNormalBookmarkDest;
-            console.log('[自動判別] 通常しおり構造検出: ' + !!hasNormalBookmarkDest);
-            console.log('[自動判別] PDFタイプ: ' + (isJsPdf ? 'JS作成PDF（ページ番号+1）' : '通常PDF（ページ番号そのまま）'));
-
-            // JS作成PDFと判定されたが、JSしおり構造もない場合はエラー
-            if (isJsPdf) {
-                const hasJsBookmarkAction = content.match(/\/S\s*\/JavaScript/) ||
-                                           content.match(/\/JS\s*[\(<]/) ||
-                                           content.match(/this\.pageNum/);
-                if (!hasJsBookmarkAction) {
-                    throw new Error('このPDFにはしおり情報が見つかりません。\n\n通常のしおり構造（/Dest, /GoTo）も、\nJavaScriptしおり構造（/JS, /S /JavaScript）も検出できませんでした。');
-                }
-                console.log('[自動判別] JSしおり構造検出: true');
-            }
-
             // ページオブジェクトとページ番号のマッピングを作成
             const pageObjects = buildPageMapping(content, objStmObjectsMap);
 
-            // しおり情報を抽出（extractBookmarksを使用）
-            let bookmarks = extractBookmarks(content, bytes, pageObjects);
-            console.log('[デバッグ] extractBookmarks結果: ' + bookmarks.length + '件');
+            // しおり情報を抽出
+            // ObjStmバイト直接抽出が成功している場合は、そちらを優先使用
+            let bookmarks = [];
 
-            // 各しおりにisJsPdfフラグを追加（ページ番号調整に使用）
-            bookmarks.forEach(bm => { bm.isJsPdf = isJsPdf; });
+            if (objStmDecodedTitles.length > 0) {
+                // デバッグ: ObjStm抽出結果
+                console.log('[デバッグ] ObjStmDecodedTitles: ' + objStmDecodedTitles.length + '件');
+
+                // ObjStmからバイト直接抽出したタイトルを優先使用（文字化けなし）
+                for (const item of objStmDecodedTitles) {
+                    let pageNum = '';
+                    if (item.pageRef) {
+                        // PAGE:N 形式（JavaScriptアクションから取得）の場合
+                        if (item.pageRef.startsWith('PAGE:')) {
+                            pageNum = parseInt(item.pageRef.substring(5), 10) || '';
+                        } else {
+                            // pageRefは "123 0 R" の形式なので、オブジェクト番号を抽出
+                            const objNumMatch = item.pageRef.match(/^(\d+)/);
+                            if (objNumMatch) {
+                                const objNum = objNumMatch[1];
+                                if (pageObjects[objNum]) {
+                                    pageNum = pageObjects[objNum];
+                                } else {
+                                    pageNum = parseInt(objNum) || '';
+                                }
+                            }
+                        }
+                    }
+                    bookmarks.push({ title: item.title, page: pageNum, level: 1, source: 'pdfjs' });
+                }
+
+                // extractBookmarksからも追加（重複削除なし）
+                const extractedBookmarks = extractBookmarks(content, bytes, pageObjects);
+                console.log('[デバッグ] extractBookmarks結果: ' + extractedBookmarks.length + '件');
+
+                for (const bm of extractedBookmarks) {
+                    // 文字化け判定: 制御文字や置換文字が含まれている場合は除外
+                    const hasGarbledChars = /[\uFFFD\u0000-\u001F]/.test(bm.title) ||
+                                           /[◆◇■□●○★☆]{2,}/.test(bm.title);
+                    if (!hasGarbledChars) {
+                        bookmarks.push(bm);
+                    }
+                }
+            } else {
+                // ObjStmバイト直接抽出がない場合は従来通り
+                bookmarks = extractBookmarks(content, bytes, pageObjects);
+                console.log('[デバッグ] extractBookmarks結果: ' + bookmarks.length + '件');
+            }
 
             // ページテキストを抽出して、しおりタイトルがリンク先ページに存在するか判定
             try {
@@ -1105,9 +1125,9 @@
                 // 注: PDF.js抽出のページ番号は0始まりなので1始まりに変換が必要
                 let verifyDebugCount = 0;
                 for (const bm of bookmarks) {
-                    // ページ番号を調整（JS作成PDFの場合のみ+1）
+                    // ページ番号を調整（ObjStm/pdfjs抽出の場合のみ0始まりから1始まりに変換）
                     const adjustedPage = typeof bm.page === 'number'
-                        ? (bm.isJsPdf ? bm.page + 1 : bm.page)
+                        ? (bm.source === 'pdfjs' ? bm.page + 1 : bm.page)
                         : bm.page;
                     if (adjustedPage && pageTexts.has(adjustedPage)) {
                         const pageText = pageTexts.get(adjustedPage);
