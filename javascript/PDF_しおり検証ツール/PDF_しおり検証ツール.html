@@ -763,8 +763,8 @@
                 // arrayBuffer(): ファイルをバイナリデータとして読み込む
                 const arrayBuffer = await selectedFile.arrayBuffer();
 
-                // PDF解析を実行（非同期）
-                bookmarks = await parsePDFBookmarks(arrayBuffer);
+                // PDF解析を実行（非同期）- pdfTypeに応じて処理を分岐
+                bookmarks = await parsePDFBookmarks(arrayBuffer, pdfType);
 
                 // 結果を表示
                 displayResults();
@@ -1038,7 +1038,10 @@
           PDFファイルのバイナリデータからしおり情報を抽出
         ======================================================================
         */
-        async function parsePDFBookmarks(arrayBuffer) {
+        async function parsePDFBookmarks(arrayBuffer, pdfType) {
+            // pdfType: 'normal'（通常PDF）または 'javascript'（JS作成PDF）
+            console.log('[デバッグ] parsePDFBookmarks開始 - PDFタイプ: ' + pdfType);
+
             // Uint8Array: バイト配列（0-255の数値の配列）
             const bytes = new Uint8Array(arrayBuffer);
 
@@ -1061,21 +1064,28 @@
             }
 
             // Object Streams (ObjStm) からしおりを抽出（非同期処理）
+            // 通常PDFではObjStm抽出をスキップ（シンプルな抽出のみ）
             let objStmDecodedTitles = [];
             let objStmObjectsMap = new Map();
-            try {
-                const objStmResult = await parseObjectStreamsAsync(content, bytes);
-                // バイト直接抽出で取得したデコード済みタイトル
-                objStmDecodedTitles = objStmResult.decodedTitles || [];
-                // ObjStm内の全オブジェクトマップ（ページテキスト抽出用）
-                objStmObjectsMap = objStmResult.objStmObjectsMap || new Map();
-                // 従来方式（latin1Decode）で取得したコンテンツ
-                const rawContents = objStmResult.rawContents || [];
-                if (rawContents.length > 0) {
-                    content = content + '\n' + rawContents.join('\n');
+            if (pdfType === 'javascript') {
+                // JS作成PDFの場合のみObjStm抽出を実行
+                console.log('[デバッグ] JS作成PDF: ObjStm抽出を実行');
+                try {
+                    const objStmResult = await parseObjectStreamsAsync(content, bytes);
+                    // バイト直接抽出で取得したデコード済みタイトル
+                    objStmDecodedTitles = objStmResult.decodedTitles || [];
+                    // ObjStm内の全オブジェクトマップ（ページテキスト抽出用）
+                    objStmObjectsMap = objStmResult.objStmObjectsMap || new Map();
+                    // 従来方式（latin1Decode）で取得したコンテンツ
+                    const rawContents = objStmResult.rawContents || [];
+                    if (rawContents.length > 0) {
+                        content = content + '\n' + rawContents.join('\n');
+                    }
+                } catch (e) {
+                    // ObjStm解析エラー（無視して続行）
                 }
-            } catch (e) {
-                // ObjStm解析エラー（無視して続行）
+            } else {
+                console.log('[デバッグ] 通常PDF: ObjStm抽出をスキップ');
             }
 
             // しおり（Outlines）の存在確認
