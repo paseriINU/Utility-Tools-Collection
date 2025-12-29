@@ -3437,28 +3437,9 @@
                 }
 
                 if (title && title.trim()) {
-                    // 重複チェック
                     const trimmedTitle = title.trim();
-                    const isDuplicate = bookmarks.some(b => b.title === trimmedTitle);
-
-                    // 「1-1」「業務」を含むタイトルはすべてログ出力
-                    if (trimmedTitle.includes('1-1') || trimmedTitle.includes('業務') || trimmedTitle.includes('１-１')) {
-                        console.log('[extractBookmarks] 方法1検出: "' + trimmedTitle + '" (重複: ' + isDuplicate + ', 位置: ' + pos.start + '-' + pos.end + ')');
-                    }
-
-                    if (!isDuplicate) {
-                        bookmarks.push({ title: trimmedTitle, page: '', level: 1, source: 'manual' });
-                        if (trimmedTitle.includes('1-1') || trimmedTitle.includes('業務') || trimmedTitle.includes('１-１')) {
-                            console.log('[extractBookmarks] 方法1で追加: "' + trimmedTitle + '"');
-                        }
-                    } else {
-                        if (trimmedTitle.includes('1-1') || trimmedTitle.includes('業務') || trimmedTitle.includes('１-１')) {
-                            console.log('[extractBookmarks] 方法1で重複スキップ: "' + trimmedTitle + '"');
-                            // 既存のものがどれかを表示
-                            const existing = bookmarks.find(b => b.title === trimmedTitle);
-                            console.log('[extractBookmarks]   既存: "' + (existing ? existing.title : 'N/A') + '"');
-                        }
-                    }
+                    // 重複チェックを削除 - 同名しおりも全て保持
+                    bookmarks.push({ title: trimmedTitle, page: '', level: 1, source: 'manual' });
                 }
             }
             console.log('[extractBookmarks] 方法1後のしおり数: ' + bookmarks.length);
@@ -3584,27 +3565,9 @@
                 }
 
                 if (title && title.trim()) {
-                    // 重複チェック
                     const trimmedTitle = title.trim();
-                    const isDuplicate = bookmarks.some(b => b.title === trimmedTitle);
-
-                    // 「1-1」「業務」を含むタイトルはすべてログ出力
-                    if (trimmedTitle.includes('1-1') || trimmedTitle.includes('業務') || trimmedTitle.includes('１-１')) {
-                        console.log('[extractBookmarks] 方法2検出: "' + trimmedTitle + '" (重複: ' + isDuplicate + ')');
-                    }
-
-                    if (!isDuplicate) {
-                        bookmarks.push({ title: trimmedTitle, page: '', level: 1, source: 'manual' });
-                        if (trimmedTitle.includes('1-1') || trimmedTitle.includes('業務') || trimmedTitle.includes('１-１')) {
-                            console.log('[extractBookmarks] 方法2で追加: "' + trimmedTitle + '"');
-                        }
-                    } else {
-                        if (trimmedTitle.includes('1-1') || trimmedTitle.includes('業務') || trimmedTitle.includes('１-１')) {
-                            console.log('[extractBookmarks] 方法2で重複スキップ: "' + trimmedTitle + '"');
-                            const existing = bookmarks.find(b => b.title === trimmedTitle);
-                            console.log('[extractBookmarks]   既存: "' + (existing ? existing.title : 'N/A') + '"');
-                        }
-                    }
+                    // 重複チェックを削除 - 同名しおりも全て保持
+                    bookmarks.push({ title: trimmedTitle, page: '', level: 1, source: 'manual' });
                 }
             }
             console.log('[extractBookmarks] 方法2: hexマッチ数: ' + hexMatchCount + ', しおり合計: ' + bookmarks.length);
@@ -3657,7 +3620,7 @@
                             title = decodeTitle(bytes);
                         }
                     }
-                    if (title && title.trim() && !bookmarks.some(b => b.title === title.trim())) {
+                    if (title && title.trim()) {
                         bookmarks.push({ title: title.trim(), page: '', level: 1, source: 'manual' });
                     }
                 }
@@ -3717,7 +3680,7 @@
                             }
                         }
 
-                        if (title && title.trim() && !bookmarks.some(b => b.title === title.trim())) {
+                        if (title && title.trim()) {
                             bookmarks.push({ title: title.trim(), page: '', level: 1, source: 'manual' });
                         }
                     }
@@ -3922,9 +3885,7 @@
                                 // 有効な日本語テキストかチェック（偽陽性削減）
                                 const validJP = isValidJapaneseText(title);
                                 if (controlChars < title.length * 0.1 && validJP) {
-                                    if (!bookmarks.some(b => b.title === title.trim())) {
-                                        bookmarks.push({ title: title.trim(), page: '', level: 1, source: 'manual' });
-                                    }
+                                    bookmarks.push({ title: title.trim(), page: '', level: 1, source: 'manual' });
                                 }
                             }
                         }
@@ -4002,7 +3963,7 @@
                                 method6UTF8Count++;
                                 try {
                                     const title = new TextDecoder('utf-8').decode(titleBytes);
-                                    if (title && title.trim().length >= 2 && !bookmarks.some(b => b.title === title.trim())) {
+                                    if (title && title.trim().length >= 2) {
                                         const controlChars = (title.match(/[\x00-\x1F]/g) || []).length;
                                         if (controlChars < title.length * 0.1) {
                                             if (method6Samples.length < 5) {
@@ -4073,7 +4034,7 @@
                                     }
                                 }
 
-                                if (title && title.trim().length >= 2 && !bookmarks.some(b => b.title === title.trim())) {
+                                if (title && title.trim().length >= 2) {
                                     const controlChars = (title.match(/[\x00-\x1F]/g) || []).length;
                                     if (controlChars < title.length * 0.1) {
                                         if (method6Samples.length < 5) {
