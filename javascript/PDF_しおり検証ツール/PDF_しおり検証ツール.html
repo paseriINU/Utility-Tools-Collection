@@ -1096,16 +1096,23 @@
                     bookmarks.push({ title: item.title, page: pageNum, level: 1, source: 'pdfjs' });
                 }
 
-                // extractBookmarksからも追加（重複削除なし）
+                // extractBookmarksからObjStmで取得できなかったタイトルのみ追加
+                // ObjStm優先のため、既存タイトルとの重複はスキップ
                 const extractedBookmarks = extractBookmarks(content, bytes, pageObjects);
                 console.log('[デバッグ] extractBookmarks結果: ' + extractedBookmarks.length + '件');
+                const existingTitles = new Set(bookmarks.map(b => b.title));
 
                 for (const bm of extractedBookmarks) {
+                    // ObjStmで取得済みのタイトルはスキップ
+                    if (existingTitles.has(bm.title)) {
+                        continue;
+                    }
                     // 文字化け判定: 制御文字や置換文字が含まれている場合は除外
                     const hasGarbledChars = /[\uFFFD\u0000-\u001F]/.test(bm.title) ||
                                            /[◆◇■□●○★☆]{2,}/.test(bm.title);
                     if (!hasGarbledChars) {
                         bookmarks.push(bm);
+                        existingTitles.add(bm.title);
                     }
                 }
             } else {
