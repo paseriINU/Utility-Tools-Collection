@@ -1070,6 +1070,16 @@
             let bookmarks = [];
 
             if (objStmDecodedTitles.length > 0) {
+                // デバッグ: ObjStm抽出結果
+                console.log('[デバッグ] ObjStmDecodedTitles: ' + objStmDecodedTitles.length + '件');
+                const objStm11 = objStmDecodedTitles.filter(item => item.title.includes('1-1'));
+                if (objStm11.length > 0) {
+                    console.log('[デバッグ] ObjStmで「1-1」を含むタイトル:');
+                    objStm11.forEach(item => console.log('  - "' + item.title + '"'));
+                } else {
+                    console.log('[デバッグ] ObjStmに「1-1」を含むタイトルなし');
+                }
+
                 // ObjStmからバイト直接抽出したタイトルを優先使用（文字化けなし）
                 for (const item of objStmDecodedTitles) {
                     // itemは { title: string, pageRef: string } の形式
@@ -1102,6 +1112,19 @@
                 const extractedBookmarks = extractBookmarks(content, bytes, pageObjects);
                 const existingTitles = new Set(bookmarks.map(b => b.title));
 
+                // デバッグ: extractBookmarksの結果を出力
+                console.log('[デバッグ] extractBookmarks結果: ' + extractedBookmarks.length + '件');
+                console.log('[デバッグ] ObjStm既存タイトル数: ' + existingTitles.size + '件');
+
+                // 「1-1」を含むタイトルを探す（デバッグ用）
+                const titles11 = extractedBookmarks.filter(b => b.title.includes('1-1'));
+                if (titles11.length > 0) {
+                    console.log('[デバッグ] extractBookmarksで「1-1」を含むタイトル:');
+                    titles11.forEach(b => console.log('  - "' + b.title + '"'));
+                } else {
+                    console.log('[デバッグ] extractBookmarksに「1-1」を含むタイトルなし');
+                }
+
                 for (const bm of extractedBookmarks) {
                     // ObjStmで取得済みのタイトルと類似していないもののみ追加
                     // （文字化けしたタイトルは除外）
@@ -1113,6 +1136,8 @@
                         if (!hasGarbledChars) {
                             bookmarks.push(bm);
                             existingTitles.add(bm.title);
+                        } else {
+                            console.log('[デバッグ] 文字化け判定で除外: "' + bm.title.substring(0, 30) + '"');
                         }
                     }
                 }
