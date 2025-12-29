@@ -1183,7 +1183,28 @@
             }
 
             // しおりをページ番号とタイトルでソート
-            // 同じページ番号の場合はタイトルの数字順（自然順ソート）
+            // 同じページ番号の場合は階層構造を考慮してソート
+
+            // タイトルから階層レベルを判定する関数
+            // 第X部 > 第X章/第X編 > 第X節/第X条 > 第X項 > X-X形式 > X-X.X形式
+            function getTitleHierarchy(title) {
+                if (!title) return 99;
+                // 第X部（最上位）
+                if (/^第[0-9０-９]+部/.test(title)) return 1;
+                // 第X編、第X章
+                if (/^第[0-9０-９]+(編|章)/.test(title)) return 2;
+                // 第X節、第X条
+                if (/^第[0-9０-９]+(節|条)/.test(title)) return 3;
+                // 第X項、第X款
+                if (/^第[0-9０-９]+(項|款)/.test(title)) return 4;
+                // X-X形式（例: 1-1, 2-1）
+                if (/^[0-9０-９]+-[0-9０-９]+[^.]/.test(title) || /^[0-9０-９]+-[0-9０-９]+$/.test(title)) return 5;
+                // X-X.X形式（例: 1-1.1, 2-1.2）
+                if (/^[0-9０-９]+-[0-9０-９]+\.[0-9０-９]+/.test(title)) return 6;
+                // その他
+                return 10;
+            }
+
             bookmarks.sort((a, b) => {
                 // ページ番号を取得（source === 'pdfjs'の場合は+1済みの値で比較）
                 const pageA = typeof a.page === 'number' ? (a.source === 'pdfjs' ? a.page + 1 : a.page) : 0;
@@ -1194,12 +1215,18 @@
                     return pageA - pageB;
                 }
 
-                // 同じページ番号の場合はタイトルで自然順ソート
-                // 数字部分を数値として比較（1-2 < 1-10）
+                // 同じページ番号の場合は階層レベルで比較
                 const titleA = a.title || '';
                 const titleB = b.title || '';
+                const hierA = getTitleHierarchy(titleA);
+                const hierB = getTitleHierarchy(titleB);
 
-                // 自然順ソート: 数字を数値として比較
+                // 階層レベルが異なる場合は階層順
+                if (hierA !== hierB) {
+                    return hierA - hierB;
+                }
+
+                // 同じ階層レベルの場合は自然順ソート
                 return titleA.localeCompare(titleB, 'ja', { numeric: true, sensitivity: 'base' });
             });
 
