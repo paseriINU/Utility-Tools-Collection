@@ -1062,15 +1062,27 @@
                 throw new Error('このPDFにはしおりがありません。');
             }
 
-            // JavaScriptアクションで作成されたPDFかどうかを自動判別
-            // /JS や /JavaScript パターンがしおり関連で使われている場合はJS作成PDF
-            const hasJsAction = content.match(/\/S\s*\/JavaScript/) ||
-                               content.match(/\/JS\s*[\(<]/) ||
-                               content.match(/app\.execMenuItem/) ||
-                               content.match(/this\.pageNum/);
-            const isJsPdf = !!hasJsAction;
-            console.log('[自動判別] JavaScriptアクション検出: ' + isJsPdf);
+            // 通常PDFかJS作成PDFかを自動判別
+            // 通常PDF: しおりが /Dest や /GoTo を使用（ブラウザでしおりが機能する）
+            // JS作成PDF: しおりが /S /JavaScript を使用（ブラウザでしおりが機能しない）
+            // 通常PDFのしおり構造が見つからない場合はJS作成PDFとして扱う
+            const hasNormalBookmarkDest = content.match(/\/Dest\s*[\[\(]/) ||      // /Dest [ref] または /Dest (name)
+                                          content.match(/\/A\s*<<[^>]*\/S\s*\/GoTo/) ||  // /A << /S /GoTo
+                                          content.match(/\/D\s*\[\s*\d+\s+\d+\s+R/);     // /D [ 123 0 R
+            const isJsPdf = !hasNormalBookmarkDest;
+            console.log('[自動判別] 通常しおり構造検出: ' + !!hasNormalBookmarkDest);
             console.log('[自動判別] PDFタイプ: ' + (isJsPdf ? 'JS作成PDF（ページ番号+1）' : '通常PDF（ページ番号そのまま）'));
+
+            // JS作成PDFと判定されたが、JSしおり構造もない場合はエラー
+            if (isJsPdf) {
+                const hasJsBookmarkAction = content.match(/\/S\s*\/JavaScript/) ||
+                                           content.match(/\/JS\s*[\(<]/) ||
+                                           content.match(/this\.pageNum/);
+                if (!hasJsBookmarkAction) {
+                    throw new Error('このPDFにはしおり情報が見つかりません。\n\n通常のしおり構造（/Dest, /GoTo）も、\nJavaScriptしおり構造（/JS, /S /JavaScript）も検出できませんでした。');
+                }
+                console.log('[自動判別] JSしおり構造検出: true');
+            }
 
             // ページオブジェクトとページ番号のマッピングを作成
             const pageObjects = buildPageMapping(content, objStmObjectsMap);
