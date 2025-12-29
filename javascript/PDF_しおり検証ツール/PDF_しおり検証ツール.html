@@ -486,16 +486,11 @@
         <!--
         ボタングループ
         disabled属性: ボタンを無効化（クリックできない状態）
-        PDFの作成方法に応じて2つのボタンを用意
         -->
         <div class="button-group">
-            <button id="validateNormalBtn" disabled title="Word等で通常作成したPDF">通常PDF検証</button>
-            <button id="validateJsBtn" disabled title="Adobe Acrobat JavaScriptで作成したPDF">JS作成PDF検証</button>
+            <button id="validateBtn" disabled>しおり検証</button>
             <button id="clearBtn" class="secondary" disabled>クリア</button>
         </div>
-        <p class="hint" style="font-size: 0.85em; color: #666; margin-top: 0.5em;">
-            ※ 通常PDF: Word等で作成 / JS作成PDF: Adobe Acrobat JavaScriptで作成
-        </p>
     </div>
 
     <!--
@@ -593,13 +588,8 @@
         const dropZone = document.getElementById('dropZone');         // ドロップゾーン
         const fileInput = document.getElementById('fileInput');       // ファイル入力
         const fileInfo = document.getElementById('fileInfo');         // ファイル情報表示
-        const validateNormalBtn = document.getElementById('validateNormalBtn');   // 通常PDF検証ボタン
-        const validateJsBtn = document.getElementById('validateJsBtn');           // JS作成PDF検証ボタン
+        const validateBtn = document.getElementById('validateBtn');   // 検証ボタン
         const clearBtn = document.getElementById('clearBtn');         // クリアボタン
-
-        // PDFタイプ: 'normal'（通常PDF）または 'javascript'（JS作成PDF）
-        // ユーザーがボタンで選択した値を保持
-        let pdfType = 'normal';
         const csvBtn = document.getElementById('csvBtn');             // CSV出力ボタン
         const resultContainer = document.getElementById('resultContainer');  // 結果コンテナ
         const resultBody = document.getElementById('resultBody');     // 結果テーブルのbody
@@ -710,8 +700,7 @@
             fileInfo.classList.add('show');
 
             // ボタンを有効化（disabled属性を解除）
-            validateNormalBtn.disabled = false;
-            validateJsBtn.disabled = false;
+            validateBtn.disabled = false;
             clearBtn.disabled = false;
 
             // エラーと結果を非表示に
@@ -744,16 +733,13 @@
           → ファイル読み込みなど、時間がかかる処理で使用
         ======================================================================
         */
-        // 共通の検証処理を関数化
-        async function runValidation(clickedBtn, otherBtn) {
+        validateBtn.addEventListener('click', async () => {
             // ファイルが選択されていなければ何もしない
             if (!selectedFile) return;
 
-            // 両方のボタンを無効化して、クリックされたボタンを「解析中...」に
-            clickedBtn.disabled = true;
-            otherBtn.disabled = true;
-            const originalText = clickedBtn.textContent;
-            clickedBtn.textContent = '解析中...';
+            // ボタンを無効化して、テキストを「解析中...」に
+            validateBtn.disabled = true;
+            validateBtn.innerHTML = '解析中...';
             hideError();
 
             // try-catch: エラーが発生する可能性のある処理を囲む
@@ -763,8 +749,8 @@
                 // arrayBuffer(): ファイルをバイナリデータとして読み込む
                 const arrayBuffer = await selectedFile.arrayBuffer();
 
-                // PDF解析を実行（非同期）- pdfTypeに応じて処理を分岐
-                bookmarks = await parsePDFBookmarks(arrayBuffer, pdfType);
+                // PDF解析を実行（非同期）
+                bookmarks = await parsePDFBookmarks(arrayBuffer);
 
                 // 結果を表示
                 displayResults();
@@ -773,24 +759,9 @@
                 showError(error.message);
             } finally {
                 // finally: 成功・失敗に関わらず最後に実行される
-                clickedBtn.disabled = false;
-                otherBtn.disabled = false;
-                clickedBtn.textContent = originalText;
+                validateBtn.disabled = false;
+                validateBtn.innerHTML = 'しおり検証';
             }
-        }
-
-        // 通常PDF検証ボタン（ページ番号をそのまま表示）
-        validateNormalBtn.addEventListener('click', async () => {
-            pdfType = 'normal';
-            console.log('[デバッグ] PDFタイプ: normal（ページ番号+1なし）');
-            await runValidation(validateNormalBtn, validateJsBtn);
-        });
-
-        // JS作成PDF検証ボタン（ページ番号を+1して表示）
-        validateJsBtn.addEventListener('click', async () => {
-            pdfType = 'javascript';
-            console.log('[デバッグ] PDFタイプ: javascript（ページ番号+1あり）');
-            await runValidation(validateJsBtn, validateNormalBtn);
         });
 
         /*
@@ -804,8 +775,7 @@
             bookmarks = [];
             fileInput.value = '';  // ファイル入力をクリア
             fileInfo.classList.remove('show');
-            validateNormalBtn.disabled = true;
-            validateJsBtn.disabled = true;
+            validateBtn.disabled = true;
             clearBtn.disabled = true;
             resultContainer.classList.add('hidden');
             hideError();
@@ -841,9 +811,9 @@
                 } else {
                     status = '不明';
                 }
-                // ページ番号を調整（JS作成PDFの場合のみ0始まりから1始まりに変換）
+                // ページ番号を調整（PDF.js抽出の場合のみ0始まりから1始まりに変換）
                 const csvPage = typeof bm.page === 'number'
-                    ? (pdfType === 'javascript' ? bm.page + 1 : bm.page)
+                    ? (bm.source === 'pdfjs' ? bm.page + 1 : bm.page)
                     : (bm.page || '');
                 // CSVの1行を追加
                 csv += `${i + 1},"${title}",${bm.level},${csvPage},${status}\n`;
@@ -952,9 +922,9 @@
                 // repeat(): 文字列を指定回数繰り返す（インデント用）
                 const indent = '　'.repeat(bm.level - 1);
 
-                // ページ番号を調整（JS作成PDFの場合のみ0始まりから1始まりに変換）
+                // ページ番号を調整（PDF.js抽出の場合のみ0始まりから1始まりに変換）
                 const displayPage = typeof bm.page === 'number'
-                    ? (pdfType === 'javascript' ? bm.page + 1 : bm.page)
+                    ? (bm.source === 'pdfjs' ? bm.page + 1 : bm.page)
                     : (bm.page || '-');
 
                 // tr要素の中身（セル）をHTML文字列で設定
@@ -1038,10 +1008,7 @@
           PDFファイルのバイナリデータからしおり情報を抽出
         ======================================================================
         */
-        async function parsePDFBookmarks(arrayBuffer, pdfType) {
-            // pdfType: 'normal'（通常PDF）または 'javascript'（JS作成PDF）
-            console.log('[デバッグ] parsePDFBookmarks開始 - PDFタイプ: ' + pdfType);
-
+        async function parsePDFBookmarks(arrayBuffer) {
             // Uint8Array: バイト配列（0-255の数値の配列）
             const bytes = new Uint8Array(arrayBuffer);
 
@@ -1064,28 +1031,21 @@
             }
 
             // Object Streams (ObjStm) からしおりを抽出（非同期処理）
-            // 通常PDFではObjStm抽出をスキップ（シンプルな抽出のみ）
             let objStmDecodedTitles = [];
             let objStmObjectsMap = new Map();
-            if (pdfType === 'javascript') {
-                // JS作成PDFの場合のみObjStm抽出を実行
-                console.log('[デバッグ] JS作成PDF: ObjStm抽出を実行');
-                try {
-                    const objStmResult = await parseObjectStreamsAsync(content, bytes);
-                    // バイト直接抽出で取得したデコード済みタイトル
-                    objStmDecodedTitles = objStmResult.decodedTitles || [];
-                    // ObjStm内の全オブジェクトマップ（ページテキスト抽出用）
-                    objStmObjectsMap = objStmResult.objStmObjectsMap || new Map();
-                    // 従来方式（latin1Decode）で取得したコンテンツ
-                    const rawContents = objStmResult.rawContents || [];
-                    if (rawContents.length > 0) {
-                        content = content + '\n' + rawContents.join('\n');
-                    }
-                } catch (e) {
-                    // ObjStm解析エラー（無視して続行）
+            try {
+                const objStmResult = await parseObjectStreamsAsync(content, bytes);
+                // バイト直接抽出で取得したデコード済みタイトル
+                objStmDecodedTitles = objStmResult.decodedTitles || [];
+                // ObjStm内の全オブジェクトマップ（ページテキスト抽出用）
+                objStmObjectsMap = objStmResult.objStmObjectsMap || new Map();
+                // 従来方式（latin1Decode）で取得したコンテンツ
+                const rawContents = objStmResult.rawContents || [];
+                if (rawContents.length > 0) {
+                    content = content + '\n' + rawContents.join('\n');
                 }
-            } else {
-                console.log('[デバッグ] 通常PDF: ObjStm抽出をスキップ');
+            } catch (e) {
+                // ObjStm解析エラー（無視して続行）
             }
 
             // しおり（Outlines）の存在確認
@@ -1197,9 +1157,9 @@
                 // 注: PDF.js抽出のページ番号は0始まりなので1始まりに変換が必要
                 let verifyDebugCount = 0;
                 for (const bm of bookmarks) {
-                    // ページ番号を調整（JS作成PDFの場合のみ0始まりから1始まりに変換）
+                    // ページ番号を調整（PDF.js抽出の場合のみ0始まりから1始まりに変換）
                     const adjustedPage = typeof bm.page === 'number'
-                        ? (pdfType === 'javascript' ? bm.page + 1 : bm.page)
+                        ? (bm.source === 'pdfjs' ? bm.page + 1 : bm.page)
                         : bm.page;
                     if (adjustedPage && pageTexts.has(adjustedPage)) {
                         const pageText = pageTexts.get(adjustedPage);
