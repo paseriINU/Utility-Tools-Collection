@@ -1182,6 +1182,27 @@
                 throw new Error(errorDetails);
             }
 
+            // しおりをページ番号とタイトルでソート
+            // 同じページ番号の場合はタイトルの数字順（自然順ソート）
+            bookmarks.sort((a, b) => {
+                // ページ番号を取得（source === 'pdfjs'の場合は+1済みの値で比較）
+                const pageA = typeof a.page === 'number' ? (a.source === 'pdfjs' ? a.page + 1 : a.page) : 0;
+                const pageB = typeof b.page === 'number' ? (b.source === 'pdfjs' ? b.page + 1 : b.page) : 0;
+
+                // ページ番号が異なる場合はページ順
+                if (pageA !== pageB) {
+                    return pageA - pageB;
+                }
+
+                // 同じページ番号の場合はタイトルで自然順ソート
+                // 数字部分を数値として比較（1-2 < 1-10）
+                const titleA = a.title || '';
+                const titleB = b.title || '';
+
+                // 自然順ソート: 数字を数値として比較
+                return titleA.localeCompare(titleB, 'ja', { numeric: true, sensitivity: 'base' });
+            });
+
             return bookmarks;
         }
 
