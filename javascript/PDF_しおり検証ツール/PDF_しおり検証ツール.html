@@ -811,8 +811,10 @@
                 } else {
                     status = '不明';
                 }
+                // ページ番号を調整（0始まりから1始まりに変換）
+                const csvPage = typeof bm.page === 'number' ? bm.page + 1 : (bm.page || '');
                 // CSVの1行を追加
-                csv += `${i + 1},"${title}",${bm.level},${bm.page || ''},${status}\n`;
+                csv += `${i + 1},"${title}",${bm.level},${csvPage},${status}\n`;
             });
 
             // Blob: バイナリデータを扱うオブジェクト
@@ -918,12 +920,15 @@
                 // repeat(): 文字列を指定回数繰り返す（インデント用）
                 const indent = '　'.repeat(bm.level - 1);
 
+                // ページ番号を調整（0始まりから1始まりに変換）
+                const displayPage = typeof bm.page === 'number' ? bm.page + 1 : (bm.page || '-');
+
                 // tr要素の中身（セル）をHTML文字列で設定
                 tr.innerHTML = `
                     <td>${i + 1}</td>
                     <td><span class="level-indent">${indent}</span>${escapeHtml(bm.title)}</td>
                     <td>${bm.level}</td>
-                    <td>${bm.page || '-'}</td>
+                    <td>${displayPage}</td>
                     <td class="${statusClass}">${status}</td>
                 `;
 
