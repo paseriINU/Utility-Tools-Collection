@@ -811,8 +811,10 @@
                 } else {
                     status = '不明';
                 }
-                // ページ番号を調整（0始まりから1始まりに変換）
-                const csvPage = typeof bm.page === 'number' ? bm.page + 1 : (bm.page || '');
+                // ページ番号を調整（PDF.js抽出の場合のみ0始まりから1始まりに変換）
+                const csvPage = typeof bm.page === 'number'
+                    ? (bm.source === 'pdfjs' ? bm.page + 1 : bm.page)
+                    : (bm.page || '');
                 // CSVの1行を追加
                 csv += `${i + 1},"${title}",${bm.level},${csvPage},${status}\n`;
             });
@@ -920,8 +922,10 @@
                 // repeat(): 文字列を指定回数繰り返す（インデント用）
                 const indent = '　'.repeat(bm.level - 1);
 
-                // ページ番号を調整（0始まりから1始まりに変換）
-                const displayPage = typeof bm.page === 'number' ? bm.page + 1 : (bm.page || '-');
+                // ページ番号を調整（PDF.js抽出の場合のみ0始まりから1始まりに変換）
+                const displayPage = typeof bm.page === 'number'
+                    ? (bm.source === 'pdfjs' ? bm.page + 1 : bm.page)
+                    : (bm.page || '-');
 
                 // tr要素の中身（セル）をHTML文字列で設定
                 tr.innerHTML = `
@@ -1089,7 +1093,7 @@
                             }
                         }
                     }
-                    bookmarks.push({ title: item.title, page: pageNum, level: 1 });
+                    bookmarks.push({ title: item.title, page: pageNum, level: 1, source: 'pdfjs' });
                 }
 
                 // ObjStmから十分な数のタイトルが取得できた場合は、
@@ -1129,11 +1133,13 @@
                 console.log('[タイトル検証] ページテキストMap件数: ' + pageTexts.size);
 
                 // 各しおりについて判定
-                // 注: PDF.jsはページ番号を1始まりで返すが、しおりのページ参照は0始まりの場合がある
+                // 注: PDF.js抽出のページ番号は0始まりなので1始まりに変換が必要
                 let verifyDebugCount = 0;
                 for (const bm of bookmarks) {
-                    // ページ番号を調整（0始まりの場合は+1して1始まりに変換）
-                    const adjustedPage = typeof bm.page === 'number' ? bm.page + 1 : bm.page;
+                    // ページ番号を調整（PDF.js抽出の場合のみ0始まりから1始まりに変換）
+                    const adjustedPage = typeof bm.page === 'number'
+                        ? (bm.source === 'pdfjs' ? bm.page + 1 : bm.page)
+                        : bm.page;
                     if (adjustedPage && pageTexts.has(adjustedPage)) {
                         const pageText = pageTexts.get(adjustedPage);
                         // 全角・半角正規化 + 空白除去 + 小文字化で比較精度を向上
@@ -3462,7 +3468,7 @@
                 if (title && title.trim()) {
                     // 重複チェック
                     if (!bookmarks.some(b => b.title === title.trim())) {
-                        bookmarks.push({ title: title.trim(), page: '', level: 1 });
+                        bookmarks.push({ title: title.trim(), page: '', level: 1, source: 'manual' });
                     }
                 }
             }
@@ -3590,7 +3596,7 @@
                 if (title && title.trim()) {
                     // 重複チェック
                     if (!bookmarks.some(b => b.title === title.trim())) {
-                        bookmarks.push({ title: title.trim(), page: '', level: 1 });
+                        bookmarks.push({ title: title.trim(), page: '', level: 1, source: 'manual' });
                     }
                 }
             }
@@ -3644,7 +3650,7 @@
                         }
                     }
                     if (title && title.trim() && !bookmarks.some(b => b.title === title.trim())) {
-                        bookmarks.push({ title: title.trim(), page: '', level: 1 });
+                        bookmarks.push({ title: title.trim(), page: '', level: 1, source: 'manual' });
                     }
                 }
             }
@@ -3704,7 +3710,7 @@
                         }
 
                         if (title && title.trim() && !bookmarks.some(b => b.title === title.trim())) {
-                            bookmarks.push({ title: title.trim(), page: '', level: 1 });
+                            bookmarks.push({ title: title.trim(), page: '', level: 1, source: 'manual' });
                         }
                     }
                 }
@@ -3909,7 +3915,7 @@
                                 const validJP = isValidJapaneseText(title);
                                 if (controlChars < title.length * 0.1 && validJP) {
                                     if (!bookmarks.some(b => b.title === title.trim())) {
-                                        bookmarks.push({ title: title.trim(), page: '', level: 1 });
+                                        bookmarks.push({ title: title.trim(), page: '', level: 1, source: 'manual' });
                                     }
                                 }
                             }
@@ -3999,7 +4005,7 @@
                                                     decoded: title.trim().substring(0, 30)
                                                 });
                                             }
-                                            bookmarks.push({ title: title.trim(), page: '', level: 1 });
+                                            bookmarks.push({ title: title.trim(), page: '', level: 1, source: 'manual' });
                                         }
                                     }
                                 } catch (e) {
@@ -4070,7 +4076,7 @@
                                                 decoded: title.trim().substring(0, 30)
                                             });
                                         }
-                                        bookmarks.push({ title: title.trim(), page: '', level: 1 });
+                                        bookmarks.push({ title: title.trim(), page: '', level: 1, source: 'manual' });
                                     }
                                 }
                             }
