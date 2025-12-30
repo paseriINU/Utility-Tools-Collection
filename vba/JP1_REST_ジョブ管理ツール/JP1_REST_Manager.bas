@@ -633,6 +633,55 @@ Private Function GetUnitList(config As Object, location As String) As Collection
     Dim result As String
     result = ExecutePowerShell(psScript)
 
+    ' APIエラーチェック
+    If InStr(result, "API_ERROR:") > 0 Then
+        Dim errorCode As String
+        Dim errorMsg As String
+        errorCode = ExtractValue(result, "API_ERROR:")
+        errorMsg = ExtractValue(result, "ERROR_MESSAGE:")
+
+        Dim userMsg As String
+        userMsg = "REST API接続エラー" & vbCrLf & vbCrLf
+        userMsg = userMsg & "エラーコード: " & errorCode & vbCrLf
+        userMsg = userMsg & "エラー内容: " & errorMsg & vbCrLf & vbCrLf
+
+        Select Case errorCode
+            Case "401"
+                userMsg = userMsg & "原因: JP1ユーザー名またはパスワードが間違っています"
+            Case "403"
+                userMsg = userMsg & "原因: JP1ユーザーに参照権限がありません"
+            Case "404"
+                userMsg = userMsg & "原因: 指定したパスまたはManagerホスト名が存在しません"
+            Case "412"
+                userMsg = userMsg & "原因: Web Consoleサーバに接続できません"
+            Case "500"
+                userMsg = userMsg & "原因: サーバ側でエラーが発生しました"
+            Case Else
+                userMsg = userMsg & "接続設定を確認してください"
+        End Select
+
+        MsgBox userMsg, vbCritical, "接続エラー"
+        Set GetUnitList = Nothing
+        Exit Function
+    End If
+
+    ' PowerShell実行エラーチェック
+    If InStr(result, "PS_ERROR:") > 0 Or Len(result) = 0 Then
+        Dim psError As String
+        psError = "PowerShell実行エラー" & vbCrLf & vbCrLf
+
+        If Len(result) = 0 Then
+            psError = psError & "応答がありませんでした。" & vbCrLf
+            psError = psError & "Web Consoleサーバへの接続を確認してください。"
+        Else
+            psError = psError & Left(result, 500)
+        End If
+
+        MsgBox psError, vbCritical, "実行エラー"
+        Set GetUnitList = Nothing
+        Exit Function
+    End If
+
     ' デバッグモード: API応答をMsgBoxで表示
     If m_DebugMode Then
         Dim debugMsg As String
@@ -648,9 +697,7 @@ Private Function GetUnitList(config As Object, location As String) As Collection
     Exit Function
 
 ErrorHandler:
-    If m_DebugMode Then
-        MsgBox "GetUnitListエラー: " & Err.Description, vbCritical, "デバッグモード"
-    End If
+    MsgBox "GetUnitListエラー: " & Err.Description, vbCritical, "VBAエラー"
     Set GetUnitList = Nothing
 End Function
 
@@ -821,7 +868,7 @@ Private Function BuildStatusesAPIScript(config As Object, location As String, se
     script = script & "$url += ""&serviceName=${schedulerService}""" & vbCrLf
     script = script & "$url += ""&location=${encodedLocation}""" & vbCrLf
     script = script & "$url += ""&searchLowerUnits=" & searchLowerUnits & """" & vbCrLf
-    script = script & "$url += ""&searchTarget=DEFINITION_AND_STATUS""" & vbCrLf
+    script = script & "$url += ""&searchTarget=DEFINITION""" & vbCrLf
     script = script & vbCrLf
 
     ' API呼び出し
@@ -1024,6 +1071,8 @@ End Function
 ' PowerShell実行
 '==============================================================================
 Private Function ExecutePowerShell(script As String) As String
+    On Error GoTo ErrorHandler
+
     Dim fso As Object
     Set fso = CreateObject("Scripting.FileSystemObject")
 
@@ -1039,23 +1088,43 @@ Private Function ExecutePowerShell(script As String) As String
     Dim outputPath As String
     outputPath = tempFolder & "\jp1rest_output_" & timestamp & ".txt"
 
-    ' ADODB.Streamを使用してUTF-8（BOM付き）で保存
+    ' デバッグモード: ファイルパスを表示
+    If m_DebugMode Then
+        MsgBox "デバッグファイル:" & vbCrLf & vbCrLf & _
+               "スクリプト: " & scriptPath & vbCrLf & _
+               "出力: " & outputPath, vbInformation, "デバッグモード"
+    End If
+
+    ' ADODB.Streamを使用してUTF-8（BOMなし）で保存
     Dim utfStream As Object
     Set utfStream = CreateObject("ADODB.Stream")
     utfStream.Type = 2 ' adTypeText
     utfStream.Charset = "UTF-8"
     utfStream.Open
     utfStream.WriteText script
-    utfStream.SaveToFile scriptPath, 2
-    utfStream.Close
-    Set utfStream = Nothing
 
-    ' PowerShell実行
+    ' BOMを除去してUTF-8で保存
+    Dim binStream As Object
+    Set binStream = CreateObject("ADODB.Stream")
+    binStream.Type = 1 ' adTypeBinary
+    binStream.Open
+
+    utfStream.Position = 3 ' Skip UTF-8 BOM (3 bytes)
+    utfStream.CopyTo binStream
+    utfStream.Close
+
+    binStream.SaveToFile scriptPath, 2
+    binStream.Close
+    Set utfStream = Nothing
+    Set binStream = Nothing
+
+    ' PowerShell実行コマンド（UTF-8出力を明示的に設定）
     Dim shell As Object
     Set shell = CreateObject("WScript.Shell")
 
     Dim cmd As String
     cmd = "powershell -NoProfile -ExecutionPolicy Bypass -Command ""& {" & _
+          "$OutputEncoding = [System.Text.Encoding]::UTF8; " & _
           "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; " & _
           "& '" & scriptPath & "'" & _
           "}"" > """ & outputPath & """ 2>&1"
@@ -1075,18 +1144,29 @@ Private Function ExecutePowerShell(script As String) As String
     output = ""
 
     If fso.FileExists(outputPath) Then
-        Set utfStream = CreateObject("ADODB.Stream")
-        utfStream.Type = 2
-        utfStream.Charset = "UTF-8"
-        utfStream.Open
-        utfStream.LoadFromFile outputPath
+        ' ファイルサイズ確認
+        Dim fileSize As Long
+        fileSize = fso.GetFile(outputPath).Size
 
-        If Not utfStream.EOS Then
-            output = utfStream.ReadText
+        If m_DebugMode Then
+            Debug.Print "Output file size: " & fileSize & " bytes"
         End If
 
-        utfStream.Close
-        Set utfStream = Nothing
+        If fileSize > 0 Then
+            ' UTF-8として読み込み
+            Set utfStream = CreateObject("ADODB.Stream")
+            utfStream.Type = 2
+            utfStream.Charset = "UTF-8"
+            utfStream.Open
+            utfStream.LoadFromFile outputPath
+
+            If Not utfStream.EOS Then
+                output = utfStream.ReadText
+            End If
+
+            utfStream.Close
+            Set utfStream = Nothing
+        End If
 
         ' デバッグモードでない場合は出力ファイル削除
         If Not m_DebugMode Then
@@ -1094,8 +1174,11 @@ Private Function ExecutePowerShell(script As String) As String
             fso.DeleteFile outputPath
             On Error GoTo 0
         Else
-            ' デバッグモード: ファイルパスをデバッグ出力
             Debug.Print "API Output File: " & outputPath
+        End If
+    Else
+        If m_DebugMode Then
+            MsgBox "出力ファイルが作成されませんでした: " & outputPath, vbExclamation, "デバッグモード"
         End If
     End If
 
@@ -1105,7 +1188,6 @@ Private Function ExecutePowerShell(script As String) As String
         fso.DeleteFile scriptPath
         On Error GoTo 0
     Else
-        ' デバッグモード: ファイルパスをデバッグ出力
         Debug.Print "Script File: " & scriptPath
         Debug.Print "API Response Length: " & Len(output)
         If Len(output) > 0 Then
@@ -1114,6 +1196,13 @@ Private Function ExecutePowerShell(script As String) As String
     End If
 
     ExecutePowerShell = output
+    Exit Function
+
+ErrorHandler:
+    If m_DebugMode Then
+        MsgBox "ExecutePowerShellエラー: " & Err.Description, vbCritical, "デバッグモード"
+    End If
+    ExecutePowerShell = "PS_ERROR:" & Err.Description
 End Function
 
 '==============================================================================
