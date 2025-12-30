@@ -1,4 +1,3 @@
-Attribute VB_Name = "WordBookmarkOrganizer_Setup"
 Option Explicit
 
 ' ============================================================================
@@ -14,9 +13,9 @@ Public Const SHEET_MAIN As String = "Word_しおり整理ツール"
 Public Const ROW_PATTERN_HEADER As Long = 19
 Public Const ROW_PATTERN_LEVEL1 As Long = 20
 Public Const ROW_PATTERN_LEVEL2 As Long = 21
-Public Const ROW_PATTERN_LEVEL3 As Long = 22   ' 第X節（節ありの場合）
-Public Const ROW_PATTERN_LEVEL4 As Long = 23   ' X-X
-Public Const ROW_PATTERN_LEVEL5 As Long = 24   ' X-X,X
+Public Const ROW_PATTERN_LEVEL3 As Long = 22   ' 第X節/X-X（節の有無で自動切替）
+Public Const ROW_PATTERN_LEVEL4 As Long = 23   ' X-X/X-X,X（節の有無で自動切替）
+Public Const ROW_PATTERN_LEVEL5 As Long = 24   ' X-X,X（節がある場合のみ使用）
 Public Const ROW_PATTERN_EXCEPTION1 As Long = 25
 Public Const ROW_PATTERN_EXCEPTION2 As Long = 26
 
@@ -162,21 +161,21 @@ Private Sub FormatMainSheet(ByRef ws As Worksheet)
         .Cells(ROW_PATTERN_LEVEL2, COL_DETECT_METHOD).Value = "ヘッダー参照"
         .Cells(ROW_PATTERN_LEVEL2, COL_STYLE_NAME).Value = "表題2"
 
-        ' レベル3（第X節 - 節ありの場合のみ使用）
+        ' レベル3（節あり:第X節、節なし:X-X）
         .Cells(ROW_PATTERN_LEVEL3, COL_LEVEL).Value = "3"
-        .Cells(ROW_PATTERN_LEVEL3, COL_PATTERN_DESC).Value = "第X節（※自動判定）"
+        .Cells(ROW_PATTERN_LEVEL3, COL_PATTERN_DESC).Value = "第X節 / X-X"
         .Cells(ROW_PATTERN_LEVEL3, COL_DETECT_METHOD).Value = "ヘッダー参照"
         .Cells(ROW_PATTERN_LEVEL3, COL_STYLE_NAME).Value = "表題3"
 
-        ' レベル4
+        ' レベル4（節あり:X-X、節なし:X-X,X）
         .Cells(ROW_PATTERN_LEVEL4, COL_LEVEL).Value = "4"
-        .Cells(ROW_PATTERN_LEVEL4, COL_PATTERN_DESC).Value = "X-X"
+        .Cells(ROW_PATTERN_LEVEL4, COL_PATTERN_DESC).Value = "X-X / X-X,X"
         .Cells(ROW_PATTERN_LEVEL4, COL_DETECT_METHOD).Value = "ヘッダー参照"
         .Cells(ROW_PATTERN_LEVEL4, COL_STYLE_NAME).Value = "表題4"
 
-        ' レベル5
+        ' レベル5（節がある場合のみ使用）
         .Cells(ROW_PATTERN_LEVEL5, COL_LEVEL).Value = "5"
-        .Cells(ROW_PATTERN_LEVEL5, COL_PATTERN_DESC).Value = "X-X,X"
+        .Cells(ROW_PATTERN_LEVEL5, COL_PATTERN_DESC).Value = "X-X,X（※節あり時）"
         .Cells(ROW_PATTERN_LEVEL5, COL_DETECT_METHOD).Value = "ヘッダー参照"
         .Cells(ROW_PATTERN_LEVEL5, COL_STYLE_NAME).Value = "表題5"
 
@@ -255,14 +254,14 @@ Private Sub FormatMainSheet(ByRef ws As Worksheet)
         .Range("B48").Value = "  例: ヘッダー「第1章　概要　1-1　詳細」→ セクション内で「1-1」を検索しスタイル適用"
         .Range("B48").Font.Color = RGB(0, 112, 192)
 
-        .Range("B50").Value = "【パターンマッチ方式】（レベル1: 第X部、ヘッダー空欄時: 第X章/第X節）"
+        .Range("B50").Value = "【パターンマッチ方式】（レベル1: 第X部、ヘッダー空欄時: 第X章）"
         .Range("B50").Font.Bold = True
         .Range("B51").Value = "  ヘッダー情報がないため、本文テキストから「第X部」を直接検出します。"
-        .Range("B52").Value = "  ヘッダーが空欄のセクションでは「第X章」「第X節」も本文から直接検出します。"
+        .Range("B52").Value = "  ヘッダーが空欄のセクションでは「第X章」も本文から直接検出します。"
 
-        .Range("B54").Value = "【第X節の自動判定】"
+        .Range("B54").Value = "【節構造の自動判定】"
         .Range("B54").Font.Bold = True
-        .Range("B55").Value = "  文書内に「第X節」が存在する場合、レベル3として処理します（なければスキップ）。"
+        .Range("B55").Value = "  ヘッダーに「第X節」があるかを事前に判定し、レベル構造を自動で切り替えます。"
 
         .Range("B57").Value = "【ヘッダーフィールド更新】"
         .Range("B57").Font.Bold = True
