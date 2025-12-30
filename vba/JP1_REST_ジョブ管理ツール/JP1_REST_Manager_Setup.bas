@@ -175,10 +175,10 @@ Private Sub FormatSettingsSheet()
     ws.Cells(ROW_WAIT_COMPLETION, 4).Font.Color = RGB(128, 128, 128)
 
     ws.Cells(ROW_POLLING_INTERVAL, 1).Value = "状態確認間隔（秒）"
-    ws.Cells(ROW_POLLING_INTERVAL, COL_SETTING_VALUE).Value = 5
+    ws.Cells(ROW_POLLING_INTERVAL, COL_SETTING_VALUE).Value = 10
 
     ws.Cells(ROW_TIMEOUT, 1).Value = "タイムアウト（秒）"
-    ws.Cells(ROW_TIMEOUT, COL_SETTING_VALUE).Value = 300
+    ws.Cells(ROW_TIMEOUT, COL_SETTING_VALUE).Value = 0
     ws.Cells(ROW_TIMEOUT, 4).Value = "※0=無制限"
     ws.Cells(ROW_TIMEOUT, 4).Font.Color = RGB(128, 128, 128)
 
