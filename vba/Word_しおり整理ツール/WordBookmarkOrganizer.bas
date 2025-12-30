@@ -183,11 +183,16 @@ Public Sub OrganizeWordBookmarks()
                     ", Level4=" & searchLevel4 & _
                     ", Level5=" & searchLevel5
 
+        ' ヘッダーが空白かどうか判定（空白文字を除去して判定）
+        Dim headerIsEmpty As Boolean
+        headerIsEmpty = (Trim(currPatterns.Level2Text) = "" And Trim(currPatterns.Level3Text) = "" And _
+                         Trim(currPatterns.Level4Text) = "" And Trim(currPatterns.Level5Text) = "")
+
         ' セクション内の段落を処理
         Dim para As Object
         For Each para In sect.Range.Paragraphs
             processedCount = processedCount + ProcessParagraphByHeader(para, styles, _
-                searchLevel2, searchLevel3, searchLevel4, searchLevel5, hasSections, wordDoc)
+                searchLevel2, searchLevel3, searchLevel4, searchLevel5, hasSections, headerIsEmpty, wordDoc)
         Next para
 
         ' セクション内の図形も処理
@@ -198,7 +203,7 @@ Public Sub OrganizeWordBookmarks()
             If shp.TextFrame.HasText Then
                 For Each shapePara In shp.TextFrame.TextRange.Paragraphs
                     processedCount = processedCount + ProcessParagraphByHeader(shapePara, styles, _
-                        searchLevel2, searchLevel3, searchLevel4, searchLevel5, hasSections, wordDoc)
+                        searchLevel2, searchLevel3, searchLevel4, searchLevel5, hasSections, headerIsEmpty, wordDoc)
                 Next shapePara
             End If
         Next shp
@@ -354,6 +359,7 @@ End Function
 ' hasSections: 文書内に「第X節」が存在する場合True
 '   True の場合: Level3=第X節, Level4=X-X, Level5=X-X,X
 '   False の場合: Level3=X-X, Level4=X-X,X, Level5=未使用
+' headerIsEmpty: ヘッダーが空白の場合True（第X部/第X章のパターンマッチ条件）
 ' ============================================================================
 Private Function ProcessParagraphByHeader(ByRef para As Object, _
                                           ByRef styles As StyleConfig, _
@@ -362,6 +368,7 @@ Private Function ProcessParagraphByHeader(ByRef para As Object, _
                                           ByVal searchLevel4 As String, _
                                           ByVal searchLevel5 As String, _
                                           ByVal hasSections As Boolean, _
+                                          ByVal headerIsEmpty As Boolean, _
                                           ByRef wordDoc As Object) As Long
     On Error GoTo ErrorHandler
 
@@ -458,8 +465,8 @@ Private Function ProcessParagraphByHeader(ByRef para As Object, _
                 detectedLevel = 2
                 targetStyle = styles.Level2Style
             End If
-        Else
-            ' ヘッダーが空の場合はパターンマッチでフォールバック
+        ElseIf headerIsEmpty Then
+            ' ヘッダーが空白の場合のみパターンマッチでフォールバック
             If MatchPattern(paraText, "第[0-9０-９]+章") Then
                 detectedLevel = 2
                 targetStyle = styles.Level2Style
@@ -467,8 +474,8 @@ Private Function ProcessParagraphByHeader(ByRef para As Object, _
         End If
     End If
 
-    ' レベル1: 第X部（パターンマッチ - 段落先頭のみ）
-    If detectedLevel = 0 And styles.Level1Style <> "" Then
+    ' レベル1: 第X部（パターンマッチ - 段落先頭かつヘッダー空白時のみ）
+    If detectedLevel = 0 And styles.Level1Style <> "" And headerIsEmpty Then
         If MatchPattern(paraText, "^第[0-9０-９]+部") Then
             detectedLevel = 1
             targetStyle = styles.Level1Style
