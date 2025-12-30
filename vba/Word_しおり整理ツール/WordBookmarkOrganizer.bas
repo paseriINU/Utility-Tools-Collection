@@ -10,12 +10,18 @@ Option Explicit
 ' === スタイル設定構造体 ===
 Private Type StyleConfig
     Level1Style As String  ' 第X部用（パターンマッチ）
-    Level2Style As String  ' 第X章用（ヘッダー参照）
+    Level2Style As String  ' 第X章用（ヘッダー参照/フォールバック:パターンマッチ）
     Level3Style As String  ' X-X用（ヘッダー参照）
     Level4Style As String  ' X-X,X用（ヘッダー参照）
     Exception1Style As String
     Exception2Style As String
 End Type
+
+' === デフォルトスタイル名定数（ヘッダーのSTYLEREF更新用） ===
+Private Const DEFAULT_LEVEL1_STYLE As String = "表題1"
+Private Const DEFAULT_LEVEL2_STYLE As String = "表題2"
+Private Const DEFAULT_LEVEL3_STYLE As String = "表題3"
+Private Const DEFAULT_LEVEL4_STYLE As String = "表題4"
 
 ' === ヘッダーパターン構造体 ===
 Private Type HeaderPatterns
@@ -170,6 +176,9 @@ Public Sub OrganizeWordBookmarks()
         ' 現在のパターンを保存
         prevPatterns = currPatterns
     Next sect
+
+    ' ヘッダー内のフィールドを更新（STYLEREFのスタイル名も変更）
+    UpdateHeaderFields wordDoc, styles
 
     ' Outputフォルダに名前を付けて保存
     wordDoc.SaveAs2 outputWordPath
@@ -358,11 +367,20 @@ Private Function ProcessParagraphByHeader(ByRef para As Object, _
         End If
     End If
 
-    ' レベル2: 第X章（ヘッダーから抽出したテキストで検索）
-    If detectedLevel = 0 And searchLevel2 <> "" And styles.Level2Style <> "" Then
-        If InStr(paraTextHalf, searchLevel2) > 0 Then
-            detectedLevel = 2
-            targetStyle = styles.Level2Style
+    ' レベル2: 第X章（ヘッダー参照またはパターンマッチ）
+    If detectedLevel = 0 And styles.Level2Style <> "" Then
+        If searchLevel2 <> "" Then
+            ' ヘッダーから抽出したテキストで検索
+            If InStr(paraTextHalf, searchLevel2) > 0 Then
+                detectedLevel = 2
+                targetStyle = styles.Level2Style
+            End If
+        Else
+            ' ヘッダーが空の場合はパターンマッチでフォールバック（第X部と第X章の両方）
+            If MatchPattern(paraText, "第[0-9０-９]+章") Then
+                detectedLevel = 2
+                targetStyle = styles.Level2Style
+            End If
         End If
     End If
 
@@ -667,6 +685,79 @@ Private Function SelectWordFileFromInput(ByVal inputDir As String) As String
     ' 選択されたファイルのフルパスを返す
     SelectWordFileFromInput = inputDir & fileList(selectedIndex)
 End Function
+
+' ============================================================================
+' ヘッダー内のフィールドを更新し、STYLEREFのスタイル名も変更
+' ============================================================================
+Private Sub UpdateHeaderFields(ByRef wordDoc As Object, ByRef styles As StyleConfig)
+    On Error Resume Next
+
+    Dim sect As Object
+    Dim hdr As Object
+    Dim fld As Object
+    Dim fieldCode As String
+    Dim newFieldCode As String
+
+    Debug.Print "========================================="
+    Debug.Print "ヘッダーのフィールドを更新しています..."
+
+    For Each sect In wordDoc.Sections
+        ' wdHeaderFooterPrimary = 1
+        For Each hdr In sect.Headers
+            ' ヘッダー内のフィールドを更新
+            For Each fld In hdr.Range.Fields
+                fieldCode = fld.Code.Text
+
+                ' STYLEREFフィールドの場合、スタイル名を更新
+                If InStr(fieldCode, "STYLEREF") > 0 Then
+                    newFieldCode = fieldCode
+
+                    ' デフォルトスタイル名を新しいスタイル名に置換
+                    If styles.Level1Style <> DEFAULT_LEVEL1_STYLE And _
+                       styles.Level1Style <> "" Then
+                        newFieldCode = Replace(newFieldCode, DEFAULT_LEVEL1_STYLE, styles.Level1Style)
+                    End If
+                    If styles.Level2Style <> DEFAULT_LEVEL2_STYLE And _
+                       styles.Level2Style <> "" Then
+                        newFieldCode = Replace(newFieldCode, DEFAULT_LEVEL2_STYLE, styles.Level2Style)
+                    End If
+                    If styles.Level3Style <> DEFAULT_LEVEL3_STYLE And _
+                       styles.Level3Style <> "" Then
+                        newFieldCode = Replace(newFieldCode, DEFAULT_LEVEL3_STYLE, styles.Level3Style)
+                    End If
+                    If styles.Level4Style <> DEFAULT_LEVEL4_STYLE And _
+                       styles.Level4Style <> "" Then
+                        newFieldCode = Replace(newFieldCode, DEFAULT_LEVEL4_STYLE, styles.Level4Style)
+                    End If
+
+                    ' フィールドコードが変更された場合、更新
+                    If newFieldCode <> fieldCode Then
+                        fld.Code.Text = newFieldCode
+                        Debug.Print "  STYLEREF更新: " & Trim(fieldCode) & " → " & Trim(newFieldCode)
+                    End If
+                End If
+
+                ' フィールドを更新
+                fld.Update
+            Next fld
+        Next hdr
+
+        ' フッターも更新
+        ' wdHeaderFooterPrimary = 1
+        For Each hdr In sect.Footers
+            For Each fld In hdr.Range.Fields
+                fld.Update
+            Next fld
+        Next hdr
+    Next sect
+
+    ' 文書全体のフィールドも更新
+    wordDoc.Fields.Update
+
+    Debug.Print "ヘッダーのフィールド更新完了"
+
+    On Error GoTo 0
+End Sub
 
 ' ============================================================================
 ' テスト用: イミディエイトウィンドウに情報を出力
