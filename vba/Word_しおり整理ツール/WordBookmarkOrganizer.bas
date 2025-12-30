@@ -467,9 +467,9 @@ Private Function ProcessParagraphByHeader(ByRef para As Object, _
         End If
     End If
 
-    ' レベル1: 第X部（パターンマッチ - ヘッダー情報なし）
+    ' レベル1: 第X部（パターンマッチ - 段落先頭のみ）
     If detectedLevel = 0 And styles.Level1Style <> "" Then
-        If MatchPattern(paraText, "第[0-9０-９]+部") Then
+        If MatchPattern(paraText, "^第[0-9０-９]+部") Then
             detectedLevel = 1
             targetStyle = styles.Level1Style
         End If
