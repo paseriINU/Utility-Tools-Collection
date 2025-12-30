@@ -121,104 +121,24 @@ Public Sub OrganizeWordBookmarks()
 
     ' すべての段落をループ
     For Each para In wordDoc.Paragraphs
-        If Not para.Range Is Nothing Then
-            Dim paraText As String
-            Dim currentStyle As String
-            Dim currentOutline As Long
-            Dim detectedLevel As Long
-            Dim targetStyle As String
-            Dim matchedNumber As Long
-
-            ' 段落テキストを取得（改行を除去）
-            paraText = Trim(Replace(para.Range.Text, vbCr, ""))
-            paraText = Replace(paraText, Chr(13), "")
-
-            ' 現在のスタイル名を取得
-            On Error Resume Next
-            currentStyle = para.Style.NameLocal
-            If Err.Number <> 0 Then
-                currentStyle = ""
-                Err.Clear
-            End If
-            On Error GoTo ErrorHandler
-
-            ' 現在のアウトラインレベルを取得
-            currentOutline = para.OutlineLevel
-
-            ' パターン検出（レベル4→3→2→1の順で評価）
-            detectedLevel = 0
-            targetStyle = ""
-            matchedNumber = 0
-
-            ' レベル4: X-X,X
-            If detectedLevel = 0 And configs(4).RegexPattern <> "" Then
-                If MatchPattern(paraText, configs(4).RegexPattern) Then
-                    detectedLevel = 4
-                    targetStyle = configs(4).StyleName
-                    matchedNumber = ExtractLastNumber(paraText, configs(4).RegexPattern)
-                End If
-            End If
-
-            ' レベル3: X-X
-            If detectedLevel = 0 And configs(3).RegexPattern <> "" Then
-                If MatchPattern(paraText, configs(3).RegexPattern) Then
-                    detectedLevel = 3
-                    targetStyle = configs(3).StyleName
-                    matchedNumber = ExtractSecondNumber(paraText, configs(3).RegexPattern)
-                End If
-            End If
-
-            ' レベル2: 第X章
-            If detectedLevel = 0 And configs(2).RegexPattern <> "" Then
-                If MatchPattern(paraText, configs(2).RegexPattern) Then
-                    detectedLevel = 2
-                    targetStyle = configs(2).StyleName
-                    matchedNumber = ExtractFirstNumber(paraText, configs(2).RegexPattern)
-                End If
-            End If
-
-            ' レベル1: 第X部
-            If detectedLevel = 0 And configs(1).RegexPattern <> "" Then
-                If MatchPattern(paraText, configs(1).RegexPattern) Then
-                    detectedLevel = 1
-                    targetStyle = configs(1).StyleName
-                    matchedNumber = ExtractFirstNumber(paraText, configs(1).RegexPattern)
-                End If
-            End If
-
-            ' 例外1: パターン外だが既にレベル1-4のスタイルが適用されている
-            If detectedLevel = 0 And exception1Style <> "" Then
-                If IsStyleInList(currentStyle, levelStyles) Then
-                    detectedLevel = -1  ' 例外1
-                    targetStyle = exception1Style
-                End If
-            End If
-
-            ' 例外2: アウトライン設定済み（段落またはスタイル）
-            If detectedLevel = 0 And exception2Style <> "" Then
-                ' 段落のOutlineLevelが1-9の場合、またはスタイルにアウトラインが定義されている場合
-                If (currentOutline >= 1 And currentOutline <= 9) Then
-                    detectedLevel = -2  ' 例外2
-                    targetStyle = exception2Style
-                ElseIf HasOutlineDefinedInStyle(para, wordDoc) Then
-                    detectedLevel = -2
-                    targetStyle = exception2Style
-                End If
-            End If
-
-            ' スタイル適用
-            If detectedLevel <> 0 And targetStyle <> "" Then
-                ApplyStyle para, targetStyle
-                processedCount = processedCount + 1
-                Debug.Print "[レベル" & detectedLevel & "] " & Left(paraText, 50)
-
-                ' 連番チェック（レベル1-4のみ）
-                If doSequenceCheck And detectedLevel > 0 Then
-                    TrackSequence tracker, detectedLevel, matchedNumber, paraText
-                End If
-            End If
-        End If
+        processedCount = processedCount + ProcessParagraph(para, configs, exception1Style, exception2Style, _
+                                                           levelStyles, wordDoc, doSequenceCheck, tracker)
     Next para
+
+    ' 図形（Shape）内のテキストも処理
+    Dim shp As Object
+    Dim shapePara As Object
+    For Each shp In wordDoc.Shapes
+        On Error Resume Next
+        If shp.TextFrame.HasText Then
+            For Each shapePara In shp.TextFrame.TextRange.Paragraphs
+                processedCount = processedCount + ProcessParagraph(shapePara, configs, exception1Style, exception2Style, _
+                                                                   levelStyles, wordDoc, doSequenceCheck, tracker)
+            Next shapePara
+        End If
+        Err.Clear
+        On Error GoTo ErrorHandler
+    Next shp
 
     ' Outputフォルダに名前を付けて保存
     wordDoc.SaveAs2 outputWordPath
@@ -290,6 +210,147 @@ ErrorHandler:
     Set wordApp = Nothing
     On Error GoTo 0
 End Sub
+
+' ============================================================================
+' 段落処理（共通関数）
+' 戻り値: 処理された場合は1、それ以外は0
+' ============================================================================
+Private Function ProcessParagraph(ByRef para As Object, _
+                                  ByRef configs() As PatternConfig, _
+                                  ByVal exception1Style As String, _
+                                  ByVal exception2Style As String, _
+                                  ByRef levelStyles As Collection, _
+                                  ByRef wordDoc As Object, _
+                                  ByVal doSequenceCheck As Boolean, _
+                                  ByRef tracker As SequenceTracker) As Long
+    On Error GoTo ErrorHandler
+
+    If para Is Nothing Then
+        ProcessParagraph = 0
+        Exit Function
+    End If
+
+    If para.Range Is Nothing Then
+        ProcessParagraph = 0
+        Exit Function
+    End If
+
+    Dim paraText As String
+    Dim currentStyle As String
+    Dim currentOutline As Long
+    Dim detectedLevel As Long
+    Dim targetStyle As String
+    Dim matchedNumber As Long
+
+    ' 段落テキストを取得（改行を除去）
+    paraText = Trim(Replace(para.Range.Text, vbCr, ""))
+    paraText = Replace(paraText, Chr(13), "")
+
+    ' 空の段落はスキップ
+    If paraText = "" Then
+        ProcessParagraph = 0
+        Exit Function
+    End If
+
+    ' 現在のスタイル名を取得
+    On Error Resume Next
+    currentStyle = para.Style.NameLocal
+    If Err.Number <> 0 Then
+        currentStyle = ""
+        Err.Clear
+    End If
+    On Error GoTo ErrorHandler
+
+    ' 現在のアウトラインレベルを取得
+    On Error Resume Next
+    currentOutline = para.OutlineLevel
+    If Err.Number <> 0 Then
+        currentOutline = 10  ' 本文レベル
+        Err.Clear
+    End If
+    On Error GoTo ErrorHandler
+
+    ' パターン検出（レベル4→3→2→1の順で評価）
+    detectedLevel = 0
+    targetStyle = ""
+    matchedNumber = 0
+
+    ' レベル4: X-X,X
+    If detectedLevel = 0 And configs(4).RegexPattern <> "" Then
+        If MatchPattern(paraText, configs(4).RegexPattern) Then
+            detectedLevel = 4
+            targetStyle = configs(4).StyleName
+            matchedNumber = ExtractLastNumber(paraText, configs(4).RegexPattern)
+        End If
+    End If
+
+    ' レベル3: X-X
+    If detectedLevel = 0 And configs(3).RegexPattern <> "" Then
+        If MatchPattern(paraText, configs(3).RegexPattern) Then
+            detectedLevel = 3
+            targetStyle = configs(3).StyleName
+            matchedNumber = ExtractSecondNumber(paraText, configs(3).RegexPattern)
+        End If
+    End If
+
+    ' レベル2: 第X章
+    If detectedLevel = 0 And configs(2).RegexPattern <> "" Then
+        If MatchPattern(paraText, configs(2).RegexPattern) Then
+            detectedLevel = 2
+            targetStyle = configs(2).StyleName
+            matchedNumber = ExtractFirstNumber(paraText, configs(2).RegexPattern)
+        End If
+    End If
+
+    ' レベル1: 第X部
+    If detectedLevel = 0 And configs(1).RegexPattern <> "" Then
+        If MatchPattern(paraText, configs(1).RegexPattern) Then
+            detectedLevel = 1
+            targetStyle = configs(1).StyleName
+            matchedNumber = ExtractFirstNumber(paraText, configs(1).RegexPattern)
+        End If
+    End If
+
+    ' 例外1: パターン外だが既にレベル1-4のスタイルが適用されている
+    If detectedLevel = 0 And exception1Style <> "" Then
+        If IsStyleInList(currentStyle, levelStyles) Then
+            detectedLevel = -1  ' 例外1
+            targetStyle = exception1Style
+        End If
+    End If
+
+    ' 例外2: アウトライン設定済み（段落またはスタイル）
+    If detectedLevel = 0 And exception2Style <> "" Then
+        ' 段落のOutlineLevelが1-9の場合、またはスタイルにアウトラインが定義されている場合
+        If (currentOutline >= 1 And currentOutline <= 9) Then
+            detectedLevel = -2  ' 例外2
+            targetStyle = exception2Style
+        ElseIf HasOutlineDefinedInStyle(para, wordDoc) Then
+            detectedLevel = -2
+            targetStyle = exception2Style
+        End If
+    End If
+
+    ' スタイル適用
+    If detectedLevel <> 0 And targetStyle <> "" Then
+        ApplyStyle para, targetStyle
+        Debug.Print "[レベル" & detectedLevel & "] " & Left(paraText, 50)
+
+        ' 連番チェック（レベル1-4のみ）
+        If doSequenceCheck And detectedLevel > 0 Then
+            TrackSequence tracker, detectedLevel, matchedNumber, paraText
+        End If
+
+        ProcessParagraph = 1
+        Exit Function
+    End If
+
+    ProcessParagraph = 0
+    Exit Function
+
+ErrorHandler:
+    ProcessParagraph = 0
+End Function
 
 ' ============================================================================
 ' Excelシートから設定を読み込み
