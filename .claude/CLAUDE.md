@@ -845,7 +845,11 @@ JP1_AJS3_REST_API.mdには以下の全19個のAPIが公式ドキュメントか�
    - statuses API: `statuses[].definition.unitName`, `statuses[].unitStatus.execID`
    - execResultDetails API: `execResultDetails`（最大5MB）
 
-4. **公式ドキュメント**
+4. **searchTargetパラメータ**
+   - `DEFINITION`: 実行中でなくても定義済みユニットを取得（ツリー表示で使用）
+   - `DEFINITION_AND_STATUS`: 実行中のユニットのみ取得（即時実行状態確認で使用）
+
+5. **公式ドキュメント**
    - [JP1/AJS3 Web Console REST API](https://itpfdoc.hitachi.co.jp/manuals/3021/30213b1920/AJSO0280.HTM)
 
 ## Tools Currently Available
