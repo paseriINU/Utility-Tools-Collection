@@ -633,11 +633,24 @@ Private Function GetUnitList(config As Object, location As String) As Collection
     Dim result As String
     result = ExecutePowerShell(psScript)
 
+    ' デバッグモード: API応答をMsgBoxで表示
+    If m_DebugMode Then
+        Dim debugMsg As String
+        debugMsg = "=== API応答デバッグ ===" & vbCrLf & vbCrLf
+        debugMsg = debugMsg & "応答長: " & Len(result) & " 文字" & vbCrLf & vbCrLf
+        debugMsg = debugMsg & "応答内容（先頭1000文字）:" & vbCrLf
+        debugMsg = debugMsg & Left(result, 1000)
+        MsgBox debugMsg, vbInformation, "デバッグモード"
+    End If
+
     ' 結果をパース
     Set GetUnitList = ParseStatusesResponse(result)
     Exit Function
 
 ErrorHandler:
+    If m_DebugMode Then
+        MsgBox "GetUnitListエラー: " & Err.Description, vbCritical, "デバッグモード"
+    End If
     Set GetUnitList = Nothing
 End Function
 
