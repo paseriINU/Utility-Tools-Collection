@@ -256,8 +256,8 @@ Private Sub FormatMainSheet(ByRef ws As Worksheet)
 
         .Range("B50").Value = "【パターンマッチ方式】（ヘッダー空欄時のみ: 第X部/第X章）"
         .Range("B50").Font.Bold = True
-        .Range("B51").Value = "  ヘッダーが空欄のセクションでのみ、本文から「第X部」「第X章」を検出します。"
-        .Range("B52").Value = "  「第X部」は段落の先頭にある場合のみ対象（段落内の途中にあるものは対象外）。"
+        .Range("B51").Value = "  ヘッダーにテキストがない場合のみ、本文から「第X部」「第X章」を検出します。"
+        .Range("B52").Value = "  「第X部」は段落先頭のみ対象。ヘッダーにSTYLEREF等があれば処理しません。"
 
         .Range("B54").Value = "【節構造の自動判定】"
         .Range("B54").Font.Bold = True
