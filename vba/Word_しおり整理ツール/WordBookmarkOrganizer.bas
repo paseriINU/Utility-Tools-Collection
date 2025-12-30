@@ -11,8 +11,9 @@ Option Explicit
 Private Type StyleConfig
     Level1Style As String  ' 第X部用（パターンマッチ）
     Level2Style As String  ' 第X章用（ヘッダー参照/フォールバック:パターンマッチ）
-    Level3Style As String  ' X-X用（ヘッダー参照）
-    Level4Style As String  ' X-X,X用（ヘッダー参照）
+    Level3Style As String  ' 第X節用（ヘッダー参照、自動判定）
+    Level4Style As String  ' X-X用（ヘッダー参照）
+    Level5Style As String  ' X-X,X用（ヘッダー参照）
     Exception1Style As String
     Exception2Style As String
 End Type
@@ -22,12 +23,14 @@ Private Const DEFAULT_LEVEL1_STYLE As String = "表題1"
 Private Const DEFAULT_LEVEL2_STYLE As String = "表題2"
 Private Const DEFAULT_LEVEL3_STYLE As String = "表題3"
 Private Const DEFAULT_LEVEL4_STYLE As String = "表題4"
+Private Const DEFAULT_LEVEL5_STYLE As String = "表題5"
 
 ' === ヘッダーパターン構造体 ===
 Private Type HeaderPatterns
     Level2Text As String   ' 第X章
-    Level3Text As String   ' X-X
-    Level4Text As String   ' X-X,X
+    Level3Text As String   ' 第X節
+    Level4Text As String   ' X-X
+    Level5Text As String   ' X-X,X
 End Type
 
 ' ============================================================================
@@ -96,6 +99,23 @@ Public Sub OrganizeWordBookmarks()
     ' Word文書を開く
     Set wordDoc = wordApp.Documents.Open(filePath)
 
+    ' スタイルの存在確認
+    Dim missingStyles As String
+    missingStyles = ValidateStyles(wordDoc, styles)
+    If missingStyles <> "" Then
+        MsgBox "エラー: 以下のスタイルがWord文書に存在しません。" & vbCrLf & vbCrLf & _
+               missingStyles & vbCrLf & _
+               "処理を中止します。" & vbCrLf & vbCrLf & _
+               "Word文書にスタイルを作成するか、" & vbCrLf & _
+               "Excelシートのスタイル名を修正してください。", _
+               vbCritical, "スタイルエラー"
+        wordDoc.Close SaveChanges:=False
+        wordApp.Quit
+        Set wordDoc = Nothing
+        Set wordApp = Nothing
+        Exit Sub
+    End If
+
     ' 処理開始メッセージ
     Debug.Print "========================================="
     Debug.Print "Word文書のしおり整理を開始します"
@@ -114,6 +134,7 @@ Public Sub OrganizeWordBookmarks()
     prevPatterns.Level2Text = ""
     prevPatterns.Level3Text = ""
     prevPatterns.Level4Text = ""
+    prevPatterns.Level5Text = ""
 
     sectIndex = 0
     For Each sect In wordDoc.Sections
@@ -126,16 +147,19 @@ Public Sub OrganizeWordBookmarks()
 
         Debug.Print "  ヘッダーパターン: Level2=" & currPatterns.Level2Text & _
                     ", Level3=" & currPatterns.Level3Text & _
-                    ", Level4=" & currPatterns.Level4Text
+                    ", Level4=" & currPatterns.Level4Text & _
+                    ", Level5=" & currPatterns.Level5Text
 
         ' 前セクションとの差分を計算（新しく追加されたパターンのみ）
         Dim searchLevel2 As String
         Dim searchLevel3 As String
         Dim searchLevel4 As String
+        Dim searchLevel5 As String
 
         searchLevel2 = ""
         searchLevel3 = ""
         searchLevel4 = ""
+        searchLevel5 = ""
 
         If currPatterns.Level2Text <> "" And currPatterns.Level2Text <> prevPatterns.Level2Text Then
             searchLevel2 = currPatterns.Level2Text
@@ -146,16 +170,20 @@ Public Sub OrganizeWordBookmarks()
         If currPatterns.Level4Text <> "" And currPatterns.Level4Text <> prevPatterns.Level4Text Then
             searchLevel4 = currPatterns.Level4Text
         End If
+        If currPatterns.Level5Text <> "" And currPatterns.Level5Text <> prevPatterns.Level5Text Then
+            searchLevel5 = currPatterns.Level5Text
+        End If
 
         Debug.Print "  検索対象: Level2=" & searchLevel2 & _
                     ", Level3=" & searchLevel3 & _
-                    ", Level4=" & searchLevel4
+                    ", Level4=" & searchLevel4 & _
+                    ", Level5=" & searchLevel5
 
         ' セクション内の段落を処理
         Dim para As Object
         For Each para In sect.Range.Paragraphs
             processedCount = processedCount + ProcessParagraphByHeader(para, styles, _
-                searchLevel2, searchLevel3, searchLevel4, wordDoc)
+                searchLevel2, searchLevel3, searchLevel4, searchLevel5, wordDoc)
         Next para
 
         ' セクション内の図形も処理
@@ -166,7 +194,7 @@ Public Sub OrganizeWordBookmarks()
             If shp.TextFrame.HasText Then
                 For Each shapePara In shp.TextFrame.TextRange.Paragraphs
                     processedCount = processedCount + ProcessParagraphByHeader(shapePara, styles, _
-                        searchLevel2, searchLevel3, searchLevel4, wordDoc)
+                        searchLevel2, searchLevel3, searchLevel4, searchLevel5, wordDoc)
                 Next shapePara
             End If
         Next shp
@@ -252,6 +280,7 @@ Private Function ExtractHeaderPatterns(ByRef sect As Object) As HeaderPatterns
     result.Level2Text = ""
     result.Level3Text = ""
     result.Level4Text = ""
+    result.Level5Text = ""
 
     On Error Resume Next
 
@@ -290,18 +319,25 @@ Private Function ExtractHeaderPatterns(ByRef sect As Object) As HeaderPatterns
         result.Level2Text = ConvertToHalfWidth(matches(matches.Count - 1).Value)
     End If
 
+    ' 第X節を抽出
+    regex.Pattern = "第[0-9０-９]+節"
+    Set matches = regex.Execute(headerText)
+    If matches.Count > 0 Then
+        result.Level3Text = ConvertToHalfWidth(matches(matches.Count - 1).Value)
+    End If
+
     ' X-X,X を先に抽出（X-Xより具体的）
     regex.Pattern = "[0-9０-９]+[-－ー][0-9０-９]+[,，.．][0-9０-９]+"
     Set matches = regex.Execute(headerText)
     If matches.Count > 0 Then
-        result.Level4Text = ConvertToHalfWidth(matches(matches.Count - 1).Value)
+        result.Level5Text = ConvertToHalfWidth(matches(matches.Count - 1).Value)
     End If
 
     ' X-X を抽出（X-X,Xを除外）
     regex.Pattern = "[0-9０-９]+[-－ー][0-9０-９]+(?![,，.．0-9０-９])"
     Set matches = regex.Execute(headerText)
     If matches.Count > 0 Then
-        result.Level3Text = ConvertToHalfWidth(matches(matches.Count - 1).Value)
+        result.Level4Text = ConvertToHalfWidth(matches(matches.Count - 1).Value)
     End If
 
     Set regex = Nothing
@@ -317,6 +353,7 @@ Private Function ProcessParagraphByHeader(ByRef para As Object, _
                                           ByVal searchLevel2 As String, _
                                           ByVal searchLevel3 As String, _
                                           ByVal searchLevel4 As String, _
+                                          ByVal searchLevel5 As String, _
                                           ByRef wordDoc As Object) As Long
     On Error GoTo ErrorHandler
 
@@ -351,7 +388,15 @@ Private Function ProcessParagraphByHeader(ByRef para As Object, _
     detectedLevel = 0
     targetStyle = ""
 
-    ' レベル4: X-X,X（ヘッダーから抽出したテキストで検索）
+    ' レベル5: X-X,X（ヘッダーから抽出したテキストで検索）
+    If detectedLevel = 0 And searchLevel5 <> "" And styles.Level5Style <> "" Then
+        If InStr(paraTextHalf, searchLevel5) > 0 Then
+            detectedLevel = 5
+            targetStyle = styles.Level5Style
+        End If
+    End If
+
+    ' レベル4: X-X（ヘッダーから抽出したテキストで検索）
     If detectedLevel = 0 And searchLevel4 <> "" And styles.Level4Style <> "" Then
         If InStr(paraTextHalf, searchLevel4) > 0 Then
             detectedLevel = 4
@@ -359,11 +404,20 @@ Private Function ProcessParagraphByHeader(ByRef para As Object, _
         End If
     End If
 
-    ' レベル3: X-X（ヘッダーから抽出したテキストで検索）
-    If detectedLevel = 0 And searchLevel3 <> "" And styles.Level3Style <> "" Then
-        If InStr(paraTextHalf, searchLevel3) > 0 Then
-            detectedLevel = 3
-            targetStyle = styles.Level3Style
+    ' レベル3: 第X節（ヘッダー参照またはパターンマッチ）
+    If detectedLevel = 0 And styles.Level3Style <> "" Then
+        If searchLevel3 <> "" Then
+            ' ヘッダーから抽出したテキストで検索
+            If InStr(paraTextHalf, searchLevel3) > 0 Then
+                detectedLevel = 3
+                targetStyle = styles.Level3Style
+            End If
+        Else
+            ' ヘッダーが空の場合はパターンマッチでフォールバック
+            If MatchPattern(paraText, "第[0-9０-９]+節") Then
+                detectedLevel = 3
+                targetStyle = styles.Level3Style
+            End If
         End If
     End If
 
@@ -376,7 +430,7 @@ Private Function ProcessParagraphByHeader(ByRef para As Object, _
                 targetStyle = styles.Level2Style
             End If
         Else
-            ' ヘッダーが空の場合はパターンマッチでフォールバック（第X部と第X章の両方）
+            ' ヘッダーが空の場合はパターンマッチでフォールバック
             If MatchPattern(paraText, "第[0-9０-９]+章") Then
                 detectedLevel = 2
                 targetStyle = styles.Level2Style
@@ -392,7 +446,7 @@ Private Function ProcessParagraphByHeader(ByRef para As Object, _
         End If
     End If
 
-    ' 例外1: パターン外だが既にレベル1-4のスタイルが適用されている
+    ' 例外1: パターン外だが既にレベル1-5のスタイルが適用されている
     If detectedLevel = 0 And styles.Exception1Style <> "" Then
         Dim currentStyle As String
         On Error Resume Next
@@ -445,7 +499,7 @@ ErrorHandler:
 End Function
 
 ' ============================================================================
-' スタイルがレベル1-4のいずれかかチェック
+' スタイルがレベル1-5のいずれかかチェック
 ' ============================================================================
 Private Function IsLevelStyle(ByVal styleName As String, ByRef styles As StyleConfig) As Boolean
     If styleName = "" Then
@@ -456,7 +510,8 @@ Private Function IsLevelStyle(ByVal styleName As String, ByRef styles As StyleCo
     If styleName = styles.Level1Style Or _
        styleName = styles.Level2Style Or _
        styleName = styles.Level3Style Or _
-       styleName = styles.Level4Style Then
+       styleName = styles.Level4Style Or _
+       styleName = styles.Level5Style Then
         IsLevelStyle = True
     Else
         IsLevelStyle = False
@@ -478,6 +533,7 @@ Private Function LoadSettings(ByRef styles As StyleConfig, _
     styles.Level2Style = CStr(ws.Cells(ROW_PATTERN_LEVEL2, COL_STYLE_NAME).Value)
     styles.Level3Style = CStr(ws.Cells(ROW_PATTERN_LEVEL3, COL_STYLE_NAME).Value)
     styles.Level4Style = CStr(ws.Cells(ROW_PATTERN_LEVEL4, COL_STYLE_NAME).Value)
+    styles.Level5Style = CStr(ws.Cells(ROW_PATTERN_LEVEL5, COL_STYLE_NAME).Value)
     styles.Exception1Style = CStr(ws.Cells(ROW_PATTERN_EXCEPTION1, COL_STYLE_NAME).Value)
     styles.Exception2Style = CStr(ws.Cells(ROW_PATTERN_EXCEPTION2, COL_STYLE_NAME).Value)
 
@@ -489,6 +545,80 @@ Private Function LoadSettings(ByRef styles As StyleConfig, _
 
 ErrorHandler:
     LoadSettings = False
+End Function
+
+' ============================================================================
+' スタイルの存在確認
+' 存在しないスタイルがあれば、そのスタイル名を改行区切りで返す
+' すべて存在すれば空文字列を返す
+' ============================================================================
+Private Function ValidateStyles(ByRef wordDoc As Object, ByRef styles As StyleConfig) As String
+    Dim missingStyles As String
+    missingStyles = ""
+
+    ' 各スタイルの存在確認
+    If styles.Level1Style <> "" Then
+        If Not StyleExists(wordDoc, styles.Level1Style) Then
+            missingStyles = missingStyles & "  - " & styles.Level1Style & " (レベル1: 第X部)" & vbCrLf
+        End If
+    End If
+
+    If styles.Level2Style <> "" Then
+        If Not StyleExists(wordDoc, styles.Level2Style) Then
+            missingStyles = missingStyles & "  - " & styles.Level2Style & " (レベル2: 第X章)" & vbCrLf
+        End If
+    End If
+
+    If styles.Level3Style <> "" Then
+        If Not StyleExists(wordDoc, styles.Level3Style) Then
+            missingStyles = missingStyles & "  - " & styles.Level3Style & " (レベル3: 第X節)" & vbCrLf
+        End If
+    End If
+
+    If styles.Level4Style <> "" Then
+        If Not StyleExists(wordDoc, styles.Level4Style) Then
+            missingStyles = missingStyles & "  - " & styles.Level4Style & " (レベル4: X-X)" & vbCrLf
+        End If
+    End If
+
+    If styles.Level5Style <> "" Then
+        If Not StyleExists(wordDoc, styles.Level5Style) Then
+            missingStyles = missingStyles & "  - " & styles.Level5Style & " (レベル5: X-X,X)" & vbCrLf
+        End If
+    End If
+
+    If styles.Exception1Style <> "" Then
+        If Not StyleExists(wordDoc, styles.Exception1Style) Then
+            missingStyles = missingStyles & "  - " & styles.Exception1Style & " (例外1)" & vbCrLf
+        End If
+    End If
+
+    If styles.Exception2Style <> "" Then
+        If Not StyleExists(wordDoc, styles.Exception2Style) Then
+            missingStyles = missingStyles & "  - " & styles.Exception2Style & " (例外2)" & vbCrLf
+        End If
+    End If
+
+    ValidateStyles = missingStyles
+End Function
+
+' ============================================================================
+' 指定したスタイルがWord文書に存在するかチェック
+' ============================================================================
+Private Function StyleExists(ByRef wordDoc As Object, ByVal styleName As String) As Boolean
+    On Error Resume Next
+
+    Dim testStyle As Object
+    Set testStyle = wordDoc.styles(styleName)
+
+    If Err.Number <> 0 Then
+        StyleExists = False
+        Err.Clear
+    Else
+        StyleExists = True
+    End If
+
+    On Error GoTo 0
 End Function
 
 ' ============================================================================
@@ -728,6 +858,10 @@ Private Sub UpdateHeaderFields(ByRef wordDoc As Object, ByRef styles As StyleCon
                     If styles.Level4Style <> DEFAULT_LEVEL4_STYLE And _
                        styles.Level4Style <> "" Then
                         newFieldCode = Replace(newFieldCode, DEFAULT_LEVEL4_STYLE, styles.Level4Style)
+                    End If
+                    If styles.Level5Style <> DEFAULT_LEVEL5_STYLE And _
+                       styles.Level5Style <> "" Then
+                        newFieldCode = Replace(newFieldCode, DEFAULT_LEVEL5_STYLE, styles.Level5Style)
                     End If
 
                     ' フィールドコードが変更された場合、更新
