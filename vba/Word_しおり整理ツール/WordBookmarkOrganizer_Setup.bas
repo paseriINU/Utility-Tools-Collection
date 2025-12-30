@@ -235,7 +235,7 @@ Private Sub FormatMainSheet(ByRef ws As Worksheet)
         .Range("B35:B38").Font.Name = "Meiryo UI"
         .Range("B35:B38").Font.Size = 10
 
-        ' === 動作説明セクション（行42-52） ===
+        ' === 動作説明セクション（行42-55） ===
         .Range("B42").Value = "■ 動作の説明"
         .Range("B42").Font.Name = "Meiryo UI"
         .Range("B42").Font.Bold = True
@@ -248,15 +248,20 @@ Private Sub FormatMainSheet(ByRef ws As Worksheet)
         .Range("B47").Value = "  例: ヘッダー「第1章　概要　1-1　詳細」→ セクション内で「1-1」を検索しスタイル適用"
         .Range("B47").Font.Color = RGB(0, 112, 192)
 
-        .Range("B49").Value = "【パターンマッチ方式】（レベル1: 第X部）"
+        .Range("B49").Value = "【パターンマッチ方式】（レベル1: 第X部、ヘッダー空欄時: 第X章）"
         .Range("B49").Font.Bold = True
         .Range("B50").Value = "  ヘッダー情報がないため、本文テキストから「第X部」を直接検出します。"
+        .Range("B51").Value = "  ヘッダーが空欄のセクションでは「第X章」も本文から直接検出します。"
 
-        .Range("B52").Value = "※ 図形（テキストボックス等）内のテキストも処理対象です"
-        .Range("B52").Font.Color = RGB(0, 112, 192)
+        .Range("B53").Value = "【ヘッダーフィールド更新】"
+        .Range("B53").Font.Bold = True
+        .Range("B54").Value = "  スタイル適用後、ヘッダー内のSTYLEREFフィールドのスタイル名を自動更新します。"
 
-        .Range("B44:B52").Font.Name = "Meiryo UI"
-        .Range("B44:B52").Font.Size = 10
+        .Range("B56").Value = "※ 図形（テキストボックス等）内のテキストも処理対象です"
+        .Range("B56").Font.Color = RGB(0, 112, 192)
+
+        .Range("B44:B56").Font.Name = "Meiryo UI"
+        .Range("B44:B56").Font.Size = 10
 
         ' === 列幅調整 ===
         .Columns("A").ColumnWidth = 3
@@ -316,6 +321,8 @@ Private Sub AddButton(ByRef ws As Worksheet, ByRef cell As Range, _
         .TextFrame2.TextRange.ParagraphFormat.Alignment = msoAlignCenter
         .TextFrame2.VerticalAnchor = msoAnchorMiddle
         .OnAction = macroName
+        ' セルサイズに依存しない固定配置
+        .Placement = xlFreeFloating
     End With
 End Sub
 
