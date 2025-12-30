@@ -183,10 +183,9 @@ Public Sub OrganizeWordBookmarks()
                     ", Level4=" & searchLevel4 & _
                     ", Level5=" & searchLevel5
 
-        ' ヘッダーが空白かどうか判定（空白文字を除去して判定）
+        ' ヘッダーが空白かどうか判定（ヘッダーテキスト自体が空かどうか）
         Dim headerIsEmpty As Boolean
-        headerIsEmpty = (Trim(currPatterns.Level2Text) = "" And Trim(currPatterns.Level3Text) = "" And _
-                         Trim(currPatterns.Level4Text) = "" And Trim(currPatterns.Level5Text) = "")
+        headerIsEmpty = IsHeaderEmpty(sect)
 
         ' セクション内の段落を処理
         Dim para As Object
@@ -278,6 +277,28 @@ ErrorHandler:
     Set wordApp = Nothing
     On Error GoTo 0
 End Sub
+
+' ============================================================================
+' セクションのヘッダーが空白かどうかをチェック
+' ============================================================================
+Private Function IsHeaderEmpty(ByRef sect As Object) As Boolean
+    On Error Resume Next
+
+    Dim headerText As String
+    headerText = sect.Headers(1).Range.Text
+    headerText = Trim(Replace(headerText, vbCr, ""))
+    headerText = Replace(headerText, Chr(13), "")
+
+    If Err.Number <> 0 Then
+        Err.Clear
+        IsHeaderEmpty = True
+        Exit Function
+    End If
+
+    On Error GoTo 0
+
+    IsHeaderEmpty = (Trim(headerText) = "")
+End Function
 
 ' ============================================================================
 ' セクションのヘッダーからパターンを抽出
@@ -403,6 +424,18 @@ Private Function ProcessParagraphByHeader(ByRef para As Object, _
     detectedLevel = 0
     targetStyle = ""
 
+    ' ========================================
+    ' 最初に「第X部」をチェック（段落先頭かつヘッダー空白時のみ）
+    ' 「第X部」で始まる段落は他のレベルの処理をスキップ
+    ' ========================================
+    If styles.Level1Style <> "" And headerIsEmpty Then
+        If MatchPattern(paraText, "^第[0-9０-９]+部") Then
+            detectedLevel = 1
+            targetStyle = styles.Level1Style
+            GoTo ApplyStyleAndExit
+        End If
+    End If
+
     If hasSections Then
         ' ========================================
         ' 節ありの場合（5レベル構造）
@@ -474,14 +507,6 @@ Private Function ProcessParagraphByHeader(ByRef para As Object, _
         End If
     End If
 
-    ' レベル1: 第X部（パターンマッチ - 段落先頭かつヘッダー空白時のみ）
-    If detectedLevel = 0 And styles.Level1Style <> "" And headerIsEmpty Then
-        If MatchPattern(paraText, "^第[0-9０-９]+部") Then
-            detectedLevel = 1
-            targetStyle = styles.Level1Style
-        End If
-    End If
-
     ' 例外1: パターン外だが既にレベル1-5のスタイルが適用されている
     If detectedLevel = 0 And styles.Exception1Style <> "" Then
         Dim currentStyle As String
@@ -519,6 +544,7 @@ Private Function ProcessParagraphByHeader(ByRef para As Object, _
         End If
     End If
 
+ApplyStyleAndExit:
     ' スタイル適用
     If detectedLevel <> 0 And targetStyle <> "" Then
         ApplyStyle para, targetStyle
