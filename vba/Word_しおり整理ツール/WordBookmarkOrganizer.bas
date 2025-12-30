@@ -99,9 +99,13 @@ Public Sub OrganizeWordBookmarks()
     ' Word文書を開く
     Set wordDoc = wordApp.Documents.Open(filePath)
 
-    ' スタイルの存在確認
+    ' 文書内に「第X節」がヘッダーに存在するか判定
+    Dim hasSections As Boolean
+    hasSections = HasSectionsInDocument(wordDoc)
+
+    ' スタイルの存在確認（節がない場合はLevel 5のチェックをスキップ）
     Dim missingStyles As String
-    missingStyles = ValidateStyles(wordDoc, styles)
+    missingStyles = ValidateStyles(wordDoc, styles, hasSections)
     If missingStyles <> "" Then
         MsgBox "エラー: 以下のスタイルがWord文書に存在しません。" & vbCrLf & vbCrLf & _
                missingStyles & vbCrLf & _
@@ -120,6 +124,7 @@ Public Sub OrganizeWordBookmarks()
     Debug.Print "========================================="
     Debug.Print "Word文書のしおり整理を開始します"
     Debug.Print "対象ファイル: " & filePath
+    Debug.Print "節構造: " & IIf(hasSections, "あり（5レベル）", "なし（4レベル）")
     Debug.Print "========================================="
 
     processedCount = 0
@@ -183,7 +188,7 @@ Public Sub OrganizeWordBookmarks()
         Dim para As Object
         For Each para In sect.Range.Paragraphs
             processedCount = processedCount + ProcessParagraphByHeader(para, styles, _
-                searchLevel2, searchLevel3, searchLevel4, searchLevel5, wordDoc)
+                searchLevel2, searchLevel3, searchLevel4, searchLevel5, hasSections, wordDoc)
         Next para
 
         ' セクション内の図形も処理
@@ -194,7 +199,7 @@ Public Sub OrganizeWordBookmarks()
             If shp.TextFrame.HasText Then
                 For Each shapePara In shp.TextFrame.TextRange.Paragraphs
                     processedCount = processedCount + ProcessParagraphByHeader(shapePara, styles, _
-                        searchLevel2, searchLevel3, searchLevel4, searchLevel5, wordDoc)
+                        searchLevel2, searchLevel3, searchLevel4, searchLevel5, hasSections, wordDoc)
                 Next shapePara
             End If
         Next shp
@@ -347,6 +352,9 @@ End Function
 ' ============================================================================
 ' 段落処理（ヘッダー参照方式）
 ' 戻り値: 処理された場合は1、それ以外は0
+' hasSections: 文書内に「第X節」が存在する場合True
+'   True の場合: Level3=第X節, Level4=X-X, Level5=X-X,X
+'   False の場合: Level3=X-X, Level4=X-X,X, Level5=未使用
 ' ============================================================================
 Private Function ProcessParagraphByHeader(ByRef para As Object, _
                                           ByRef styles As StyleConfig, _
@@ -354,6 +362,7 @@ Private Function ProcessParagraphByHeader(ByRef para As Object, _
                                           ByVal searchLevel3 As String, _
                                           ByVal searchLevel4 As String, _
                                           ByVal searchLevel5 As String, _
+                                          ByVal hasSections As Boolean, _
                                           ByRef wordDoc As Object) As Long
     On Error GoTo ErrorHandler
 
@@ -388,33 +397,54 @@ Private Function ProcessParagraphByHeader(ByRef para As Object, _
     detectedLevel = 0
     targetStyle = ""
 
-    ' レベル5: X-X,X（ヘッダーから抽出したテキストで検索）
-    If detectedLevel = 0 And searchLevel5 <> "" And styles.Level5Style <> "" Then
-        If InStr(paraTextHalf, searchLevel5) > 0 Then
-            detectedLevel = 5
-            targetStyle = styles.Level5Style
-        End If
-    End If
+    If hasSections Then
+        ' ========================================
+        ' 節ありの場合（5レベル構造）
+        ' Level3=第X節, Level4=X-X, Level5=X-X,X
+        ' ========================================
 
-    ' レベル4: X-X（ヘッダーから抽出したテキストで検索）
-    If detectedLevel = 0 And searchLevel4 <> "" And styles.Level4Style <> "" Then
-        If InStr(paraTextHalf, searchLevel4) > 0 Then
-            detectedLevel = 4
-            targetStyle = styles.Level4Style
+        ' レベル5: X-X,X（ヘッダーから抽出したテキストで検索）
+        If detectedLevel = 0 And searchLevel5 <> "" And styles.Level5Style <> "" Then
+            If InStr(paraTextHalf, searchLevel5) > 0 Then
+                detectedLevel = 5
+                targetStyle = styles.Level5Style
+            End If
         End If
-    End If
 
-    ' レベル3: 第X節（ヘッダー参照またはパターンマッチ）
-    If detectedLevel = 0 And styles.Level3Style <> "" Then
-        If searchLevel3 <> "" Then
-            ' ヘッダーから抽出したテキストで検索
+        ' レベル4: X-X（ヘッダーから抽出したテキストで検索）
+        If detectedLevel = 0 And searchLevel4 <> "" And styles.Level4Style <> "" Then
+            If InStr(paraTextHalf, searchLevel4) > 0 Then
+                detectedLevel = 4
+                targetStyle = styles.Level4Style
+            End If
+        End If
+
+        ' レベル3: 第X節（ヘッダー参照のみ - パターンマッチなし）
+        If detectedLevel = 0 And searchLevel3 <> "" And styles.Level3Style <> "" Then
             If InStr(paraTextHalf, searchLevel3) > 0 Then
                 detectedLevel = 3
                 targetStyle = styles.Level3Style
             End If
-        Else
-            ' ヘッダーが空の場合はパターンマッチでフォールバック
-            If MatchPattern(paraText, "第[0-9０-９]+節") Then
+        End If
+    Else
+        ' ========================================
+        ' 節なしの場合（4レベル構造）
+        ' Level3=X-X, Level4=X-X,X, Level5=未使用
+        ' ========================================
+
+        ' レベル4: X-X,X（ヘッダーから抽出したテキストで検索）
+        ' ※節なしの場合、searchLevel5にX-X,Xが入っている
+        If detectedLevel = 0 And searchLevel5 <> "" And styles.Level4Style <> "" Then
+            If InStr(paraTextHalf, searchLevel5) > 0 Then
+                detectedLevel = 4
+                targetStyle = styles.Level4Style
+            End If
+        End If
+
+        ' レベル3: X-X（ヘッダーから抽出したテキストで検索）
+        ' ※節なしの場合、searchLevel4にX-Xが入っている
+        If detectedLevel = 0 And searchLevel4 <> "" And styles.Level3Style <> "" Then
+            If InStr(paraTextHalf, searchLevel4) > 0 Then
                 detectedLevel = 3
                 targetStyle = styles.Level3Style
             End If
@@ -548,11 +578,44 @@ ErrorHandler:
 End Function
 
 ' ============================================================================
+' 文書内のヘッダーに「第X節」が存在するかチェック
+' ============================================================================
+Private Function HasSectionsInDocument(ByRef wordDoc As Object) As Boolean
+    On Error Resume Next
+
+    Dim sect As Object
+    Dim headerText As String
+    Dim regex As Object
+
+    Set regex = CreateObject("VBScript.RegExp")
+    regex.Global = True
+    regex.Pattern = "第[0-9０-９]+節"
+
+    For Each sect In wordDoc.Sections
+        ' プライマリヘッダーからテキストを取得
+        headerText = sect.Headers(1).Range.Text
+        If Err.Number = 0 Then
+            If regex.Test(headerText) Then
+                Set regex = Nothing
+                HasSectionsInDocument = True
+                Exit Function
+            End If
+        End If
+        Err.Clear
+    Next sect
+
+    Set regex = Nothing
+    HasSectionsInDocument = False
+End Function
+
+' ============================================================================
 ' スタイルの存在確認
 ' 存在しないスタイルがあれば、そのスタイル名を改行区切りで返す
 ' すべて存在すれば空文字列を返す
+' hasSections: 節構造がある場合はTrue（Level5まで検証）
 ' ============================================================================
-Private Function ValidateStyles(ByRef wordDoc As Object, ByRef styles As StyleConfig) As String
+Private Function ValidateStyles(ByRef wordDoc As Object, ByRef styles As StyleConfig, _
+                                ByVal hasSections As Boolean) As String
     Dim missingStyles As String
     missingStyles = ""
 
@@ -571,17 +634,26 @@ Private Function ValidateStyles(ByRef wordDoc As Object, ByRef styles As StyleCo
 
     If styles.Level3Style <> "" Then
         If Not StyleExists(wordDoc, styles.Level3Style) Then
-            missingStyles = missingStyles & "  - " & styles.Level3Style & " (レベル3: 第X節)" & vbCrLf
+            If hasSections Then
+                missingStyles = missingStyles & "  - " & styles.Level3Style & " (レベル3: 第X節)" & vbCrLf
+            Else
+                missingStyles = missingStyles & "  - " & styles.Level3Style & " (レベル3: X-X)" & vbCrLf
+            End If
         End If
     End If
 
     If styles.Level4Style <> "" Then
         If Not StyleExists(wordDoc, styles.Level4Style) Then
-            missingStyles = missingStyles & "  - " & styles.Level4Style & " (レベル4: X-X)" & vbCrLf
+            If hasSections Then
+                missingStyles = missingStyles & "  - " & styles.Level4Style & " (レベル4: X-X)" & vbCrLf
+            Else
+                missingStyles = missingStyles & "  - " & styles.Level4Style & " (レベル4: X-X,X)" & vbCrLf
+            End If
         End If
     End If
 
-    If styles.Level5Style <> "" Then
+    ' Level5は節がある場合のみチェック
+    If hasSections And styles.Level5Style <> "" Then
         If Not StyleExists(wordDoc, styles.Level5Style) Then
             missingStyles = missingStyles & "  - " & styles.Level5Style & " (レベル5: X-X,X)" & vbCrLf
         End If
