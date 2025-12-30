@@ -1,4 +1,3 @@
-Attribute VB_Name = "JP1_REST_Manager_Setup"
 Option Explicit
 
 '==============================================================================
@@ -25,10 +24,11 @@ Public Const ROW_ROOT_PATH As Long = 14
 Public Const ROW_WAIT_COMPLETION As Long = 16
 Public Const ROW_POLLING_INTERVAL As Long = 17
 Public Const ROW_TIMEOUT As Long = 18
+Public Const ROW_DEBUG_MODE As Long = 20
 Public Const COL_SETTING_VALUE As Long = 3
 
 ' ツリー表示シートの列位置
-Public Const COL_EXPAND As Long = 1          ' 展開/折りたたみ（▶▼）
+Public Const COL_EXPAND As Long = 1          ' 展開/折りたたみ（>[v]）
 Public Const COL_UNIT_NAME As Long = 2       ' インデント付きユニット名
 Public Const COL_UNIT_PATH As Long = 3       ' ユニットパス（フルパス）
 Public Const COL_UNIT_TYPE As Long = 4       ' ユニット種別
@@ -182,23 +182,33 @@ Private Sub FormatSettingsSheet()
     ws.Cells(ROW_TIMEOUT, 4).Value = "※0=無制限"
     ws.Cells(ROW_TIMEOUT, 4).Font.Color = RGB(128, 128, 128)
 
+    ' デバッグセクション
+    ws.Range("A19").Value = "■ デバッグ設定"
+    ws.Range("A19").Font.Bold = True
+
+    ws.Cells(ROW_DEBUG_MODE, 1).Value = "デバッグモード"
+    ws.Cells(ROW_DEBUG_MODE, COL_SETTING_VALUE).Value = "いいえ"
+    AddDropdown ws, ws.Cells(ROW_DEBUG_MODE, COL_SETTING_VALUE), "いいえ,はい"
+    ws.Cells(ROW_DEBUG_MODE, 4).Value = "※はい=PowerShellウィンドウ表示・API応答ログ出力"
+    ws.Cells(ROW_DEBUG_MODE, 4).Font.Color = RGB(128, 128, 128)
+
     ' 使い方セクション
-    ws.Range("A20").Value = "■ 使い方"
-    ws.Range("A20").Font.Bold = True
+    ws.Range("A22").Value = "■ 使い方"
+    ws.Range("A22").Font.Bold = True
 
-    ws.Range("A21").Value = "1. 上記の接続設定を入力します"
-    ws.Range("A22").Value = "2. 「ツリー取得」ボタンでジョブ階層を取得します"
-    ws.Range("A23").Value = "3. ツリー表示シートで▶をダブルクリックして展開します"
-    ws.Range("A24").Value = "4. 実行したいジョブネットの「選択」列をチェックします"
-    ws.Range("A25").Value = "5. 「選択実行」ボタンでジョブネットを即時実行します"
-    ws.Range("A26").Value = "6. 完了待ち「はい」の場合、自動でログを取得します"
+    ws.Range("A23").Value = "1. 上記の接続設定を入力します"
+    ws.Range("A24").Value = "2. 「ツリー取得」ボタンでジョブ階層を取得します"
+    ws.Range("A25").Value = "3. ツリー表示シートで[>]をダブルクリックして展開します"
+    ws.Range("A26").Value = "4. 実行したいジョブネットの「選択」列をチェックします"
+    ws.Range("A27").Value = "5. 「選択実行」ボタンでジョブネットを即時実行します"
+    ws.Range("A28").Value = "6. 完了待ち「はい」の場合、自動でログを取得します"
 
-    ws.Range("A28").Value = "■ 注意事項"
-    ws.Range("A28").Font.Bold = True
+    ws.Range("A30").Value = "■ 注意事項"
+    ws.Range("A30").Font.Bold = True
 
-    ws.Range("A29").Value = "・このツールはREST APIのみを使用し、WinRMは使用しません"
-    ws.Range("A30").Value = "・実行可能なのはジョブネット（ROOTNET/NET）のみです"
-    ws.Range("A31").Value = "・ログ取得は最大5MBまでです（超過分は取得できません）"
+    ws.Range("A31").Value = "・このツールはREST APIのみを使用し、WinRMは使用しません"
+    ws.Range("A32").Value = "・実行可能なのはジョブネット（ROOTNET/NET）のみです"
+    ws.Range("A33").Value = "・ログ取得は最大5MBまでです（超過分は取得できません）"
 
     ' 列幅調整
     ws.Columns("A").ColumnWidth = 22
@@ -211,7 +221,7 @@ Private Sub FormatSettingsSheet()
     settingCells = Array(ROW_WEB_CONSOLE_HOST, ROW_WEB_CONSOLE_PORT, ROW_USE_HTTPS, _
                          ROW_MANAGER_HOST, ROW_SCHEDULER_SERVICE, ROW_JP1_USER, _
                          ROW_JP1_PASSWORD, ROW_ROOT_PATH, ROW_WAIT_COMPLETION, _
-                         ROW_POLLING_INTERVAL, ROW_TIMEOUT)
+                         ROW_POLLING_INTERVAL, ROW_TIMEOUT, ROW_DEBUG_MODE)
     Dim r As Variant
     For Each r In settingCells
         With ws.Cells(CLng(r), COL_SETTING_VALUE)
@@ -252,7 +262,7 @@ Private Sub FormatTreeSheet()
     ws.Rows(2).RowHeight = 35
 
     ' 説明
-    ws.Range("A3").Value = "▶をダブルクリックで展開、▼で折りたたみ。ジョブネットを選択して「選択実行」で即時実行。"
+    ws.Range("A3").Value = "[>]をダブルクリックで展開、[v]で折りたたみ。ジョブネットを選択して「選択実行」で即時実行。"
 
     ' ダブルクリックイベントを追加
     AddWorksheetDoubleClickEvent ws

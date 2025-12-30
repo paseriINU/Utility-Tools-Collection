@@ -1,4 +1,3 @@
-Attribute VB_Name = "JP1_REST_Manager"
 Option Explicit
 
 '==============================================================================
@@ -11,8 +10,8 @@ Option Explicit
 '       定数はSetupモジュールで Public として定義されています
 '==============================================================================
 
-' デバッグモード
-Private Const DEBUG_MODE As Boolean = False
+' デバッグモード（設定シートから読み込み）
+Private m_DebugMode As Boolean
 
 ' ユニット種別の日本語表示名
 Private Const TYPE_GROUP As String = "グループ"
@@ -88,7 +87,7 @@ Public Sub RefreshTree()
     Application.ScreenUpdating = True
 
     MsgBox "ツリーの取得が完了しました（" & units.Count & " 件）。" & vbCrLf & _
-           "▶をダブルクリックで展開できます。", vbInformation
+           "[>]をダブルクリックで展開できます。", vbInformation
 
     wsTree.Activate
     Exit Sub
@@ -264,7 +263,7 @@ End Sub
 '==============================================================================
 Public Sub ExpandAll()
     MsgBox "全展開機能は現在実装中です。" & vbCrLf & _
-           "個別に▶をダブルクリックして展開してください。", vbInformation
+           "個別に[>]をダブルクリックして展開してください。", vbInformation
 End Sub
 
 '==============================================================================
@@ -1048,8 +1047,15 @@ Private Function ExecutePowerShell(script As String) As String
           "& '" & scriptPath & "'" & _
           "}"" > """ & outputPath & """ 2>&1"
 
-    ' 0 = vbHide（非表示）、True で完了まで待機
-    shell.Run cmd, 0, True
+    ' デバッグモード: 1 = 表示, 0 = 非表示
+    Dim windowStyle As Long
+    If m_DebugMode Then
+        windowStyle = 1  ' 表示
+    Else
+        windowStyle = 0  ' 非表示
+    End If
+
+    shell.Run cmd, windowStyle, True
 
     ' 結果ファイルを読み込む
     Dim output As String
@@ -1069,16 +1075,30 @@ Private Function ExecutePowerShell(script As String) As String
         utfStream.Close
         Set utfStream = Nothing
 
-        ' 出力ファイル削除
-        On Error Resume Next
-        fso.DeleteFile outputPath
-        On Error GoTo 0
+        ' デバッグモードでない場合は出力ファイル削除
+        If Not m_DebugMode Then
+            On Error Resume Next
+            fso.DeleteFile outputPath
+            On Error GoTo 0
+        Else
+            ' デバッグモード: ファイルパスをデバッグ出力
+            Debug.Print "API Output File: " & outputPath
+        End If
     End If
 
-    ' スクリプトファイル削除
-    On Error Resume Next
-    fso.DeleteFile scriptPath
-    On Error GoTo 0
+    ' デバッグモードでない場合はスクリプトファイル削除
+    If Not m_DebugMode Then
+        On Error Resume Next
+        fso.DeleteFile scriptPath
+        On Error GoTo 0
+    Else
+        ' デバッグモード: ファイルパスをデバッグ出力
+        Debug.Print "Script File: " & scriptPath
+        Debug.Print "API Response Length: " & Len(output)
+        If Len(output) > 0 Then
+            Debug.Print "API Response (first 500 chars): " & Left(output, 500)
+        End If
+    End If
 
     ExecutePowerShell = output
 End Function
@@ -1279,6 +1299,10 @@ Private Function GetConfig() As Object
     config("WaitCompletion") = Trim(CStr(ws.Cells(ROW_WAIT_COMPLETION, COL_SETTING_VALUE).Value))
     config("PollingInterval") = ws.Cells(ROW_POLLING_INTERVAL, COL_SETTING_VALUE).Value
     config("Timeout") = ws.Cells(ROW_TIMEOUT, COL_SETTING_VALUE).Value
+    config("DebugMode") = Trim(CStr(ws.Cells(ROW_DEBUG_MODE, COL_SETTING_VALUE).Value))
+
+    ' デバッグモード設定をモジュール変数に保存
+    m_DebugMode = (config("DebugMode") = "はい")
 
     ' 必須項目チェック
     If config("WebConsoleHost") = "" Or config("SchedulerService") = "" Or config("JP1User") = "" Then
