@@ -21,27 +21,20 @@ Public Const ROW_PATTERN_EXCEPTION2 As Long = 25
 
 Public Const COL_LEVEL As Long = 2          ' B列
 Public Const COL_PATTERN_DESC As Long = 3   ' C列
-Public Const COL_REGEX As Long = 4          ' D列
+Public Const COL_DETECT_METHOD As Long = 4  ' D列（検出方法）
 Public Const COL_STYLE_NAME As Long = 5     ' E列
 
 ' オプション設定
-Public Const ROW_OPTION_SEQUENCE_CHECK As Long = 27
-Public Const ROW_OPTION_PDF_OUTPUT As Long = 28
+Public Const ROW_OPTION_PDF_OUTPUT As Long = 27
 Public Const COL_OPTION_LABEL As Long = 2   ' B列
 Public Const COL_OPTION_VALUE As Long = 3   ' C列
 
 ' ボタン行
-Public Const ROW_BUTTON As Long = 30
+Public Const ROW_BUTTON As Long = 29
 
 ' フォルダパス表示
 Public Const ROW_INPUT_FOLDER As Long = 10
 Public Const ROW_OUTPUT_FOLDER As Long = 12
-
-' === 正規表現パターン定数 ===
-Public Const REGEX_LEVEL1 As String = "第[0-9０-９]+部"
-Public Const REGEX_LEVEL2 As String = "第[0-9０-９]+章"
-Public Const REGEX_LEVEL3 As String = "[0-9０-９]+[-－ー][0-9０-９]+(?![,，.．])"
-Public Const REGEX_LEVEL4 As String = "[0-9０-９]+[-－ー][0-9０-９]+[,，.．][0-9０-９]+"
 
 ' ============================================================================
 ' メイン初期化プロシージャ
@@ -112,7 +105,7 @@ Private Sub FormatMainSheet(ByRef ws As Worksheet)
         .Rows(3).RowHeight = 10
 
         ' === 説明エリア（行5-6） ===
-        .Range("B5").Value = "Word文書の段落テキストをパターンマッチし、指定スタイルを適用します。"
+        .Range("B5").Value = "セクションのヘッダー情報を参照し、本文の該当箇所にスタイルを適用します。"
         .Range("B6").Value = "PDFエクスポート時に正しいしおり（ブックマーク）を生成します。"
         .Range("B5:B6").Font.Name = "Meiryo UI"
         .Range("B5:B6").Font.Size = 11
@@ -138,7 +131,7 @@ Private Sub FormatMainSheet(ByRef ws As Worksheet)
         .Range("C12").Interior.Color = RGB(242, 242, 242)
 
         ' === パターン設定セクション（行17-25） ===
-        .Range("B17").Value = "■ パターン設定"
+        .Range("B17").Value = "■ スタイル設定"
         .Range("B17").Font.Name = "Meiryo UI"
         .Range("B17").Font.Bold = True
         .Range("B17").Font.Size = 12
@@ -146,7 +139,7 @@ Private Sub FormatMainSheet(ByRef ws As Worksheet)
         ' ヘッダー行
         .Cells(ROW_PATTERN_HEADER, COL_LEVEL).Value = "レベル"
         .Cells(ROW_PATTERN_HEADER, COL_PATTERN_DESC).Value = "テキストパターン"
-        .Cells(ROW_PATTERN_HEADER, COL_REGEX).Value = "正規表現"
+        .Cells(ROW_PATTERN_HEADER, COL_DETECT_METHOD).Value = "検出方法"
         .Cells(ROW_PATTERN_HEADER, COL_STYLE_NAME).Value = "適用スタイル"
 
         With .Range(.Cells(ROW_PATTERN_HEADER, COL_LEVEL), .Cells(ROW_PATTERN_HEADER, COL_STYLE_NAME))
@@ -159,37 +152,37 @@ Private Sub FormatMainSheet(ByRef ws As Worksheet)
         ' レベル1
         .Cells(ROW_PATTERN_LEVEL1, COL_LEVEL).Value = "1"
         .Cells(ROW_PATTERN_LEVEL1, COL_PATTERN_DESC).Value = "第X部"
-        .Cells(ROW_PATTERN_LEVEL1, COL_REGEX).Value = REGEX_LEVEL1
+        .Cells(ROW_PATTERN_LEVEL1, COL_DETECT_METHOD).Value = "パターンマッチ"
         .Cells(ROW_PATTERN_LEVEL1, COL_STYLE_NAME).Value = "表題1"
 
         ' レベル2
         .Cells(ROW_PATTERN_LEVEL2, COL_LEVEL).Value = "2"
         .Cells(ROW_PATTERN_LEVEL2, COL_PATTERN_DESC).Value = "第X章"
-        .Cells(ROW_PATTERN_LEVEL2, COL_REGEX).Value = REGEX_LEVEL2
+        .Cells(ROW_PATTERN_LEVEL2, COL_DETECT_METHOD).Value = "ヘッダー参照"
         .Cells(ROW_PATTERN_LEVEL2, COL_STYLE_NAME).Value = "表題2"
 
         ' レベル3
         .Cells(ROW_PATTERN_LEVEL3, COL_LEVEL).Value = "3"
         .Cells(ROW_PATTERN_LEVEL3, COL_PATTERN_DESC).Value = "X-X"
-        .Cells(ROW_PATTERN_LEVEL3, COL_REGEX).Value = REGEX_LEVEL3
+        .Cells(ROW_PATTERN_LEVEL3, COL_DETECT_METHOD).Value = "ヘッダー参照"
         .Cells(ROW_PATTERN_LEVEL3, COL_STYLE_NAME).Value = "表題3"
 
         ' レベル4
         .Cells(ROW_PATTERN_LEVEL4, COL_LEVEL).Value = "4"
         .Cells(ROW_PATTERN_LEVEL4, COL_PATTERN_DESC).Value = "X-X,X"
-        .Cells(ROW_PATTERN_LEVEL4, COL_REGEX).Value = REGEX_LEVEL4
+        .Cells(ROW_PATTERN_LEVEL4, COL_DETECT_METHOD).Value = "ヘッダー参照"
         .Cells(ROW_PATTERN_LEVEL4, COL_STYLE_NAME).Value = "表題4"
 
         ' 例外1
         .Cells(ROW_PATTERN_EXCEPTION1, COL_LEVEL).Value = "例外1"
         .Cells(ROW_PATTERN_EXCEPTION1, COL_PATTERN_DESC).Value = "パターン外スタイル"
-        .Cells(ROW_PATTERN_EXCEPTION1, COL_REGEX).Value = "-"
+        .Cells(ROW_PATTERN_EXCEPTION1, COL_DETECT_METHOD).Value = "-"
         .Cells(ROW_PATTERN_EXCEPTION1, COL_STYLE_NAME).Value = "本文"
 
         ' 例外2
         .Cells(ROW_PATTERN_EXCEPTION2, COL_LEVEL).Value = "例外2"
         .Cells(ROW_PATTERN_EXCEPTION2, COL_PATTERN_DESC).Value = "アウトライン設定済み"
-        .Cells(ROW_PATTERN_EXCEPTION2, COL_REGEX).Value = "-"
+        .Cells(ROW_PATTERN_EXCEPTION2, COL_DETECT_METHOD).Value = "-"
         .Cells(ROW_PATTERN_EXCEPTION2, COL_STYLE_NAME).Value = "本文"
 
         ' テーブル全体のフォント設定
@@ -208,65 +201,68 @@ Private Sub FormatMainSheet(ByRef ws As Worksheet)
             .Interior.Color = RGB(255, 255, 204)
         End With
 
-        ' 正規表現列の書式
-        With .Range(.Cells(ROW_PATTERN_LEVEL1, COL_REGEX), .Cells(ROW_PATTERN_LEVEL4, COL_REGEX))
-            .Font.Name = "Consolas"
+        ' 検出方法列の書式
+        With .Range(.Cells(ROW_PATTERN_LEVEL1, COL_DETECT_METHOD), .Cells(ROW_PATTERN_EXCEPTION2, COL_DETECT_METHOD))
             .Font.Size = 9
+            .HorizontalAlignment = xlCenter
         End With
 
-        ' === オプション設定セクション（行27-28） ===
-        .Cells(ROW_OPTION_SEQUENCE_CHECK, COL_OPTION_LABEL).Value = "連番チェック:"
-        .Cells(ROW_OPTION_SEQUENCE_CHECK, COL_OPTION_LABEL).Font.Name = "Meiryo UI"
-        .Cells(ROW_OPTION_SEQUENCE_CHECK, COL_OPTION_VALUE).Value = "はい"
-        AddDropdown ws, .Cells(ROW_OPTION_SEQUENCE_CHECK, COL_OPTION_VALUE), "はい,いいえ"
-
+        ' === オプション設定セクション（行27） ===
         .Cells(ROW_OPTION_PDF_OUTPUT, COL_OPTION_LABEL).Value = "PDF出力:"
         .Cells(ROW_OPTION_PDF_OUTPUT, COL_OPTION_LABEL).Font.Name = "Meiryo UI"
         .Cells(ROW_OPTION_PDF_OUTPUT, COL_OPTION_VALUE).Value = "はい"
         AddDropdown ws, .Cells(ROW_OPTION_PDF_OUTPUT, COL_OPTION_VALUE), "はい,いいえ"
 
-        With .Range(.Cells(ROW_OPTION_SEQUENCE_CHECK, COL_OPTION_VALUE), .Cells(ROW_OPTION_PDF_OUTPUT, COL_OPTION_VALUE))
+        With .Cells(ROW_OPTION_PDF_OUTPUT, COL_OPTION_VALUE)
             .Interior.Color = RGB(255, 255, 204)
             .Font.Name = "Meiryo UI"
         End With
 
-        ' === ボタン配置（行30） ===
+        ' === ボタン配置（行29） ===
         AddButton ws, .Range("C" & ROW_BUTTON), 200, 35, "OrganizeWordBookmarks", "しおりを整理してPDF出力", RGB(68, 114, 196)
         AddButton ws, .Range("F" & ROW_BUTTON), 100, 35, "ResetSettings", "設定リセット", RGB(128, 128, 128)
 
-        ' === 使い方セクション（行34-42） ===
-        .Range("B34").Value = "■ 使い方"
-        .Range("B34").Font.Name = "Meiryo UI"
-        .Range("B34").Font.Bold = True
-        .Range("B34").Font.Size = 12
+        ' === 使い方セクション（行33-38） ===
+        .Range("B33").Value = "■ 使い方"
+        .Range("B33").Font.Name = "Meiryo UI"
+        .Range("B33").Font.Bold = True
+        .Range("B33").Font.Size = 12
 
-        .Range("B36").Value = "1. 処理したいWord文書(.docx/.doc)をInputフォルダに配置します"
-        .Range("B37").Value = "2. パターン設定の「適用スタイル」欄にWord文書で使用するスタイル名を入力します"
-        .Range("B38").Value = "3. 「しおりを整理してPDF出力」ボタンをクリックします"
-        .Range("B39").Value = "4. Outputフォルダに処理済みのWord文書とPDFが出力されます"
-        .Range("B36:B39").Font.Name = "Meiryo UI"
-        .Range("B36:B39").Font.Size = 10
+        .Range("B35").Value = "1. 処理したいWord文書(.docx/.doc)をInputフォルダに配置します"
+        .Range("B36").Value = "2. 「適用スタイル」欄にWord文書で使用するスタイル名を入力します"
+        .Range("B37").Value = "3. 「しおりを整理してPDF出力」ボタンをクリックします"
+        .Range("B38").Value = "4. Outputフォルダに処理済みのWord文書とPDFが出力されます"
+        .Range("B35:B38").Font.Name = "Meiryo UI"
+        .Range("B35:B38").Font.Size = 10
 
-        ' === パターン説明セクション（行44-52） ===
-        .Range("B44").Value = "■ パターンの説明"
-        .Range("B44").Font.Name = "Meiryo UI"
+        ' === 動作説明セクション（行42-52） ===
+        .Range("B42").Value = "■ 動作の説明"
+        .Range("B42").Font.Name = "Meiryo UI"
+        .Range("B42").Font.Bold = True
+        .Range("B42").Font.Size = 12
+
+        .Range("B44").Value = "【ヘッダー参照方式】（レベル2-4）"
         .Range("B44").Font.Bold = True
-        .Range("B44").Font.Size = 12
+        .Range("B45").Value = "  各セクションのヘッダーから「第X章」「X-X」「X-X,X」パターンを抽出します。"
+        .Range("B46").Value = "  前セクションと比較して新しく追加されたパターンを、そのセクション内で検索します。"
+        .Range("B47").Value = "  例: ヘッダー「第1章　概要　1-1　詳細」→ セクション内で「1-1」を検索しスタイル適用"
+        .Range("B47").Font.Color = RGB(0, 112, 192)
 
-        .Range("B46").Value = "レベル1-4: 正規表現でテキストパターンを検出し、指定スタイルを適用します"
-        .Range("B47").Value = "例外1: パターンに一致しないが、既にレベル1-4のスタイルが適用されている段落"
-        .Range("B48").Value = "例外2: 段落に既にアウトラインレベルが設定されている、またはスタイルにアウトライン定義がある場合"
-        .Range("B49").Value = ""
-        .Range("B50").Value = "※ 数字、ハイフン、ピリオド、カンマは全角・半角どちらも検出します"
-        .Range("B50").Font.Color = RGB(0, 112, 192)
-        .Range("B46:B50").Font.Name = "Meiryo UI"
-        .Range("B46:B50").Font.Size = 10
+        .Range("B49").Value = "【パターンマッチ方式】（レベル1: 第X部）"
+        .Range("B49").Font.Bold = True
+        .Range("B50").Value = "  ヘッダー情報がないため、本文テキストから「第X部」を直接検出します。"
+
+        .Range("B52").Value = "※ 図形（テキストボックス等）内のテキストも処理対象です"
+        .Range("B52").Font.Color = RGB(0, 112, 192)
+
+        .Range("B44:B52").Font.Name = "Meiryo UI"
+        .Range("B44:B52").Font.Size = 10
 
         ' === 列幅調整 ===
         .Columns("A").ColumnWidth = 3
         .Columns("B").ColumnWidth = 18
         .Columns("C").ColumnWidth = 20
-        .Columns("D").ColumnWidth = 45
+        .Columns("D").ColumnWidth = 18
         .Columns("E").ColumnWidth = 15
         .Columns("F").ColumnWidth = 12
         .Columns("G").ColumnWidth = 12
@@ -276,7 +272,7 @@ Private Sub FormatMainSheet(ByRef ws As Worksheet)
 
         ' 入力可能セルをアンロック（シート保護時用）
         .Range(.Cells(ROW_PATTERN_LEVEL1, COL_STYLE_NAME), .Cells(ROW_PATTERN_EXCEPTION2, COL_STYLE_NAME)).Locked = False
-        .Range(.Cells(ROW_OPTION_SEQUENCE_CHECK, COL_OPTION_VALUE), .Cells(ROW_OPTION_PDF_OUTPUT, COL_OPTION_VALUE)).Locked = False
+        .Cells(ROW_OPTION_PDF_OUTPUT, COL_OPTION_VALUE).Locked = False
 
         ' A1セルを選択
         .Range("A1").Select
@@ -371,7 +367,6 @@ Public Sub ResetSettings()
         .Cells(ROW_PATTERN_EXCEPTION2, COL_STYLE_NAME).Value = "本文"
 
         ' オプションをデフォルト値に戻す
-        .Cells(ROW_OPTION_SEQUENCE_CHECK, COL_OPTION_VALUE).Value = "はい"
         .Cells(ROW_OPTION_PDF_OUTPUT, COL_OPTION_VALUE).Value = "はい"
     End With
 

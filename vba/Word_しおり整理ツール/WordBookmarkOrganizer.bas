@@ -3,24 +3,25 @@ Option Explicit
 
 ' ============================================================================
 ' Word しおり整理ツール - メインモジュール
-' パターン検出、スタイル適用、連番チェック、PDF出力を行う
+' ヘッダー参照方式: セクションのヘッダーからパターンを抽出し、
+' そのセクション内の本文で該当テキストを検索してスタイルを適用
 ' ============================================================================
 
-' === パターン設定構造体 ===
-Private Type PatternConfig
-    Level As Long
-    Description As String
-    RegexPattern As String
-    StyleName As String
+' === スタイル設定構造体 ===
+Private Type StyleConfig
+    Level1Style As String  ' 第X部用（パターンマッチ）
+    Level2Style As String  ' 第X章用（ヘッダー参照）
+    Level3Style As String  ' X-X用（ヘッダー参照）
+    Level4Style As String  ' X-X,X用（ヘッダー参照）
+    Exception1Style As String
+    Exception2Style As String
 End Type
 
-' === 連番トラッカー構造体 ===
-Private Type SequenceTracker
-    Level1Expected As Long
-    Level2Expected As Long
-    Level3Expected As Long
-    Level4Expected As Long
-    Warnings As Collection
+' === ヘッダーパターン構造体 ===
+Private Type HeaderPatterns
+    Level2Text As String   ' 第X章
+    Level3Text As String   ' X-X
+    Level4Text As String   ' X-X,X
 End Type
 
 ' ============================================================================
@@ -29,7 +30,6 @@ End Type
 Public Sub OrganizeWordBookmarks()
     Dim wordApp As Object           ' Word.Application
     Dim wordDoc As Object           ' Word.Document
-    Dim para As Object              ' Word.Paragraph
     Dim filePath As String
     Dim outputWordPath As String
     Dim outputPdfPath As String
@@ -39,19 +39,8 @@ Public Sub OrganizeWordBookmarks()
     Dim outputDir As String
 
     ' 設定
-    Dim configs(1 To 4) As PatternConfig
-    Dim exception1Style As String
-    Dim exception2Style As String
-    Dim doSequenceCheck As Boolean
+    Dim styles As StyleConfig
     Dim doPdfOutput As Boolean
-
-    ' 連番トラッカー
-    Dim tracker As SequenceTracker
-    Set tracker.Warnings = New Collection
-    tracker.Level1Expected = 1
-    tracker.Level2Expected = 1
-    tracker.Level3Expected = 1
-    tracker.Level4Expected = 1
 
     ' マクロのあるフォルダを基準にする
     baseDir = ThisWorkbook.Path
@@ -74,7 +63,7 @@ Public Sub OrganizeWordBookmarks()
     End If
 
     ' Excelシートから設定を読み込み
-    If Not LoadSettings(configs, exception1Style, exception2Style, doSequenceCheck, doPdfOutput) Then
+    If Not LoadSettings(styles, doPdfOutput) Then
         MsgBox "設定の読み込みに失敗しました。" & vbCrLf & _
                "シートを初期化してください。", vbExclamation
         Exit Sub
@@ -109,116 +98,78 @@ Public Sub OrganizeWordBookmarks()
 
     processedCount = 0
 
-    ' レベル1-4のスタイル名リスト（例外処理用）
-    Dim levelStyles As Collection
-    Set levelStyles = New Collection
-    Dim i As Long
-    For i = 1 To 4
-        If configs(i).StyleName <> "" Then
-            levelStyles.Add configs(i).StyleName
+    ' セクションごとに処理
+    Dim sect As Object
+    Dim sectIndex As Long
+    Dim prevPatterns As HeaderPatterns
+    Dim currPatterns As HeaderPatterns
+
+    ' 初期化
+    prevPatterns.Level2Text = ""
+    prevPatterns.Level3Text = ""
+    prevPatterns.Level4Text = ""
+
+    sectIndex = 0
+    For Each sect In wordDoc.Sections
+        sectIndex = sectIndex + 1
+        Debug.Print "-----------------------------------------"
+        Debug.Print "セクション " & sectIndex & " を処理中..."
+
+        ' このセクションのヘッダーからパターンを抽出
+        currPatterns = ExtractHeaderPatterns(sect)
+
+        Debug.Print "  ヘッダーパターン: Level2=" & currPatterns.Level2Text & _
+                    ", Level3=" & currPatterns.Level3Text & _
+                    ", Level4=" & currPatterns.Level4Text
+
+        ' 前セクションとの差分を計算（新しく追加されたパターンのみ）
+        Dim searchLevel2 As String
+        Dim searchLevel3 As String
+        Dim searchLevel4 As String
+
+        searchLevel2 = ""
+        searchLevel3 = ""
+        searchLevel4 = ""
+
+        If currPatterns.Level2Text <> "" And currPatterns.Level2Text <> prevPatterns.Level2Text Then
+            searchLevel2 = currPatterns.Level2Text
         End If
-    Next i
-
-    ' すべての段落をループ
-    For Each para In wordDoc.Paragraphs
-        If Not para.Range Is Nothing Then
-            Dim paraText As String
-            Dim currentStyle As String
-            Dim currentOutline As Long
-            Dim detectedLevel As Long
-            Dim targetStyle As String
-            Dim matchedNumber As Long
-
-            ' 段落テキストを取得（改行を除去）
-            paraText = Trim(Replace(para.Range.Text, vbCr, ""))
-            paraText = Replace(paraText, Chr(13), "")
-
-            ' 現在のスタイル名を取得
-            On Error Resume Next
-            currentStyle = para.Style.NameLocal
-            If Err.Number <> 0 Then
-                currentStyle = ""
-                Err.Clear
-            End If
-            On Error GoTo ErrorHandler
-
-            ' 現在のアウトラインレベルを取得
-            currentOutline = para.OutlineLevel
-
-            ' パターン検出（レベル4→3→2→1の順で評価）
-            detectedLevel = 0
-            targetStyle = ""
-            matchedNumber = 0
-
-            ' レベル4: X-X,X
-            If detectedLevel = 0 And configs(4).RegexPattern <> "" Then
-                If MatchPattern(paraText, configs(4).RegexPattern) Then
-                    detectedLevel = 4
-                    targetStyle = configs(4).StyleName
-                    matchedNumber = ExtractLastNumber(paraText, configs(4).RegexPattern)
-                End If
-            End If
-
-            ' レベル3: X-X
-            If detectedLevel = 0 And configs(3).RegexPattern <> "" Then
-                If MatchPattern(paraText, configs(3).RegexPattern) Then
-                    detectedLevel = 3
-                    targetStyle = configs(3).StyleName
-                    matchedNumber = ExtractSecondNumber(paraText, configs(3).RegexPattern)
-                End If
-            End If
-
-            ' レベル2: 第X章
-            If detectedLevel = 0 And configs(2).RegexPattern <> "" Then
-                If MatchPattern(paraText, configs(2).RegexPattern) Then
-                    detectedLevel = 2
-                    targetStyle = configs(2).StyleName
-                    matchedNumber = ExtractFirstNumber(paraText, configs(2).RegexPattern)
-                End If
-            End If
-
-            ' レベル1: 第X部
-            If detectedLevel = 0 And configs(1).RegexPattern <> "" Then
-                If MatchPattern(paraText, configs(1).RegexPattern) Then
-                    detectedLevel = 1
-                    targetStyle = configs(1).StyleName
-                    matchedNumber = ExtractFirstNumber(paraText, configs(1).RegexPattern)
-                End If
-            End If
-
-            ' 例外1: パターン外だが既にレベル1-4のスタイルが適用されている
-            If detectedLevel = 0 And exception1Style <> "" Then
-                If IsStyleInList(currentStyle, levelStyles) Then
-                    detectedLevel = -1  ' 例外1
-                    targetStyle = exception1Style
-                End If
-            End If
-
-            ' 例外2: アウトライン設定済み（段落またはスタイル）
-            If detectedLevel = 0 And exception2Style <> "" Then
-                ' 段落のOutlineLevelが1-9の場合、またはスタイルにアウトラインが定義されている場合
-                If (currentOutline >= 1 And currentOutline <= 9) Then
-                    detectedLevel = -2  ' 例外2
-                    targetStyle = exception2Style
-                ElseIf HasOutlineDefinedInStyle(para, wordDoc) Then
-                    detectedLevel = -2
-                    targetStyle = exception2Style
-                End If
-            End If
-
-            ' スタイル適用
-            If detectedLevel <> 0 And targetStyle <> "" Then
-                ApplyStyle para, targetStyle
-                processedCount = processedCount + 1
-                Debug.Print "[レベル" & detectedLevel & "] " & Left(paraText, 50)
-
-                ' 連番チェック（レベル1-4のみ）
-                If doSequenceCheck And detectedLevel > 0 Then
-                    TrackSequence tracker, detectedLevel, matchedNumber, paraText
-                End If
-            End If
+        If currPatterns.Level3Text <> "" And currPatterns.Level3Text <> prevPatterns.Level3Text Then
+            searchLevel3 = currPatterns.Level3Text
         End If
-    Next para
+        If currPatterns.Level4Text <> "" And currPatterns.Level4Text <> prevPatterns.Level4Text Then
+            searchLevel4 = currPatterns.Level4Text
+        End If
+
+        Debug.Print "  検索対象: Level2=" & searchLevel2 & _
+                    ", Level3=" & searchLevel3 & _
+                    ", Level4=" & searchLevel4
+
+        ' セクション内の段落を処理
+        Dim para As Object
+        For Each para In sect.Range.Paragraphs
+            processedCount = processedCount + ProcessParagraphByHeader(para, styles, _
+                searchLevel2, searchLevel3, searchLevel4, wordDoc)
+        Next para
+
+        ' セクション内の図形も処理
+        Dim shp As Object
+        Dim shapePara As Object
+        On Error Resume Next
+        For Each shp In sect.Range.ShapeRange
+            If shp.TextFrame.HasText Then
+                For Each shapePara In shp.TextFrame.TextRange.Paragraphs
+                    processedCount = processedCount + ProcessParagraphByHeader(shapePara, styles, _
+                        searchLevel2, searchLevel3, searchLevel4, wordDoc)
+                Next shapePara
+            End If
+        Next shp
+        Err.Clear
+        On Error GoTo ErrorHandler
+
+        ' 現在のパターンを保存
+        prevPatterns = currPatterns
+    Next sect
 
     ' Outputフォルダに名前を付けて保存
     wordDoc.SaveAs2 outputWordPath
@@ -259,15 +210,6 @@ Public Sub OrganizeWordBookmarks()
         msg = msg & vbCrLf & "PDF出力先: " & outputPdfPath
     End If
 
-    ' 連番チェック警告があれば追加
-    If doSequenceCheck And tracker.Warnings.Count > 0 Then
-        msg = msg & vbCrLf & vbCrLf & "■ 連番チェック警告:" & vbCrLf
-        Dim warning As Variant
-        For Each warning In tracker.Warnings
-            msg = msg & "  - " & warning & vbCrLf
-        Next
-    End If
-
     MsgBox msg, vbInformation, "処理完了"
 
     Exit Sub
@@ -292,45 +234,236 @@ ErrorHandler:
 End Sub
 
 ' ============================================================================
+' セクションのヘッダーからパターンを抽出
+' ============================================================================
+Private Function ExtractHeaderPatterns(ByRef sect As Object) As HeaderPatterns
+    Dim result As HeaderPatterns
+    Dim headerText As String
+
+    result.Level2Text = ""
+    result.Level3Text = ""
+    result.Level4Text = ""
+
+    On Error Resume Next
+
+    ' プライマリヘッダーからテキストを取得
+    ' wdHeaderFooterPrimary = 1
+    headerText = sect.Headers(1).Range.Text
+    headerText = Trim(Replace(headerText, vbCr, " "))
+    headerText = Replace(headerText, Chr(13), " ")
+
+    If Err.Number <> 0 Then
+        Err.Clear
+        ExtractHeaderPatterns = result
+        Exit Function
+    End If
+
+    On Error GoTo 0
+
+    Debug.Print "  ヘッダーテキスト: " & Left(headerText, 100)
+
+    ' ヘッダーが空の場合はスキップ
+    If Trim(headerText) = "" Then
+        ExtractHeaderPatterns = result
+        Exit Function
+    End If
+
+    ' パターンを抽出（正規表現で）
+    Dim regex As Object
+    Set regex = CreateObject("VBScript.RegExp")
+    regex.Global = True
+
+    ' 第X章を抽出
+    regex.Pattern = "第[0-9０-９]+章"
+    Dim matches As Object
+    Set matches = regex.Execute(headerText)
+    If matches.Count > 0 Then
+        result.Level2Text = ConvertToHalfWidth(matches(matches.Count - 1).Value)
+    End If
+
+    ' X-X,X を先に抽出（X-Xより具体的）
+    regex.Pattern = "[0-9０-９]+[-－ー][0-9０-９]+[,，.．][0-9０-９]+"
+    Set matches = regex.Execute(headerText)
+    If matches.Count > 0 Then
+        result.Level4Text = ConvertToHalfWidth(matches(matches.Count - 1).Value)
+    End If
+
+    ' X-X を抽出（X-X,Xを除外）
+    regex.Pattern = "[0-9０-９]+[-－ー][0-9０-９]+(?![,，.．0-9０-９])"
+    Set matches = regex.Execute(headerText)
+    If matches.Count > 0 Then
+        result.Level3Text = ConvertToHalfWidth(matches(matches.Count - 1).Value)
+    End If
+
+    Set regex = Nothing
+    ExtractHeaderPatterns = result
+End Function
+
+' ============================================================================
+' 段落処理（ヘッダー参照方式）
+' 戻り値: 処理された場合は1、それ以外は0
+' ============================================================================
+Private Function ProcessParagraphByHeader(ByRef para As Object, _
+                                          ByRef styles As StyleConfig, _
+                                          ByVal searchLevel2 As String, _
+                                          ByVal searchLevel3 As String, _
+                                          ByVal searchLevel4 As String, _
+                                          ByRef wordDoc As Object) As Long
+    On Error GoTo ErrorHandler
+
+    If para Is Nothing Then
+        ProcessParagraphByHeader = 0
+        Exit Function
+    End If
+
+    If para.Range Is Nothing Then
+        ProcessParagraphByHeader = 0
+        Exit Function
+    End If
+
+    Dim paraText As String
+    Dim paraTextHalf As String
+    Dim detectedLevel As Long
+    Dim targetStyle As String
+
+    ' 段落テキストを取得（改行を除去）
+    paraText = Trim(Replace(para.Range.Text, vbCr, ""))
+    paraText = Replace(paraText, Chr(13), "")
+
+    ' 半角変換版も用意（比較用）
+    paraTextHalf = ConvertToHalfWidth(paraText)
+
+    ' 空の段落はスキップ
+    If paraText = "" Then
+        ProcessParagraphByHeader = 0
+        Exit Function
+    End If
+
+    detectedLevel = 0
+    targetStyle = ""
+
+    ' レベル4: X-X,X（ヘッダーから抽出したテキストで検索）
+    If detectedLevel = 0 And searchLevel4 <> "" And styles.Level4Style <> "" Then
+        If InStr(paraTextHalf, searchLevel4) > 0 Then
+            detectedLevel = 4
+            targetStyle = styles.Level4Style
+        End If
+    End If
+
+    ' レベル3: X-X（ヘッダーから抽出したテキストで検索）
+    If detectedLevel = 0 And searchLevel3 <> "" And styles.Level3Style <> "" Then
+        If InStr(paraTextHalf, searchLevel3) > 0 Then
+            detectedLevel = 3
+            targetStyle = styles.Level3Style
+        End If
+    End If
+
+    ' レベル2: 第X章（ヘッダーから抽出したテキストで検索）
+    If detectedLevel = 0 And searchLevel2 <> "" And styles.Level2Style <> "" Then
+        If InStr(paraTextHalf, searchLevel2) > 0 Then
+            detectedLevel = 2
+            targetStyle = styles.Level2Style
+        End If
+    End If
+
+    ' レベル1: 第X部（パターンマッチ - ヘッダー情報なし）
+    If detectedLevel = 0 And styles.Level1Style <> "" Then
+        If MatchPattern(paraText, "第[0-9０-９]+部") Then
+            detectedLevel = 1
+            targetStyle = styles.Level1Style
+        End If
+    End If
+
+    ' 例外1: パターン外だが既にレベル1-4のスタイルが適用されている
+    If detectedLevel = 0 And styles.Exception1Style <> "" Then
+        Dim currentStyle As String
+        On Error Resume Next
+        currentStyle = para.Style.NameLocal
+        If Err.Number <> 0 Then
+            currentStyle = ""
+            Err.Clear
+        End If
+        On Error GoTo ErrorHandler
+
+        If IsLevelStyle(currentStyle, styles) Then
+            detectedLevel = -1
+            targetStyle = styles.Exception1Style
+        End If
+    End If
+
+    ' 例外2: アウトライン設定済み（段落またはスタイル）
+    If detectedLevel = 0 And styles.Exception2Style <> "" Then
+        Dim currentOutline As Long
+        On Error Resume Next
+        currentOutline = para.OutlineLevel
+        If Err.Number <> 0 Then
+            currentOutline = 10
+            Err.Clear
+        End If
+        On Error GoTo ErrorHandler
+
+        If (currentOutline >= 1 And currentOutline <= 9) Then
+            detectedLevel = -2
+            targetStyle = styles.Exception2Style
+        ElseIf HasOutlineDefinedInStyle(para, wordDoc) Then
+            detectedLevel = -2
+            targetStyle = styles.Exception2Style
+        End If
+    End If
+
+    ' スタイル適用
+    If detectedLevel <> 0 And targetStyle <> "" Then
+        ApplyStyle para, targetStyle
+        Debug.Print "  [レベル" & detectedLevel & "] " & Left(paraText, 50)
+        ProcessParagraphByHeader = 1
+        Exit Function
+    End If
+
+    ProcessParagraphByHeader = 0
+    Exit Function
+
+ErrorHandler:
+    ProcessParagraphByHeader = 0
+End Function
+
+' ============================================================================
+' スタイルがレベル1-4のいずれかかチェック
+' ============================================================================
+Private Function IsLevelStyle(ByVal styleName As String, ByRef styles As StyleConfig) As Boolean
+    If styleName = "" Then
+        IsLevelStyle = False
+        Exit Function
+    End If
+
+    If styleName = styles.Level1Style Or _
+       styleName = styles.Level2Style Or _
+       styleName = styles.Level3Style Or _
+       styleName = styles.Level4Style Then
+        IsLevelStyle = True
+    Else
+        IsLevelStyle = False
+    End If
+End Function
+
+' ============================================================================
 ' Excelシートから設定を読み込み
 ' ============================================================================
-Private Function LoadSettings(ByRef configs() As PatternConfig, _
-                              ByRef exception1Style As String, _
-                              ByRef exception2Style As String, _
-                              ByRef doSequenceCheck As Boolean, _
+Private Function LoadSettings(ByRef styles As StyleConfig, _
                               ByRef doPdfOutput As Boolean) As Boolean
     On Error GoTo ErrorHandler
 
     Dim ws As Worksheet
     Set ws = ThisWorkbook.Worksheets(SHEET_MAIN)
 
-    ' レベル1-4の設定を読み込み
-    configs(1).Level = 1
-    configs(1).Description = "第X部"
-    configs(1).RegexPattern = CStr(ws.Cells(ROW_PATTERN_LEVEL1, COL_REGEX).Value)
-    configs(1).StyleName = CStr(ws.Cells(ROW_PATTERN_LEVEL1, COL_STYLE_NAME).Value)
-
-    configs(2).Level = 2
-    configs(2).Description = "第X章"
-    configs(2).RegexPattern = CStr(ws.Cells(ROW_PATTERN_LEVEL2, COL_REGEX).Value)
-    configs(2).StyleName = CStr(ws.Cells(ROW_PATTERN_LEVEL2, COL_STYLE_NAME).Value)
-
-    configs(3).Level = 3
-    configs(3).Description = "X-X"
-    configs(3).RegexPattern = CStr(ws.Cells(ROW_PATTERN_LEVEL3, COL_REGEX).Value)
-    configs(3).StyleName = CStr(ws.Cells(ROW_PATTERN_LEVEL3, COL_STYLE_NAME).Value)
-
-    configs(4).Level = 4
-    configs(4).Description = "X-X,X"
-    configs(4).RegexPattern = CStr(ws.Cells(ROW_PATTERN_LEVEL4, COL_REGEX).Value)
-    configs(4).StyleName = CStr(ws.Cells(ROW_PATTERN_LEVEL4, COL_STYLE_NAME).Value)
-
-    ' 例外スタイルを読み込み
-    exception1Style = CStr(ws.Cells(ROW_PATTERN_EXCEPTION1, COL_STYLE_NAME).Value)
-    exception2Style = CStr(ws.Cells(ROW_PATTERN_EXCEPTION2, COL_STYLE_NAME).Value)
+    ' スタイル名を読み込み
+    styles.Level1Style = CStr(ws.Cells(ROW_PATTERN_LEVEL1, COL_STYLE_NAME).Value)
+    styles.Level2Style = CStr(ws.Cells(ROW_PATTERN_LEVEL2, COL_STYLE_NAME).Value)
+    styles.Level3Style = CStr(ws.Cells(ROW_PATTERN_LEVEL3, COL_STYLE_NAME).Value)
+    styles.Level4Style = CStr(ws.Cells(ROW_PATTERN_LEVEL4, COL_STYLE_NAME).Value)
+    styles.Exception1Style = CStr(ws.Cells(ROW_PATTERN_EXCEPTION1, COL_STYLE_NAME).Value)
+    styles.Exception2Style = CStr(ws.Cells(ROW_PATTERN_EXCEPTION2, COL_STYLE_NAME).Value)
 
     ' オプション設定を読み込み
-    doSequenceCheck = (CStr(ws.Cells(ROW_OPTION_SEQUENCE_CHECK, COL_OPTION_VALUE).Value) = "はい")
     doPdfOutput = (CStr(ws.Cells(ROW_OPTION_PDF_OUTPUT, COL_OPTION_VALUE).Value) = "はい")
 
     LoadSettings = True
@@ -343,10 +476,10 @@ End Function
 ' ============================================================================
 ' 正規表現パターンマッチ
 ' ============================================================================
-Private Function MatchPattern(ByVal text As String, ByVal pattern As String) As Boolean
+Private Function MatchPattern(ByVal text As String, ByVal Pattern As String) As Boolean
     On Error GoTo ErrorHandler
 
-    If text = "" Or pattern = "" Then
+    If text = "" Or Pattern = "" Then
         MatchPattern = False
         Exit Function
     End If
@@ -358,7 +491,7 @@ Private Function MatchPattern(ByVal text As String, ByVal pattern As String) As 
         .Global = False
         .IgnoreCase = False
         .MultiLine = False
-        .pattern = pattern
+        .Pattern = Pattern
     End With
 
     MatchPattern = regex.Test(text)
@@ -371,138 +504,34 @@ ErrorHandler:
 End Function
 
 ' ============================================================================
-' 数値抽出（最初の数値）- 全角対応
-' ============================================================================
-Private Function ExtractFirstNumber(ByVal text As String, ByVal pattern As String) As Long
-    On Error GoTo ErrorHandler
-
-    ' 全角数字を半角に変換
-    text = ConvertToHalfWidth(text)
-
-    Dim regex As Object
-    Set regex = CreateObject("VBScript.RegExp")
-    regex.pattern = "[0-9]+"
-    regex.Global = False
-
-    Dim matches As Object
-    Set matches = regex.Execute(text)
-
-    If matches.Count > 0 Then
-        ExtractFirstNumber = CLng(matches(0).Value)
-    Else
-        ExtractFirstNumber = 0
-    End If
-
-    Set regex = Nothing
-    Exit Function
-
-ErrorHandler:
-    ExtractFirstNumber = 0
-End Function
-
-' ============================================================================
-' 数値抽出（2番目の数値）- X-X パターン用、全角対応
-' ============================================================================
-Private Function ExtractSecondNumber(ByVal text As String, ByVal pattern As String) As Long
-    On Error GoTo ErrorHandler
-
-    ' 全角数字を半角に変換
-    text = ConvertToHalfWidth(text)
-
-    Dim regex As Object
-    Set regex = CreateObject("VBScript.RegExp")
-    regex.pattern = "[0-9]+"
-    regex.Global = True
-
-    Dim matches As Object
-    Set matches = regex.Execute(text)
-
-    If matches.Count >= 2 Then
-        ExtractSecondNumber = CLng(matches(1).Value)
-    ElseIf matches.Count = 1 Then
-        ExtractSecondNumber = CLng(matches(0).Value)
-    Else
-        ExtractSecondNumber = 0
-    End If
-
-    Set regex = Nothing
-    Exit Function
-
-ErrorHandler:
-    ExtractSecondNumber = 0
-End Function
-
-' ============================================================================
-' 数値抽出（最後の数値）- X-X,X パターン用、全角対応
-' ============================================================================
-Private Function ExtractLastNumber(ByVal text As String, ByVal pattern As String) As Long
-    On Error GoTo ErrorHandler
-
-    ' 全角数字を半角に変換
-    text = ConvertToHalfWidth(text)
-
-    Dim regex As Object
-    Set regex = CreateObject("VBScript.RegExp")
-    regex.pattern = "[0-9]+"
-    regex.Global = True
-
-    Dim matches As Object
-    Set matches = regex.Execute(text)
-
-    If matches.Count > 0 Then
-        ExtractLastNumber = CLng(matches(matches.Count - 1).Value)
-    Else
-        ExtractLastNumber = 0
-    End If
-
-    Set regex = Nothing
-    Exit Function
-
-ErrorHandler:
-    ExtractLastNumber = 0
-End Function
-
-' ============================================================================
-' 全角を半角に変換（数字のみ）
+' 全角を半角に変換（数字、ハイフン、カンマ、ピリオド）
 ' ============================================================================
 Private Function ConvertToHalfWidth(ByVal text As String) As String
     Dim i As Long
     Dim char As String
     Dim result As String
+    Dim charCode As Long
 
     result = ""
     For i = 1 To Len(text)
         char = Mid(text, i, 1)
-        Select Case AscW(char)
-            Case &HFF10 To &HFF19  ' ０-９
-                result = result & Chr(AscW(char) - &HFF10 + Asc("0"))
+        charCode = AscW(char)
+
+        Select Case charCode
+            Case &HFF10 To &HFF19  ' ０-９ → 0-9
+                result = result & Chr(charCode - &HFF10 + Asc("0"))
+            Case &HFF0D, &H2212, &H30FC  ' －、−、ー → -
+                result = result & "-"
+            Case &HFF0C  ' ， → ,
+                result = result & ","
+            Case &HFF0E  ' ． → .
+                result = result & "."
             Case Else
                 result = result & char
         End Select
     Next i
 
     ConvertToHalfWidth = result
-End Function
-
-' ============================================================================
-' スタイルがリストに含まれるかチェック
-' ============================================================================
-Private Function IsStyleInList(ByVal styleName As String, ByRef styleList As Collection) As Boolean
-    On Error GoTo ErrorHandler
-
-    Dim item As Variant
-    For Each item In styleList
-        If styleName = CStr(item) Then
-            IsStyleInList = True
-            Exit Function
-        End If
-    Next
-
-    IsStyleInList = False
-    Exit Function
-
-ErrorHandler:
-    IsStyleInList = False
 End Function
 
 ' ============================================================================
@@ -515,7 +544,7 @@ Private Function HasOutlineDefinedInStyle(ByRef para As Object, ByRef wordDoc As
     styleName = para.Style.NameLocal
 
     Dim style As Object
-    Set style = wordDoc.Styles(styleName)
+    Set style = wordDoc.styles(styleName)
 
     ' スタイルのOutlineLevelが本文(10)以外なら、アウトライン定義あり
     If style.ParagraphFormat.OutlineLevel >= 1 And _
@@ -537,73 +566,15 @@ End Function
 Private Sub ApplyStyle(ByRef para As Object, ByVal styleName As String)
     On Error Resume Next
 
-    para.Style = styleName
+    para.style = styleName
 
     If Err.Number <> 0 Then
-        Debug.Print "[警告] スタイル '" & styleName & "' が見つかりません: " & _
-                    Left(para.Range.Text, 50)
+        Debug.Print "  [警告] スタイル '" & styleName & "' が見つかりません: " & _
+                    Left(para.Range.text, 50)
         Err.Clear
     End If
 
     On Error GoTo 0
-End Sub
-
-' ============================================================================
-' 連番トラッキング
-' ============================================================================
-Private Sub TrackSequence(ByRef tracker As SequenceTracker, _
-                          ByVal level As Long, _
-                          ByVal actualNum As Long, _
-                          ByVal paraText As String)
-    Dim expectedNum As Long
-    Dim warningMsg As String
-
-    Select Case level
-        Case 1
-            expectedNum = tracker.Level1Expected
-            If actualNum <> expectedNum Then
-                warningMsg = "レベル1: 期待=" & expectedNum & ", 実際=" & actualNum & _
-                             " (" & Left(paraText, 30) & "...)"
-                tracker.Warnings.Add warningMsg
-            End If
-            tracker.Level1Expected = actualNum + 1
-            ' 下位レベルをリセット
-            tracker.Level2Expected = 1
-            tracker.Level3Expected = 1
-            tracker.Level4Expected = 1
-
-        Case 2
-            expectedNum = tracker.Level2Expected
-            If actualNum <> expectedNum Then
-                warningMsg = "レベル2: 期待=" & expectedNum & ", 実際=" & actualNum & _
-                             " (" & Left(paraText, 30) & "...)"
-                tracker.Warnings.Add warningMsg
-            End If
-            tracker.Level2Expected = actualNum + 1
-            ' 下位レベルをリセット
-            tracker.Level3Expected = 1
-            tracker.Level4Expected = 1
-
-        Case 3
-            expectedNum = tracker.Level3Expected
-            If actualNum <> expectedNum Then
-                warningMsg = "レベル3: 期待=" & expectedNum & ", 実際=" & actualNum & _
-                             " (" & Left(paraText, 30) & "...)"
-                tracker.Warnings.Add warningMsg
-            End If
-            tracker.Level3Expected = actualNum + 1
-            ' 下位レベルをリセット
-            tracker.Level4Expected = 1
-
-        Case 4
-            expectedNum = tracker.Level4Expected
-            If actualNum <> expectedNum Then
-                warningMsg = "レベル4: 期待=" & expectedNum & ", 実際=" & actualNum & _
-                             " (" & Left(paraText, 30) & "...)"
-                tracker.Warnings.Add warningMsg
-            End If
-            tracker.Level4Expected = actualNum + 1
-    End Select
 End Sub
 
 ' ============================================================================
