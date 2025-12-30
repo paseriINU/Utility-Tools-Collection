@@ -210,6 +210,12 @@ Private Sub FormatSettingsSheet()
     ws.Range("A32").Value = "・実行可能なのはジョブネット（ROOTNET/NET）のみです"
     ws.Range("A33").Value = "・ログ取得は最大5MBまでです（超過分は取得できません）"
 
+    ws.Range("A35").Value = "■ searchTargetパラメータについて"
+    ws.Range("A35").Font.Bold = True
+
+    ws.Range("A36").Value = "・DEFINITION: 実行中でなくても定義済みユニットを取得（ツリー表示で使用）"
+    ws.Range("A37").Value = "・DEFINITION_AND_STATUS: 実行中のユニットのみ取得（即時実行状態確認で使用）"
+
     ' 列幅調整
     ws.Columns("A").ColumnWidth = 22
     ws.Columns("B").ColumnWidth = 5
