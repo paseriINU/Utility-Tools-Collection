@@ -298,6 +298,17 @@ Private Function ProcessParagraph(ByRef para As Object, _
         Exit Function
     End If
 
+    ' ハイパーリンクを含む段落はスキップ（目次など）
+    On Error Resume Next
+    If para.Range.Hyperlinks.Count > 0 Then
+        ProcessParagraph = 0
+        Exit Function
+    End If
+    If Err.Number <> 0 Then
+        Err.Clear
+    End If
+    On Error GoTo ErrorHandler
+
     detectedLevel = 0
     targetStyle = ""
 
@@ -365,9 +376,8 @@ Private Function ProcessParagraph(ByRef para As Object, _
         End If
     End If
 
-    ' レベル2: 第X章（パターンマッチ、ヘッダー空白時はスキップ）
-    ' ヘッダーが空白のセクションでは「第X部」のみ処理し、「第X章」は処理しない
-    If detectedLevel = 0 And styles.Level2Style <> "" And Not headerIsEmpty Then
+    ' レベル2: 第X章（パターンマッチ）
+    If detectedLevel = 0 And styles.Level2Style <> "" Then
         If MatchPattern(paraText, "^第[0-9０-９]+章") Then
             detectedLevel = 2
             targetStyle = styles.Level2Style
