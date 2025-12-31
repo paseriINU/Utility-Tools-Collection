@@ -292,6 +292,12 @@ Private Function ProcessParagraph(ByRef para As Object, _
         Exit Function
     End If
 
+    ' 「・」で始まる段落はスキップ（目次形式: 「・　第1章」など）
+    If Left(paraText, 1) = "・" Then
+        ProcessParagraph = 0
+        Exit Function
+    End If
+
     detectedLevel = 0
     targetStyle = ""
 
