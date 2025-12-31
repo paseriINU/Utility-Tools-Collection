@@ -94,6 +94,10 @@ Public Sub OrganizeWordBookmarks()
     Dim hasSections As Boolean
     hasSections = HasSectionsInDocument(wordDoc)
 
+    ' 1ページ目に「帳票」があるか判定
+    Dim isHyohyoDocument As Boolean
+    isHyohyoDocument = HasHyohyoOnFirstPage(wordDoc)
+
     ' スタイルの存在確認（節がない場合はLevel 5のチェックをスキップ）
     Dim missingStyles As String
     missingStyles = ValidateStyles(wordDoc, styles, hasSections)
@@ -116,6 +120,7 @@ Public Sub OrganizeWordBookmarks()
     Debug.Print "Word文書のしおり整理を開始します"
     Debug.Print "対象ファイル: " & filePath
     Debug.Print "節構造: " & IIf(hasSections, "あり（5レベル）", "なし（4レベル）")
+    Debug.Print "帳票文書: " & IIf(isHyohyoDocument, "あり（帳票番号パターン有効）", "なし")
     Debug.Print "========================================="
 
     processedCount = 0
@@ -138,7 +143,7 @@ Public Sub OrganizeWordBookmarks()
         ' セクション内の段落を処理（パターンマッチ方式）
         Dim para As Object
         For Each para In sect.Range.Paragraphs
-            processedCount = processedCount + ProcessParagraph(para, styles, hasSections, headerIsEmpty, wordDoc)
+            processedCount = processedCount + ProcessParagraph(para, styles, hasSections, headerIsEmpty, isHyohyoDocument, wordDoc)
         Next para
 
         ' セクション内の図形も処理
@@ -148,7 +153,7 @@ Public Sub OrganizeWordBookmarks()
         For Each shp In sect.Range.ShapeRange
             If shp.TextFrame.HasText Then
                 For Each shapePara In shp.TextFrame.TextRange.Paragraphs
-                    processedCount = processedCount + ProcessParagraph(shapePara, styles, hasSections, headerIsEmpty, wordDoc)
+                    processedCount = processedCount + ProcessParagraph(shapePara, styles, hasSections, headerIsEmpty, isHyohyoDocument, wordDoc)
                 Next shapePara
             End If
         Next shp
@@ -250,11 +255,14 @@ End Function
 '   True の場合: Level3=第X節, Level4=X-X, Level5=X-X,X
 '   False の場合: Level3=X-X, Level4=X-X,X, Level5=未使用
 ' headerIsEmpty: ヘッダーが空白の場合True
+' isHyohyoDocument: 1ページ目に「帳票」がある場合True
+'   True の場合: (X123)/(XX12)パターンにLevel5スタイルを適用
 ' ============================================================================
 Private Function ProcessParagraph(ByRef para As Object, _
                                   ByRef styles As StyleConfig, _
                                   ByVal hasSections As Boolean, _
                                   ByVal headerIsEmpty As Boolean, _
+                                  ByVal isHyohyoDocument As Boolean, _
                                   ByRef wordDoc As Object) As Long
     On Error GoTo ErrorHandler
 
@@ -399,6 +407,19 @@ Private Function ProcessParagraph(ByRef para As Object, _
         End If
     End If
 
+    ' 帳票文書の場合: (X123)/(XX12)パターンにLevel5スタイルを適用
+    ' (X123): 英字1文字 + 数字3文字
+    ' (XX12): 英字2文字 + 数字2文字
+    If detectedLevel = 0 And isHyohyoDocument And styles.Level5Style <> "" Then
+        ' 全角・半角両対応のパターン
+        If MatchPattern(paraText, "[（(][A-Za-zＡ-Ｚａ-ｚ][0-9０-９]{3}[）)]") Or _
+           MatchPattern(paraText, "[（(][A-Za-zＡ-Ｚａ-ｚ]{2}[0-9０-９]{2}[）)]") Then
+            detectedLevel = 5
+            targetStyle = styles.Level5Style
+            Debug.Print "  [帳票番号検出] " & Left(paraText, 50)
+        End If
+    End If
+
     ' 特定テキストの例外処理（スタイルはレベル3、アウトラインはレベル1）
     If detectedLevel = 0 And styles.Level3Style <> "" Then
         If paraText = "本書の記述について" Or paraText = "修正履歴" Then
@@ -513,6 +534,36 @@ Private Function LoadSettings(ByRef styles As StyleConfig, _
 
 ErrorHandler:
     LoadSettings = False
+End Function
+
+' ============================================================================
+' 1ページ目に「帳票」の文字があるかチェック
+' ============================================================================
+Private Function HasHyohyoOnFirstPage(ByRef wordDoc As Object) As Boolean
+    On Error Resume Next
+
+    Dim firstPageRange As Object
+    Dim secondPageStart As Object
+
+    ' 1ページ目の開始位置を取得
+    Set firstPageRange = wordDoc.GoTo(What:=1, Which:=1, Count:=1)  ' wdGoToPage = 1
+
+    ' 2ページ目の開始位置を取得してRangeの終点とする
+    Set secondPageStart = wordDoc.GoTo(What:=1, Which:=1, Count:=2)
+
+    If Err.Number <> 0 Then
+        ' 文書が1ページの場合は全体を対象
+        Err.Clear
+        Set firstPageRange = wordDoc.Content
+    Else
+        firstPageRange.End = secondPageStart.Start
+    End If
+
+    ' 「帳票」を検索
+    firstPageRange.Find.ClearFormatting
+    HasHyohyoOnFirstPage = firstPageRange.Find.Execute(FindText:="帳票")
+
+    On Error GoTo 0
 End Function
 
 ' ============================================================================
