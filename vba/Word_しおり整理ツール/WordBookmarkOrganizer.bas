@@ -388,11 +388,17 @@ Private Function ProcessParagraph(ByRef para As Object, _
         End If
     End If
 
-    ' 特定テキストの例外処理（レベル3として扱う）
+    ' 特定テキストの例外処理（スタイルはレベル3、アウトラインはレベル1）
     If detectedLevel = 0 And styles.Level3Style <> "" Then
         If paraText = "本書の記述について" Or paraText = "修正履歴" Then
-            detectedLevel = 3
-            targetStyle = styles.Level3Style
+            ApplyStyle para, styles.Level3Style
+            ' アウトラインレベルを1に設定（しおりの階層用）
+            On Error Resume Next
+            para.Range.ParagraphFormat.OutlineLevel = 1  ' wdOutlineLevel1
+            On Error GoTo ErrorHandler
+            Debug.Print "  [特定テキスト→アウトライン1] " & paraText
+            ProcessParagraph = 1
+            Exit Function
         End If
     End If
 
