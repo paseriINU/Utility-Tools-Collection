@@ -429,10 +429,11 @@ Private Function ProcessParagraph(ByRef para As Object, _
     ' 帳票文書の場合: (X123)/(XX12)パターンにLevel5スタイルを適用
     ' (X123): 英字1文字 + 数字3文字
     ' (XX12): 英字2文字 + 数字2文字
+    ' ※全角・半角両対応（paraTextHalfで半角統一済み）
     If detectedLevel = 0 And isHyohyoDocument And styles.Level5Style <> "" Then
-        ' 全角・半角両対応のパターン
-        If MatchPattern(paraText, "[（(][A-Za-zＡ-Ｚａ-ｚ][0-9０-９]{3}[）)]") Or _
-           MatchPattern(paraText, "[（(][A-Za-zＡ-Ｚａ-ｚ]{2}[0-9０-９]{2}[）)]") Then
+        ' 半角変換後のテキストでパターンマッチ
+        If MatchPattern(paraTextHalf, "\([A-Za-z][0-9]{3}\)") Or _
+           MatchPattern(paraTextHalf, "\([A-Za-z]{2}[0-9]{2}\)") Then
             detectedLevel = 5
             targetStyle = styles.Level5Style
             Debug.Print "  [帳票番号検出] " & Left(paraText, 50)
@@ -732,7 +733,7 @@ ErrorHandler:
 End Function
 
 ' ============================================================================
-' 全角を半角に変換（数字、ハイフン、カンマ、ピリオド）
+' 全角を半角に変換（数字、英字、ハイフン、カンマ、ピリオド、括弧）
 ' ============================================================================
 Private Function ConvertToHalfWidth(ByVal text As String) As String
     Dim i As Long
@@ -748,12 +749,20 @@ Private Function ConvertToHalfWidth(ByVal text As String) As String
         Select Case charCode
             Case &HFF10 To &HFF19  ' ０-９ → 0-9
                 result = result & Chr(charCode - &HFF10 + Asc("0"))
+            Case &HFF21 To &HFF3A  ' Ａ-Ｚ → A-Z
+                result = result & Chr(charCode - &HFF21 + Asc("A"))
+            Case &HFF41 To &HFF5A  ' ａ-ｚ → a-z
+                result = result & Chr(charCode - &HFF41 + Asc("a"))
             Case &HFF0D, &H2212, &H30FC  ' －、−、ー → -
                 result = result & "-"
             Case &HFF0C  ' ， → ,
                 result = result & ","
             Case &HFF0E  ' ． → .
                 result = result & "."
+            Case &HFF08  ' （ → (
+                result = result & "("
+            Case &HFF09  ' ） → )
+                result = result & ")"
             Case Else
                 result = result & char
         End Select
