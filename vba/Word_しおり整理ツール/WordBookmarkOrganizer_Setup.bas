@@ -240,7 +240,7 @@ Private Sub FormatMainSheet(ByRef ws As Worksheet)
 
         .Range("B49").Value = "【スキップ条件】"
         .Range("B49").Font.Bold = True
-        .Range("B50").Value = "  「参照」を含む段落、「・」で始まる段落、ハイパーリンクを含む段落はスキップします。"
+        .Range("B50").Value = "  「参照」を含む段落、「・」で始まる段落、ハイパーリンク・表内の段落はスキップします。"
         .Range("B51").Value = "  第X部はヘッダー空欄時のみ処理します。"
 
         .Range("B53").Value = "【節構造の自動判定】"
