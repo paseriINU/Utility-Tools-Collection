@@ -105,7 +105,7 @@ Private Sub FormatMainSheet(ByRef ws As Worksheet)
         .Rows(3).RowHeight = 10
 
         ' === 説明エリア（行5-6） ===
-        .Range("B5").Value = "セクションのヘッダー情報を参照し、本文の該当箇所にスタイルを適用します。"
+        .Range("B5").Value = "段落テキストをパターンマッチでスタイル適用します（「参照」を含む段落はスキップ）。"
         .Range("B6").Value = "PDFエクスポート時に正しいしおり（ブックマーク）を生成します。"
         .Range("B5:B6").Font.Name = "Meiryo UI"
         .Range("B5:B6").Font.Size = 11
@@ -158,25 +158,25 @@ Private Sub FormatMainSheet(ByRef ws As Worksheet)
         ' レベル2
         .Cells(ROW_PATTERN_LEVEL2, COL_LEVEL).Value = "2"
         .Cells(ROW_PATTERN_LEVEL2, COL_PATTERN_DESC).Value = "第X章"
-        .Cells(ROW_PATTERN_LEVEL2, COL_DETECT_METHOD).Value = "ヘッダー参照"
+        .Cells(ROW_PATTERN_LEVEL2, COL_DETECT_METHOD).Value = "パターンマッチ"
         .Cells(ROW_PATTERN_LEVEL2, COL_STYLE_NAME).Value = "表題2"
 
         ' レベル3（節あり:第X節、節なし:X-X）
         .Cells(ROW_PATTERN_LEVEL3, COL_LEVEL).Value = "3"
         .Cells(ROW_PATTERN_LEVEL3, COL_PATTERN_DESC).Value = "第X節 / X-X"
-        .Cells(ROW_PATTERN_LEVEL3, COL_DETECT_METHOD).Value = "ヘッダー参照"
+        .Cells(ROW_PATTERN_LEVEL3, COL_DETECT_METHOD).Value = "パターンマッチ"
         .Cells(ROW_PATTERN_LEVEL3, COL_STYLE_NAME).Value = "表題3"
 
         ' レベル4（節あり:X-X、節なし:X-X,X）
         .Cells(ROW_PATTERN_LEVEL4, COL_LEVEL).Value = "4"
         .Cells(ROW_PATTERN_LEVEL4, COL_PATTERN_DESC).Value = "X-X / X-X,X"
-        .Cells(ROW_PATTERN_LEVEL4, COL_DETECT_METHOD).Value = "ヘッダー参照"
+        .Cells(ROW_PATTERN_LEVEL4, COL_DETECT_METHOD).Value = "パターンマッチ"
         .Cells(ROW_PATTERN_LEVEL4, COL_STYLE_NAME).Value = "表題4"
 
         ' レベル5（節がある場合のみ使用）
         .Cells(ROW_PATTERN_LEVEL5, COL_LEVEL).Value = "5"
         .Cells(ROW_PATTERN_LEVEL5, COL_PATTERN_DESC).Value = "X-X,X（※節あり時）"
-        .Cells(ROW_PATTERN_LEVEL5, COL_DETECT_METHOD).Value = "ヘッダー参照"
+        .Cells(ROW_PATTERN_LEVEL5, COL_DETECT_METHOD).Value = "パターンマッチ"
         .Cells(ROW_PATTERN_LEVEL5, COL_STYLE_NAME).Value = "表題5"
 
         ' 例外1
@@ -247,17 +247,17 @@ Private Sub FormatMainSheet(ByRef ws As Worksheet)
         .Range("B43").Font.Bold = True
         .Range("B43").Font.Size = 12
 
-        .Range("B45").Value = "【ヘッダー参照方式】（レベル2-5）"
+        .Range("B45").Value = "【パターンマッチ方式】（レベル1-5）"
         .Range("B45").Font.Bold = True
-        .Range("B46").Value = "  各セクションのヘッダーから「第X章」「第X節」「X-X」「X-X,X」パターンを抽出します。"
-        .Range("B47").Value = "  前セクションと比較して新しく追加されたパターンを、そのセクション内で検索します。"
-        .Range("B48").Value = "  例: ヘッダー「第1章　概要　1-1　詳細」→ セクション内で「1-1」を検索しスタイル適用"
+        .Range("B46").Value = "  段落テキストを正規表現でパターンマッチし、該当するスタイルを適用します。"
+        .Range("B47").Value = "  「参照」を含む段落はスキップします。"
+        .Range("B48").Value = "  例: 「第1章　概要」→ 第X章パターンに一致 → 表題2スタイル適用"
         .Range("B48").Font.Color = RGB(0, 112, 192)
 
-        .Range("B50").Value = "【パターンマッチ方式】（ヘッダー空欄時のみ: 第X部/第X章）"
+        .Range("B50").Value = "【ヘッダー空白時の処理】（第X部・第X章）"
         .Range("B50").Font.Bold = True
-        .Range("B51").Value = "  ヘッダーにテキストがない場合のみ、本文から「第X部」「第X章」を検出します。"
-        .Range("B52").Value = "  「第X部」は段落先頭のみ対象。ヘッダーにSTYLEREF等があれば処理しません。"
+        .Range("B51").Value = "  ヘッダーが空欄のセクションでは「第X部」のみ検出し、「第X章」は処理しません。"
+        .Range("B52").Value = "  ヘッダーが空欄でないセクションでは「第X章」を処理します。"
 
         .Range("B54").Value = "【節構造の自動判定】"
         .Range("B54").Font.Bold = True
