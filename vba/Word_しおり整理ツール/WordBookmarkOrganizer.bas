@@ -549,27 +549,23 @@ End Function
 Private Function HasHyohyoOnFirstPage(ByRef wordDoc As Object) As Boolean
     On Error Resume Next
 
-    Dim firstPageRange As Object
-    Dim secondPageStart As Object
+    Dim searchRange As Object
 
-    ' 1ページ目の開始位置を取得
-    Set firstPageRange = wordDoc.GoTo(What:=1, Which:=1, Count:=1)  ' wdGoToPage = 1
-
-    ' 2ページ目の開始位置を取得してRangeの終点とする
-    Set secondPageStart = wordDoc.GoTo(What:=1, Which:=1, Count:=2)
-
-    If Err.Number <> 0 Then
-        ' 文書が1ページの場合は全体を対象
-        Err.Clear
-        Set firstPageRange = wordDoc.Content
-    Else
-        firstPageRange.End = secondPageStart.Start
-    End If
+    ' 文書全体を検索対象に
+    Set searchRange = wordDoc.Content
 
     ' 「帳票」を検索
-    firstPageRange.Find.ClearFormatting
-    HasHyohyoOnFirstPage = firstPageRange.Find.Execute(FindText:="帳票")
+    searchRange.Find.ClearFormatting
+    If searchRange.Find.Execute(FindText:="帳票") Then
+        ' 見つかった位置が1ページ目かどうかを確認
+        ' wdActiveEndPageNumber = 3
+        If searchRange.Information(3) = 1 Then
+            HasHyohyoOnFirstPage = True
+            Exit Function
+        End If
+    End If
 
+    HasHyohyoOnFirstPage = False
     On Error GoTo 0
 End Function
 
