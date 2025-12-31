@@ -247,15 +247,19 @@ Private Sub FormatMainSheet(ByRef ws As Worksheet)
         .Range("B53").Font.Bold = True
         .Range("B54").Value = "  ヘッダーに「第X節」があるかを事前に判定し、レベル構造を自動で切り替えます。"
 
-        .Range("B56").Value = "【ヘッダーフィールド更新】"
+        .Range("B56").Value = "【特定テキストの例外処理】"
         .Range("B56").Font.Bold = True
-        .Range("B57").Value = "  スタイル適用後、ヘッダー内のSTYLEREFフィールドのスタイル名を自動更新します。"
+        .Range("B57").Value = "  「本書の記述について」「修正履歴」はレベル3スタイル適用、アウトラインはレベル1に設定。"
 
-        .Range("B59").Value = "※ 図形（テキストボックス等）内のテキストも処理対象です"
-        .Range("B59").Font.Color = RGB(0, 112, 192)
+        .Range("B59").Value = "【ヘッダーフィールド更新】"
+        .Range("B59").Font.Bold = True
+        .Range("B60").Value = "  スタイル適用後、ヘッダー内のSTYLEREFフィールドのスタイル名を自動更新します。"
 
-        .Range("B45:B59").Font.Name = "Meiryo UI"
-        .Range("B45:B59").Font.Size = 10
+        .Range("B62").Value = "※ 図形（テキストボックス等）内のテキストも処理対象です"
+        .Range("B62").Font.Color = RGB(0, 112, 192)
+
+        .Range("B45:B62").Font.Name = "Meiryo UI"
+        .Range("B45:B62").Font.Size = 10
 
         ' === 列幅調整 ===
         .Columns("A").ColumnWidth = 3
