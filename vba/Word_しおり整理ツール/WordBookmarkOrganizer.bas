@@ -16,6 +16,10 @@ Private Type StyleConfig
     Exception1Style As String
     Exception2Style As String
     HyohyoStyle As String  ' 帳票パターン（X123）/（XX12）用
+    Special1Text As String  ' 特定テキスト1（完全一致）
+    Special1Style As String ' 特定テキスト1のスタイル
+    Special2Text As String  ' 特定テキスト2（完全一致）
+    Special2Style As String ' 特定テキスト2のスタイル
 End Type
 
 ' === デフォルトスタイル名定数（ヘッダーのSTYLEREF更新用） ===
@@ -428,15 +432,30 @@ Private Function ProcessParagraph(ByRef para As Object, _
         End If
     End If
 
-    ' 特定テキストの例外処理（スタイルはレベル3、アウトラインはレベル1）
-    If detectedLevel = 0 And styles.Level3Style <> "" Then
-        If paraText = "本書の記述について" Or paraText = "修正履歴" Then
-            ApplyStyle para, styles.Level3Style
+    ' 特定テキストの例外処理（スタイルを適用、アウトラインはレベル1）
+    ' 特定テキスト1（例: 本書の記述について）
+    If detectedLevel = 0 And styles.Special1Text <> "" And styles.Special1Style <> "" Then
+        If paraText = styles.Special1Text Then
+            ApplyStyle para, styles.Special1Style
             ' アウトラインレベルを1に設定（しおりの階層用）
             On Error Resume Next
             para.Range.ParagraphFormat.OutlineLevel = 1  ' wdOutlineLevel1
             On Error GoTo ErrorHandler
-            Debug.Print "  [特定テキスト→アウトライン1] " & paraText
+            Debug.Print "  [特定テキスト1→アウトライン1] " & paraText
+            ProcessParagraph = 1
+            Exit Function
+        End If
+    End If
+
+    ' 特定テキスト2（例: 修正履歴）
+    If detectedLevel = 0 And styles.Special2Text <> "" And styles.Special2Style <> "" Then
+        If paraText = styles.Special2Text Then
+            ApplyStyle para, styles.Special2Style
+            ' アウトラインレベルを1に設定（しおりの階層用）
+            On Error Resume Next
+            para.Range.ParagraphFormat.OutlineLevel = 1  ' wdOutlineLevel1
+            On Error GoTo ErrorHandler
+            Debug.Print "  [特定テキスト2→アウトライン1] " & paraText
             ProcessParagraph = 1
             Exit Function
         End If
@@ -534,6 +553,12 @@ Private Function LoadSettings(ByRef styles As StyleConfig, _
     styles.Exception1Style = CStr(ws.Cells(ROW_PATTERN_EXCEPTION1, COL_STYLE_NAME).Value)
     styles.Exception2Style = CStr(ws.Cells(ROW_PATTERN_EXCEPTION2, COL_STYLE_NAME).Value)
     styles.HyohyoStyle = CStr(ws.Cells(ROW_PATTERN_HYOHYO, COL_STYLE_NAME).Value)
+
+    ' 特定テキスト設定を読み込み
+    styles.Special1Text = CStr(ws.Cells(ROW_PATTERN_SPECIAL1, COL_PATTERN_DESC).Value)
+    styles.Special1Style = CStr(ws.Cells(ROW_PATTERN_SPECIAL1, COL_STYLE_NAME).Value)
+    styles.Special2Text = CStr(ws.Cells(ROW_PATTERN_SPECIAL2, COL_PATTERN_DESC).Value)
+    styles.Special2Style = CStr(ws.Cells(ROW_PATTERN_SPECIAL2, COL_STYLE_NAME).Value)
 
     ' オプション設定を読み込み
     doPdfOutput = (CStr(ws.Cells(ROW_OPTION_PDF_OUTPUT, COL_OPTION_VALUE).Value) = "はい")
