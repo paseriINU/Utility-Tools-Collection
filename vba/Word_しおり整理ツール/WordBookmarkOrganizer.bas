@@ -273,9 +273,13 @@ Private Function ProcessParagraph(ByRef para As Object, _
     Dim detectedLevel As Long
     Dim targetStyle As String
 
-    ' 段落テキストを取得（改行を除去）
+    ' 段落テキストを取得（改行・改ページ等の制御文字を除去）
     paraText = Trim(Replace(para.Range.Text, vbCr, ""))
-    paraText = Replace(paraText, Chr(13), "")
+    paraText = Replace(paraText, Chr(13), "")   ' キャリッジリターン
+    paraText = Replace(paraText, Chr(12), "")   ' 改ページ（フォームフィード）
+    paraText = Replace(paraText, Chr(11), "")   ' 段落内改行（Shift+Enter）
+    paraText = Replace(paraText, Chr(7), "")    ' セル終端マーカー（表内）
+    paraText = Trim(paraText)                   ' 再度トリム
 
     ' 半角変換版も用意（比較用）
     paraTextHalf = ConvertToHalfWidth(paraText)
