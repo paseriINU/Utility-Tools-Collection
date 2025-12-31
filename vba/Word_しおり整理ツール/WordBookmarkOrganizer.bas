@@ -298,6 +298,21 @@ Private Function ProcessParagraph(ByRef para As Object, _
         Exit Function
     End If
 
+    ' 目次スタイルの段落はスキップ（目次1、目次2、TOC 1、TOC 2など）
+    Dim paraStyleName As String
+    On Error Resume Next
+    paraStyleName = para.Style.NameLocal
+    If Err.Number <> 0 Then
+        paraStyleName = ""
+        Err.Clear
+    End If
+    On Error GoTo ErrorHandler
+
+    If Left(paraStyleName, 2) = "目次" Or Left(UCase(paraStyleName), 3) = "TOC" Then
+        ProcessParagraph = 0
+        Exit Function
+    End If
+
     detectedLevel = 0
     targetStyle = ""
 
@@ -365,9 +380,8 @@ Private Function ProcessParagraph(ByRef para As Object, _
         End If
     End If
 
-    ' レベル2: 第X章（パターンマッチ、ヘッダー空白時はスキップ）
-    ' ヘッダーが空白のセクションでは「第X部」のみ処理し、「第X章」は処理しない
-    If detectedLevel = 0 And styles.Level2Style <> "" And Not headerIsEmpty Then
+    ' レベル2: 第X章（パターンマッチ）
+    If detectedLevel = 0 And styles.Level2Style <> "" Then
         If MatchPattern(paraText, "^第[0-9０-９]+章") Then
             detectedLevel = 2
             targetStyle = styles.Level2Style

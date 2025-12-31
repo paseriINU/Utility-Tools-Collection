@@ -104,7 +104,7 @@ Private Sub FormatMainSheet(ByRef ws As Worksheet)
         .Rows(3).RowHeight = 10
 
         ' === 説明エリア（行5-6） ===
-        .Range("B5").Value = "段落テキストをパターンマッチでスタイル適用します（「参照」・「・」始まりはスキップ）。"
+        .Range("B5").Value = "段落テキストをパターンマッチでスタイル適用します（「参照」・目次・「・」始まりはスキップ）。"
         .Range("B6").Value = "PDFエクスポート時に正しいしおり（ブックマーク）を生成します。"
         .Range("B5:B6").Font.Name = "Meiryo UI"
         .Range("B5:B6").Font.Size = 11
@@ -235,28 +235,27 @@ Private Sub FormatMainSheet(ByRef ws As Worksheet)
         .Range("B45").Value = "【パターンマッチ方式】（レベル1-5）"
         .Range("B45").Font.Bold = True
         .Range("B46").Value = "  段落テキストを正規表現でパターンマッチし、該当するスタイルを適用します。"
-        .Range("B47").Value = "  「参照」を含む段落、「・」で始まる段落（目次形式）はスキップします。"
-        .Range("B48").Value = "  例: 「第1章　概要」→ 第X章パターンに一致 → 表題2スタイル適用"
-        .Range("B48").Font.Color = RGB(0, 112, 192)
+        .Range("B47").Value = "  例: 「第1章　概要」→ 第X章パターンに一致 → 表題2スタイル適用"
+        .Range("B47").Font.Color = RGB(0, 112, 192)
 
-        .Range("B50").Value = "【ヘッダー空白時の処理】（第X部・第X章）"
-        .Range("B50").Font.Bold = True
-        .Range("B51").Value = "  ヘッダーが空欄のセクションでは「第X部」のみ検出し、「第X章」は処理しません。"
-        .Range("B52").Value = "  ヘッダーが空欄でないセクションでは「第X章」を処理します。"
+        .Range("B49").Value = "【スキップ条件】"
+        .Range("B49").Font.Bold = True
+        .Range("B50").Value = "  「参照」を含む段落、「・」で始まる段落、目次スタイルの段落はスキップします。"
+        .Range("B51").Value = "  第X部はヘッダー空欄時のみ処理します。"
 
-        .Range("B54").Value = "【節構造の自動判定】"
-        .Range("B54").Font.Bold = True
-        .Range("B55").Value = "  ヘッダーに「第X節」があるかを事前に判定し、レベル構造を自動で切り替えます。"
+        .Range("B53").Value = "【節構造の自動判定】"
+        .Range("B53").Font.Bold = True
+        .Range("B54").Value = "  ヘッダーに「第X節」があるかを事前に判定し、レベル構造を自動で切り替えます。"
 
-        .Range("B57").Value = "【ヘッダーフィールド更新】"
-        .Range("B57").Font.Bold = True
-        .Range("B58").Value = "  スタイル適用後、ヘッダー内のSTYLEREFフィールドのスタイル名を自動更新します。"
+        .Range("B56").Value = "【ヘッダーフィールド更新】"
+        .Range("B56").Font.Bold = True
+        .Range("B57").Value = "  スタイル適用後、ヘッダー内のSTYLEREFフィールドのスタイル名を自動更新します。"
 
-        .Range("B60").Value = "※ 図形（テキストボックス等）内のテキストも処理対象です"
-        .Range("B60").Font.Color = RGB(0, 112, 192)
+        .Range("B59").Value = "※ 図形（テキストボックス等）内のテキストも処理対象です"
+        .Range("B59").Font.Color = RGB(0, 112, 192)
 
-        .Range("B45:B60").Font.Name = "Meiryo UI"
-        .Range("B45:B60").Font.Size = 10
+        .Range("B45:B59").Font.Name = "Meiryo UI"
+        .Range("B45:B59").Font.Size = 10
 
         ' === 列幅調整 ===
         .Columns("A").ColumnWidth = 3
