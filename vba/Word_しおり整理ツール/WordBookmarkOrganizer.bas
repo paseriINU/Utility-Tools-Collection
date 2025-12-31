@@ -2,17 +2,17 @@ Option Explicit
 
 ' ============================================================================
 ' Word しおり整理ツール - メインモジュール
-' ヘッダー参照方式: セクションのヘッダーからパターンを抽出し、
-' そのセクション内の本文で該当テキストを検索してスタイルを適用
+' パターンマッチ方式: 段落テキストを正規表現でパターンマッチし、
+' 該当するスタイルを適用。「参照」を含む段落はスキップ。
 ' ============================================================================
 
 ' === スタイル設定構造体 ===
 Private Type StyleConfig
-    Level1Style As String  ' 第X部用（パターンマッチ）
-    Level2Style As String  ' 第X章用（ヘッダー参照/フォールバック:パターンマッチ）
-    Level3Style As String  ' 第X節用（ヘッダー参照、自動判定）
-    Level4Style As String  ' X-X用（ヘッダー参照）
-    Level5Style As String  ' X-X,X用（ヘッダー参照）
+    Level1Style As String  ' 第X部用（パターンマッチ、ヘッダー空白時のみ）
+    Level2Style As String  ' 第X章用（パターンマッチ、ヘッダー非空白時のみ）
+    Level3Style As String  ' 第X節/X-X用（パターンマッチ、自動判定）
+    Level4Style As String  ' X-X/X-X,X用（パターンマッチ）
+    Level5Style As String  ' X-X,X用（パターンマッチ、節あり時のみ）
     Exception1Style As String
     Exception2Style As String
 End Type
@@ -23,14 +23,6 @@ Private Const DEFAULT_LEVEL2_STYLE As String = "表題2"
 Private Const DEFAULT_LEVEL3_STYLE As String = "表題3"
 Private Const DEFAULT_LEVEL4_STYLE As String = "表題4"
 Private Const DEFAULT_LEVEL5_STYLE As String = "表題5"
-
-' === ヘッダーパターン構造体 ===
-Private Type HeaderPatterns
-    Level2Text As String   ' 第X章
-    Level3Text As String   ' 第X節
-    Level4Text As String   ' X-X
-    Level5Text As String   ' X-X,X
-End Type
 
 ' ============================================================================
 ' メインプロシージャ: Word文書のしおりを整理してPDF出力
@@ -131,14 +123,6 @@ Public Sub OrganizeWordBookmarks()
     ' セクションごとに処理
     Dim sect As Object
     Dim sectIndex As Long
-    Dim prevPatterns As HeaderPatterns
-    Dim currPatterns As HeaderPatterns
-
-    ' 初期化
-    prevPatterns.Level2Text = ""
-    prevPatterns.Level3Text = ""
-    prevPatterns.Level4Text = ""
-    prevPatterns.Level5Text = ""
 
     sectIndex = 0
     For Each sect In wordDoc.Sections
@@ -146,52 +130,15 @@ Public Sub OrganizeWordBookmarks()
         Debug.Print "-----------------------------------------"
         Debug.Print "セクション " & sectIndex & " を処理中..."
 
-        ' このセクションのヘッダーからパターンを抽出
-        currPatterns = ExtractHeaderPatterns(sect)
-
-        Debug.Print "  ヘッダーパターン: Level2=" & currPatterns.Level2Text & _
-                    ", Level3=" & currPatterns.Level3Text & _
-                    ", Level4=" & currPatterns.Level4Text & _
-                    ", Level5=" & currPatterns.Level5Text
-
-        ' 前セクションとの差分を計算（新しく追加されたパターンのみ）
-        Dim searchLevel2 As String
-        Dim searchLevel3 As String
-        Dim searchLevel4 As String
-        Dim searchLevel5 As String
-
-        searchLevel2 = ""
-        searchLevel3 = ""
-        searchLevel4 = ""
-        searchLevel5 = ""
-
-        If currPatterns.Level2Text <> "" And currPatterns.Level2Text <> prevPatterns.Level2Text Then
-            searchLevel2 = currPatterns.Level2Text
-        End If
-        If currPatterns.Level3Text <> "" And currPatterns.Level3Text <> prevPatterns.Level3Text Then
-            searchLevel3 = currPatterns.Level3Text
-        End If
-        If currPatterns.Level4Text <> "" And currPatterns.Level4Text <> prevPatterns.Level4Text Then
-            searchLevel4 = currPatterns.Level4Text
-        End If
-        If currPatterns.Level5Text <> "" And currPatterns.Level5Text <> prevPatterns.Level5Text Then
-            searchLevel5 = currPatterns.Level5Text
-        End If
-
-        Debug.Print "  検索対象: Level2=" & searchLevel2 & _
-                    ", Level3=" & searchLevel3 & _
-                    ", Level4=" & searchLevel4 & _
-                    ", Level5=" & searchLevel5
-
         ' ヘッダーが空白かどうか判定（ヘッダーテキスト自体が空かどうか）
         Dim headerIsEmpty As Boolean
         headerIsEmpty = IsHeaderEmpty(sect)
+        Debug.Print "  ヘッダー空白: " & headerIsEmpty
 
-        ' セクション内の段落を処理
+        ' セクション内の段落を処理（パターンマッチ方式）
         Dim para As Object
         For Each para In sect.Range.Paragraphs
-            processedCount = processedCount + ProcessParagraphByHeader(para, styles, _
-                searchLevel2, searchLevel3, searchLevel4, searchLevel5, hasSections, headerIsEmpty, wordDoc)
+            processedCount = processedCount + ProcessParagraph(para, styles, hasSections, headerIsEmpty, wordDoc)
         Next para
 
         ' セクション内の図形も処理
@@ -201,16 +148,12 @@ Public Sub OrganizeWordBookmarks()
         For Each shp In sect.Range.ShapeRange
             If shp.TextFrame.HasText Then
                 For Each shapePara In shp.TextFrame.TextRange.Paragraphs
-                    processedCount = processedCount + ProcessParagraphByHeader(shapePara, styles, _
-                        searchLevel2, searchLevel3, searchLevel4, searchLevel5, hasSections, headerIsEmpty, wordDoc)
+                    processedCount = processedCount + ProcessParagraph(shapePara, styles, hasSections, headerIsEmpty, wordDoc)
                 Next shapePara
             End If
         Next shp
         Err.Clear
         On Error GoTo ErrorHandler
-
-        ' 現在のパターンを保存
-        prevPatterns = currPatterns
     Next sect
 
     ' ヘッダー内のフィールドを更新（STYLEREFのスタイル名も変更）
@@ -301,105 +244,27 @@ Private Function IsHeaderEmpty(ByRef sect As Object) As Boolean
 End Function
 
 ' ============================================================================
-' セクションのヘッダーからパターンを抽出
-' ============================================================================
-Private Function ExtractHeaderPatterns(ByRef sect As Object) As HeaderPatterns
-    Dim result As HeaderPatterns
-    Dim headerText As String
-
-    result.Level2Text = ""
-    result.Level3Text = ""
-    result.Level4Text = ""
-    result.Level5Text = ""
-
-    On Error Resume Next
-
-    ' プライマリヘッダーからテキストを取得
-    ' wdHeaderFooterPrimary = 1
-    headerText = sect.Headers(1).Range.Text
-    headerText = Trim(Replace(headerText, vbCr, " "))
-    headerText = Replace(headerText, Chr(13), " ")
-
-    If Err.Number <> 0 Then
-        Err.Clear
-        ExtractHeaderPatterns = result
-        Exit Function
-    End If
-
-    On Error GoTo 0
-
-    Debug.Print "  ヘッダーテキスト: " & Left(headerText, 100)
-
-    ' ヘッダーが空の場合はスキップ
-    If Trim(headerText) = "" Then
-        ExtractHeaderPatterns = result
-        Exit Function
-    End If
-
-    ' パターンを抽出（正規表現で）
-    Dim regex As Object
-    Set regex = CreateObject("VBScript.RegExp")
-    regex.Global = True
-
-    ' 第X章を抽出
-    regex.Pattern = "第[0-9０-９]+章"
-    Dim matches As Object
-    Set matches = regex.Execute(headerText)
-    If matches.Count > 0 Then
-        result.Level2Text = ConvertToHalfWidth(matches(matches.Count - 1).Value)
-    End If
-
-    ' 第X節を抽出
-    regex.Pattern = "第[0-9０-９]+節"
-    Set matches = regex.Execute(headerText)
-    If matches.Count > 0 Then
-        result.Level3Text = ConvertToHalfWidth(matches(matches.Count - 1).Value)
-    End If
-
-    ' X-X,X を先に抽出（X-Xより具体的）
-    regex.Pattern = "[0-9０-９]+[-－ー][0-9０-９]+[,，.．][0-9０-９]+"
-    Set matches = regex.Execute(headerText)
-    If matches.Count > 0 Then
-        result.Level5Text = ConvertToHalfWidth(matches(matches.Count - 1).Value)
-    End If
-
-    ' X-X を抽出（X-X,Xを除外）
-    regex.Pattern = "[0-9０-９]+[-－ー][0-9０-９]+(?![,，.．0-9０-９])"
-    Set matches = regex.Execute(headerText)
-    If matches.Count > 0 Then
-        result.Level4Text = ConvertToHalfWidth(matches(matches.Count - 1).Value)
-    End If
-
-    Set regex = Nothing
-    ExtractHeaderPatterns = result
-End Function
-
-' ============================================================================
-' 段落処理（ヘッダー参照方式）
+' 段落処理（パターンマッチ方式）
 ' 戻り値: 処理された場合は1、それ以外は0
 ' hasSections: 文書内に「第X節」が存在する場合True
 '   True の場合: Level3=第X節, Level4=X-X, Level5=X-X,X
 '   False の場合: Level3=X-X, Level4=X-X,X, Level5=未使用
 ' headerIsEmpty: ヘッダーが空白の場合True
 ' ============================================================================
-Private Function ProcessParagraphByHeader(ByRef para As Object, _
-                                          ByRef styles As StyleConfig, _
-                                          ByVal searchLevel2 As String, _
-                                          ByVal searchLevel3 As String, _
-                                          ByVal searchLevel4 As String, _
-                                          ByVal searchLevel5 As String, _
-                                          ByVal hasSections As Boolean, _
-                                          ByVal headerIsEmpty As Boolean, _
-                                          ByRef wordDoc As Object) As Long
+Private Function ProcessParagraph(ByRef para As Object, _
+                                  ByRef styles As StyleConfig, _
+                                  ByVal hasSections As Boolean, _
+                                  ByVal headerIsEmpty As Boolean, _
+                                  ByRef wordDoc As Object) As Long
     On Error GoTo ErrorHandler
 
     If para Is Nothing Then
-        ProcessParagraphByHeader = 0
+        ProcessParagraph = 0
         Exit Function
     End If
 
     If para.Range Is Nothing Then
-        ProcessParagraphByHeader = 0
+        ProcessParagraph = 0
         Exit Function
     End If
 
@@ -417,7 +282,13 @@ Private Function ProcessParagraphByHeader(ByRef para As Object, _
 
     ' 空の段落はスキップ
     If paraText = "" Then
-        ProcessParagraphByHeader = 0
+        ProcessParagraph = 0
+        Exit Function
+    End If
+
+    ' 「参照」を含む段落はスキップ
+    If InStr(paraText, "参照") > 0 Then
+        ProcessParagraph = 0
         Exit Function
     End If
 
@@ -442,25 +313,25 @@ Private Function ProcessParagraphByHeader(ByRef para As Object, _
         ' Level3=第X節, Level4=X-X, Level5=X-X,X
         ' ========================================
 
-        ' レベル5: X-X,X（ヘッダーから抽出したテキストで検索）
-        If detectedLevel = 0 And searchLevel5 <> "" And styles.Level5Style <> "" Then
-            If InStr(paraTextHalf, searchLevel5) > 0 Then
+        ' レベル5: X-X,X（パターンマッチ）
+        If detectedLevel = 0 And styles.Level5Style <> "" Then
+            If MatchPattern(paraTextHalf, "^[0-9]+-[0-9]+[,\.][0-9]+") Then
                 detectedLevel = 5
                 targetStyle = styles.Level5Style
             End If
         End If
 
-        ' レベル4: X-X（ヘッダーから抽出したテキストで検索）
-        If detectedLevel = 0 And searchLevel4 <> "" And styles.Level4Style <> "" Then
-            If InStr(paraTextHalf, searchLevel4) > 0 Then
+        ' レベル4: X-X（パターンマッチ、X-X,Xを除外）
+        If detectedLevel = 0 And styles.Level4Style <> "" Then
+            If MatchPattern(paraTextHalf, "^[0-9]+-[0-9]+(?![,\.0-9])") Then
                 detectedLevel = 4
                 targetStyle = styles.Level4Style
             End If
         End If
 
-        ' レベル3: 第X節（ヘッダー参照のみ - パターンマッチなし）
-        If detectedLevel = 0 And searchLevel3 <> "" And styles.Level3Style <> "" Then
-            If InStr(paraTextHalf, searchLevel3) > 0 Then
+        ' レベル3: 第X節（パターンマッチ）
+        If detectedLevel = 0 And styles.Level3Style <> "" Then
+            If MatchPattern(paraText, "^第[0-9０-９]+節") Then
                 detectedLevel = 3
                 targetStyle = styles.Level3Style
             End If
@@ -471,30 +342,27 @@ Private Function ProcessParagraphByHeader(ByRef para As Object, _
         ' Level3=X-X, Level4=X-X,X, Level5=未使用
         ' ========================================
 
-        ' レベル4: X-X,X（ヘッダーから抽出したテキストで検索）
-        ' ※節なしの場合、searchLevel5にX-X,Xが入っている
-        If detectedLevel = 0 And searchLevel5 <> "" And styles.Level4Style <> "" Then
-            If InStr(paraTextHalf, searchLevel5) > 0 Then
+        ' レベル4: X-X,X（パターンマッチ）
+        If detectedLevel = 0 And styles.Level4Style <> "" Then
+            If MatchPattern(paraTextHalf, "^[0-9]+-[0-9]+[,\.][0-9]+") Then
                 detectedLevel = 4
                 targetStyle = styles.Level4Style
             End If
         End If
 
-        ' レベル3: X-X（ヘッダーから抽出したテキストで検索）
-        ' ※節なしの場合、searchLevel4にX-Xが入っている
-        If detectedLevel = 0 And searchLevel4 <> "" And styles.Level3Style <> "" Then
-            If InStr(paraTextHalf, searchLevel4) > 0 Then
+        ' レベル3: X-X（パターンマッチ、X-X,Xを除外）
+        If detectedLevel = 0 And styles.Level3Style <> "" Then
+            If MatchPattern(paraTextHalf, "^[0-9]+-[0-9]+(?![,\.0-9])") Then
                 detectedLevel = 3
                 targetStyle = styles.Level3Style
             End If
         End If
     End If
 
-    ' レベル2: 第X章（ヘッダー参照のみ、ヘッダー空白時はスキップ）
+    ' レベル2: 第X章（パターンマッチ、ヘッダー空白時はスキップ）
     ' ヘッダーが空白のセクションでは「第X部」のみ処理し、「第X章」は処理しない
-    If detectedLevel = 0 And styles.Level2Style <> "" And searchLevel2 <> "" And Not headerIsEmpty Then
-        ' ヘッダーから抽出したテキストで検索
-        If InStr(paraTextHalf, searchLevel2) > 0 Then
+    If detectedLevel = 0 And styles.Level2Style <> "" And Not headerIsEmpty Then
+        If MatchPattern(paraText, "^第[0-9０-９]+章") Then
             detectedLevel = 2
             targetStyle = styles.Level2Style
         End If
@@ -542,15 +410,15 @@ ApplyStyleAndExit:
     If detectedLevel <> 0 And targetStyle <> "" Then
         ApplyStyle para, targetStyle
         Debug.Print "  [レベル" & detectedLevel & "] " & Left(paraText, 50)
-        ProcessParagraphByHeader = 1
+        ProcessParagraph = 1
         Exit Function
     End If
 
-    ProcessParagraphByHeader = 0
+    ProcessParagraph = 0
     Exit Function
 
 ErrorHandler:
-    ProcessParagraphByHeader = 0
+    ProcessParagraph = 0
 End Function
 
 ' ============================================================================
