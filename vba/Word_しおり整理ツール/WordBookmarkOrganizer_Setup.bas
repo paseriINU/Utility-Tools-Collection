@@ -326,8 +326,8 @@ Private Sub FormatMainSheet(ByRef ws As Worksheet)
         .Cells(ROW_PATTERN_SPECIAL1, COL_PATTERN_DESC).Locked = False
         .Cells(ROW_PATTERN_SPECIAL2, COL_PATTERN_DESC).Locked = False
         .Cells(ROW_OPTION_PDF_OUTPUT, COL_OPTION_VALUE).Locked = False
-        .Range("C10").Locked = False
-        .Range("C12").Locked = False
+        .Range("C10:G10").Locked = False
+        .Range("C12:G12").Locked = False
 
         ' A1セルを選択
         .Range("A1").Select
