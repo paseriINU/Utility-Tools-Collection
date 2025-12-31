@@ -313,6 +313,17 @@ Private Function ProcessParagraph(ByRef para As Object, _
     End If
     On Error GoTo ErrorHandler
 
+    ' 表内の段落はスキップ
+    On Error Resume Next
+    If para.Range.Information(12) = True Then  ' 12 = wdWithInTable
+        ProcessParagraph = 0
+        Exit Function
+    End If
+    If Err.Number <> 0 Then
+        Err.Clear
+    End If
+    On Error GoTo ErrorHandler
+
     detectedLevel = 0
     targetStyle = ""
 
