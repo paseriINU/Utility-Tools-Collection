@@ -34,7 +34,6 @@ Public Sub OrganizeWordBookmarks()
     Dim outputWordPath As String
     Dim outputPdfPath As String
     Dim processedCount As Long
-    Dim baseDir As String
     Dim inputDir As String
     Dim outputDir As String
 
@@ -42,43 +41,31 @@ Public Sub OrganizeWordBookmarks()
     Dim styles As StyleConfig
     Dim doPdfOutput As Boolean
 
-    ' マクロのあるフォルダを基準にする
-    baseDir = ThisWorkbook.Path
-    If Right(baseDir, 1) <> "\" Then baseDir = baseDir & "\"
+    ' Excelシートからフォルダパスを読み取る
+    Dim ws As Worksheet
+    Set ws = ThisWorkbook.Worksheets(SHEET_MAIN)
 
-    ' カレントフォルダ名を取得
-    Dim folderName As String
-    Dim parentDir As String
-    folderName = Mid(baseDir, InStrRev(Left(baseDir, Len(baseDir) - 1), "\") + 1)
-    folderName = Left(folderName, Len(folderName) - 1)  ' 末尾の\を除去
-    parentDir = Left(baseDir, InStrRev(Left(baseDir, Len(baseDir) - 1), "\"))
+    inputDir = CStr(ws.Cells(ROW_INPUT_FOLDER, 3).Value)  ' C10セル
+    outputDir = CStr(ws.Cells(ROW_OUTPUT_FOLDER, 3).Value)  ' C12セル
 
-    ' カレントフォルダ名に「Input」または「Output」が含まれている場合の処理
-    If InStr(1, folderName, "Input", vbTextCompare) > 0 Then
-        ' フォルダ名に「Input」が含まれている → カレントフォルダをInputとして使用
-        inputDir = baseDir
-        outputDir = parentDir & "Output\"
-    ElseIf InStr(1, folderName, "Output", vbTextCompare) > 0 Then
-        ' フォルダ名に「Output」が含まれている → カレントフォルダをOutputとして使用
-        inputDir = parentDir & "Input\"
-        outputDir = baseDir
-    Else
-        ' どちらも含まれていない → 従来通りサブフォルダを使用
-        inputDir = baseDir & "Input\"
-        outputDir = baseDir & "Output\"
-    End If
+    ' 末尾に\を追加（なければ）
+    If Right(inputDir, 1) <> "\" Then inputDir = inputDir & "\"
+    If Right(outputDir, 1) <> "\" Then outputDir = outputDir & "\"
 
-    ' Inputフォルダの存在確認と作成
+    ' Inputフォルダの存在確認（存在しない場合はエラー）
     If Dir(inputDir, vbDirectory) = "" Then
-        MkDir inputDir
-        MsgBox "Inputフォルダを作成しました: " & vbCrLf & inputDir & vbCrLf & vbCrLf & _
-               "このフォルダに処理したいWord文書を配置してください。", vbInformation
+        MsgBox "エラー: 入力フォルダが存在しません。" & vbCrLf & vbCrLf & _
+               inputDir & vbCrLf & vbCrLf & _
+               "フォルダ設定を確認してください。", vbCritical, "フォルダエラー"
         Exit Sub
     End If
 
-    ' Outputフォルダの存在確認と作成
+    ' Outputフォルダの存在確認（存在しない場合はエラー）
     If Dir(outputDir, vbDirectory) = "" Then
-        MkDir outputDir
+        MsgBox "エラー: 出力フォルダが存在しません。" & vbCrLf & vbCrLf & _
+               outputDir & vbCrLf & vbCrLf & _
+               "フォルダ設定を確認してください。", vbCritical, "フォルダエラー"
+        Exit Sub
     End If
 
     ' Excelシートから設定を読み込み
