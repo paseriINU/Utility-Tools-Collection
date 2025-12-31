@@ -46,15 +46,28 @@ Public Sub OrganizeWordBookmarks()
     baseDir = ThisWorkbook.Path
     If Right(baseDir, 1) <> "\" Then baseDir = baseDir & "\"
 
-    inputDir = baseDir & "Input\"
-    outputDir = baseDir & "Output\"
+    ' カレントフォルダ名を取得
+    Dim folderName As String
+    Dim parentDir As String
+    folderName = Mid(baseDir, InStrRev(Left(baseDir, Len(baseDir) - 1), "\") + 1)
+    folderName = Left(folderName, Len(folderName) - 1)  ' 末尾の\を除去
+    parentDir = Left(baseDir, InStrRev(Left(baseDir, Len(baseDir) - 1), "\"))
 
-    ' Inputフォルダの存在確認と作成
-    If Dir(inputDir, vbDirectory) = "" Then
-        MkDir inputDir
-        MsgBox "Inputフォルダを作成しました: " & vbCrLf & inputDir & vbCrLf & vbCrLf & _
-               "このフォルダに処理したいWord文書を配置してください。", vbInformation
-        Exit Sub
+    ' カレントフォルダ名に「Input」が含まれている場合、そのフォルダをInputとして使用
+    If InStr(1, folderName, "Input", vbTextCompare) > 0 Then
+        inputDir = baseDir
+        outputDir = parentDir & "Output\"
+    Else
+        inputDir = baseDir & "Input\"
+        outputDir = baseDir & "Output\"
+
+        ' Inputフォルダの存在確認と作成
+        If Dir(inputDir, vbDirectory) = "" Then
+            MkDir inputDir
+            MsgBox "Inputフォルダを作成しました: " & vbCrLf & inputDir & vbCrLf & vbCrLf & _
+                   "このフォルダに処理したいWord文書を配置してください。", vbInformation
+            Exit Sub
+        End If
     End If
 
     ' Outputフォルダの存在確認と作成
