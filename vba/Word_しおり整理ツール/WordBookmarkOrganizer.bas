@@ -388,6 +388,14 @@ Private Function ProcessParagraph(ByRef para As Object, _
         End If
     End If
 
+    ' 特定テキストの例外処理（レベル3として扱う）
+    If detectedLevel = 0 And styles.Level3Style <> "" Then
+        If paraText = "本書の記述について" Or paraText = "修正履歴" Then
+            detectedLevel = 3
+            targetStyle = styles.Level3Style
+        End If
+    End If
+
     ' 例外1: パターン外だが既にレベル1-5のスタイルが適用されている
     If detectedLevel = 0 And styles.Exception1Style <> "" Then
         Dim currentStyle As String
