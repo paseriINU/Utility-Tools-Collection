@@ -254,10 +254,10 @@ Private Sub FormatMainSheet(ByRef ws As Worksheet)
         .Range("B48").Value = "  例: ヘッダー「第1章　概要　1-1　詳細」→ セクション内で「1-1」を検索しスタイル適用"
         .Range("B48").Font.Color = RGB(0, 112, 192)
 
-        .Range("B50").Value = "【パターンマッチ方式】（ヘッダー空欄時のみ: 第X部/第X章）"
+        .Range("B50").Value = "【パターンマッチ方式】（ヘッダー空欄時のみ: 第X部）"
         .Range("B50").Font.Bold = True
-        .Range("B51").Value = "  ヘッダーにテキストがない場合のみ、本文から「第X部」「第X章」を検出します。"
-        .Range("B52").Value = "  「第X部」は段落先頭のみ対象。ヘッダーにSTYLEREF等があれば処理しません。"
+        .Range("B51").Value = "  ヘッダーが空欄のセクションでは「第X部」のみ検出し、「第X章」は処理しません。"
+        .Range("B52").Value = "  「第X部」は段落先頭のみ対象。同じセクション内の章は無視されます。"
 
         .Range("B54").Value = "【節構造の自動判定】"
         .Range("B54").Font.Bold = True

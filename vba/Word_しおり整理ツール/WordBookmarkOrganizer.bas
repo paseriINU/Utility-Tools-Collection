@@ -380,7 +380,7 @@ End Function
 ' hasSections: 文書内に「第X節」が存在する場合True
 '   True の場合: Level3=第X節, Level4=X-X, Level5=X-X,X
 '   False の場合: Level3=X-X, Level4=X-X,X, Level5=未使用
-' headerIsEmpty: ヘッダーが空白の場合True（第X部/第X章のパターンマッチ条件）
+' headerIsEmpty: ヘッダーが空白の場合True
 ' ============================================================================
 Private Function ProcessParagraphByHeader(ByRef para As Object, _
                                           ByRef styles As StyleConfig, _
@@ -490,20 +490,13 @@ Private Function ProcessParagraphByHeader(ByRef para As Object, _
         End If
     End If
 
-    ' レベル2: 第X章（ヘッダー参照またはパターンマッチ）
-    If detectedLevel = 0 And styles.Level2Style <> "" Then
-        If searchLevel2 <> "" Then
-            ' ヘッダーから抽出したテキストで検索
-            If InStr(paraTextHalf, searchLevel2) > 0 Then
-                detectedLevel = 2
-                targetStyle = styles.Level2Style
-            End If
-        ElseIf headerIsEmpty Then
-            ' ヘッダーが空白の場合のみパターンマッチでフォールバック
-            If MatchPattern(paraText, "第[0-9０-９]+章") Then
-                detectedLevel = 2
-                targetStyle = styles.Level2Style
-            End If
+    ' レベル2: 第X章（ヘッダー参照のみ、ヘッダー空白時はスキップ）
+    ' ヘッダーが空白のセクションでは「第X部」のみ処理し、「第X章」は処理しない
+    If detectedLevel = 0 And styles.Level2Style <> "" And searchLevel2 <> "" And Not headerIsEmpty Then
+        ' ヘッダーから抽出したテキストで検索
+        If InStr(paraTextHalf, searchLevel2) > 0 Then
+            detectedLevel = 2
+            targetStyle = styles.Level2Style
         End If
     End If
 
