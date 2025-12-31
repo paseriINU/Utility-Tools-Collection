@@ -545,16 +545,16 @@ End Function
 
 ' ============================================================================
 ' 1ページ目に「帳票」の文字があるかチェック
+' （本文およびテキストボックス等の図形内も検索）
 ' ============================================================================
 Private Function HasHyohyoOnFirstPage(ByRef wordDoc As Object) As Boolean
     On Error Resume Next
 
     Dim searchRange As Object
+    Dim shp As Object
 
-    ' 文書全体を検索対象に
+    ' 文書本文で「帳票」を検索
     Set searchRange = wordDoc.Content
-
-    ' 「帳票」を検索
     searchRange.Find.ClearFormatting
     If searchRange.Find.Execute(FindText:="帳票") Then
         ' 見つかった位置が1ページ目かどうかを確認
@@ -564,6 +564,19 @@ Private Function HasHyohyoOnFirstPage(ByRef wordDoc As Object) As Boolean
             Exit Function
         End If
     End If
+
+    ' 図形（テキストボックス等）内のテキストを検索
+    For Each shp In wordDoc.Shapes
+        If shp.TextFrame.HasText Then
+            If InStr(shp.TextFrame.TextRange.Text, "帳票") > 0 Then
+                ' 図形のアンカーが1ページ目にあるか確認
+                If shp.Anchor.Information(3) = 1 Then
+                    HasHyohyoOnFirstPage = True
+                    Exit Function
+                End If
+            End If
+        End If
+    Next shp
 
     HasHyohyoOnFirstPage = False
     On Error GoTo 0
