@@ -61,13 +61,10 @@ Public Sub InitializeWordしおり整理ツール()
     ' フォーマット適用
     FormatMainSheet ws
 
-    ' Input/Outputフォルダ作成
-    CreateFolders
-
     Application.ScreenUpdating = True
 
     MsgBox "初期化が完了しました。" & vbCrLf & vbCrLf & _
-           "処理したいWord文書をInputフォルダに配置してください。", _
+           "フォルダ設定を確認し、入力フォルダにWord文書を配置してください。", _
            vbInformation, "Word しおり整理ツール"
     Exit Sub
 
@@ -211,7 +208,6 @@ Private Sub FormatMainSheet(ByRef ws As Worksheet)
 
         ' === ボタン配置（行30） ===
         AddButton ws, .Range("B" & ROW_BUTTON), 180, 35, "OrganizeWordBookmarks", "しおりを整理してPDF出力", RGB(68, 114, 196)
-        AddButton ws, .Range("F" & ROW_BUTTON), 80, 35, "ResetSettings", "リセット", RGB(128, 128, 128)
 
         ' === 使い方セクション（行34-39） ===
         .Range("B34").Value = "■ 使い方"
@@ -219,12 +215,11 @@ Private Sub FormatMainSheet(ByRef ws As Worksheet)
         .Range("B34").Font.Bold = True
         .Range("B34").Font.Size = 12
 
-        .Range("B36").Value = "1. 処理したいWord文書(.docx/.doc)をInputフォルダに配置します"
-        .Range("B37").Value = "   ※フォルダ名に「Input」「Output」が含まれる場合、そのフォルダが自動的に使用されます"
-        .Range("B37").Font.Color = RGB(0, 112, 192)
-        .Range("B38").Value = "2. 「適用スタイル」欄にWord文書で使用するスタイル名を入力します"
-        .Range("B39").Value = "3. 「しおりを整理してPDF出力」ボタンをクリックします"
-        .Range("B40").Value = "4. Outputフォルダに処理済みのWord文書とPDFが出力されます"
+        .Range("B36").Value = "1. 「フォルダ設定」の入力/出力フォルダパスを確認・編集します"
+        .Range("B37").Value = "2. 処理したいWord文書(.docx/.doc)を入力フォルダに配置します"
+        .Range("B38").Value = "3. 「適用スタイル」欄にWord文書で使用するスタイル名を入力します"
+        .Range("B39").Value = "4. 「しおりを整理してPDF出力」ボタンをクリックします"
+        .Range("B40").Value = "5. 出力フォルダに処理済みのWord文書とPDFが出力されます"
         .Range("B36:B40").Font.Name = "Meiryo UI"
         .Range("B36:B40").Font.Size = 10
 
@@ -329,57 +324,3 @@ Private Sub AddButton(ByRef ws As Worksheet, ByRef cell As Range, _
     End With
 End Sub
 
-' ============================================================================
-' Input/Outputフォルダの作成
-' ============================================================================
-Private Sub CreateFolders()
-    Dim fso As Object
-    Set fso = CreateObject("Scripting.FileSystemObject")
-
-    Dim macroDir As String
-    macroDir = ThisWorkbook.Path
-
-    ' Inputフォルダ
-    If Not fso.FolderExists(macroDir & "\Input") Then
-        fso.CreateFolder macroDir & "\Input"
-    End If
-
-    ' Outputフォルダ
-    If Not fso.FolderExists(macroDir & "\Output") Then
-        fso.CreateFolder macroDir & "\Output"
-    End If
-
-    Set fso = Nothing
-End Sub
-
-' ============================================================================
-' 設定リセット
-' ============================================================================
-Public Sub ResetSettings()
-    Dim ws As Worksheet
-
-    On Error Resume Next
-    Set ws = ThisWorkbook.Worksheets(SHEET_MAIN)
-    On Error GoTo 0
-
-    If ws Is Nothing Then
-        MsgBox "シートが見つかりません。初期化を実行してください。", vbExclamation
-        Exit Sub
-    End If
-
-    With ws
-        ' スタイル名をデフォルト値に戻す
-        .Cells(ROW_PATTERN_LEVEL1, COL_STYLE_NAME).Value = "表題1"
-        .Cells(ROW_PATTERN_LEVEL2, COL_STYLE_NAME).Value = "表題2"
-        .Cells(ROW_PATTERN_LEVEL3, COL_STYLE_NAME).Value = "表題3"
-        .Cells(ROW_PATTERN_LEVEL4, COL_STYLE_NAME).Value = "表題4"
-        .Cells(ROW_PATTERN_LEVEL5, COL_STYLE_NAME).Value = "表題5"
-        .Cells(ROW_PATTERN_EXCEPTION1, COL_STYLE_NAME).Value = "本文"
-        .Cells(ROW_PATTERN_EXCEPTION2, COL_STYLE_NAME).Value = "本文"
-
-        ' オプションをデフォルト値に戻す
-        .Cells(ROW_OPTION_PDF_OUTPUT, COL_OPTION_VALUE).Value = "はい"
-    End With
-
-    MsgBox "設定をリセットしました。", vbInformation
-End Sub
