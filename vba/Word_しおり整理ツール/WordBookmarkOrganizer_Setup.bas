@@ -220,7 +220,7 @@ Private Sub FormatMainSheet(ByRef ws As Worksheet)
         .Range("B34").Font.Size = 12
 
         .Range("B36").Value = "1. 処理したいWord文書(.docx/.doc)をInputフォルダに配置します"
-        .Range("B37").Value = "   ※フォルダ名に「Input」が含まれる場合、そのフォルダがInputとして使用されます"
+        .Range("B37").Value = "   ※フォルダ名に「Input」「Output」が含まれる場合、そのフォルダが自動的に使用されます"
         .Range("B37").Font.Color = RGB(0, 112, 192)
         .Range("B38").Value = "2. 「適用スタイル」欄にWord文書で使用するスタイル名を入力します"
         .Range("B39").Value = "3. 「しおりを整理してPDF出力」ボタンをクリックします"
