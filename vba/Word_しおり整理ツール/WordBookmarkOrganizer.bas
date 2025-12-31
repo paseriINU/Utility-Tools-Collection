@@ -292,17 +292,8 @@ Private Function ProcessParagraph(ByRef para As Object, _
         Exit Function
     End If
 
-    ' 目次スタイルの段落はスキップ（目次1、目次2、TOC 1、TOC 2など）
-    Dim paraStyleName As String
-    On Error Resume Next
-    paraStyleName = para.Style.NameLocal
-    If Err.Number <> 0 Then
-        paraStyleName = ""
-        Err.Clear
-    End If
-    On Error GoTo ErrorHandler
-
-    If Left(paraStyleName, 2) = "目次" Or Left(UCase(paraStyleName), 3) = "TOC" Then
+    ' 「・」で始まる段落はスキップ（目次形式: 「・　第1章」など）
+    If Left(paraText, 1) = "・" Then
         ProcessParagraph = 0
         Exit Function
     End If
