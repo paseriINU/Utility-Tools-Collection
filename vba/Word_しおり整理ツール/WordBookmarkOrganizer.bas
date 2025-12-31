@@ -15,6 +15,7 @@ Private Type StyleConfig
     Level5Style As String  ' X-X,X用（パターンマッチ、節あり時のみ）
     Exception1Style As String
     Exception2Style As String
+    HyohyoStyle As String  ' 帳票パターン（X123）/（XX12）用
 End Type
 
 ' === デフォルトスタイル名定数（ヘッダーのSTYLEREF更新用） ===
@@ -413,16 +414,16 @@ Private Function ProcessParagraph(ByRef para As Object, _
         End If
     End If
 
-    ' 帳票文書の場合: (X123)/(XX12)パターンにLevel5スタイルを適用
+    ' 帳票文書の場合: (X123)/(XX12)パターンに帳票スタイルを適用
     ' (X123): 英字1文字 + 数字3文字
     ' (XX12): 英字2文字 + 数字2文字
     ' ※全角・半角両対応（paraTextHalfで半角統一済み）
-    If detectedLevel = 0 And isHyohyoDocument And styles.Level5Style <> "" Then
+    If detectedLevel = 0 And isHyohyoDocument And styles.HyohyoStyle <> "" Then
         ' 半角変換後のテキストでパターンマッチ
         If MatchPattern(paraTextHalf, "\([A-Za-z][0-9]{3}\)") Or _
            MatchPattern(paraTextHalf, "\([A-Za-z]{2}[0-9]{2}\)") Then
-            detectedLevel = 5
-            targetStyle = styles.Level5Style
+            detectedLevel = 6  ' 帳票レベル
+            targetStyle = styles.HyohyoStyle
             Debug.Print "  [帳票番号検出] " & Left(paraText, 50)
         End If
     End If
@@ -532,6 +533,7 @@ Private Function LoadSettings(ByRef styles As StyleConfig, _
     styles.Level5Style = CStr(ws.Cells(ROW_PATTERN_LEVEL5, COL_STYLE_NAME).Value)
     styles.Exception1Style = CStr(ws.Cells(ROW_PATTERN_EXCEPTION1, COL_STYLE_NAME).Value)
     styles.Exception2Style = CStr(ws.Cells(ROW_PATTERN_EXCEPTION2, COL_STYLE_NAME).Value)
+    styles.HyohyoStyle = CStr(ws.Cells(ROW_PATTERN_HYOHYO, COL_STYLE_NAME).Value)
 
     ' オプション設定を読み込み
     doPdfOutput = (CStr(ws.Cells(ROW_OPTION_PDF_OUTPUT, COL_OPTION_VALUE).Value) = "はい")
