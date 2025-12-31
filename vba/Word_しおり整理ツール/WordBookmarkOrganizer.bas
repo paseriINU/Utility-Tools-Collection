@@ -298,20 +298,16 @@ Private Function ProcessParagraph(ByRef para As Object, _
         Exit Function
     End If
 
-    ' 目次スタイルの段落はスキップ（目次1、目次2、TOC 1、TOC 2など）
-    Dim paraStyleName As String
+    ' ハイパーリンクを含む段落はスキップ（目次など）
     On Error Resume Next
-    paraStyleName = para.Style.NameLocal
-    If Err.Number <> 0 Then
-        paraStyleName = ""
-        Err.Clear
-    End If
-    On Error GoTo ErrorHandler
-
-    If Left(paraStyleName, 2) = "目次" Or Left(UCase(paraStyleName), 3) = "TOC" Then
+    If para.Range.Hyperlinks.Count > 0 Then
         ProcessParagraph = 0
         Exit Function
     End If
+    If Err.Number <> 0 Then
+        Err.Clear
+    End If
+    On Error GoTo ErrorHandler
 
     detectedLevel = 0
     targetStyle = ""

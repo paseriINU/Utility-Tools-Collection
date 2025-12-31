@@ -104,7 +104,7 @@ Private Sub FormatMainSheet(ByRef ws As Worksheet)
         .Rows(3).RowHeight = 10
 
         ' === 説明エリア（行5-6） ===
-        .Range("B5").Value = "段落テキストをパターンマッチでスタイル適用します（「参照」・目次・「・」始まりはスキップ）。"
+        .Range("B5").Value = "段落テキストをパターンマッチでスタイル適用します（「参照」・リンク・「・」始まりはスキップ）。"
         .Range("B6").Value = "PDFエクスポート時に正しいしおり（ブックマーク）を生成します。"
         .Range("B5:B6").Font.Name = "Meiryo UI"
         .Range("B5:B6").Font.Size = 11
@@ -240,7 +240,7 @@ Private Sub FormatMainSheet(ByRef ws As Worksheet)
 
         .Range("B49").Value = "【スキップ条件】"
         .Range("B49").Font.Bold = True
-        .Range("B50").Value = "  「参照」を含む段落、「・」で始まる段落、目次スタイルの段落はスキップします。"
+        .Range("B50").Value = "  「参照」を含む段落、「・」で始まる段落、ハイパーリンクを含む段落はスキップします。"
         .Range("B51").Value = "  第X部はヘッダー空欄時のみ処理します。"
 
         .Range("B53").Value = "【節構造の自動判定】"
