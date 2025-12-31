@@ -21,8 +21,7 @@ Public Const ROW_PATTERN_EXCEPTION2 As Long = 26
 
 Public Const COL_LEVEL As Long = 2          ' B列
 Public Const COL_PATTERN_DESC As Long = 3   ' C列
-Public Const COL_DETECT_METHOD As Long = 4  ' D列（検出方法）
-Public Const COL_STYLE_NAME As Long = 5     ' E列
+Public Const COL_STYLE_NAME As Long = 4     ' D列
 
 ' オプション設定
 Public Const ROW_OPTION_PDF_OUTPUT As Long = 28
@@ -139,7 +138,6 @@ Private Sub FormatMainSheet(ByRef ws As Worksheet)
         ' ヘッダー行
         .Cells(ROW_PATTERN_HEADER, COL_LEVEL).Value = "レベル"
         .Cells(ROW_PATTERN_HEADER, COL_PATTERN_DESC).Value = "テキストパターン"
-        .Cells(ROW_PATTERN_HEADER, COL_DETECT_METHOD).Value = "検出方法"
         .Cells(ROW_PATTERN_HEADER, COL_STYLE_NAME).Value = "適用スタイル"
 
         With .Range(.Cells(ROW_PATTERN_HEADER, COL_LEVEL), .Cells(ROW_PATTERN_HEADER, COL_STYLE_NAME))
@@ -152,43 +150,36 @@ Private Sub FormatMainSheet(ByRef ws As Worksheet)
         ' レベル1
         .Cells(ROW_PATTERN_LEVEL1, COL_LEVEL).Value = "1"
         .Cells(ROW_PATTERN_LEVEL1, COL_PATTERN_DESC).Value = "第X部"
-        .Cells(ROW_PATTERN_LEVEL1, COL_DETECT_METHOD).Value = "パターンマッチ"
         .Cells(ROW_PATTERN_LEVEL1, COL_STYLE_NAME).Value = "表題1"
 
         ' レベル2
         .Cells(ROW_PATTERN_LEVEL2, COL_LEVEL).Value = "2"
         .Cells(ROW_PATTERN_LEVEL2, COL_PATTERN_DESC).Value = "第X章"
-        .Cells(ROW_PATTERN_LEVEL2, COL_DETECT_METHOD).Value = "パターンマッチ"
         .Cells(ROW_PATTERN_LEVEL2, COL_STYLE_NAME).Value = "表題2"
 
         ' レベル3（節あり:第X節、節なし:X-X）
         .Cells(ROW_PATTERN_LEVEL3, COL_LEVEL).Value = "3"
         .Cells(ROW_PATTERN_LEVEL3, COL_PATTERN_DESC).Value = "第X節 / X-X"
-        .Cells(ROW_PATTERN_LEVEL3, COL_DETECT_METHOD).Value = "パターンマッチ"
         .Cells(ROW_PATTERN_LEVEL3, COL_STYLE_NAME).Value = "表題3"
 
-        ' レベル4（節あり:X-X、節なし:X-X,X）
+        ' レベル4（節あり:X-X、節なし:X-X.X）
         .Cells(ROW_PATTERN_LEVEL4, COL_LEVEL).Value = "4"
-        .Cells(ROW_PATTERN_LEVEL4, COL_PATTERN_DESC).Value = "X-X / X-X,X"
-        .Cells(ROW_PATTERN_LEVEL4, COL_DETECT_METHOD).Value = "パターンマッチ"
+        .Cells(ROW_PATTERN_LEVEL4, COL_PATTERN_DESC).Value = "X-X / X-X.X"
         .Cells(ROW_PATTERN_LEVEL4, COL_STYLE_NAME).Value = "表題4"
 
         ' レベル5（節がある場合のみ使用）
         .Cells(ROW_PATTERN_LEVEL5, COL_LEVEL).Value = "5"
-        .Cells(ROW_PATTERN_LEVEL5, COL_PATTERN_DESC).Value = "X-X,X（※節あり時）"
-        .Cells(ROW_PATTERN_LEVEL5, COL_DETECT_METHOD).Value = "パターンマッチ"
+        .Cells(ROW_PATTERN_LEVEL5, COL_PATTERN_DESC).Value = "X-X.X（※節あり時）"
         .Cells(ROW_PATTERN_LEVEL5, COL_STYLE_NAME).Value = "表題5"
 
         ' 例外1
         .Cells(ROW_PATTERN_EXCEPTION1, COL_LEVEL).Value = "例外1"
         .Cells(ROW_PATTERN_EXCEPTION1, COL_PATTERN_DESC).Value = "パターン外スタイル"
-        .Cells(ROW_PATTERN_EXCEPTION1, COL_DETECT_METHOD).Value = "-"
         .Cells(ROW_PATTERN_EXCEPTION1, COL_STYLE_NAME).Value = "本文"
 
         ' 例外2
         .Cells(ROW_PATTERN_EXCEPTION2, COL_LEVEL).Value = "例外2"
         .Cells(ROW_PATTERN_EXCEPTION2, COL_PATTERN_DESC).Value = "アウトライン設定済み"
-        .Cells(ROW_PATTERN_EXCEPTION2, COL_DETECT_METHOD).Value = "-"
         .Cells(ROW_PATTERN_EXCEPTION2, COL_STYLE_NAME).Value = "本文"
 
         ' テーブル全体のフォント設定
@@ -205,12 +196,6 @@ Private Sub FormatMainSheet(ByRef ws As Worksheet)
         ' 入力セルの背景色（黄色）
         With .Range(.Cells(ROW_PATTERN_LEVEL1, COL_STYLE_NAME), .Cells(ROW_PATTERN_EXCEPTION2, COL_STYLE_NAME))
             .Interior.Color = RGB(255, 255, 204)
-        End With
-
-        ' 検出方法列の書式
-        With .Range(.Cells(ROW_PATTERN_LEVEL1, COL_DETECT_METHOD), .Cells(ROW_PATTERN_EXCEPTION2, COL_DETECT_METHOD))
-            .Font.Size = 9
-            .HorizontalAlignment = xlCenter
         End With
 
         ' === オプション設定セクション（行27） ===
@@ -277,10 +262,9 @@ Private Sub FormatMainSheet(ByRef ws As Worksheet)
         .Columns("A").ColumnWidth = 3
         .Columns("B").ColumnWidth = 18
         .Columns("C").ColumnWidth = 20
-        .Columns("D").ColumnWidth = 18
-        .Columns("E").ColumnWidth = 15
+        .Columns("D").ColumnWidth = 15
+        .Columns("E").ColumnWidth = 12
         .Columns("F").ColumnWidth = 12
-        .Columns("G").ColumnWidth = 12
 
         ' 行の高さ調整
         .Rows(ROW_BUTTON).RowHeight = 40
