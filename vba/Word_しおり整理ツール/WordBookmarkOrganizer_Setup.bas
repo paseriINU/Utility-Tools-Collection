@@ -302,7 +302,7 @@ Private Sub FormatMainSheet(ByRef ws As Worksheet)
         .Range("B80").Value = "【ヘッダーフィールド更新】"
         .Range("B80").Font.Bold = True
         .Range("B81").Value = "  スタイル適用後、ヘッダー内のSTYLEREFフィールドのスタイル名を自動更新します。"
-        .Range("B82").Value = "  例: STYLEREF \"表題1\" → 設定したスタイル名に置換"
+        .Range("B82").Value = "  例: STYLEREF ""表題1"" → 設定したスタイル名に置換"
 
         .Range("B84").Value = "※ 図形（テキストボックス等）内のテキストも処理対象です"
         .Range("B84").Font.Color = RGB(0, 112, 192)
