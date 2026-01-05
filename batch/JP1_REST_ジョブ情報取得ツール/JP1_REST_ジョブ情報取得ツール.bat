@@ -384,11 +384,9 @@ try {
     # ジョブネットのコメントを取得
     if ($jobnetJson.statuses -and $jobnetJson.statuses.Count -gt 0) {
         $jobnetDef = $jobnetJson.statuses[0].definition
-        # comment または cm フィールドを確認
-        if ($jobnetDef.comment) {
-            $jobnetComment = $jobnetDef.comment
-        } elseif ($jobnetDef.cm) {
-            $jobnetComment = $jobnetDef.cm
+        # unitComment フィールドを確認（JP1 REST APIのフィールド名）
+        if ($jobnetDef.unitComment) {
+            $jobnetComment = $jobnetDef.unitComment
         }
     }
 } catch {
