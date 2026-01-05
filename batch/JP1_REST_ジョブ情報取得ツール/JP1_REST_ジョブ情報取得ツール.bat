@@ -409,6 +409,7 @@ try {
             $unitStatus = $unit.unitStatus
             $execIdValue = if ($unitStatus) { $unitStatus.execID } else { $null }
             $statusValue = if ($unitStatus) { $unitStatus.status } else { "N/A" }
+            $startTimeValue = if ($unitStatus) { $unitStatus.startTime } else { $null }
 
             # execIDがある場合のみリストに追加
             if ($execIdValue) {
@@ -417,6 +418,7 @@ try {
                     ExecId = $execIdValue
                     Status = $statusValue
                     UnitType = $unitTypeValue
+                    StartTime = $startTimeValue
                 }
             }
         }
@@ -441,6 +443,19 @@ if ($execIdList.Count -gt 0) {
     foreach ($item in $execIdList) {
         $targetPath = $item.Path
         $targetExecId = $item.ExecId
+        $targetStartTime = $item.StartTime
+
+        # 開始日時をファイル名用フォーマットに変換（yyyyMMdd_HHmmss）
+        # 例: "2015-09-02T22:50:28+09:00" → "20150902_225028"
+        $startTimeForFileName = ""
+        if ($targetStartTime) {
+            try {
+                $dt = [DateTime]::Parse($targetStartTime)
+                $startTimeForFileName = $dt.ToString("yyyyMMdd_HHmmss")
+            } catch {
+                $startTimeForFileName = ""
+            }
+        }
 
         # ユニットパスをURLエンコード
         $encodedPath = [System.Uri]::EscapeDataString($targetPath)
@@ -461,6 +476,10 @@ if ($execIdList.Count -gt 0) {
 
             # all フラグのチェック（falseの場合は5MB超過で切り捨て）
             if ($resultJson.all -eq $false) { exit 5 }  # 5MB超過エラー
+
+            # 開始日時を最初の行に出力（ファイル名用フォーマット）
+            # 呼び出し側でファイル名に使用可能
+            [Console]::WriteLine("START_TIME:$startTimeForFileName")
 
             # 実行結果詳細を出力
             if ($resultJson.execResultDetails) {
