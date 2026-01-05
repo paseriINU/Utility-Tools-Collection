@@ -308,24 +308,19 @@ $encodedParentPath = [System.Uri]::EscapeDataString($parentPath)
 $encodedJobName = [System.Uri]::EscapeDataString($jobName)
 
 # ==============================================================================
-# STEP 1: ユニット存在確認・種別確認・親ジョブネットコメント取得（DEFINITION）
+# STEP 1: ユニット存在確認・種別確認（DEFINITION）
 # ==============================================================================
-# DEFINITION モードで以下を確認・取得します：
+# 最初に DEFINITION のみで呼び出し、以下を確認します：
 #   - 指定したユニットが存在するか
 #   - 指定したユニットがジョブ（JOB系）かどうか
-#   - 親ジョブネットのコメント（searchLowerUnits=YESで親も含めて取得）
-
-# 親ジョブネットを検索対象として、配下のジョブも含めて取得
-$encodedGrandParentPath = [System.Uri]::EscapeDataString($grandParentPath)
-$encodedJobnetName = [System.Uri]::EscapeDataString($jobnetName)
 
 $defUrl = "${baseUrl}/objects/statuses?mode=search"
 $defUrl += "&manager=${managerHost}"
 $defUrl += "&serviceName=${schedulerService}"
-$defUrl += "&location=${encodedGrandParentPath}"
-$defUrl += "&searchLowerUnits=YES"
+$defUrl += "&location=${encodedParentPath}"
+$defUrl += "&searchLowerUnits=NO"
 $defUrl += "&searchTarget=DEFINITION"
-$defUrl += "&unitName=${encodedJobnetName}"
+$defUrl += "&unitName=${encodedJobName}"
 $defUrl += "&unitNameMatchMethods=EQ"
 
 $unitTypeValue = $null
@@ -345,35 +340,10 @@ try {
         exit 2  # ユニット未検出
     }
 
-    # レスポンスから親ジョブネットと対象ジョブを検索
-    $targetJobFound = $false
-    foreach ($unit in $defJson.statuses) {
-        $unitDef = $unit.definition
-        $currentUnitName = $unitDef.unitName
-        $currentUnitType = $unitDef.unitType
-
-        # 親ジョブネットの場合（パスが一致）
-        if ($currentUnitName -eq $parentPath) {
-            # コメントを取得（comment または cm フィールド）
-            if ($unitDef.comment) {
-                $jobnetComment = $unitDef.comment
-            } elseif ($unitDef.cm) {
-                $jobnetComment = $unitDef.cm
-            }
-        }
-
-        # 対象ジョブの場合（フルパスが一致）
-        if ($currentUnitName -eq $unitPath) {
-            $unitFullName = $currentUnitName
-            $unitTypeValue = $currentUnitType
-            $targetJobFound = $true
-        }
-    }
-
-    # 対象ジョブが見つからない場合
-    if (-not $targetJobFound) {
-        exit 2  # ユニット未検出
-    }
+    # 最初のユニットの情報を取得
+    $defUnit = $defJson.statuses[0]
+    $unitFullName = $defUnit.definition.unitName
+    $unitTypeValue = $defUnit.definition.unitType
 
     # ユニット種別確認（JOB系かどうか）
     # JOB系: JOB, PJOB, QJOB, EVWJB, FLWJB, MLWJB, MSWJB, LFWJB, TMWJB,
@@ -384,6 +354,46 @@ try {
 
 } catch {
     exit 9  # API接続エラー（存在確認）
+}
+
+# ==============================================================================
+# STEP 1.5: 親ジョブネットのコメント取得
+# ==============================================================================
+# 親ジョブネットの定義を取得し、コメント（cm属性）を取得します。
+
+$encodedGrandParentPath = [System.Uri]::EscapeDataString($grandParentPath)
+$encodedJobnetName = [System.Uri]::EscapeDataString($jobnetName)
+
+$jobnetUrl = "${baseUrl}/objects/statuses?mode=search"
+$jobnetUrl += "&manager=${managerHost}"
+$jobnetUrl += "&serviceName=${schedulerService}"
+$jobnetUrl += "&location=${encodedGrandParentPath}"
+$jobnetUrl += "&searchLowerUnits=NO"
+$jobnetUrl += "&searchTarget=DEFINITION"
+$jobnetUrl += "&unitName=${encodedJobnetName}"
+$jobnetUrl += "&unitNameMatchMethods=EQ"
+
+try {
+    $jobnetResponse = Invoke-WebRequest -Uri $jobnetUrl -Method GET -Headers $headers -TimeoutSec 30 -UseBasicParsing
+
+    # UTF-8文字化け対策
+    $jobnetBytes = $jobnetResponse.RawContentStream.ToArray()
+    $jobnetText = [System.Text.Encoding]::UTF8.GetString($jobnetBytes)
+    $jobnetJson = $jobnetText | ConvertFrom-Json
+
+    # ジョブネットのコメントを取得
+    if ($jobnetJson.statuses -and $jobnetJson.statuses.Count -gt 0) {
+        $jobnetDef = $jobnetJson.statuses[0].definition
+        # comment または cm フィールドを確認
+        if ($jobnetDef.comment) {
+            $jobnetComment = $jobnetDef.comment
+        } elseif ($jobnetDef.cm) {
+            $jobnetComment = $jobnetDef.cm
+        }
+    }
+} catch {
+    # コメント取得失敗は無視して続行（必須ではない）
+    $jobnetComment = ""
 }
 
 # ==============================================================================
