@@ -2,6 +2,9 @@
 title JP1 ジョブログ取得サンプル
 setlocal enabledelayedexpansion
 
+rem UNCパス対応（PushD/PopDで自動マッピング）
+pushd "%~dp0"
+
 rem ============================================================================
 rem JP1 ジョブログ取得サンプル
 rem
@@ -124,6 +127,7 @@ goto :ERROR_EXIT
 echo.
 del "%TEMP_FILE%" >nul 2>&1
 pause
+popd
 exit /b %EXIT_CODE%
 
 :SUCCESS
@@ -135,6 +139,7 @@ if "%FILE_SIZE%"=="0" (
     echo.
     del "%TEMP_FILE%" >nul 2>&1
     pause
+    popd
     exit /b 1
 )
 
@@ -172,6 +177,7 @@ if "%JOB_START_TIME%"=="" (
     echo          - 世代指定（generation）の設定を確認してください
     del "%TEMP_FILE%" >nul 2>&1
     pause
+    popd
     exit /b 7
 )
 
@@ -223,4 +229,5 @@ echo.
 rem メモ帳で開く
 start notepad "%OUTPUT_FILE%"
 
+popd
 exit /b 0
