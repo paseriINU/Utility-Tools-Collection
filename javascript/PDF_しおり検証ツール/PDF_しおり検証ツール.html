@@ -254,6 +254,64 @@
             background-color: #545b62;
         }
 
+        /* モード選択ボタン */
+        .mode-selection {
+            margin-top: 15px;
+            padding: 15px;
+            background: #fff3e0;
+            border-radius: 4px;
+            display: none;
+        }
+
+        .mode-selection.show {
+            display: block;
+        }
+
+        .mode-selection h3 {
+            margin: 0 0 10px 0;
+            font-size: 14px;
+            color: #666;
+        }
+
+        .mode-btn-group {
+            display: flex;
+            gap: 10px;
+        }
+
+        .mode-btn {
+            flex: 1;
+            padding: 15px 20px;
+            background-color: #f5f5f5;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-align: center;
+        }
+
+        .mode-btn:hover {
+            background-color: #e3f2fd;
+            border-color: #4a90d9;
+        }
+
+        .mode-btn.selected {
+            background-color: #e3f2fd;
+            border-color: #4a90d9;
+            box-shadow: 0 0 0 2px rgba(74, 144, 217, 0.3);
+        }
+
+        .mode-btn .mode-title {
+            font-size: 16px;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 5px;
+        }
+
+        .mode-btn .mode-desc {
+            font-size: 12px;
+            color: #666;
+        }
+
         /* ボタンをまとめるグループ */
         .button-group {
             margin-top: 15px;
@@ -484,6 +542,26 @@
         <div class="file-info" id="fileInfo"></div>
 
         <!--
+        解析モード選択
+        Word版としおり版の選択ボタン
+        -->
+        <div class="mode-selection" id="modeSelection">
+            <h3>📋 解析モードを選択してください：</h3>
+            <div class="mode-btn-group">
+                <div class="mode-btn" id="modeWord" onclick="selectMode('word')">
+                    <div class="mode-title">📄 Word版</div>
+                    <div class="mode-desc">Word文書から作成されたしおり</div>
+                </div>
+                <div class="mode-btn" id="modeJS" onclick="selectMode('javascript')">
+                    <div class="mode-title">📜 JavaScript版</div>
+                    <div class="mode-desc">JavaScript APIで作成されたしおり</div>
+                </div>
+            </div>
+        </div>
+
+
+
+        <!--
         ボタングループ
         disabled属性: ボタンを無効化（クリックできない状態）
         -->
@@ -573,6 +651,9 @@
         // null: 「何もない」という意味の特別な値
         let selectedFile = null;  // ユーザーが選択したPDFファイル
         let bookmarks = [];       // 抽出したしおり情報を格納する配列
+
+        let selectedMode = null;  // 選択された解析モード（'word' or 'javascript'）
+
 
         /*
         ======================================================================
@@ -700,12 +781,41 @@
             fileInfo.classList.add('show');
 
             // ボタンを有効化（disabled属性を解除）
-            validateBtn.disabled = false;
+            // モード選択を表示（検証ボタンはモード選択後に有効化）
+            document.getElementById('modeSelection').classList.add('show');
+            // 前回選択したモードをリセット
+            selectedMode = null;
+            document.getElementById('modeWord').classList.remove('selected');
+            document.getElementById('modeJS').classList.remove('selected');
             clearBtn.disabled = false;
 
             // エラーと結果を非表示に
             hideError();
             resultContainer.classList.add('hidden');
+        }
+
+        /*
+        ======================================================================
+          モード選択処理
+          ユーザーがWord版またはJavaScript版を選択したときの処理
+        ======================================================================
+        */
+        function selectMode(mode) {
+            selectedMode = mode;
+            
+            // すべてのモードボタンからselectedクラスを削除
+            document.getElementById('modeWord').classList.remove('selected');
+            document.getElementById('modeJS').classList.remove('selected');
+            
+            // 選択されたボタンにselectedクラスを追加
+            if (mode === 'word') {
+                document.getElementById('modeWord').classList.add('selected');
+            } else if (mode === 'javascript') {
+                document.getElementById('modeJS').classList.add('selected');
+            }
+            
+            // 検証ボタンを有効化
+            validateBtn.disabled = false;
         }
 
         /*
@@ -736,6 +846,12 @@
         validateBtn.addEventListener('click', async () => {
             // ファイルが選択されていなければ何もしない
             if (!selectedFile) return;
+            
+            // モードが選択されていなければ警告
+            if (!selectedMode) {
+                showError('解析モードを選択してください。');
+                return;
+            }
 
             // ボタンを無効化して、テキストを「解析中...」に
             validateBtn.disabled = true;
@@ -750,7 +866,7 @@
                 const arrayBuffer = await selectedFile.arrayBuffer();
 
                 // PDF解析を実行（非同期）
-                bookmarks = await parsePDFBookmarks(arrayBuffer);
+                bookmarks = await parsePDFBookmarks(arrayBuffer, selectedMode);
 
                 // 結果を表示
                 displayResults();
@@ -779,6 +895,11 @@
             clearBtn.disabled = true;
             resultContainer.classList.add('hidden');
             hideError();
+            // モード選択をリセット
+            selectedMode = null;
+            document.getElementById('modeSelection').classList.remove('show');
+            document.getElementById('modeWord').classList.remove('selected');
+            document.getElementById('modeJS').classList.remove('selected');
         });
 
         /*
@@ -1013,7 +1134,7 @@
           PDFファイルのバイナリデータからしおり情報を抽出
         ======================================================================
         */
-        async function parsePDFBookmarks(arrayBuffer) {
+        async function parsePDFBookmarks(arrayBuffer, mode = 'word') {
             // Uint8Array: バイト配列（0-255の数値の配列）
             const bytes = new Uint8Array(arrayBuffer);
 
@@ -1074,34 +1195,36 @@
             // ObjStmバイト直接抽出が成功している場合は、そちらを優先使用
             let bookmarks = [];
 
-            if (objStmDecodedTitles.length > 0) {
-                // ObjStmからバイト直接抽出したタイトルを優先使用（文字化けなし）
-                for (const item of objStmDecodedTitles) {
-                    let pageNum = '';
-                    if (item.pageRef) {
-                        // PAGE:N 形式（JavaScriptアクションから取得）の場合
-                        if (item.pageRef.startsWith('PAGE:')) {
-                            pageNum = parseInt(item.pageRef.substring(5), 10) || '';
-                        } else {
-                            // pageRefは "123 0 R" の形式なので、オブジェクト番号を抽出
-                            const objNumMatch = item.pageRef.match(/^(\d+)/);
-                            if (objNumMatch) {
-                                const objNum = objNumMatch[1];
-                                if (pageObjects[objNum]) {
-                                    pageNum = pageObjects[objNum];
-                                } else {
-                                    pageNum = parseInt(objNum) || '';
+            // モードに応じて解析方法を切り替え
+            if (mode === 'javascript') {
+                // JavaScript版: ObjStmからの抽出を強制使用（フォールバックなし）
+                if (objStmDecodedTitles.length > 0) {
+                    // ObjStmからバイト直接抽出したタイトルを使用（JavaScript APIで作成されたしおり向け）
+                    for (const item of objStmDecodedTitles) {
+                        let pageNum = '';
+                        if (item.pageRef) {
+                            // PAGE:N 形式（JavaScriptアクションから取得）の場合
+                            if (item.pageRef.startsWith('PAGE:')) {
+                                pageNum = parseInt(item.pageRef.substring(5), 10) || '';
+                            } else {
+                                // pageRefは "123 0 R" の形式なので、オブジェクト番号を抽出
+                                const objNumMatch = item.pageRef.match(/^(\d+)/);
+                                if (objNumMatch) {
+                                    const objNum = objNumMatch[1];
+                                    if (pageObjects[objNum]) {
+                                        pageNum = pageObjects[objNum];
+                                    } else {
+                                        pageNum = parseInt(objNum) || '';
+                                    }
                                 }
                             }
                         }
+                        bookmarks.push({ title: item.title, page: pageNum, level: 1, source: 'pdfjs' });
                     }
-                    bookmarks.push({ title: item.title, page: pageNum, level: 1, source: 'pdfjs' });
                 }
-
-                // ObjStmで取得できた場合はextractBookmarksは使用しない
-                // （ObjStmが正確なため、extractBookmarksは文字化けの原因となる）
+                // ObjStmから取得できない場合はbookmarksが空のまま（後続のエラー処理に任せる）
             } else {
-                // ObjStmバイト直接抽出がない場合は従来通り
+                // Word版: extractBookmarks関数のみを使用（変更前の動作を保証）
                 bookmarks = extractBookmarks(content, bytes, pageObjects);
             }
 
