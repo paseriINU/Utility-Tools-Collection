@@ -30,12 +30,13 @@ rem === ここを編集してください（ジョブのパスを指定）===
 set "UNIT_PATH=/JobGroup/Jobnet/Job1"
 
 rem === ファイル名の設定 ===
-rem ファイル名のプレフィックス（日時の前に付ける文字列）
-rem 例: "テスト（" → "テスト（20251010_163520実行分）.txt"
-set "FILE_PREFIX=テスト（"
+rem ファイル名形式: {ジョブネットコメント}（{日時}実行分）.txt
+rem 例: ジョブネットのコメントが"テスト"の場合 → "テスト（20251010_163520実行分）.txt"
+rem
+rem ジョブネットコメントが取得できない場合に使用するデフォルト値
+set "DEFAULT_PREFIX=ジョブログ"
 
 rem ファイル名のサフィックス（日時の後に付ける文字列、拡張子の前）
-rem 例: "実行分）" → "テスト（20251010_163520実行分）.txt"
 set "FILE_SUFFIX=実行分）"
 
 rem 一時ファイル名（後でジョブ開始日時を使用してリネーム）
@@ -147,6 +148,22 @@ for /f "tokens=1,* delims=:" %%a in ('type "%TEMP_FILE%" 2^>nul') do (
 )
 :GOT_START_TIME
 
+rem 一時ファイルから JOBNET_COMMENT: 行を取得してジョブネットコメントを抽出
+set "JOBNET_COMMENT="
+for /f "tokens=1,* delims=:" %%a in ('type "%TEMP_FILE%" 2^>nul') do (
+    if "%%a"=="JOBNET_COMMENT" (
+        set "JOBNET_COMMENT=%%b"
+        goto :GOT_JOBNET_COMMENT
+    )
+)
+:GOT_JOBNET_COMMENT
+
+rem ジョブネットコメントが空の場合はデフォルト値を使用
+if "%JOBNET_COMMENT%"=="" set "JOBNET_COMMENT=%DEFAULT_PREFIX%"
+
+rem ファイル名のプレフィックスを設定（ジョブネットコメント＋開き括弧）
+set "FILE_PREFIX=%JOBNET_COMMENT%（"
+
 rem ジョブ開始日時が取得できなかった場合はエラー
 if "%JOB_START_TIME%"=="" (
     echo.
@@ -179,13 +196,14 @@ if "%OLD_DATA_WARNING%"=="OLD" (
 rem 出力ファイル名をジョブ開始日時で作成（プレフィックス＋日時＋サフィックス）
 set "OUTPUT_FILE=%~dp0%FILE_PREFIX%%JOB_START_TIME%%FILE_SUFFIX%.txt"
 
-rem START_TIME:行を除いた実行結果詳細を出力ファイルに保存
+rem START_TIME:行とJOBNET_COMMENT:行を除いた実行結果詳細を出力ファイルに保存
 (for /f "usebackq tokens=* delims=" %%L in ("%TEMP_FILE%") do (
     set "LINE=%%L"
     setlocal enabledelayedexpansion
-    if not "!LINE:~0,11!"=="START_TIME:" (
-        echo !LINE!
-    )
+    set "SKIP="
+    if "!LINE:~0,11!"=="START_TIME:" set "SKIP=1"
+    if "!LINE:~0,15!"=="JOBNET_COMMENT:" set "SKIP=1"
+    if not defined SKIP echo !LINE!
     endlocal
 )) > "%OUTPUT_FILE%"
 
@@ -197,6 +215,7 @@ echo ================================================================
 echo   取得完了 - ファイルに保存しました
 echo ================================================================
 echo.
+echo ジョブネット:   %JOBNET_COMMENT%
 echo ジョブ開始日時: %JOB_START_TIME%
 echo 出力ファイル:   %OUTPUT_FILE%
 echo.

@@ -292,6 +292,11 @@ if (-not $jobName) {
     exit 1  # ジョブ名が空
 }
 
+# 親ジョブネット名を取得（コメント取得用）
+$grandParentSlashIndex = $parentPath.LastIndexOf("/")
+$grandParentPath = if ($grandParentSlashIndex -gt 0) { $parentPath.Substring(0, $grandParentSlashIndex) } else { "/" }
+$jobnetName = if ($grandParentSlashIndex -ge 0) { $parentPath.Substring($grandParentSlashIndex + 1) } else { $parentPath.TrimStart("/") }
+
 # パスとジョブ名をURLエンコード
 $encodedParentPath = [System.Uri]::EscapeDataString($parentPath)
 $encodedJobName = [System.Uri]::EscapeDataString($jobName)
@@ -343,6 +348,44 @@ try {
 
 } catch {
     exit 9  # API接続エラー（存在確認）
+}
+
+# ==============================================================================
+# STEP 1.5: 親ジョブネットのコメント取得
+# ==============================================================================
+# 親ジョブネットの定義を取得し、コメント（cm属性）を取得します。
+
+$jobnetComment = ""
+$encodedGrandParentPath = [System.Uri]::EscapeDataString($grandParentPath)
+$encodedJobnetName = [System.Uri]::EscapeDataString($jobnetName)
+
+$jobnetUrl = "${baseUrl}/objects/statuses?mode=search"
+$jobnetUrl += "&manager=${managerHost}"
+$jobnetUrl += "&serviceName=${schedulerService}"
+$jobnetUrl += "&location=${encodedGrandParentPath}"
+$jobnetUrl += "&searchLowerUnits=NO"
+$jobnetUrl += "&searchTarget=DEFINITION"
+$jobnetUrl += "&unitName=${encodedJobnetName}"
+$jobnetUrl += "&unitNameMatchMethods=EQ"
+
+try {
+    $jobnetResponse = Invoke-WebRequest -Uri $jobnetUrl -Method GET -Headers $headers -TimeoutSec 30 -UseBasicParsing
+
+    # UTF-8文字化け対策
+    $jobnetBytes = $jobnetResponse.RawContentStream.ToArray()
+    $jobnetText = [System.Text.Encoding]::UTF8.GetString($jobnetBytes)
+    $jobnetJson = $jobnetText | ConvertFrom-Json
+
+    # ジョブネットのコメントを取得
+    if ($jobnetJson.statuses -and $jobnetJson.statuses.Count -gt 0) {
+        $jobnetDef = $jobnetJson.statuses[0].definition
+        if ($jobnetDef.comment) {
+            $jobnetComment = $jobnetDef.comment
+        }
+    }
+} catch {
+    # コメント取得失敗は無視して続行（必須ではない）
+    $jobnetComment = ""
 }
 
 # ==============================================================================
@@ -480,6 +523,9 @@ if ($execIdList.Count -gt 0) {
             # 開始日時を最初の行に出力（ファイル名用フォーマット）
             # 呼び出し側でファイル名に使用可能
             [Console]::WriteLine("START_TIME:$startTimeForFileName")
+
+            # ジョブネットコメントを出力（ファイル名用）
+            [Console]::WriteLine("JOBNET_COMMENT:$jobnetComment")
 
             # 実行結果詳細を出力
             if ($resultJson.execResultDetails) {
