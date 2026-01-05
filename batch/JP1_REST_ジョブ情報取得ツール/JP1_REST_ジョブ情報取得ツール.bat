@@ -16,15 +16,21 @@ if "%~1"=="" exit /b 1
 rem 第1引数（ジョブパス）を環境変数に設定（PowerShellに渡すため）
 set "JP1_UNIT_PATH=%~1"
 
+rem UNCパス対応（PushD/PopDで自動マッピング）
+pushd "%~dp0"
+
 rem PowerShellを起動し、このファイル自体をスクリプトとして実行
 rem -NoProfile: プロファイルを読み込まない（高速化）
 rem -ExecutionPolicy Bypass: 実行ポリシーを回避
 rem gc '%~f0': このファイル自体を読み込む
 rem iex: 読み込んだ内容をPowerShellスクリプトとして実行
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$scriptDir=('%~dp0' -replace '\\$',''); iex ((gc '%~f0' -Encoding Default) -join \"`n\")"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$scriptDir=('%~dp0' -replace '\\$',''); try { iex ((gc '%~f0' -Encoding Default) -join \"`n\") } finally { Set-Location C:\ }"
+set "EXITCODE=%ERRORLEVEL%"
+
+popd
 
 rem PowerShellの終了コードをそのまま返す
-exit /b %ERRORLEVEL%
+exit /b %EXITCODE%
 : #>
 
 # ==============================================================================
@@ -302,24 +308,29 @@ $encodedParentPath = [System.Uri]::EscapeDataString($parentPath)
 $encodedJobName = [System.Uri]::EscapeDataString($jobName)
 
 # ==============================================================================
-# STEP 1: ユニット存在確認・種別確認（DEFINITION）
+# STEP 1: ユニット存在確認・種別確認・親ジョブネットコメント取得（DEFINITION）
 # ==============================================================================
-# 最初に DEFINITION のみで呼び出し、以下を確認します：
+# DEFINITION モードで以下を確認・取得します：
 #   - 指定したユニットが存在するか
 #   - 指定したユニットがジョブ（JOB系）かどうか
-#   - 親ユニット（ジョブネット）の情報
+#   - 親ジョブネットのコメント（searchLowerUnits=YESで親も含めて取得）
+
+# 親ジョブネットを検索対象として、配下のジョブも含めて取得
+$encodedGrandParentPath = [System.Uri]::EscapeDataString($grandParentPath)
+$encodedJobnetName = [System.Uri]::EscapeDataString($jobnetName)
 
 $defUrl = "${baseUrl}/objects/statuses?mode=search"
 $defUrl += "&manager=${managerHost}"
 $defUrl += "&serviceName=${schedulerService}"
-$defUrl += "&location=${encodedParentPath}"
-$defUrl += "&searchLowerUnits=NO"
+$defUrl += "&location=${encodedGrandParentPath}"
+$defUrl += "&searchLowerUnits=YES"
 $defUrl += "&searchTarget=DEFINITION"
-$defUrl += "&unitName=${encodedJobName}"
+$defUrl += "&unitName=${encodedJobnetName}"
 $defUrl += "&unitNameMatchMethods=EQ"
 
 $unitTypeValue = $null
 $unitFullName = $null
+$jobnetComment = ""
 
 try {
     $defResponse = Invoke-WebRequest -Uri $defUrl -Method GET -Headers $headers -TimeoutSec 30 -UseBasicParsing
@@ -334,10 +345,35 @@ try {
         exit 2  # ユニット未検出
     }
 
-    # 最初のユニットの情報を取得
-    $defUnit = $defJson.statuses[0]
-    $unitFullName = $defUnit.definition.unitName
-    $unitTypeValue = $defUnit.definition.unitType
+    # レスポンスから親ジョブネットと対象ジョブを検索
+    $targetJobFound = $false
+    foreach ($unit in $defJson.statuses) {
+        $unitDef = $unit.definition
+        $currentUnitName = $unitDef.unitName
+        $currentUnitType = $unitDef.unitType
+
+        # 親ジョブネットの場合（パスが一致）
+        if ($currentUnitName -eq $parentPath) {
+            # コメントを取得（comment または cm フィールド）
+            if ($unitDef.comment) {
+                $jobnetComment = $unitDef.comment
+            } elseif ($unitDef.cm) {
+                $jobnetComment = $unitDef.cm
+            }
+        }
+
+        # 対象ジョブの場合（フルパスが一致）
+        if ($currentUnitName -eq $unitPath) {
+            $unitFullName = $currentUnitName
+            $unitTypeValue = $currentUnitType
+            $targetJobFound = $true
+        }
+    }
+
+    # 対象ジョブが見つからない場合
+    if (-not $targetJobFound) {
+        exit 2  # ユニット未検出
+    }
 
     # ユニット種別確認（JOB系かどうか）
     # JOB系: JOB, PJOB, QJOB, EVWJB, FLWJB, MLWJB, MSWJB, LFWJB, TMWJB,
@@ -348,44 +384,6 @@ try {
 
 } catch {
     exit 9  # API接続エラー（存在確認）
-}
-
-# ==============================================================================
-# STEP 1.5: 親ジョブネットのコメント取得
-# ==============================================================================
-# 親ジョブネットの定義を取得し、コメント（cm属性）を取得します。
-
-$jobnetComment = ""
-$encodedGrandParentPath = [System.Uri]::EscapeDataString($grandParentPath)
-$encodedJobnetName = [System.Uri]::EscapeDataString($jobnetName)
-
-$jobnetUrl = "${baseUrl}/objects/statuses?mode=search"
-$jobnetUrl += "&manager=${managerHost}"
-$jobnetUrl += "&serviceName=${schedulerService}"
-$jobnetUrl += "&location=${encodedGrandParentPath}"
-$jobnetUrl += "&searchLowerUnits=NO"
-$jobnetUrl += "&searchTarget=DEFINITION"
-$jobnetUrl += "&unitName=${encodedJobnetName}"
-$jobnetUrl += "&unitNameMatchMethods=EQ"
-
-try {
-    $jobnetResponse = Invoke-WebRequest -Uri $jobnetUrl -Method GET -Headers $headers -TimeoutSec 30 -UseBasicParsing
-
-    # UTF-8文字化け対策
-    $jobnetBytes = $jobnetResponse.RawContentStream.ToArray()
-    $jobnetText = [System.Text.Encoding]::UTF8.GetString($jobnetBytes)
-    $jobnetJson = $jobnetText | ConvertFrom-Json
-
-    # ジョブネットのコメントを取得
-    if ($jobnetJson.statuses -and $jobnetJson.statuses.Count -gt 0) {
-        $jobnetDef = $jobnetJson.statuses[0].definition
-        if ($jobnetDef.comment) {
-            $jobnetComment = $jobnetDef.comment
-        }
-    }
-} catch {
-    # コメント取得失敗は無視して続行（必須ではない）
-    $jobnetComment = ""
 }
 
 # ==============================================================================
