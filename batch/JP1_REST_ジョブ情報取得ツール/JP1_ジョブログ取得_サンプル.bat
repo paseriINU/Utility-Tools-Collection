@@ -1,6 +1,9 @@
 @echo off
 title JP1 ジョブログ取得サンプル
-setlocal
+setlocal enabledelayedexpansion
+
+rem UNCパス対応（PushD/PopDで自動マッピング）
+pushd "%~dp0"
 
 rem ============================================================================
 rem JP1 ジョブログ取得サンプル
@@ -22,16 +25,25 @@ rem   3: ユニット種別エラー（STEP 1）
 rem   4: 実行世代なし（STEP 2）
 rem   5: 5MB超過エラー（STEP 3）
 rem   6: 詳細取得エラー（STEP 3）
+rem   7: ジョブ開始日時取得エラー（START_TIMEが空）
 rem   9: API接続エラー（各STEP）
 rem ============================================================================
 
 rem === ここを編集してください（ジョブのパスを指定）===
 set "UNIT_PATH=/JobGroup/Jobnet/Job1"
 
-rem 出力ファイル名（日付_時間形式）
-set "DATETIME=%date:~0,4%%date:~5,2%%date:~8,2%_%time:~0,2%%time:~3,2%%time:~6,2%"
-set "DATETIME=%DATETIME: =0%"
-set "OUTPUT_FILE=%~dp0%DATETIME%.txt"
+rem === ファイル名の設定 ===
+rem ファイル名形式: {ジョブネットコメント}（{日時}実行分）.txt
+rem 例: ジョブネットのコメントが"テスト"の場合 → "テスト（20251010_163520実行分）.txt"
+rem
+rem ジョブネットコメントが取得できない場合に使用するデフォルト値
+set "DEFAULT_PREFIX=ジョブログ"
+
+rem ファイル名のサフィックス（日時の後に付ける文字列、拡張子の前）
+set "FILE_SUFFIX=実行分）"
+
+rem 一時ファイル名（後でジョブ開始日時を使用してリネーム）
+set "TEMP_FILE=%~dp0temp_output.txt"
 
 rem スクリプトのディレクトリを取得
 set "SCRIPT_DIR=%~dp0"
@@ -42,12 +54,11 @@ echo   JP1 ジョブログ取得サンプル
 echo ================================================================
 echo.
 echo   対象: %UNIT_PATH%
-echo   出力: %OUTPUT_FILE%
 echo.
 echo ログを取得中...
 
-rem JP1_REST_ジョブ情報取得ツール.bat を呼び出し、結果を直接ファイルに保存
-call "%SCRIPT_DIR%JP1_REST_ジョブ情報取得ツール.bat" "%UNIT_PATH%" > "%OUTPUT_FILE%" 2>&1
+rem JP1_REST_ジョブ情報取得ツール.bat を呼び出し、結果を一時ファイルに保存
+call "%SCRIPT_DIR%JP1_REST_ジョブ情報取得ツール.bat" "%UNIT_PATH%" > "%TEMP_FILE%" 2>&1
 set "EXIT_CODE=%ERRORLEVEL%"
 
 rem エラーコード別のハンドリング（実行順）
@@ -114,31 +125,109 @@ goto :ERROR_EXIT
 
 :ERROR_EXIT
 echo.
-del "%OUTPUT_FILE%" >nul 2>&1
+del "%TEMP_FILE%" >nul 2>&1
 pause
+popd
 exit /b %EXIT_CODE%
 
 :SUCCESS
 rem 結果が空かチェック
-for %%A in ("%OUTPUT_FILE%") do set "FILE_SIZE=%%~zA"
+for %%A in ("%TEMP_FILE%") do set "FILE_SIZE=%%~zA"
 if "%FILE_SIZE%"=="0" (
     echo.
     echo [警告] 取得結果が空です
     echo.
-    del "%OUTPUT_FILE%" >nul 2>&1
+    del "%TEMP_FILE%" >nul 2>&1
     pause
+    popd
     exit /b 1
 )
+
+rem 一時ファイルから START_TIME: 行を取得してジョブ開始日時を抽出
+set "JOB_START_TIME="
+for /f "tokens=1,* delims=:" %%a in ('type "%TEMP_FILE%" 2^>nul') do (
+    if "%%a"=="START_TIME" (
+        set "JOB_START_TIME=%%b"
+        goto :GOT_START_TIME
+    )
+)
+:GOT_START_TIME
+
+rem 一時ファイルから JOBNET_COMMENT: 行を取得してジョブネットコメントを抽出
+set "JOBNET_COMMENT="
+for /f "tokens=1,* delims=:" %%a in ('type "%TEMP_FILE%" 2^>nul') do (
+    if "%%a"=="JOBNET_COMMENT" (
+        set "JOBNET_COMMENT=%%b"
+        goto :GOT_JOBNET_COMMENT
+    )
+)
+:GOT_JOBNET_COMMENT
+
+rem ジョブネットコメントが空の場合はデフォルト値を使用
+if "%JOBNET_COMMENT%"=="" set "JOBNET_COMMENT=%DEFAULT_PREFIX%"
+
+rem ファイル名のプレフィックスを設定（ジョブネットコメント＋開き括弧）
+set "FILE_PREFIX=%JOBNET_COMMENT%（"
+
+rem ジョブ開始日時が取得できなかった場合はエラー
+if "%JOB_START_TIME%"=="" (
+    echo.
+    echo [エラー] ジョブ開始日時が取得できませんでした
+    echo          - ジョブが実行中の可能性があります
+    echo          - 世代指定（generation）の設定を確認してください
+    del "%TEMP_FILE%" >nul 2>&1
+    pause
+    popd
+    exit /b 7
+)
+
+rem ジョブ開始日時が2日以上前かチェック
+set "OLD_DATA_WARNING="
+for /f %%D in ('powershell -NoProfile -Command "$dt=[DateTime]::ParseExact('%JOB_START_TIME%','yyyyMMdd_HHmmss',$null); if(((Get-Date)-$dt).TotalDays -ge 2){'OLD'}"') do set "OLD_DATA_WARNING=%%D"
+
+if "%OLD_DATA_WARNING%"=="OLD" (
+    echo.
+    echo ================================================================
+    echo   [警告] ジョブ開始日時が2日以上前です
+    echo ================================================================
+    echo.
+    echo   ジョブ開始日時: %JOB_START_TIME%
+    echo.
+    echo   意図した世代のログか確認してください。
+    echo   続行する場合は任意のキーを押してください...
+    echo.
+    pause >nul
+)
+
+rem 出力ファイル名をジョブ開始日時で作成（プレフィックス＋日時＋サフィックス）
+set "OUTPUT_FILE=%~dp0%FILE_PREFIX%%JOB_START_TIME%%FILE_SUFFIX%.txt"
+
+rem START_TIME:行とJOBNET_COMMENT:行を除いた実行結果詳細を出力ファイルに保存
+(for /f "usebackq tokens=* delims=" %%L in ("%TEMP_FILE%") do (
+    set "LINE=%%L"
+    setlocal enabledelayedexpansion
+    set "SKIP="
+    if "!LINE:~0,11!"=="START_TIME:" set "SKIP=1"
+    if "!LINE:~0,15!"=="JOBNET_COMMENT:" set "SKIP=1"
+    if not defined SKIP echo !LINE!
+    endlocal
+)) > "%OUTPUT_FILE%"
+
+rem 一時ファイルを削除
+del "%TEMP_FILE%" >nul 2>&1
 
 echo.
 echo ================================================================
 echo   取得完了 - ファイルに保存しました
 echo ================================================================
 echo.
-echo 出力ファイル: %OUTPUT_FILE%
+echo ジョブネット:   %JOBNET_COMMENT%
+echo ジョブ開始日時: %JOB_START_TIME%
+echo 出力ファイル:   %OUTPUT_FILE%
 echo.
 
 rem メモ帳で開く
 start notepad "%OUTPUT_FILE%"
 
+popd
 exit /b 0

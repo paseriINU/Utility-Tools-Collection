@@ -59,12 +59,15 @@ JP1_REST_ジョブ情報取得ツール.bat "/JobGroup/Jobnet"
 
 ```batch
 rem === ここを編集してください ===
-set "UNIT_PATH=/JobGroup/Jobnet"
-set "OUTPUT_FILE=%~dp0joblog_output.txt"
+set "UNIT_PATH=/JobGroup/Jobnet/Job1"
 ```
 
 2. ダブルクリックで実行
-3. 結果が `OUTPUT_FILE` に保存されます
+3. 結果が `{ジョブネットコメント}（{日時}実行分）.txt` 形式で保存されます
+   - 例: ジョブネットのコメントが「テスト」の場合 → `テスト（20251010_163520実行分）.txt`
+   - ジョブネットコメントが空の場合は `DEFAULT_PREFIX` の値が使用されます
+4. ファイル名にジョブの実際の開始日時が使用されるため、履歴管理が容易です
+5. **警告機能**: ジョブ開始日時が2日以上前の場合、警告を表示して確認を求めます
 
 ### 他バッチからの呼び出し
 
@@ -133,13 +136,37 @@ type result.txt
 | 4 | STEP 2 | 実行世代なし（実行履歴が存在しません） |
 | 5 | STEP 3 | 5MB超過エラー（実行結果が切り捨てられました） |
 | 6 | STEP 3 | 詳細取得エラー（実行結果詳細の取得に失敗） |
+| 7 | サンプル | ジョブ開始日時取得エラー（START_TIMEが空） |
 | 9 | 全STEP | API接続エラー（各STEPでの接続失敗） |
 
 ## 出力形式
 
 - **文字コード**: Shift-JIS
-- **形式**: 実行結果詳細のテキスト出力
+- **形式**:
+  - 1行目: `START_TIME:yyyyMMdd_HHmmss`（ジョブ開始日時）
+  - 2行目: `JOBNET_COMMENT:コメント`（親ジョブネットのコメント）
+  - 3行目以降: 実行結果詳細のテキスト出力
 - **エラー時**: `ERROR:` で始まるメッセージを出力
+
+### 出力例
+
+```
+START_TIME:20250105_153028
+JOBNET_COMMENT:テスト
+（実行結果詳細の内容）
+```
+
+### START_TIME/JOBNET_COMMENTの活用
+
+呼び出し側でジョブ開始日時とジョブネットコメントをファイル名に使用できます：
+
+```batch
+for /f "tokens=1,* delims=:" %%a in ('JP1_REST_ジョブ情報取得ツール.bat "/path"') do (
+    if "%%a"=="START_TIME" set "JOB_START_TIME=%%b"
+    if "%%a"=="JOBNET_COMMENT" set "JOBNET_COMMENT=%%b"
+)
+echo ファイル名: %JOBNET_COMMENT%（%JOB_START_TIME%実行分）.txt
+```
 
 ## 注意事項
 

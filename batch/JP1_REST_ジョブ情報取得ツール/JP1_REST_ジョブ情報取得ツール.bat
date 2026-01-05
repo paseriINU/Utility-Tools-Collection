@@ -16,15 +16,21 @@ if "%~1"=="" exit /b 1
 rem 第1引数（ジョブパス）を環境変数に設定（PowerShellに渡すため）
 set "JP1_UNIT_PATH=%~1"
 
+rem UNCパス対応（PushD/PopDで自動マッピング）
+pushd "%~dp0"
+
 rem PowerShellを起動し、このファイル自体をスクリプトとして実行
 rem -NoProfile: プロファイルを読み込まない（高速化）
 rem -ExecutionPolicy Bypass: 実行ポリシーを回避
 rem gc '%~f0': このファイル自体を読み込む
 rem iex: 読み込んだ内容をPowerShellスクリプトとして実行
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$scriptDir=('%~dp0' -replace '\\$',''); iex ((gc '%~f0' -Encoding Default) -join \"`n\")"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$scriptDir=('%~dp0' -replace '\\$',''); try { iex ((gc '%~f0' -Encoding Default) -join \"`n\") } finally { Set-Location C:\ }"
+set "EXITCODE=%ERRORLEVEL%"
+
+popd
 
 rem PowerShellの終了コードをそのまま返す
-exit /b %ERRORLEVEL%
+exit /b %EXITCODE%
 : #>
 
 # ==============================================================================
@@ -292,6 +298,11 @@ if (-not $jobName) {
     exit 1  # ジョブ名が空
 }
 
+# 親ジョブネット名を取得（コメント取得用）
+$grandParentSlashIndex = $parentPath.LastIndexOf("/")
+$grandParentPath = if ($grandParentSlashIndex -gt 0) { $parentPath.Substring(0, $grandParentSlashIndex) } else { "/" }
+$jobnetName = if ($grandParentSlashIndex -ge 0) { $parentPath.Substring($grandParentSlashIndex + 1) } else { $parentPath.TrimStart("/") }
+
 # パスとジョブ名をURLエンコード
 $encodedParentPath = [System.Uri]::EscapeDataString($parentPath)
 $encodedJobName = [System.Uri]::EscapeDataString($jobName)
@@ -302,7 +313,6 @@ $encodedJobName = [System.Uri]::EscapeDataString($jobName)
 # 最初に DEFINITION のみで呼び出し、以下を確認します：
 #   - 指定したユニットが存在するか
 #   - 指定したユニットがジョブ（JOB系）かどうか
-#   - 親ユニット（ジョブネット）の情報
 
 $defUrl = "${baseUrl}/objects/statuses?mode=search"
 $defUrl += "&manager=${managerHost}"
@@ -315,6 +325,7 @@ $defUrl += "&unitNameMatchMethods=EQ"
 
 $unitTypeValue = $null
 $unitFullName = $null
+$jobnetComment = ""
 
 try {
     $defResponse = Invoke-WebRequest -Uri $defUrl -Method GET -Headers $headers -TimeoutSec 30 -UseBasicParsing
@@ -343,6 +354,44 @@ try {
 
 } catch {
     exit 9  # API接続エラー（存在確認）
+}
+
+# ==============================================================================
+# STEP 1.5: 親ジョブネットのコメント取得
+# ==============================================================================
+# 親ジョブネットの定義を取得し、コメント（cm属性）を取得します。
+
+$encodedGrandParentPath = [System.Uri]::EscapeDataString($grandParentPath)
+$encodedJobnetName = [System.Uri]::EscapeDataString($jobnetName)
+
+$jobnetUrl = "${baseUrl}/objects/statuses?mode=search"
+$jobnetUrl += "&manager=${managerHost}"
+$jobnetUrl += "&serviceName=${schedulerService}"
+$jobnetUrl += "&location=${encodedGrandParentPath}"
+$jobnetUrl += "&searchLowerUnits=NO"
+$jobnetUrl += "&searchTarget=DEFINITION"
+$jobnetUrl += "&unitName=${encodedJobnetName}"
+$jobnetUrl += "&unitNameMatchMethods=EQ"
+
+try {
+    $jobnetResponse = Invoke-WebRequest -Uri $jobnetUrl -Method GET -Headers $headers -TimeoutSec 30 -UseBasicParsing
+
+    # UTF-8文字化け対策
+    $jobnetBytes = $jobnetResponse.RawContentStream.ToArray()
+    $jobnetText = [System.Text.Encoding]::UTF8.GetString($jobnetBytes)
+    $jobnetJson = $jobnetText | ConvertFrom-Json
+
+    # ジョブネットのコメントを取得
+    if ($jobnetJson.statuses -and $jobnetJson.statuses.Count -gt 0) {
+        $jobnetDef = $jobnetJson.statuses[0].definition
+        # unitComment フィールドを確認（JP1 REST APIのフィールド名）
+        if ($jobnetDef.unitComment) {
+            $jobnetComment = $jobnetDef.unitComment
+        }
+    }
+} catch {
+    # コメント取得失敗は無視して続行（必須ではない）
+    $jobnetComment = ""
 }
 
 # ==============================================================================
@@ -409,6 +458,7 @@ try {
             $unitStatus = $unit.unitStatus
             $execIdValue = if ($unitStatus) { $unitStatus.execID } else { $null }
             $statusValue = if ($unitStatus) { $unitStatus.status } else { "N/A" }
+            $startTimeValue = if ($unitStatus) { $unitStatus.startTime } else { $null }
 
             # execIDがある場合のみリストに追加
             if ($execIdValue) {
@@ -417,6 +467,7 @@ try {
                     ExecId = $execIdValue
                     Status = $statusValue
                     UnitType = $unitTypeValue
+                    StartTime = $startTimeValue
                 }
             }
         }
@@ -441,6 +492,19 @@ if ($execIdList.Count -gt 0) {
     foreach ($item in $execIdList) {
         $targetPath = $item.Path
         $targetExecId = $item.ExecId
+        $targetStartTime = $item.StartTime
+
+        # 開始日時をファイル名用フォーマットに変換（yyyyMMdd_HHmmss）
+        # 例: "2015-09-02T22:50:28+09:00" → "20150902_225028"
+        $startTimeForFileName = ""
+        if ($targetStartTime) {
+            try {
+                $dt = [DateTime]::Parse($targetStartTime)
+                $startTimeForFileName = $dt.ToString("yyyyMMdd_HHmmss")
+            } catch {
+                $startTimeForFileName = ""
+            }
+        }
 
         # ユニットパスをURLエンコード
         $encodedPath = [System.Uri]::EscapeDataString($targetPath)
@@ -461,6 +525,13 @@ if ($execIdList.Count -gt 0) {
 
             # all フラグのチェック（falseの場合は5MB超過で切り捨て）
             if ($resultJson.all -eq $false) { exit 5 }  # 5MB超過エラー
+
+            # 開始日時を最初の行に出力（ファイル名用フォーマット）
+            # 呼び出し側でファイル名に使用可能
+            [Console]::WriteLine("START_TIME:$startTimeForFileName")
+
+            # ジョブネットコメントを出力（ファイル名用）
+            [Console]::WriteLine("JOBNET_COMMENT:$jobnetComment")
 
             # 実行結果詳細を出力
             if ($resultJson.execResultDetails) {
