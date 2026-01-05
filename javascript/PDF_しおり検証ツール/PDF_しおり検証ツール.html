@@ -932,7 +932,8 @@
                 } else {
                     status = '不明';
                 }
-                // ページ番号を調整（ObjStm/pdfjs抽出の場合のみ0始まりから1始まりに変換）
+                // ページ番号を調整（pdfjs抽出の場合のみ0始まりから1始まりに変換）
+                // javascript版は取得時に+1済み
                 const csvPage = typeof bm.page === 'number'
                     ? (bm.source === 'pdfjs' ? bm.page + 1 : bm.page)
                     : (bm.page || '');
@@ -1043,7 +1044,8 @@
                 // repeat(): 文字列を指定回数繰り返す（インデント用）
                 const indent = '　'.repeat(bm.level - 1);
 
-                // ページ番号を調整（ObjStm/pdfjs抽出の場合のみ0始まりから1始まりに変換）
+                // ページ番号を調整（pdfjs抽出の場合のみ0始まりから1始まりに変換）
+                // javascript版は取得時に+1済み
                 const displayPage = typeof bm.page === 'number'
                     ? (bm.source === 'pdfjs' ? bm.page + 1 : bm.page)
                     : (bm.page || '-');
@@ -1198,28 +1200,35 @@
             // モードに応じて解析方法を切り替え
             if (mode === 'javascript') {
                 // JavaScript版: ObjStmからの抽出を強制使用（フォールバックなし）
+                // JavaScript版で作成されたPDFは0始まりのページ番号を使用するため、+1して1始まりに変換
                 if (objStmDecodedTitles.length > 0) {
                     // ObjStmからバイト直接抽出したタイトルを使用（JavaScript APIで作成されたしおり向け）
                     for (const item of objStmDecodedTitles) {
                         let pageNum = '';
                         if (item.pageRef) {
                             // PAGE:N 形式（JavaScriptアクションから取得）の場合
+                            // JavaScript版PDFは0始まりなので+1する
                             if (item.pageRef.startsWith('PAGE:')) {
-                                pageNum = parseInt(item.pageRef.substring(5), 10) || '';
+                                const rawPageNum = parseInt(item.pageRef.substring(5), 10);
+                                pageNum = (typeof rawPageNum === 'number' && !isNaN(rawPageNum)) ? rawPageNum + 1 : '';
                             } else {
                                 // pageRefは "123 0 R" の形式なので、オブジェクト番号を抽出
                                 const objNumMatch = item.pageRef.match(/^(\d+)/);
                                 if (objNumMatch) {
                                     const objNum = objNumMatch[1];
                                     if (pageObjects[objNum]) {
+                                        // pageObjectsは既に1始まりなのでそのまま使用
                                         pageNum = pageObjects[objNum];
                                     } else {
-                                        pageNum = parseInt(objNum) || '';
+                                        // フォールバック: オブジェクト番号を0始まりと想定して+1
+                                        const rawNum = parseInt(objNum);
+                                        pageNum = (typeof rawNum === 'number' && !isNaN(rawNum)) ? rawNum + 1 : '';
                                     }
                                 }
                             }
                         }
-                        bookmarks.push({ title: item.title, page: pageNum, level: 1, source: 'pdfjs' });
+                        // source: 'javascript' に変更して、検証時の+1調整を適用しない
+                        bookmarks.push({ title: item.title, page: pageNum, level: 1, source: 'javascript' });
                     }
                 }
                 // ObjStmから取得できない場合はbookmarksが空のまま（後続のエラー処理に任せる）
@@ -1233,9 +1242,12 @@
                 const pageTexts = await extractPageTexts(content, bytes, objStmObjectsMap);
 
                 // 各しおりについて判定
-                // 注: PDF.js抽出のページ番号は0始まりなので1始まりに変換が必要
+                // 注: source別のページ番号処理
+                // - 'javascript': 取得時に+1済み（0始まり→1始まり変換済み）
+                // - 'pdfjs': 0始まりのため検証時に+1が必要
+                // - その他（Word版等）: 既に1始まり
                 for (const bm of bookmarks) {
-                    // ページ番号を調整（ObjStm/pdfjs抽出の場合のみ0始まりから1始まりに変換）
+                    // ページ番号を調整（pdfjs抽出の場合のみ0始まりから1始まりに変換）
                     const adjustedPage = typeof bm.page === 'number'
                         ? (bm.source === 'pdfjs' ? bm.page + 1 : bm.page)
                         : bm.page;
@@ -1304,7 +1316,10 @@
             }
 
             bookmarks.sort((a, b) => {
-                // ページ番号を取得（source === 'pdfjs'の場合は+1済みの値で比較）
+                // ページ番号を取得
+                // - 'pdfjs': 0始まりなので+1して1始まりに変換
+                // - 'javascript': 取得時に+1済みなのでそのまま使用
+                // - その他: 既に1始まり
                 const pageA = typeof a.page === 'number' ? (a.source === 'pdfjs' ? a.page + 1 : a.page) : 0;
                 const pageB = typeof b.page === 'number' ? (b.source === 'pdfjs' ? b.page + 1 : b.page) : 0;
 
