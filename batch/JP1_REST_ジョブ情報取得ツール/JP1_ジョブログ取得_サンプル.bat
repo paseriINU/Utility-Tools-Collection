@@ -158,6 +158,24 @@ if "%JOB_START_TIME%"=="" (
     exit /b 7
 )
 
+rem ジョブ開始日時が2日以上前かチェック
+set "OLD_DATA_WARNING="
+for /f %%D in ('powershell -NoProfile -Command "$dt=[DateTime]::ParseExact('%JOB_START_TIME%','yyyyMMdd_HHmmss',$null); if(((Get-Date)-$dt).TotalDays -ge 2){'OLD'}"') do set "OLD_DATA_WARNING=%%D"
+
+if "%OLD_DATA_WARNING%"=="OLD" (
+    echo.
+    echo ================================================================
+    echo   [警告] ジョブ開始日時が2日以上前です
+    echo ================================================================
+    echo.
+    echo   ジョブ開始日時: %JOB_START_TIME%
+    echo.
+    echo   意図した世代のログか確認してください。
+    echo   続行する場合は任意のキーを押してください...
+    echo.
+    pause >nul
+)
+
 rem 出力ファイル名をジョブ開始日時で作成（プレフィックス＋日時＋サフィックス）
 set "OUTPUT_FILE=%~dp0%FILE_PREFIX%%JOB_START_TIME%%FILE_SUFFIX%.txt"
 
