@@ -59,12 +59,12 @@ JP1_REST_ジョブ情報取得ツール.bat "/JobGroup/Jobnet"
 
 ```batch
 rem === ここを編集してください ===
-set "UNIT_PATH=/JobGroup/Jobnet"
-set "OUTPUT_FILE=%~dp0joblog_output.txt"
+set "UNIT_PATH=/JobGroup/Jobnet/Job1"
 ```
 
 2. ダブルクリックで実行
-3. 結果が `OUTPUT_FILE` に保存されます
+3. 結果が `ジョブ開始日時.txt` 形式で保存されます（例: `20250105_153028.txt`）
+4. ファイル名にジョブの実際の開始日時が使用されるため、履歴管理が容易です
 
 ### 他バッチからの呼び出し
 
@@ -138,8 +138,28 @@ type result.txt
 ## 出力形式
 
 - **文字コード**: Shift-JIS
-- **形式**: 実行結果詳細のテキスト出力
+- **形式**:
+  - 1行目: `START_TIME:yyyyMMdd_HHmmss`（ジョブ開始日時）
+  - 2行目以降: 実行結果詳細のテキスト出力
 - **エラー時**: `ERROR:` で始まるメッセージを出力
+
+### 出力例
+
+```
+START_TIME:20250105_153028
+（実行結果詳細の内容）
+```
+
+### START_TIMEの活用
+
+呼び出し側でジョブ開始日時をファイル名に使用できます：
+
+```batch
+for /f "tokens=1,* delims=:" %%a in ('JP1_REST_ジョブ情報取得ツール.bat "/path"') do (
+    if "%%a"=="START_TIME" set "JOB_START_TIME=%%b"
+)
+echo ファイル名: log_%JOB_START_TIME%.txt
+```
 
 ## 注意事項
 

@@ -1,6 +1,6 @@
 @echo off
 title JP1 ジョブログ取得サンプル
-setlocal
+setlocal enabledelayedexpansion
 
 rem ============================================================================
 rem JP1 ジョブログ取得サンプル
@@ -28,10 +28,8 @@ rem ============================================================================
 rem === ここを編集してください（ジョブのパスを指定）===
 set "UNIT_PATH=/JobGroup/Jobnet/Job1"
 
-rem 出力ファイル名（日付_時間形式）
-set "DATETIME=%date:~0,4%%date:~5,2%%date:~8,2%_%time:~0,2%%time:~3,2%%time:~6,2%"
-set "DATETIME=%DATETIME: =0%"
-set "OUTPUT_FILE=%~dp0%DATETIME%.txt"
+rem 一時ファイル名（後でジョブ開始日時を使用してリネーム）
+set "TEMP_FILE=%~dp0temp_output.txt"
 
 rem スクリプトのディレクトリを取得
 set "SCRIPT_DIR=%~dp0"
@@ -42,12 +40,11 @@ echo   JP1 ジョブログ取得サンプル
 echo ================================================================
 echo.
 echo   対象: %UNIT_PATH%
-echo   出力: %OUTPUT_FILE%
 echo.
 echo ログを取得中...
 
-rem JP1_REST_ジョブ情報取得ツール.bat を呼び出し、結果を直接ファイルに保存
-call "%SCRIPT_DIR%JP1_REST_ジョブ情報取得ツール.bat" "%UNIT_PATH%" > "%OUTPUT_FILE%" 2>&1
+rem JP1_REST_ジョブ情報取得ツール.bat を呼び出し、結果を一時ファイルに保存
+call "%SCRIPT_DIR%JP1_REST_ジョブ情報取得ツール.bat" "%UNIT_PATH%" > "%TEMP_FILE%" 2>&1
 set "EXIT_CODE=%ERRORLEVEL%"
 
 rem エラーコード別のハンドリング（実行順）
@@ -114,28 +111,62 @@ goto :ERROR_EXIT
 
 :ERROR_EXIT
 echo.
-del "%OUTPUT_FILE%" >nul 2>&1
+del "%TEMP_FILE%" >nul 2>&1
 pause
 exit /b %EXIT_CODE%
 
 :SUCCESS
 rem 結果が空かチェック
-for %%A in ("%OUTPUT_FILE%") do set "FILE_SIZE=%%~zA"
+for %%A in ("%TEMP_FILE%") do set "FILE_SIZE=%%~zA"
 if "%FILE_SIZE%"=="0" (
     echo.
     echo [警告] 取得結果が空です
     echo.
-    del "%OUTPUT_FILE%" >nul 2>&1
+    del "%TEMP_FILE%" >nul 2>&1
     pause
     exit /b 1
 )
+
+rem 一時ファイルから START_TIME: 行を取得してジョブ開始日時を抽出
+set "JOB_START_TIME="
+for /f "tokens=1,* delims=:" %%a in ('type "%TEMP_FILE%" 2^>nul') do (
+    if "%%a"=="START_TIME" (
+        set "JOB_START_TIME=%%b"
+        goto :GOT_START_TIME
+    )
+)
+:GOT_START_TIME
+
+rem ジョブ開始日時が取得できなかった場合は現在日時を使用
+if "%JOB_START_TIME%"=="" (
+    set "DATETIME=%date:~0,4%%date:~5,2%%date:~8,2%_%time:~0,2%%time:~3,2%%time:~6,2%"
+    set "DATETIME=!DATETIME: =0!"
+    set "JOB_START_TIME=%DATETIME%"
+)
+
+rem 出力ファイル名をジョブ開始日時で作成
+set "OUTPUT_FILE=%~dp0%JOB_START_TIME%.txt"
+
+rem START_TIME:行を除いた実行結果詳細を出力ファイルに保存
+(for /f "usebackq tokens=* delims=" %%L in ("%TEMP_FILE%") do (
+    set "LINE=%%L"
+    setlocal enabledelayedexpansion
+    if not "!LINE:~0,11!"=="START_TIME:" (
+        echo !LINE!
+    )
+    endlocal
+)) > "%OUTPUT_FILE%"
+
+rem 一時ファイルを削除
+del "%TEMP_FILE%" >nul 2>&1
 
 echo.
 echo ================================================================
 echo   取得完了 - ファイルに保存しました
 echo ================================================================
 echo.
-echo 出力ファイル: %OUTPUT_FILE%
+echo ジョブ開始日時: %JOB_START_TIME%
+echo 出力ファイル:   %OUTPUT_FILE%
 echo.
 
 rem メモ帳で開く
