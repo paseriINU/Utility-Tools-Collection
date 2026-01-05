@@ -22,11 +22,21 @@ rem   3: ユニット種別エラー（STEP 1）
 rem   4: 実行世代なし（STEP 2）
 rem   5: 5MB超過エラー（STEP 3）
 rem   6: 詳細取得エラー（STEP 3）
+rem   7: ジョブ開始日時取得エラー（START_TIMEが空）
 rem   9: API接続エラー（各STEP）
 rem ============================================================================
 
 rem === ここを編集してください（ジョブのパスを指定）===
 set "UNIT_PATH=/JobGroup/Jobnet/Job1"
+
+rem === ファイル名の設定 ===
+rem ファイル名のプレフィックス（日時の前に付ける文字列）
+rem 例: "テスト（" → "テスト（20251010_163520実行分）.txt"
+set "FILE_PREFIX=テスト（"
+
+rem ファイル名のサフィックス（日時の後に付ける文字列、拡張子の前）
+rem 例: "実行分）" → "テスト（20251010_163520実行分）.txt"
+set "FILE_SUFFIX=実行分）"
 
 rem 一時ファイル名（後でジョブ開始日時を使用してリネーム）
 set "TEMP_FILE=%~dp0temp_output.txt"
@@ -137,15 +147,19 @@ for /f "tokens=1,* delims=:" %%a in ('type "%TEMP_FILE%" 2^>nul') do (
 )
 :GOT_START_TIME
 
-rem ジョブ開始日時が取得できなかった場合は現在日時を使用
+rem ジョブ開始日時が取得できなかった場合はエラー
 if "%JOB_START_TIME%"=="" (
-    set "DATETIME=%date:~0,4%%date:~5,2%%date:~8,2%_%time:~0,2%%time:~3,2%%time:~6,2%"
-    set "DATETIME=!DATETIME: =0!"
-    set "JOB_START_TIME=%DATETIME%"
+    echo.
+    echo [エラー] ジョブ開始日時が取得できませんでした
+    echo          - ジョブが実行中の可能性があります
+    echo          - 世代指定（generation）の設定を確認してください
+    del "%TEMP_FILE%" >nul 2>&1
+    pause
+    exit /b 7
 )
 
-rem 出力ファイル名をジョブ開始日時で作成
-set "OUTPUT_FILE=%~dp0%JOB_START_TIME%.txt"
+rem 出力ファイル名をジョブ開始日時で作成（プレフィックス＋日時＋サフィックス）
+set "OUTPUT_FILE=%~dp0%FILE_PREFIX%%JOB_START_TIME%%FILE_SUFFIX%.txt"
 
 rem START_TIME:行を除いた実行結果詳細を出力ファイルに保存
 (for /f "usebackq tokens=* delims=" %%L in ("%TEMP_FILE%") do (
