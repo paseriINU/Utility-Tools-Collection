@@ -23,7 +23,8 @@
 │
 ├── linux/                   # Linuxスクリプト
 │   ├── winrm-client/        # WinRMクライアント（Python/Bash/C）
-│   └── opentp1-deploy/      # OpenTP1デプロイ自動化ツール
+│   ├── opentp1-deploy/      # OpenTP1デプロイ自動化ツール
+│   └── c-memory-safety-check/ # Cメモリ安全性チェックツール
 │
 ├── vba/                     # Excel VBAマクロ
 │   ├── SQL_生成ツール/        # Oracle SELECT文生成ツール
@@ -151,6 +152,13 @@
   - OpenTP1停止 → ソース配置 → 起動を自動実行
   - バックアップ機能付き
   - 詳細なログ出力
+
+- **[C言語 メモリ安全性チェックツール](linux/c-memory-safety-check/)**: C言語のメモリ安全性・デッドロジックを検出
+  - GCC警告オプションによる静的チェック
+  - cppcheckによる静的解析（オプション）
+  - AddressSanitizerによるメモリ破壊検出
+  - Valgrindによるメモリリーク検出（オプション）
+  - 到達不能コード・未使用変数の検出
 
 ### Git Hooks
 
