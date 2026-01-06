@@ -83,17 +83,21 @@ sudo ln -s $(pwd)/linux/c-memory-safety-check/c-memory-safety-check.sh /usr/loca
 ./c-memory-safety-check.sh <source.c>
 ```
 
-### インクルードパスを指定
+### Makefileからコンパイルオプションを抽出
 
-別ディレクトリのヘッダーファイルを参照する場合：
+Makefileに定義されたCFLAGS、インクルードパス等を自動的に読み取って使用します：
 
 ```bash
-# 単一のインクルードパス
-./c-memory-safety-check.sh main.c -I ./include
-
-# 複数のインクルードパス
-./c-memory-safety-check.sh main.c -I ./include -I ./lib -I ../common
+./c-memory-safety-check.sh main.c -m Makefile
 ```
+
+**抽出される変数：**
+- `CFLAGS`
+- `CPPFLAGS`
+- `INCLUDES`
+- `INCDIR`
+- `INC_PATH`
+- `INC`
 
 ### テスト実行時に引数を渡す
 
@@ -102,10 +106,10 @@ sudo ln -s $(pwd)/linux/c-memory-safety-check/c-memory-safety-check.sh /usr/loca
 ./c-memory-safety-check.sh myprogram.c -- arg1 arg2
 ```
 
-### インクルードパスとテスト引数の両方を指定
+### Makefileとテスト引数の両方を指定
 
 ```bash
-./c-memory-safety-check.sh main.c -I ./include -- input.txt output.txt
+./c-memory-safety-check.sh main.c -m Makefile -- input.txt output.txt
 ```
 
 ### ヘルプ表示
@@ -142,11 +146,16 @@ int main() {
 
 ```
 ============================================
- C言語 メモリ安全性チェックツール v1.1.0
+ C言語 メモリ安全性チェックツール v1.2.0
 ============================================
 
 チェック対象: test_memory.c
-インクルードパス: ./include ./lib  (指定した場合)
+Makefile: Makefile (指定した場合)
+
+[INFO] Makefileからコンパイルオプションを抽出中...
+[OK] Makefileからオプションを抽出しました
+[INFO]   CFLAGS: -Wall -O2
+[INFO]   INCLUDES: -I./include -I./lib
 
 ========================================
  環境チェック
@@ -281,7 +290,7 @@ int main() {
 
 ### AddressSanitizerでビルドエラーが発生する
 
-```
+```bash
 # GCCのバージョンを確認（4.8以降が必要）
 gcc --version
 
@@ -291,17 +300,22 @@ ldconfig -p | grep asan
 
 ### Valgrindで「Permission denied」エラー
 
-```
+```bash
 # 実行権限を確認
 chmod +x ./c-check-results/*_test
 ```
 
 ### 日本語が文字化けする
 
-```
+```bash
 # ロケールを設定
 export LANG=ja_JP.UTF-8
 ```
+
+### Makefileからオプションが抽出できない
+
+Makefileで使用している変数名が異なる場合があります。対応している変数名：
+- `CFLAGS`, `CPPFLAGS`, `INCLUDES`, `INCDIR`, `INC_PATH`, `INC`
 
 ## ライセンス
 

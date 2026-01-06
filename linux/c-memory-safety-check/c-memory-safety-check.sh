@@ -12,7 +12,7 @@
 #   4. Valgrindによるメモリリーク検出（インストールされている場合）
 #
 # 使用方法:
-#   ./c-memory-safety-check.sh <source.c> [テスト実行引数...]
+#   ./c-memory-safety-check.sh <source.c> [-m Makefile] [-- テスト引数...]
 #   ./c-memory-safety-check.sh --help
 #
 # 必須環境:
@@ -40,14 +40,18 @@ BOLD='\033[1m'
 #-------------------------------------------------------------------------------
 # グローバル変数
 #-------------------------------------------------------------------------------
-VERSION="1.1.0"
+VERSION="1.2.0"
 SCRIPT_NAME=$(basename "$0")
 SOURCE_FILE=""
+MAKEFILE=""
 TEST_ARGS=()
-INCLUDE_PATHS=()
 OUTPUT_DIR=""
 REPORT_FILE=""
 TEMP_BINARY=""
+
+# Makefileから抽出したオプション
+EXTRACTED_CFLAGS=""
+EXTRACTED_INCLUDES=""
 
 # チェック結果カウンター
 TOTAL_WARNINGS=0
@@ -63,7 +67,7 @@ show_help() {
 ${BOLD}C言語 メモリ安全性・デッドロジック チェックツール v${VERSION}${NC}
 
 ${BOLD}使用方法:${NC}
-  $SCRIPT_NAME <source.c> [-I <include_path>...] [-- テスト実行引数...]
+  $SCRIPT_NAME <source.c> [-m Makefile] [-- テスト実行引数...]
   $SCRIPT_NAME --help
 
 ${BOLD}説明:${NC}
@@ -86,7 +90,7 @@ ${BOLD}引数:${NC}
   source.c          チェック対象のCソースファイル
 
 ${BOLD}オプション:${NC}
-  -I <path>         インクルードパスを追加（複数指定可）
+  -m <Makefile>     Makefileからコンパイルオプションを抽出
   --                以降の引数をテスト実行時の引数として扱う
   --help, -h        このヘルプを表示
 
@@ -101,14 +105,14 @@ ${BOLD}例:${NC}
   # 基本的な使用方法
   $SCRIPT_NAME myprogram.c
 
-  # インクルードパスを指定
-  $SCRIPT_NAME main.c -I ./include -I ./lib
+  # Makefileからコンパイルオプションを抽出
+  $SCRIPT_NAME main.c -m Makefile
 
   # テスト実行時に引数を渡す
   $SCRIPT_NAME myprogram.c -- arg1 arg2
 
-  # インクルードパスとテスト引数の両方を指定
-  $SCRIPT_NAME main.c -I ./include -- input.txt
+  # Makefileとテスト引数の両方を指定
+  $SCRIPT_NAME main.c -m Makefile -- input.txt
 
 ${BOLD}出力:${NC}
   チェック結果は以下に保存されます:
@@ -141,6 +145,57 @@ log_section() {
     echo -e "${BOLD}${CYAN}========================================${NC}"
     echo -e "${BOLD}${CYAN} $1${NC}"
     echo -e "${BOLD}${CYAN}========================================${NC}"
+}
+
+#-------------------------------------------------------------------------------
+# Makefileからコンパイルオプションを抽出
+#-------------------------------------------------------------------------------
+extract_makefile_options() {
+    if [ -z "$MAKEFILE" ]; then
+        return
+    fi
+
+    if [ ! -f "$MAKEFILE" ]; then
+        log_error "Makefileが見つかりません: $MAKEFILE"
+        exit 1
+    fi
+
+    log_info "Makefileからコンパイルオプションを抽出中..."
+
+    local makefile_dir=$(dirname "$MAKEFILE")
+
+    # make -p でMakefileの変数を展開して取得
+    local make_output
+    make_output=$(make -p -f "$MAKEFILE" -C "$makefile_dir" 2>/dev/null | grep -E "^(CFLAGS|CPPFLAGS|INCLUDES|INCDIR|INC_PATH|INC) " || true)
+
+    # CFLAGSを抽出
+    EXTRACTED_CFLAGS=$(echo "$make_output" | grep "^CFLAGS" | head -1 | sed 's/^CFLAGS[[:space:]]*=[[:space:]]*//' || true)
+
+    # インクルードパス関連を抽出
+    local cppflags=$(echo "$make_output" | grep "^CPPFLAGS" | head -1 | sed 's/^CPPFLAGS[[:space:]]*=[[:space:]]*//' || true)
+    local includes=$(echo "$make_output" | grep "^INCLUDES" | head -1 | sed 's/^INCLUDES[[:space:]]*=[[:space:]]*//' || true)
+    local incdir=$(echo "$make_output" | grep "^INCDIR" | head -1 | sed 's/^INCDIR[[:space:]]*=[[:space:]]*//' || true)
+    local inc_path=$(echo "$make_output" | grep "^INC_PATH" | head -1 | sed 's/^INC_PATH[[:space:]]*=[[:space:]]*//' || true)
+    local inc=$(echo "$make_output" | grep "^INC " | head -1 | sed 's/^INC[[:space:]]*=[[:space:]]*//' || true)
+
+    # インクルードパスを結合
+    EXTRACTED_INCLUDES="$cppflags $includes $incdir $inc_path $inc"
+    EXTRACTED_INCLUDES=$(echo "$EXTRACTED_INCLUDES" | tr -s ' ')
+
+    # -Iオプションのみを抽出
+    EXTRACTED_INCLUDES=$(echo "$EXTRACTED_INCLUDES" | grep -oE '\-I[^ ]+' | tr '\n' ' ' || true)
+
+    if [ -n "$EXTRACTED_CFLAGS" ] || [ -n "$EXTRACTED_INCLUDES" ]; then
+        log_success "Makefileからオプションを抽出しました"
+        if [ -n "$EXTRACTED_CFLAGS" ]; then
+            log_info "  CFLAGS: $EXTRACTED_CFLAGS"
+        fi
+        if [ -n "$EXTRACTED_INCLUDES" ]; then
+            log_info "  INCLUDES: $EXTRACTED_INCLUDES"
+        fi
+    else
+        log_warning "Makefileからコンパイルオプションを抽出できませんでした"
+    fi
 }
 
 #-------------------------------------------------------------------------------
@@ -199,10 +254,18 @@ prepare_output_dir() {
 C言語 メモリ安全性・デッドロジック チェックレポート
 ================================================================================
 ソースファイル: $SOURCE_FILE
+Makefile: ${MAKEFILE:-なし}
 チェック日時: $(date '+%Y-%m-%d %H:%M:%S')
 ================================================================================
 
 EOF
+
+    if [ -n "$EXTRACTED_CFLAGS" ] || [ -n "$EXTRACTED_INCLUDES" ]; then
+        echo "抽出されたコンパイルオプション:" >> "$REPORT_FILE"
+        echo "  CFLAGS: $EXTRACTED_CFLAGS" >> "$REPORT_FILE"
+        echo "  INCLUDES: $EXTRACTED_INCLUDES" >> "$REPORT_FILE"
+        echo "" >> "$REPORT_FILE"
+    fi
 }
 
 #-------------------------------------------------------------------------------
@@ -217,12 +280,6 @@ run_gcc_warnings() {
 
     local gcc_output
     local gcc_exit_code
-
-    # インクルードパスオプションを構築
-    local include_opts=()
-    for path in "${INCLUDE_PATHS[@]}"; do
-        include_opts+=("-I" "$path")
-    done
 
     # 厳格な警告オプションでコンパイル
     gcc_output=$(gcc -Wall -Wextra -Wpedantic \
@@ -241,7 +298,7 @@ run_gcc_warnings() {
         -Wstrict-prototypes \
         -Wmissing-prototypes \
         -fsyntax-only \
-        "${include_opts[@]}" \
+        $EXTRACTED_CFLAGS $EXTRACTED_INCLUDES \
         "$SOURCE_FILE" 2>&1)
     gcc_exit_code=$?
 
@@ -293,18 +350,12 @@ run_cppcheck() {
 
     local cppcheck_output
 
-    # インクルードパスオプションを構築
-    local include_opts=()
-    for path in "${INCLUDE_PATHS[@]}"; do
-        include_opts+=("-I" "$path")
-    done
-
     # cppcheckで詳細な静的解析
     cppcheck_output=$(cppcheck --enable=all \
         --inconclusive \
         --force \
         --suppress=missingIncludeSystem \
-        "${include_opts[@]}" \
+        $EXTRACTED_INCLUDES \
         "$SOURCE_FILE" 2>&1)
 
     if echo "$cppcheck_output" | grep -q -E "(error|warning|style|performance|portability)"; then
@@ -343,17 +394,11 @@ run_address_sanitizer() {
     # AddressSanitizerでビルド
     log_info "AddressSanitizerでビルド中..."
 
-    # インクルードパスオプションを構築
-    local include_opts=()
-    for path in "${INCLUDE_PATHS[@]}"; do
-        include_opts+=("-I" "$path")
-    done
-
     local build_output
     build_output=$(gcc -fsanitize=address -fsanitize=undefined \
         -fno-omit-frame-pointer \
         -g -O1 \
-        "${include_opts[@]}" \
+        $EXTRACTED_CFLAGS $EXTRACTED_INCLUDES \
         -o "$TEMP_BINARY" \
         "$SOURCE_FILE" 2>&1)
 
@@ -376,7 +421,11 @@ run_address_sanitizer() {
     # ASANの出力を取得
     export ASAN_OPTIONS="detect_leaks=1:halt_on_error=0:print_stats=1"
 
-    asan_output=$("$TEMP_BINARY" "${TEST_ARGS[@]}" 2>&1) || true
+    if [ ${#TEST_ARGS[@]} -gt 0 ]; then
+        asan_output=$("$TEMP_BINARY" "${TEST_ARGS[@]}" 2>&1) || true
+    else
+        asan_output=$("$TEMP_BINARY" 2>&1) || true
+    fi
     asan_exit_code=$?
 
     if echo "$asan_output" | grep -q "ERROR: AddressSanitizer"; then
@@ -428,14 +477,8 @@ run_valgrind() {
     # デバッグ情報付きでビルド
     log_info "デバッグビルド中..."
 
-    # インクルードパスオプションを構築
-    local include_opts=()
-    for path in "${INCLUDE_PATHS[@]}"; do
-        include_opts+=("-I" "$path")
-    done
-
     local build_output
-    build_output=$(gcc -g -O0 "${include_opts[@]}" -o "$TEMP_BINARY" "$SOURCE_FILE" 2>&1)
+    build_output=$(gcc -g -O0 $EXTRACTED_CFLAGS $EXTRACTED_INCLUDES -o "$TEMP_BINARY" "$SOURCE_FILE" 2>&1)
 
     if [ $? -ne 0 ]; then
         log_error "ビルド失敗"
@@ -451,11 +494,19 @@ run_valgrind() {
     log_info "Valgrind実行中..."
 
     local valgrind_output
-    valgrind_output=$(valgrind --leak-check=full \
-        --show-leak-kinds=all \
-        --track-origins=yes \
-        --verbose \
-        "$TEMP_BINARY" "${TEST_ARGS[@]}" 2>&1)
+    if [ ${#TEST_ARGS[@]} -gt 0 ]; then
+        valgrind_output=$(valgrind --leak-check=full \
+            --show-leak-kinds=all \
+            --track-origins=yes \
+            --verbose \
+            "$TEMP_BINARY" "${TEST_ARGS[@]}" 2>&1)
+    else
+        valgrind_output=$(valgrind --leak-check=full \
+            --show-leak-kinds=all \
+            --track-origins=yes \
+            --verbose \
+            "$TEMP_BINARY" 2>&1)
+    fi
 
     # エラーサマリーを解析
     local error_summary=$(echo "$valgrind_output" | grep "ERROR SUMMARY")
@@ -568,21 +619,16 @@ main() {
     SOURCE_FILE="$1"
     shift
 
-    # -I オプションと -- 以降のテスト引数を解析
+    # オプションと -- 以降のテスト引数を解析
     while [ $# -gt 0 ]; do
         case "$1" in
-            -I)
+            -m)
                 if [ $# -lt 2 ]; then
-                    log_error "-I オプションにはパスが必要です"
+                    log_error "-m オプションにはMakefileパスが必要です"
                     exit 1
                 fi
-                INCLUDE_PATHS+=("$2")
+                MAKEFILE="$2"
                 shift 2
-                ;;
-            -I*)
-                # -I/path/to/include 形式
-                INCLUDE_PATHS+=("${1#-I}")
-                shift
                 ;;
             --)
                 shift
@@ -590,7 +636,7 @@ main() {
                 break
                 ;;
             *)
-                # -- がない場合は残りをテスト引数として扱う
+                # 不明なオプションはテスト引数として扱う
                 TEST_ARGS=("$@")
                 break
                 ;;
@@ -614,12 +660,15 @@ main() {
     echo -e "${BOLD}${CYAN}============================================${NC}"
     echo ""
     echo -e "${BOLD}チェック対象:${NC} $SOURCE_FILE"
-    if [ ${#INCLUDE_PATHS[@]} -gt 0 ]; then
-        echo -e "${BOLD}インクルードパス:${NC} ${INCLUDE_PATHS[*]}"
+    if [ -n "$MAKEFILE" ]; then
+        echo -e "${BOLD}Makefile:${NC} $MAKEFILE"
     fi
     if [ ${#TEST_ARGS[@]} -gt 0 ]; then
         echo -e "${BOLD}テスト引数:${NC} ${TEST_ARGS[*]}"
     fi
+
+    # Makefileからオプション抽出
+    extract_makefile_options
 
     # 環境チェック
     check_environment
