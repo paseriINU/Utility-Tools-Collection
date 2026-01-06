@@ -4321,6 +4321,7 @@
           階層構造解析関数
 
           しおりの親子関係を解析して階層レベルを設定
+          /Parent参照を追跡して正確な階層を計算
         ======================================================================
         */
         function analyzeHierarchy(content, bookmarks) {
@@ -4328,25 +4329,59 @@
             // || []: マッチがなければ空配列を返す
             const outlineItems = content.match(/\d+\s+\d+\s+obj[\s\S]*?\/Title[\s\S]*?endobj/g) || [];
 
+            // オブジェクト番号 → 親オブジェクト番号 のマップを構築
+            const parentMap = {};  // { objNum: parentObjNum }
+            const objNumToIndex = {};  // { objNum: bookmarkIndex }
+
+            outlineItems.forEach((item, index) => {
+                // オブジェクト番号を取得（例: "5 0 obj" → 5）
+                const objNumMatch = item.match(/^(\d+)\s+\d+\s+obj/);
+                if (objNumMatch) {
+                    const objNum = parseInt(objNumMatch[1]);
+                    objNumToIndex[objNum] = index;
+
+                    // /Parent の参照先を取得
+                    const parentMatch = item.match(/\/Parent\s+(\d+)\s+\d+\s+R/);
+                    if (parentMatch) {
+                        parentMap[objNum] = parseInt(parentMatch[1]);
+                    }
+                }
+            });
+
+            // ルートオブジェクト（/Outlines）を特定
+            // /Outlines を持つオブジェクトを探す
+            const outlinesMatch = content.match(/(\d+)\s+\d+\s+obj[\s\S]*?\/Type\s*\/Outlines[\s\S]*?endobj/);
+            const rootObjNum = outlinesMatch ? parseInt(outlinesMatch[1]) : null;
+
+            // 各しおりの階層レベルを計算（/Parent を辿ってルートまでの深さを数える）
+            function calculateLevel(objNum, visited = new Set()) {
+                // 循環参照防止
+                if (visited.has(objNum)) return 1;
+                visited.add(objNum);
+
+                const parentObjNum = parentMap[objNum];
+                if (!parentObjNum || parentObjNum === rootObjNum) {
+                    // 親がない、またはルートが親 → レベル1
+                    return 1;
+                }
+
+                // 親がしおり（/Title を持つオブジェクト）かどうか確認
+                if (objNumToIndex.hasOwnProperty(parentObjNum)) {
+                    // 親もしおり → 親のレベル + 1
+                    return Math.min(calculateLevel(parentObjNum, visited) + 1, 5);
+                }
+
+                // 親がルートアウトライン → レベル1
+                return 1;
+            }
+
+            // 各しおりにレベルを設定
             outlineItems.forEach((item, index) => {
                 if (index < bookmarks.length) {
-                    // /Parent, /First, /Prev の存在をチェック
-                    const parentMatch = item.match(/\/Parent\s+(\d+)/);
-                    const firstMatch = item.match(/\/First\s+(\d+)/);
-                    const prevMatch = item.match(/\/Prev\s+(\d+)/);
-
-                    // /Parent があり /First がない → 子要素または兄弟要素
-                    if (parentMatch && !firstMatch) {
-                        if (index > 0) {
-                            if (prevMatch) {
-                                // /Prev がある → 兄弟要素なので前のしおりと同じレベル
-                                bookmarks[index].level = bookmarks[index - 1].level;
-                            } else {
-                                // /Prev がない → 新しい子要素なので前のしおりより1レベル深く
-                                // Math.min(): 最大5レベルに制限
-                                bookmarks[index].level = Math.min(bookmarks[index - 1].level + 1, 5);
-                            }
-                        }
+                    const objNumMatch = item.match(/^(\d+)\s+\d+\s+obj/);
+                    if (objNumMatch) {
+                        const objNum = parseInt(objNumMatch[1]);
+                        bookmarks[index].level = calculateLevel(objNum);
                     }
                 }
             });
