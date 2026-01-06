@@ -554,11 +554,11 @@ if ($execIdList.Count -gt 0) {
                 $safeJobnetComment = $jobnetComment -replace '[\\/:*?"<>|]', '_'
 
                 # ファイル名を構築
-                # 形式: 【ジョブ実行結果】【yyyyMMdd_HHmmss】ジョブ名_コメント.txt
+                # 形式: 【ジョブ実行結果】【yyyyMMdd_HHmmss実行分】ジョブ名_コメント.txt
                 if ($startTimeForFileName -and $safeJobnetComment) {
-                    $outputFileName = "【ジョブ実行結果】【${startTimeForFileName}】${safeJobName}_${safeJobnetComment}.txt"
+                    $outputFileName = "【ジョブ実行結果】【${startTimeForFileName}実行分】${safeJobName}_${safeJobnetComment}.txt"
                 } elseif ($startTimeForFileName) {
-                    $outputFileName = "【ジョブ実行結果】【${startTimeForFileName}】${safeJobName}.txt"
+                    $outputFileName = "【ジョブ実行結果】【${startTimeForFileName}実行分】${safeJobName}.txt"
                 } elseif ($safeJobnetComment) {
                     $outputFileName = "【ジョブ実行結果】${safeJobName}_${safeJobnetComment}.txt"
                 } else {
