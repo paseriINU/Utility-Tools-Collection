@@ -33,14 +33,11 @@ rem === ここを編集してください（ジョブのパスを指定）===
 set "UNIT_PATH=/JobGroup/Jobnet/Job1"
 
 rem === ファイル名の設定 ===
-rem ファイル名形式: {ジョブネットコメント}（{日時}実行分）.txt
-rem 例: ジョブネットのコメントが"テスト"の場合 → "テスト（20251010_163520実行分）.txt"
+rem ファイル名形式: 【ジョブ実行結果】【{日時}実行分】{ジョブネット名}_{コメント}.txt
+rem 例: 【ジョブ実行結果】【20251010_163520実行分】Jobnet_テスト.txt
 rem
 rem ジョブネットコメントが取得できない場合に使用するデフォルト値
-set "DEFAULT_PREFIX=ジョブログ"
-
-rem ファイル名のサフィックス（日時の後に付ける文字列、拡張子の前）
-set "FILE_SUFFIX=実行分）"
+set "DEFAULT_COMMENT=NoComment"
 
 rem 一時ファイル名（後でジョブ開始日時を使用してリネーム）
 set "TEMP_FILE=%~dp0temp_output.txt"
@@ -153,6 +150,16 @@ for /f "tokens=1,* delims=:" %%a in ('type "%TEMP_FILE%" 2^>nul') do (
 )
 :GOT_START_TIME
 
+rem 一時ファイルから JOBNET_NAME: 行を取得してジョブネット名を抽出
+set "JOBNET_NAME="
+for /f "tokens=1,* delims=:" %%a in ('type "%TEMP_FILE%" 2^>nul') do (
+    if "%%a"=="JOBNET_NAME" (
+        set "JOBNET_NAME=%%b"
+        goto :GOT_JOBNET_NAME
+    )
+)
+:GOT_JOBNET_NAME
+
 rem 一時ファイルから JOBNET_COMMENT: 行を取得してジョブネットコメントを抽出
 set "JOBNET_COMMENT="
 for /f "tokens=1,* delims=:" %%a in ('type "%TEMP_FILE%" 2^>nul') do (
@@ -164,10 +171,10 @@ for /f "tokens=1,* delims=:" %%a in ('type "%TEMP_FILE%" 2^>nul') do (
 :GOT_JOBNET_COMMENT
 
 rem ジョブネットコメントが空の場合はデフォルト値を使用
-if "%JOBNET_COMMENT%"=="" set "JOBNET_COMMENT=%DEFAULT_PREFIX%"
+if "%JOBNET_COMMENT%"=="" set "JOBNET_COMMENT=%DEFAULT_COMMENT%"
 
-rem ファイル名のプレフィックスを設定（ジョブネットコメント＋開き括弧）
-set "FILE_PREFIX=%JOBNET_COMMENT%（"
+rem ジョブネット名が空の場合はデフォルト値を使用
+if "%JOBNET_NAME%"=="" set "JOBNET_NAME=UnknownJobnet"
 
 rem ジョブ開始日時が取得できなかった場合はエラー
 if "%JOB_START_TIME%"=="" (
@@ -199,15 +206,17 @@ if "%OLD_DATA_WARNING%"=="OLD" (
     pause >nul
 )
 
-rem 出力ファイル名をジョブ開始日時で作成（プレフィックス＋日時＋サフィックス）
-set "OUTPUT_FILE=%~dp0%FILE_PREFIX%%JOB_START_TIME%%FILE_SUFFIX%.txt"
+rem 出力ファイル名を新形式で作成
+rem 形式: 【ジョブ実行結果】【{日時}実行分】{ジョブネット名}_{コメント}.txt
+set "OUTPUT_FILE=%~dp0【ジョブ実行結果】【%JOB_START_TIME%実行分】%JOBNET_NAME%_%JOBNET_COMMENT%.txt"
 
-rem START_TIME:行とJOBNET_COMMENT:行を除いた実行結果詳細を出力ファイルに保存
+rem START_TIME:行、JOBNET_NAME:行、JOBNET_COMMENT:行を除いた実行結果詳細を出力ファイルに保存
 (for /f "usebackq tokens=* delims=" %%L in ("%TEMP_FILE%") do (
     set "LINE=%%L"
     setlocal enabledelayedexpansion
     set "SKIP="
     if "!LINE:~0,11!"=="START_TIME:" set "SKIP=1"
+    if "!LINE:~0,12!"=="JOBNET_NAME:" set "SKIP=1"
     if "!LINE:~0,15!"=="JOBNET_COMMENT:" set "SKIP=1"
     if not defined SKIP echo !LINE!
     endlocal
@@ -221,7 +230,8 @@ echo ================================================================
 echo   取得完了 - ファイルに保存しました
 echo ================================================================
 echo.
-echo ジョブネット:   %JOBNET_COMMENT%
+echo ジョブネット名: %JOBNET_NAME%
+echo コメント:       %JOBNET_COMMENT%
 echo ジョブ開始日時: %JOB_START_TIME%
 echo 出力ファイル:   %OUTPUT_FILE%
 echo.

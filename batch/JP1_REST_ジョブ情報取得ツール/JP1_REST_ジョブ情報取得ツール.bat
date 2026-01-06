@@ -526,17 +526,23 @@ if ($execIdList.Count -gt 0) {
             # all フラグのチェック（falseの場合は5MB超過で切り捨て）
             if ($resultJson.all -eq $false) { exit 5 }  # 5MB超過エラー
 
+            # 実行結果の内容を取得
+            $execResultContent = ""
+            if ($resultJson.execResultDetails) {
+                $execResultContent = $resultJson.execResultDetails
+            }
+
             # 開始日時を最初の行に出力（ファイル名用フォーマット）
-            # 呼び出し側でファイル名に使用可能
             [Console]::WriteLine("START_TIME:$startTimeForFileName")
+
+            # ジョブネット名を出力（ファイル名用）
+            [Console]::WriteLine("JOBNET_NAME:$jobnetName")
 
             # ジョブネットコメントを出力（ファイル名用）
             [Console]::WriteLine("JOBNET_COMMENT:$jobnetComment")
 
             # 実行結果詳細を出力
-            if ($resultJson.execResultDetails) {
-                [Console]::WriteLine($resultJson.execResultDetails)
-            }
+            [Console]::WriteLine($execResultContent)
         } catch {
             exit 6  # 詳細取得エラー
         }
