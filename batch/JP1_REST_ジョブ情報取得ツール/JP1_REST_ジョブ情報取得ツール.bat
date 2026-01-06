@@ -119,6 +119,18 @@ $jp1User = "jp1admin"
 # パスワードは平文で保存されます。本番環境では取り扱いに注意してください。
 $jp1Password = "password"
 
+# ------------------------------------------------------------------------------
+# 出力設定
+# ------------------------------------------------------------------------------
+# 実行結果をファイルに出力するかどうか
+# $true: ファイルに出力（ファイル名は自動生成）
+# $false: 標準出力のみ（従来動作）
+$outputToFile = $true
+
+# 出力先ディレクトリ（空欄の場合はスクリプトと同じディレクトリ）
+# 例: "C:\JP1\Output" や "D:\ジョブ結果"
+$outputDirectory = ""
+
 # ==============================================================================
 # ■ 検索条件設定セクション
 # ==============================================================================
@@ -526,16 +538,50 @@ if ($execIdList.Count -gt 0) {
             # all フラグのチェック（falseの場合は5MB超過で切り捨て）
             if ($resultJson.all -eq $false) { exit 5 }  # 5MB超過エラー
 
-            # 開始日時を最初の行に出力（ファイル名用フォーマット）
-            # 呼び出し側でファイル名に使用可能
-            [Console]::WriteLine("START_TIME:$startTimeForFileName")
-
-            # ジョブネットコメントを出力（ファイル名用）
-            [Console]::WriteLine("JOBNET_COMMENT:$jobnetComment")
-
-            # 実行結果詳細を出力
+            # 実行結果の内容を取得
+            $execResultContent = ""
             if ($resultJson.execResultDetails) {
-                [Console]::WriteLine($resultJson.execResultDetails)
+                $execResultContent = $resultJson.execResultDetails
+            }
+
+            # ファイル出力モードの場合
+            if ($outputToFile) {
+                # 出力先ディレクトリを決定
+                $outDir = if ($outputDirectory) { $outputDirectory } else { $scriptDir }
+
+                # ファイル名に使用できない文字を置換
+                $safeJobName = $jobName -replace '[\\/:*?"<>|]', '_'
+                $safeJobnetComment = $jobnetComment -replace '[\\/:*?"<>|]', '_'
+
+                # ファイル名を構築
+                # 形式: 【ジョブ実行結果】【yyyyMMdd_HHmmss】ジョブ名_コメント.txt
+                if ($startTimeForFileName -and $safeJobnetComment) {
+                    $outputFileName = "【ジョブ実行結果】【${startTimeForFileName}】${safeJobName}_${safeJobnetComment}.txt"
+                } elseif ($startTimeForFileName) {
+                    $outputFileName = "【ジョブ実行結果】【${startTimeForFileName}】${safeJobName}.txt"
+                } elseif ($safeJobnetComment) {
+                    $outputFileName = "【ジョブ実行結果】${safeJobName}_${safeJobnetComment}.txt"
+                } else {
+                    $outputFileName = "【ジョブ実行結果】${safeJobName}.txt"
+                }
+
+                $outputFilePath = Join-Path $outDir $outputFileName
+
+                # ファイルに書き込み（Shift-JIS）
+                $execResultContent | Out-File -FilePath $outputFilePath -Encoding Default -Force
+
+                # 出力ファイル名を標準出力に表示
+                [Console]::WriteLine("OUTPUT_FILE:$outputFilePath")
+            } else {
+                # 従来動作：標準出力のみ
+                # 開始日時を最初の行に出力（ファイル名用フォーマット）
+                [Console]::WriteLine("START_TIME:$startTimeForFileName")
+
+                # ジョブネットコメントを出力（ファイル名用）
+                [Console]::WriteLine("JOBNET_COMMENT:$jobnetComment")
+
+                # 実行結果詳細を出力
+                [Console]::WriteLine($execResultContent)
             }
         } catch {
             exit 6  # 詳細取得エラー

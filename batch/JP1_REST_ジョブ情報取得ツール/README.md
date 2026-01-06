@@ -95,8 +95,20 @@ type result.txt
 | `$schedulerService` | スケジューラーサービス名 | `AJSROOT1` |
 | `$jp1User` | JP1ユーザー名 | `jp1admin` |
 | `$jp1Password` | JP1パスワード | - |
+| `$outputToFile` | ファイル出力モード | `$true` |
+| `$outputDirectory` | 出力先ディレクトリ | （空欄=スクリプトと同じ場所） |
 | `$generation` | 世代指定 | `RESULT` |
 | `$statusFilter` | ステータスフィルタ | （空欄=全件） |
+
+### 出力モード（outputToFile）
+
+| 値 | 説明 |
+|----|------|
+| `$true` | ファイルに出力（自動ファイル名生成） |
+| `$false` | 標準出力のみ（従来動作） |
+
+**ファイル名形式**: `【ジョブ実行結果】【yyyyMMdd_HHmmss】ジョブ名_コメント.txt`
+- 例: `【ジョブ実行結果】【20250106_143028】Job1_テストジョブ.txt`
 
 ### 世代指定（generation）
 
@@ -141,6 +153,16 @@ type result.txt
 
 ## 出力形式
 
+### ファイル出力モード（$outputToFile = $true）※デフォルト
+
+- **文字コード**: Shift-JIS
+- **ファイル名**: `【ジョブ実行結果】【yyyyMMdd_HHmmss】ジョブ名_コメント.txt`
+  - 例: `【ジョブ実行結果】【20250106_143028】Job1_テストジョブ.txt`
+- **出力先**: `$outputDirectory` で指定（空欄の場合はスクリプトと同じディレクトリ）
+- **標準出力**: `OUTPUT_FILE:出力ファイルパス` を出力
+
+### 標準出力モード（$outputToFile = $false）
+
 - **文字コード**: Shift-JIS
 - **形式**:
   - 1行目: `START_TIME:yyyyMMdd_HHmmss`（ジョブ開始日時）
@@ -148,7 +170,13 @@ type result.txt
   - 3行目以降: 実行結果詳細のテキスト出力
 - **エラー時**: `ERROR:` で始まるメッセージを出力
 
-### 出力例
+### 出力例（ファイル出力モード）
+
+```
+OUTPUT_FILE:C:\JP1\Output\【ジョブ実行結果】【20250106_143028】Job1_テスト.txt
+```
+
+### 出力例（標準出力モード）
 
 ```
 START_TIME:20250105_153028
@@ -156,7 +184,7 @@ JOBNET_COMMENT:テスト
 （実行結果詳細の内容）
 ```
 
-### START_TIME/JOBNET_COMMENTの活用
+### START_TIME/JOBNET_COMMENTの活用（標準出力モード時）
 
 呼び出し側でジョブ開始日時とジョブネットコメントをファイル名に使用できます：
 
