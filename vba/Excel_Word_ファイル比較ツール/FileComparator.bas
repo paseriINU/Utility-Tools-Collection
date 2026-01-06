@@ -133,6 +133,36 @@ Private Function GetUseLCSMode() As Boolean
 End Function
 
 '==============================================================================
+' メインシートのスタイル比較チェックボックス状態を取得
+' True: スタイル比較する、False: スタイル比較しない
+'==============================================================================
+Private Function GetCheckStyleMode() As Boolean
+    Dim ws As Worksheet
+    Dim chkBox As CheckBox
+
+    On Error Resume Next
+
+    ' メインシートを取得
+    Set ws = ThisWorkbook.Worksheets("メイン")
+    If ws Is Nothing Then
+        GetCheckStyleMode = True  ' メインシートがない場合はスタイル比較する（デフォルト）
+        Exit Function
+    End If
+
+    ' チェックボックスを取得
+    Set chkBox = ws.CheckBoxes("chkCheckStyle")
+    If chkBox Is Nothing Then
+        GetCheckStyleMode = True  ' チェックボックスがない場合はスタイル比較する（デフォルト）
+        Exit Function
+    End If
+
+    ' チェック状態を返す
+    GetCheckStyleMode = (chkBox.Value = xlOn)
+
+    On Error GoTo 0
+End Function
+
+'==============================================================================
 ' Excel専用比較プロシージャ（ボタン用）
 '==============================================================================
 Public Sub CompareExcelFiles()
@@ -622,7 +652,7 @@ End Sub
 
 '==============================================================================
 ' 差分が検出された段落のみスタイル情報を取得（遅延評価）
-' また、テキスト一致段落のスタイル比較も実行
+' また、テキスト一致段落のスタイル比較も実行（チェックボックスがオンの場合のみ）
 '==============================================================================
 Private Sub FetchStylesForDifferences(ByRef doc1 As Object, ByRef doc2 As Object, _
                                        ByRef differences() As WordDifferenceInfo, ByRef diffCount As Long)
@@ -633,6 +663,21 @@ Private Sub FetchStylesForDifferences(ByRef doc1 As Object, ByRef doc2 As Object
     Dim oldStyle As String
     Dim newStyle As String
     Dim oldText As String
+    Dim checkStyleMode As Boolean
+
+    ' スタイル比較モードを取得
+    checkStyleMode = GetCheckStyleMode()
+
+    ' スタイル比較がオフの場合はスキップ
+    If Not checkStyleMode Then
+        Debug.Print "  スタイル比較: スキップ（チェックボックスがオフ）"
+        ' モジュールレベル変数をクリア
+        g_MatchedCount = 0
+        Erase g_MatchedOld
+        Erase g_MatchedNew
+        ClearProgress
+        Exit Sub
+    End If
 
     Dim totalStyleWork As Long
     totalStyleWork = diffCount + g_MatchedCount
