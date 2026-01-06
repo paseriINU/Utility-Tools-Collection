@@ -60,6 +60,11 @@ JP1_REST_ジョブ情報取得ツール.bat "/JobGroup/Jobnet"
 ```batch
 rem === ここを編集してください ===
 set "UNIT_PATH=/JobGroup/Jobnet/Job1"
+
+rem === スクロール位置の設定 ===
+rem メモ帳で開いた後、指定した文字列を検索してその位置にスクロールします
+rem 例: "エラー", "ERROR", "RC=", "異常終了" など
+set "SCROLL_TO_TEXT=エラー"
 ```
 
 2. ダブルクリックで実行
@@ -68,6 +73,7 @@ set "UNIT_PATH=/JobGroup/Jobnet/Job1"
    - ジョブネットコメントが空の場合は `DEFAULT_COMMENT` の値が使用されます
 4. ファイル名にジョブの実際の開始日時が使用されるため、履歴管理が容易です
 5. **警告機能**: ジョブ開始日時が2日以上前の場合、警告を表示して確認を求めます
+6. **スクロール機能**: `SCROLL_TO_TEXT` に文字列を設定すると、メモ帳で開いた後にその文字列を検索して自動スクロールします
 
 ### 他バッチからの呼び出し
 
@@ -97,6 +103,14 @@ type result.txt
 | `$jp1Password` | JP1パスワード | - |
 | `$generation` | 世代指定 | `RESULT` |
 | `$statusFilter` | ステータスフィルタ | （空欄=全件） |
+
+### サンプルバッチの設定項目
+
+| 設定項目 | 説明 | デフォルト値 |
+|---------|------|-------------|
+| `UNIT_PATH` | 取得対象のジョブパス | `/JobGroup/Jobnet/Job1` |
+| `SCROLL_TO_TEXT` | メモ帳で開いた後に検索・スクロールする文字列 | （空欄=スクロールなし） |
+| `DEFAULT_COMMENT` | ジョブネットコメントが空の場合のデフォルト値 | `NoComment` |
 
 ### 世代指定（generation）
 

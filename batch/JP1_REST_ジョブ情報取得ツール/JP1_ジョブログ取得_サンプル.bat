@@ -32,6 +32,12 @@ rem ============================================================================
 rem === ここを編集してください（ジョブのパスを指定）===
 set "UNIT_PATH=/JobGroup/Jobnet/Job1"
 
+rem === スクロール位置の設定 ===
+rem メモ帳で開いた後、指定した文字列を検索してその位置にスクロールします
+rem 空欄の場合はスクロールせずにファイル先頭を表示します
+rem 例: "エラー", "ERROR", "RC=", "異常終了" など
+set "SCROLL_TO_TEXT="
+
 rem === ファイル名の設定 ===
 rem ファイル名形式: 【ジョブ実行結果】【{日時}実行分】{ジョブネット名}_{コメント}.txt
 rem 例: 【ジョブ実行結果】【20251010_163520実行分】Jobnet_テスト.txt
@@ -238,6 +244,30 @@ echo.
 
 rem メモ帳で開く
 start notepad "%OUTPUT_FILE%"
+
+rem 検索文字列が指定されている場合、その位置にスクロール
+if not "%SCROLL_TO_TEXT%"=="" (
+    echo スクロール位置: %SCROLL_TO_TEXT%
+    echo.
+    rem PowerShellでSendKeysを使ってメモ帳の検索機能を操作
+    rem 注意: ウィンドウ名はファイル名で検索（日本語/英語環境両対応）
+    powershell -NoProfile -Command ^
+        "$searchText = '%SCROLL_TO_TEXT%';" ^
+        "Start-Sleep -Milliseconds 800;" ^
+        "$wshell = New-Object -ComObject WScript.Shell;" ^
+        "$activated = $wshell.AppActivate('メモ帳');" ^
+        "if (-not $activated) { $activated = $wshell.AppActivate('Notepad') };" ^
+        "if ($activated) {" ^
+        "  Start-Sleep -Milliseconds 100;" ^
+        "  $wshell.SendKeys('^f');" ^
+        "  Start-Sleep -Milliseconds 300;" ^
+        "  $wshell.SendKeys($searchText);" ^
+        "  Start-Sleep -Milliseconds 100;" ^
+        "  $wshell.SendKeys('{ENTER}');" ^
+        "  Start-Sleep -Milliseconds 100;" ^
+        "  $wshell.SendKeys('{ESCAPE}');" ^
+        "}"
+)
 
 popd
 exit /b 0
