@@ -63,8 +63,8 @@ set "UNIT_PATH=/JobGroup/Jobnet/Job1"
 ```
 
 2. ダブルクリックで実行
-3. 結果が `【ジョブ実行結果】【{日時}実行分】{ジョブ名}_{コメント}.txt` 形式で保存されます
-   - 例: `【ジョブ実行結果】【20251010_163520実行分】Job1_テスト.txt`
+3. 結果が `【ジョブ実行結果】【{日時}実行分】{ジョブネット名}_{コメント}.txt` 形式で保存されます
+   - 例: `【ジョブ実行結果】【20251010_163520実行分】Jobnet_テスト.txt`
    - ジョブネットコメントが空の場合は `DEFAULT_COMMENT` の値が使用されます
 4. ファイル名にジョブの実際の開始日時が使用されるため、履歴管理が容易です
 5. **警告機能**: ジョブ開始日時が2日以上前の場合、警告を表示して確認を求めます
@@ -146,14 +146,16 @@ type result.txt
 - **文字コード**: Shift-JIS
 - **形式**:
   - 1行目: `START_TIME:yyyyMMdd_HHmmss`（ジョブ開始日時）
-  - 2行目: `JOBNET_COMMENT:コメント`（親ジョブネットのコメント）
-  - 3行目以降: 実行結果詳細のテキスト出力
+  - 2行目: `JOBNET_NAME:ジョブネット名`（親ジョブネット名）
+  - 3行目: `JOBNET_COMMENT:コメント`（親ジョブネットのコメント）
+  - 4行目以降: 実行結果詳細のテキスト出力
 - **エラー時**: 終了コードで判定
 
 ### 出力例（メインツール）
 
 ```
 START_TIME:20250105_153028
+JOBNET_NAME:Jobnet
 JOBNET_COMMENT:テスト
 （実行結果詳細の内容）
 ```
@@ -161,20 +163,21 @@ JOBNET_COMMENT:テスト
 ### サンプルバッチ（ファイル保存）
 
 - **文字コード**: Shift-JIS
-- **ファイル名形式**: `【ジョブ実行結果】【yyyyMMdd_HHmmss実行分】ジョブ名_コメント.txt`
-  - 例: `【ジョブ実行結果】【20250106_143028実行分】Job1_テスト.txt`
+- **ファイル名形式**: `【ジョブ実行結果】【yyyyMMdd_HHmmss実行分】ジョブネット名_コメント.txt`
+  - 例: `【ジョブ実行結果】【20250106_143028実行分】Jobnet_テスト.txt`
 - **出力先**: サンプルバッチと同じディレクトリ
 
-### START_TIME/JOBNET_COMMENTの活用（他バッチからの呼び出し時）
+### START_TIME/JOBNET_NAME/JOBNET_COMMENTの活用（他バッチからの呼び出し時）
 
-呼び出し側でジョブ開始日時とジョブネットコメントをファイル名に使用できます：
+呼び出し側でジョブ開始日時、ジョブネット名、ジョブネットコメントをファイル名に使用できます：
 
 ```batch
 for /f "tokens=1,* delims=:" %%a in ('JP1_REST_ジョブ情報取得ツール.bat "/path"') do (
     if "%%a"=="START_TIME" set "JOB_START_TIME=%%b"
+    if "%%a"=="JOBNET_NAME" set "JOBNET_NAME=%%b"
     if "%%a"=="JOBNET_COMMENT" set "JOBNET_COMMENT=%%b"
 )
-echo ファイル名: %JOBNET_COMMENT%（%JOB_START_TIME%実行分）.txt
+echo ファイル名: 【ジョブ実行結果】【%JOB_START_TIME%実行分】%JOBNET_NAME%_%JOBNET_COMMENT%.txt
 ```
 
 ## 注意事項

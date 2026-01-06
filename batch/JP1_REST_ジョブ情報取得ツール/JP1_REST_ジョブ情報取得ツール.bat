@@ -535,6 +535,9 @@ if ($execIdList.Count -gt 0) {
             # 開始日時を最初の行に出力（ファイル名用フォーマット）
             [Console]::WriteLine("START_TIME:$startTimeForFileName")
 
+            # ジョブネット名を出力（ファイル名用）
+            [Console]::WriteLine("JOBNET_NAME:$jobnetName")
+
             # ジョブネットコメントを出力（ファイル名用）
             [Console]::WriteLine("JOBNET_COMMENT:$jobnetComment")
 
