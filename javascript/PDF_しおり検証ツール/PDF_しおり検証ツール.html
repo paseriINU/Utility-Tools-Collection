@@ -4330,16 +4330,22 @@
 
             outlineItems.forEach((item, index) => {
                 if (index < bookmarks.length) {
-                    // /Parent と /First の存在をチェック
+                    // /Parent, /First, /Prev の存在をチェック
                     const parentMatch = item.match(/\/Parent\s+(\d+)/);
                     const firstMatch = item.match(/\/First\s+(\d+)/);
+                    const prevMatch = item.match(/\/Prev\s+(\d+)/);
 
-                    // /Parent があり /First がない → 子要素の可能性
+                    // /Parent があり /First がない → 子要素または兄弟要素
                     if (parentMatch && !firstMatch) {
                         if (index > 0) {
-                            // 前のしおりより1レベル深く
-                            // Math.min(): 最大5レベルに制限
-                            bookmarks[index].level = Math.min(bookmarks[index - 1].level + 1, 5);
+                            if (prevMatch) {
+                                // /Prev がある → 兄弟要素なので前のしおりと同じレベル
+                                bookmarks[index].level = bookmarks[index - 1].level;
+                            } else {
+                                // /Prev がない → 新しい子要素なので前のしおりより1レベル深く
+                                // Math.min(): 最大5レベルに制限
+                                bookmarks[index].level = Math.min(bookmarks[index - 1].level + 1, 5);
+                            }
                         }
                     }
                 }
