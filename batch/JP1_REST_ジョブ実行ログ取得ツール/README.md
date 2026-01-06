@@ -115,8 +115,24 @@ type result.txt
 | `$useHttps` | HTTPS使用フラグ | `$false` |
 | `$managerHost` | JP1/AJS3 Managerのホスト名 | `localhost` |
 | `$schedulerService` | スケジューラーサービス名 | `AJSROOT1` |
-| `$jp1User` | JP1ユーザー名 | `jp1admin` |
-| `$jp1Password` | JP1パスワード | - |
+| `$jp1User` | JP1ユーザー名（空欄で資格情報マネージャー使用） | `""`（空欄） |
+| `$jp1Password` | JP1パスワード（空欄で資格情報マネージャー使用） | `""`（空欄） |
+| `$credentialTarget` | 資格情報マネージャーのターゲット名 | `JP1_WebConsole` |
+
+### 認証方法（優先順位）
+
+1. **スクリプト内に直接記載** → そのまま使用
+2. **空欄** → Windows資格情報マネージャーから取得
+3. **資格情報なし** → 実行時に入力プロンプト表示
+
+### Windows資格情報マネージャーの登録方法
+
+コマンドプロンプトで以下を実行：
+```batch
+cmdkey /generic:JP1_WebConsole /user:jp1admin /pass:yourpassword
+```
+
+または「資格情報マネージャー」（コントロールパネル）からGUIで登録できます。
 
 ### 実行設定
 

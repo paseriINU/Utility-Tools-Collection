@@ -112,12 +112,19 @@ $schedulerService = "AJSROOT1"
 # ------------------------------------------------------------------------------
 # JP1ユーザー名を指定します。
 # このユーザーには、対象ユニットへの参照権限が必要です。
-$jp1User = "jp1admin"
+# ★ 空欄の場合は資格情報マネージャーから取得します
+$jp1User = ""
 
 # JP1パスワードを指定します。
-# ★★★ セキュリティ注意 ★★★
-# パスワードは平文で保存されます。本番環境では取り扱いに注意してください。
-$jp1Password = "password"
+# ★ 空欄の場合は資格情報マネージャー → 入力プロンプトの順で取得します
+# ★ セキュリティのため、空欄にしてWindows資格情報マネージャーの使用を推奨
+$jp1Password = ""
+
+# Windows資格情報マネージャーのターゲット名
+# 事前に以下のコマンドで登録してください:
+#   cmdkey /generic:JP1_WebConsole /user:jp1admin /pass:yourpassword
+# または「資格情報マネージャー」（コントロールパネル）からGUIで登録
+$credentialTarget = "JP1_WebConsole"
 
 # ==============================================================================
 # ■ 検索条件設定セクション
@@ -238,6 +245,66 @@ $unitPath = $env:JP1_UNIT_PATH
 # ------------------------------------------------------------------------------
 # HTTPS使用フラグに基づいて、接続プロトコルを決定します
 $protocol = if ($useHttps) { "https" } else { "http" }
+
+# ------------------------------------------------------------------------------
+# Windows資格情報マネージャーからの認証情報取得
+# ------------------------------------------------------------------------------
+# ユーザー名またはパスワードが空の場合、資格情報マネージャーから取得を試みます
+
+if (-not $jp1User -or -not $jp1Password) {
+    # Windows API (CredRead) を使用して資格情報を取得
+    Add-Type -TypeDefinition @"
+        using System;
+        using System.Runtime.InteropServices;
+        public class CredManager {
+            [DllImport("advapi32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+            public static extern bool CredRead(string target, int type, int reservedFlag, out IntPtr credentialPtr);
+            [DllImport("advapi32.dll", SetLastError = true)]
+            public static extern bool CredFree(IntPtr credential);
+            [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+            public struct CREDENTIAL {
+                public int Flags;
+                public int Type;
+                public string TargetName;
+                public string Comment;
+                public System.Runtime.InteropServices.ComTypes.FILETIME LastWritten;
+                public int CredentialBlobSize;
+                public IntPtr CredentialBlob;
+                public int Persist;
+                public int AttributeCount;
+                public IntPtr Attributes;
+                public string TargetAlias;
+                public string UserName;
+            }
+            public static string[] GetCredential(string target) {
+                IntPtr credPtr;
+                if (CredRead(target, 1, 0, out credPtr)) {
+                    CREDENTIAL cred = (CREDENTIAL)Marshal.PtrToStructure(credPtr, typeof(CREDENTIAL));
+                    string password = cred.CredentialBlobSize > 0 ? Marshal.PtrToStringUni(cred.CredentialBlob, cred.CredentialBlobSize / 2) : "";
+                    string userName = cred.UserName ?? "";
+                    CredFree(credPtr);
+                    return new string[] { userName, password };
+                }
+                return null;
+            }
+        }
+"@
+    $storedCred = [CredManager]::GetCredential($credentialTarget)
+    if ($storedCred) {
+        if (-not $jp1User) { $jp1User = $storedCred[0] }
+        if (-not $jp1Password) { $jp1Password = $storedCred[1] }
+    }
+}
+
+# それでもパスワードが空の場合は入力プロンプトを表示
+if (-not $jp1User) {
+    $jp1User = Read-Host "JP1ユーザー名を入力してください"
+}
+if (-not $jp1Password) {
+    $securePass = Read-Host "JP1パスワードを入力してください" -AsSecureString
+    $jp1Password = [Runtime.InteropServices.Marshal]::PtrToStringAuto(
+        [Runtime.InteropServices.Marshal]::SecureStringToBSTR($securePass))
+}
 
 # ------------------------------------------------------------------------------
 # 認証情報の作成
