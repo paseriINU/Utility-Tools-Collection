@@ -83,10 +83,29 @@ sudo ln -s $(pwd)/linux/c-memory-safety-check/c-memory-safety-check.sh /usr/loca
 ./c-memory-safety-check.sh <source.c>
 ```
 
+### インクルードパスを指定
+
+別ディレクトリのヘッダーファイルを参照する場合：
+
+```bash
+# 単一のインクルードパス
+./c-memory-safety-check.sh main.c -I ./include
+
+# 複数のインクルードパス
+./c-memory-safety-check.sh main.c -I ./include -I ./lib -I ../common
+```
+
 ### テスト実行時に引数を渡す
 
 ```bash
-./c-memory-safety-check.sh myprogram.c arg1 arg2
+# -- 以降がテスト実行時の引数になります
+./c-memory-safety-check.sh myprogram.c -- arg1 arg2
+```
+
+### インクルードパスとテスト引数の両方を指定
+
+```bash
+./c-memory-safety-check.sh main.c -I ./include -- input.txt output.txt
 ```
 
 ### ヘルプ表示
@@ -123,10 +142,11 @@ int main() {
 
 ```
 ============================================
- C言語 メモリ安全性チェックツール v1.0.0
+ C言語 メモリ安全性チェックツール v1.1.0
 ============================================
 
 チェック対象: test_memory.c
+インクルードパス: ./include ./lib  (指定した場合)
 
 ========================================
  環境チェック

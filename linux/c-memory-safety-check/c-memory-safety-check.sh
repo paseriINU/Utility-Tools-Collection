@@ -40,10 +40,11 @@ BOLD='\033[1m'
 #-------------------------------------------------------------------------------
 # グローバル変数
 #-------------------------------------------------------------------------------
-VERSION="1.0.0"
+VERSION="1.1.0"
 SCRIPT_NAME=$(basename "$0")
 SOURCE_FILE=""
 TEST_ARGS=()
+INCLUDE_PATHS=()
 OUTPUT_DIR=""
 REPORT_FILE=""
 TEMP_BINARY=""
@@ -62,7 +63,7 @@ show_help() {
 ${BOLD}C言語 メモリ安全性・デッドロジック チェックツール v${VERSION}${NC}
 
 ${BOLD}使用方法:${NC}
-  $SCRIPT_NAME <source.c> [テスト実行引数...]
+  $SCRIPT_NAME <source.c> [-I <include_path>...] [-- テスト実行引数...]
   $SCRIPT_NAME --help
 
 ${BOLD}説明:${NC}
@@ -83,9 +84,10 @@ ${BOLD}チェック項目:${NC}
 
 ${BOLD}引数:${NC}
   source.c          チェック対象のCソースファイル
-  テスト実行引数    動的チェック時にプログラムに渡す引数（オプション）
 
 ${BOLD}オプション:${NC}
+  -I <path>         インクルードパスを追加（複数指定可）
+  --                以降の引数をテスト実行時の引数として扱う
   --help, -h        このヘルプを表示
 
 ${BOLD}必須環境:${NC}
@@ -99,11 +101,14 @@ ${BOLD}例:${NC}
   # 基本的な使用方法
   $SCRIPT_NAME myprogram.c
 
-  # テスト実行時に引数を渡す
-  $SCRIPT_NAME myprogram.c arg1 arg2
+  # インクルードパスを指定
+  $SCRIPT_NAME main.c -I ./include -I ./lib
 
-  # 複数ファイルプロジェクト（メインファイルを指定）
-  $SCRIPT_NAME main.c
+  # テスト実行時に引数を渡す
+  $SCRIPT_NAME myprogram.c -- arg1 arg2
+
+  # インクルードパスとテスト引数の両方を指定
+  $SCRIPT_NAME main.c -I ./include -- input.txt
 
 ${BOLD}出力:${NC}
   チェック結果は以下に保存されます:
@@ -213,6 +218,12 @@ run_gcc_warnings() {
     local gcc_output
     local gcc_exit_code
 
+    # インクルードパスオプションを構築
+    local include_opts=()
+    for path in "${INCLUDE_PATHS[@]}"; do
+        include_opts+=("-I" "$path")
+    done
+
     # 厳格な警告オプションでコンパイル
     gcc_output=$(gcc -Wall -Wextra -Wpedantic \
         -Wuninitialized -Wmaybe-uninitialized \
@@ -230,6 +241,7 @@ run_gcc_warnings() {
         -Wstrict-prototypes \
         -Wmissing-prototypes \
         -fsyntax-only \
+        "${include_opts[@]}" \
         "$SOURCE_FILE" 2>&1)
     gcc_exit_code=$?
 
@@ -281,11 +293,18 @@ run_cppcheck() {
 
     local cppcheck_output
 
+    # インクルードパスオプションを構築
+    local include_opts=()
+    for path in "${INCLUDE_PATHS[@]}"; do
+        include_opts+=("-I" "$path")
+    done
+
     # cppcheckで詳細な静的解析
     cppcheck_output=$(cppcheck --enable=all \
         --inconclusive \
         --force \
         --suppress=missingIncludeSystem \
+        "${include_opts[@]}" \
         "$SOURCE_FILE" 2>&1)
 
     if echo "$cppcheck_output" | grep -q -E "(error|warning|style|performance|portability)"; then
@@ -324,10 +343,17 @@ run_address_sanitizer() {
     # AddressSanitizerでビルド
     log_info "AddressSanitizerでビルド中..."
 
+    # インクルードパスオプションを構築
+    local include_opts=()
+    for path in "${INCLUDE_PATHS[@]}"; do
+        include_opts+=("-I" "$path")
+    done
+
     local build_output
     build_output=$(gcc -fsanitize=address -fsanitize=undefined \
         -fno-omit-frame-pointer \
         -g -O1 \
+        "${include_opts[@]}" \
         -o "$TEMP_BINARY" \
         "$SOURCE_FILE" 2>&1)
 
@@ -402,8 +428,14 @@ run_valgrind() {
     # デバッグ情報付きでビルド
     log_info "デバッグビルド中..."
 
+    # インクルードパスオプションを構築
+    local include_opts=()
+    for path in "${INCLUDE_PATHS[@]}"; do
+        include_opts+=("-I" "$path")
+    done
+
     local build_output
-    build_output=$(gcc -g -O0 -o "$TEMP_BINARY" "$SOURCE_FILE" 2>&1)
+    build_output=$(gcc -g -O0 "${include_opts[@]}" -o "$TEMP_BINARY" "$SOURCE_FILE" 2>&1)
 
     if [ $? -ne 0 ]; then
         log_error "ビルド失敗"
@@ -535,7 +567,35 @@ main() {
     # 引数解析
     SOURCE_FILE="$1"
     shift
-    TEST_ARGS=("$@")
+
+    # -I オプションと -- 以降のテスト引数を解析
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            -I)
+                if [ $# -lt 2 ]; then
+                    log_error "-I オプションにはパスが必要です"
+                    exit 1
+                fi
+                INCLUDE_PATHS+=("$2")
+                shift 2
+                ;;
+            -I*)
+                # -I/path/to/include 形式
+                INCLUDE_PATHS+=("${1#-I}")
+                shift
+                ;;
+            --)
+                shift
+                TEST_ARGS=("$@")
+                break
+                ;;
+            *)
+                # -- がない場合は残りをテスト引数として扱う
+                TEST_ARGS=("$@")
+                break
+                ;;
+        esac
+    done
 
     # ソースファイル存在チェック
     if [ ! -f "$SOURCE_FILE" ]; then
@@ -554,6 +614,9 @@ main() {
     echo -e "${BOLD}${CYAN}============================================${NC}"
     echo ""
     echo -e "${BOLD}チェック対象:${NC} $SOURCE_FILE"
+    if [ ${#INCLUDE_PATHS[@]} -gt 0 ]; then
+        echo -e "${BOLD}インクルードパス:${NC} ${INCLUDE_PATHS[*]}"
+    fi
     if [ ${#TEST_ARGS[@]} -gt 0 ]; then
         echo -e "${BOLD}テスト引数:${NC} ${TEST_ARGS[*]}"
     fi
