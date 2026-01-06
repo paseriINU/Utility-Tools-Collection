@@ -34,32 +34,36 @@ exit /b %EXITCODE%
 : #>
 
 # ==============================================================================
-# JP1 REST API ジョブ情報取得ツール
+# JP1 REST API ジョブ実行ログ取得ツール
 #
 # 説明:
-#   JP1/AJS3 Web Console REST APIを使用して、ジョブ/ジョブネットの
-#   実行結果詳細を取得します。
+#   JP1/AJS3 Web Console REST APIを使用して、ジョブネットを即時実行し、
+#   完了後にジョブの実行結果詳細を取得します。
 #   ※ JP1/AJS3 - Web Consoleが必要です
 #
 # 使い方:
 #   ジョブのパスを指定して実行します:
-#     JP1_REST_ジョブ情報取得ツール.bat "/JobGroup/Jobnet/Job1"
+#     JP1_REST_ジョブ実行ログ取得ツール.bat "/JobGroup/Jobnet/Job1"
 #
-#   ※ 親パス（ジョブネット）を検索対象とし、ジョブ名でフィルタします
+#   ※ ルートジョブネットを自動特定して即時実行し、指定ジョブの完了を待ちます
 #
 # 処理フロー:
 #   STEP 1: DEFINITION で存在確認・ユニット種別確認
-#   STEP 2: DEFINITION_AND_STATUS で execID 取得
-#   STEP 3: 実行結果詳細取得
+#   STEP 2: ルートジョブネットを特定
+#   STEP 3: 即時実行登録API でルートジョブネットを実行
+#   STEP 4: 状態監視（指定ジョブの完了待ち）
+#   STEP 5: 実行結果詳細取得
 #
 # 終了コード（実行順）:
 #   0: 正常終了
 #   1: 引数エラー（ユニットパスが指定されていません）
 #   2: ユニット未検出（STEP 1: 指定したユニットが存在しません）
 #   3: ユニット種別エラー（STEP 1: 指定したユニットがジョブではありません）
-#   4: 実行世代なし（STEP 2: 実行履歴が存在しません）
-#   5: 5MB超過エラー（STEP 3: 実行結果が切り捨てられました）
-#   6: 詳細取得エラー（STEP 3: 実行結果詳細の取得に失敗）
+#   4: ルートジョブネット特定エラー（STEP 2）
+#   5: 即時実行登録エラー（STEP 3: API呼び出し失敗）
+#   6: タイムアウト（STEP 4: 指定時間内に完了しませんでした）
+#   7: 5MB超過エラー（STEP 5: 実行結果が切り捨てられました）
+#   8: 詳細取得エラー（STEP 5: 実行結果詳細の取得に失敗）
 #   9: API接続エラー（各STEPでの接続失敗）
 #
 # 参考:
@@ -111,7 +115,7 @@ $schedulerService = "AJSROOT1"
 # 認証設定
 # ------------------------------------------------------------------------------
 # JP1ユーザー名を指定します。
-# このユーザーには、対象ユニットへの参照権限が必要です。
+# このユーザーには、対象ユニットへの参照権限と実行権限が必要です。
 # ★ 空欄の場合は資格情報マネージャーから取得します
 $jp1User = ""
 
@@ -127,108 +131,19 @@ $jp1Password = ""
 $credentialTarget = "JP1_WebConsole"
 
 # ==============================================================================
-# ■ 検索条件設定セクション
+# ■ 実行設定セクション
 # ==============================================================================
-# このセクションでは、ユニット一覧取得APIの検索条件を設定します。
 
 # ------------------------------------------------------------------------------
-# (1) GenerationType - 世代指定
+# タイムアウト設定
 # ------------------------------------------------------------------------------
-# 取得するユニットの世代を指定します。
-#
-# 指定可能な値:
-#   "NO"     - 世代を検索条件にしません
-#   "STATUS" - 最新状態の世代を取得します
-#              （VIEWSTATUSRANGEの設定値に従う）
-#   "RESULT" - 最新結果の世代を取得します（★推奨★）
-#              （終了済みジョブの直近終了世代を取得）
-#   "PERIOD" - 指定した期間に存在する世代を取得します
-#              （periodBegin/periodEnd の設定が必要）
-#   "EXECID" - 指定した実行IDの世代を取得します
-#              （execID パラメータの設定が必要）
-#
-# ★ 通常は "RESULT" を使用することで、終了済みジョブの結果を取得できます
-$generation = "RESULT"
+# ジョブ完了待ちのタイムアウト時間（秒）
+# ★ デフォルト: 3600秒（60分）
+$timeoutSeconds = 3600
 
-# 期間指定（generation="PERIOD" の場合に使用）
-# 形式: YYYY-MM-DDThh:mm（ISO 8601形式）
-# 例: "2025-01-01T00:00" ～ "2025-01-31T23:59"
-$periodBegin = "2025-12-01T00:00"
-$periodEnd = "2025-12-25T23:59"
-
-# 実行ID指定（generation="EXECID" の場合に使用）
-# 形式: @[mmmm]{A～Z}nnnn（例: @A100, @10A200）
-$execID = ""
-
-# ------------------------------------------------------------------------------
-# (2) UnitStatus - ユニット状態フィルタ
-# ------------------------------------------------------------------------------
-# 取得するユニットの状態を指定します。
-#
-# 【個別状態】
-#   "NO"             - ユニット状態を検索条件にしません（すべて取得）
-#   "UNREGISTERED"   - 未登録
-#   "NOPLAN"         - 未計画
-#   "UNEXEC"         - 未実行終了
-#   "BYPASS"         - 計画未実行
-#   "EXECDEFFER"     - 繰越未実行
-#   "SHUTDOWN"       - 閉塞
-#   "TIMEWAIT"       - 開始時刻待ち
-#   "TERMWAIT"       - 先行終了待ち
-#   "EXECWAIT"       - 実行待ち
-#   "QUEUING"        - キューイング
-#   "CONDITIONWAIT"  - 起動条件待ち
-#   "HOLDING"        - 保留中
-#   "RUNNING"        - 実行中
-#   "WACONT"         - 警告検出実行中
-#   "ABCONT"         - 異常検出実行中
-#   "MONITORING"     - 監視中
-#   "ABNORMAL"       - 異常検出終了（★エラー調査時に便利★）
-#   "INVALIDSEQ"     - 順序不正
-#   "INTERRUPT"      - 中断
-#   "KILL"           - 強制終了
-#   "FAIL"           - 起動失敗
-#   "UNKNOWN"        - 終了状態不正
-#   "MONITORCLOSE"   - 監視打ち切り終了
-#   "WARNING"        - 警告検出終了
-#   "NORMAL"         - 正常終了
-#   "NORMALFALSE"    - 正常終了-偽
-#   "UNEXECMONITOR"  - 監視未起動終了
-#   "MONITORINTRPT"  - 監視中断
-#   "MONITORNORMAL"  - 監視正常終了
-#
-# 【グループ状態】（複数の状態をまとめて指定）
-#   "GRP_WAIT"     - 待ち状態（開始時刻待ち、先行終了待ち、実行待ち、キューイング、起動条件待ち）
-#   "GRP_RUN"      - 実行中状態（実行中、警告検出実行中、異常検出実行中、監視中）
-#   "GRP_ABNORMAL" - 異常終了状態（異常検出終了、順序不正、中断、強制終了、起動失敗、終了状態不明、監視打ち切り終了）
-#   "GRP_NORMAL"   - 正常終了状態（正常終了、正常終了-偽、監視未起動終了、監視中断、監視正常終了）
-#
-# ★ 空欄または "NO" で全件取得
-# ★ エラー調査時は "ABNORMAL" や "GRP_ABNORMAL" が便利
-$statusFilter = "NO"
-
-# ------------------------------------------------------------------------------
-# (3) DelayType - 遅延状態フィルタ
-# ------------------------------------------------------------------------------
-# 開始遅延または終了遅延の有無でフィルタします。
-#
-# 指定可能な値:
-#   "NO"    - 遅延状態を検索条件にしません（すべて取得）
-#   "START" - 開始遅延のあるユニットのみ取得
-#   "END"   - 終了遅延のあるユニットのみ取得
-#   "YES"   - 開始遅延または終了遅延のあるユニットを取得
-$delayStatus = "NO"
-
-# ------------------------------------------------------------------------------
-# (4) HoldPlan - 保留予定フィルタ
-# ------------------------------------------------------------------------------
-# 保留予定の有無でフィルタします。
-#
-# 指定可能な値:
-#   "NO"        - 保留予定を検索条件にしません（すべて取得）
-#   "PLAN_NONE" - 保留予定のないユニットのみ取得
-#   "PLAN_YES"  - 保留予定のあるユニットのみ取得
-$holdPlan = "NO"
+# ステータス確認間隔（秒）
+# ★ デフォルト: 5秒
+$pollIntervalSeconds = 5
 
 # ==============================================================================
 # ■ メイン処理（以下は通常編集不要）
@@ -392,6 +307,7 @@ $defUrl += "&unitNameMatchMethods=EQ"
 
 $unitTypeValue = $null
 $unitFullName = $null
+$rootJobnetName = $null
 $jobnetComment = ""
 
 try {
@@ -411,6 +327,7 @@ try {
     $defUnit = $defJson.statuses[0]
     $unitFullName = $defUnit.definition.unitName
     $unitTypeValue = $defUnit.definition.unitType
+    $rootJobnetName = $defUnit.definition.rootJobnetName
 
     # ユニット種別確認（JOB系かどうか）
     # JOB系: JOB, PJOB, QJOB, EVWJB, FLWJB, MLWJB, MSWJB, LFWJB, TMWJB,
@@ -424,7 +341,16 @@ try {
 }
 
 # ==============================================================================
-# STEP 1.5: 親ジョブネットのコメント取得
+# STEP 2: ルートジョブネット特定
+# ==============================================================================
+# STEP 1で取得した rootJobnetName を使用してルートジョブネットを特定します。
+
+if (-not $rootJobnetName) {
+    exit 4  # ルートジョブネット特定エラー
+}
+
+# ==============================================================================
+# STEP 2.5: 親ジョブネットのコメント取得
 # ==============================================================================
 # 親ジョブネットの定義を取得し、コメント（cm属性）を取得します。
 
@@ -462,9 +388,41 @@ try {
 }
 
 # ==============================================================================
-# STEP 2: 実行状態・execID取得（DEFINITION_AND_STATUS）
+# STEP 3: 即時実行登録API
 # ==============================================================================
-# 存在確認・種別確認が成功したら、DEFINITION_AND_STATUS で execID を取得します。
+# ルートジョブネットを即時実行します。
+# API: POST /ajs/api/v1/objects/definitions/{unitName}/actions/registerImmediateExec/invoke
+
+$encodedRootJobnet = [System.Uri]::EscapeDataString($rootJobnetName)
+
+$execUrl = "${baseUrl}/objects/definitions/${encodedRootJobnet}/actions/registerImmediateExec/invoke"
+$execUrl += "?manager=${managerHost}&serviceName=${schedulerService}"
+
+$execIdFromRegister = $null
+
+try {
+    $execResponse = Invoke-WebRequest -Uri $execUrl -Method POST -Headers $headers -TimeoutSec 30 -UseBasicParsing
+
+    # UTF-8文字化け対策
+    $execBytes = $execResponse.RawContentStream.ToArray()
+    $execText = [System.Text.Encoding]::UTF8.GetString($execBytes)
+    $execJson = $execText | ConvertFrom-Json
+
+    # execIDを取得
+    $execIdFromRegister = $execJson.execID
+
+    if (-not $execIdFromRegister) {
+        exit 5  # 即時実行登録エラー（execIDが取得できない）
+    }
+
+} catch {
+    exit 5  # 即時実行登録エラー
+}
+
+# ==============================================================================
+# STEP 4: 状態監視（指定ジョブの完了待ち）
+# ==============================================================================
+# 指定したジョブの状態を監視し、終了を待ちます。
 
 $statusUrl = "${baseUrl}/objects/statuses?mode=search"
 $statusUrl += "&manager=${managerHost}"
@@ -474,146 +432,119 @@ $statusUrl += "&searchLowerUnits=NO"
 $statusUrl += "&searchTarget=DEFINITION_AND_STATUS"
 $statusUrl += "&unitName=${encodedJobName}"
 $statusUrl += "&unitNameMatchMethods=EQ"
+$statusUrl += "&generation=EXECID"
+$statusUrl += "&execID=${execIdFromRegister}"
 
-# 世代指定
-$statusUrl += "&generation=${generation}"
+$startTime = Get-Date
+$endTime = $startTime.AddSeconds($timeoutSeconds)
+$jobStatus = $null
+$jobExecId = $null
+$jobStartTime = $null
 
-# 期間指定（generation=PERIOD の場合）
-if ($generation -eq "PERIOD") {
-    $statusUrl += "&periodBegin=${periodBegin}"
-    $statusUrl += "&periodEnd=${periodEnd}"
-}
+# 終了状態の定義
+$finishedStatuses = @(
+    "NORMAL", "NORMALFALSE", "WARNING", "ABNORMAL",
+    "INTERRUPT", "KILL", "FAIL", "UNKNOWN",
+    "MONITORCLOSE", "UNEXECMONITOR", "MONITORINTRPT", "MONITORNORMAL",
+    "UNEXEC", "BYPASS", "EXECDEFFER", "INVALIDSEQ", "SHUTDOWN"
+)
 
-# 実行ID指定（generation=EXECID の場合）
-if ($generation -eq "EXECID" -and $execID) {
-    $statusUrl += "&execID=${execID}"
-}
+while ((Get-Date) -lt $endTime) {
+    try {
+        $pollResponse = Invoke-WebRequest -Uri $statusUrl -Method GET -Headers $headers -TimeoutSec 30 -UseBasicParsing
 
-# ステータスフィルタ
-if ($statusFilter -and $statusFilter -ne "NO") {
-    $statusUrl += "&status=${statusFilter}"
-}
+        # UTF-8文字化け対策
+        $pollBytes = $pollResponse.RawContentStream.ToArray()
+        $pollText = [System.Text.Encoding]::UTF8.GetString($pollBytes)
+        $pollJson = $pollText | ConvertFrom-Json
 
-# 遅延状態フィルタ
-if ($delayStatus -and $delayStatus -ne "NO") {
-    $statusUrl += "&delayStatus=${delayStatus}"
-}
-
-# 保留予定フィルタ
-if ($holdPlan -and $holdPlan -ne "NO") {
-    $statusUrl += "&holdPlan=${holdPlan}"
-}
-
-$execIdList = @()
-
-try {
-    $response = Invoke-WebRequest -Uri $statusUrl -Method GET -Headers $headers -TimeoutSec 30 -UseBasicParsing
-
-    # UTF-8文字化け対策
-    $responseBytes = $response.RawContentStream.ToArray()
-    $responseText = [System.Text.Encoding]::UTF8.GetString($responseBytes)
-    $jsonData = $responseText | ConvertFrom-Json
-
-    # レスポンスからユニット情報を抽出
-    if ($jsonData.statuses -and $jsonData.statuses.Count -gt 0) {
-        foreach ($unit in $jsonData.statuses) {
-            # ユニット定義情報
-            $unitFullName = $unit.definition.unitName
-            $unitTypeValue = $unit.definition.unitType
-
-            # ユニット状態情報
+        # レスポンスからジョブ情報を抽出
+        if ($pollJson.statuses -and $pollJson.statuses.Count -gt 0) {
+            $unit = $pollJson.statuses[0]
             $unitStatus = $unit.unitStatus
-            $execIdValue = if ($unitStatus) { $unitStatus.execID } else { $null }
-            $statusValue = if ($unitStatus) { $unitStatus.status } else { "N/A" }
-            $startTimeValue = if ($unitStatus) { $unitStatus.startTime } else { $null }
 
-            # execIDがある場合のみリストに追加
-            if ($execIdValue) {
-                $execIdList += @{
-                    Path = $unitFullName
-                    ExecId = $execIdValue
-                    Status = $statusValue
-                    UnitType = $unitTypeValue
-                    StartTime = $startTimeValue
+            if ($unitStatus) {
+                $jobStatus = $unitStatus.status
+                $jobExecId = $unitStatus.execID
+                $jobStartTime = $unitStatus.startTime
+
+                # 終了状態かどうかをチェック
+                if ($finishedStatuses -contains $jobStatus) {
+                    break  # 終了状態になったのでループを抜ける
                 }
             }
         }
+
+    } catch {
+        # API呼び出しエラーは無視して再試行
     }
 
-    # 実行世代が存在しない場合
-    if ($execIdList.Count -eq 0) {
-        exit 4  # 実行世代なし
-    }
+    Start-Sleep -Seconds $pollIntervalSeconds
+}
 
-} catch {
-    exit 9  # API接続エラー（状態取得）
+# タイムアウトチェック
+if ((Get-Date) -ge $endTime) {
+    if (-not ($finishedStatuses -contains $jobStatus)) {
+        exit 6  # タイムアウト
+    }
+}
+
+# 開始日時をファイル名用フォーマットに変換（yyyyMMdd_HHmmss）
+$startTimeForFileName = ""
+if ($jobStartTime) {
+    try {
+        $dt = [DateTime]::Parse($jobStartTime)
+        $startTimeForFileName = $dt.ToString("yyyyMMdd_HHmmss")
+    } catch {
+        $startTimeForFileName = ""
+    }
 }
 
 # ==============================================================================
-# STEP 3: 実行結果詳細取得API
+# STEP 5: 実行結果詳細取得API
 # ==============================================================================
-# STEP 2で取得した各ジョブについて、実行結果詳細を取得します。
-# 実行結果詳細には、標準出力・標準エラー出力の内容が含まれます。
+# ジョブの実行結果詳細を取得します。
 
-if ($execIdList.Count -gt 0) {
-    foreach ($item in $execIdList) {
-        $targetPath = $item.Path
-        $targetExecId = $item.ExecId
-        $targetStartTime = $item.StartTime
+$encodedPath = [System.Uri]::EscapeDataString($unitPath)
 
-        # 開始日時をファイル名用フォーマットに変換（yyyyMMdd_HHmmss）
-        # 例: "2015-09-02T22:50:28+09:00" → "20150902_225028"
-        $startTimeForFileName = ""
-        if ($targetStartTime) {
-            try {
-                $dt = [DateTime]::Parse($targetStartTime)
-                $startTimeForFileName = $dt.ToString("yyyyMMdd_HHmmss")
-            } catch {
-                $startTimeForFileName = ""
-            }
-        }
+# 実行結果詳細取得APIのURL構築
+$detailUrl = "${baseUrl}/objects/statuses/${encodedPath}:${jobExecId}/actions/execResultDetails/invoke"
+$detailUrl += "?manager=${managerHost}&serviceName=${schedulerService}"
 
-        # ユニットパスをURLエンコード
-        $encodedPath = [System.Uri]::EscapeDataString($targetPath)
+try {
+    # APIリクエストを送信
+    $resultResponse = Invoke-WebRequest -Uri $detailUrl -Method GET -Headers $headers -TimeoutSec 30 -UseBasicParsing
 
-        # 実行結果詳細取得APIのURL構築
-        # 形式: /objects/statuses/{unitName}:{execID}/actions/execResultDetails/invoke
-        $detailUrl = "${baseUrl}/objects/statuses/${encodedPath}:${targetExecId}/actions/execResultDetails/invoke"
-        $detailUrl += "?manager=${managerHost}&serviceName=${schedulerService}"
+    # UTF-8文字化け対策
+    $resultBytes = $resultResponse.RawContentStream.ToArray()
+    $resultText = [System.Text.Encoding]::UTF8.GetString($resultBytes)
+    $resultJson = $resultText | ConvertFrom-Json
 
-        try {
-            # APIリクエストを送信
-            $resultResponse = Invoke-WebRequest -Uri $detailUrl -Method GET -Headers $headers -TimeoutSec 30 -UseBasicParsing
+    # all フラグのチェック（falseの場合は5MB超過で切り捨て）
+    if ($resultJson.all -eq $false) { exit 7 }  # 5MB超過エラー
 
-            # UTF-8文字化け対策
-            $resultBytes = $resultResponse.RawContentStream.ToArray()
-            $resultText = [System.Text.Encoding]::UTF8.GetString($resultBytes)
-            $resultJson = $resultText | ConvertFrom-Json
-
-            # all フラグのチェック（falseの場合は5MB超過で切り捨て）
-            if ($resultJson.all -eq $false) { exit 5 }  # 5MB超過エラー
-
-            # 実行結果の内容を取得
-            $execResultContent = ""
-            if ($resultJson.execResultDetails) {
-                $execResultContent = $resultJson.execResultDetails
-            }
-
-            # 開始日時を最初の行に出力（ファイル名用フォーマット）
-            [Console]::WriteLine("START_TIME:$startTimeForFileName")
-
-            # ジョブネット名を出力（ファイル名用）
-            [Console]::WriteLine("JOBNET_NAME:$jobnetName")
-
-            # ジョブネットコメントを出力（ファイル名用）
-            [Console]::WriteLine("JOBNET_COMMENT:$jobnetComment")
-
-            # 実行結果詳細を出力
-            [Console]::WriteLine($execResultContent)
-        } catch {
-            exit 6  # 詳細取得エラー
-        }
+    # 実行結果の内容を取得
+    $execResultContent = ""
+    if ($resultJson.execResultDetails) {
+        $execResultContent = $resultJson.execResultDetails
     }
+
+    # 開始日時を最初の行に出力（ファイル名用フォーマット）
+    [Console]::WriteLine("START_TIME:$startTimeForFileName")
+
+    # ジョブネット名を出力（ファイル名用）
+    [Console]::WriteLine("JOBNET_NAME:$jobnetName")
+
+    # ジョブネットコメントを出力（ファイル名用）
+    [Console]::WriteLine("JOBNET_COMMENT:$jobnetComment")
+
+    # ジョブ終了ステータスを出力
+    [Console]::WriteLine("JOB_STATUS:$jobStatus")
+
+    # 実行結果詳細を出力
+    [Console]::WriteLine($execResultContent)
+} catch {
+    exit 8  # 詳細取得エラー
 }
 
 # 正常終了
