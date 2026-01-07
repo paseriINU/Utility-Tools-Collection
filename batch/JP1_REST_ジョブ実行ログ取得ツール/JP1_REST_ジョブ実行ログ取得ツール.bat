@@ -400,16 +400,23 @@ $encodedRootJobnet = [System.Uri]::EscapeDataString($rootJobnetName)
 $execUrl = "${baseUrl}/objects/definitions/${encodedRootJobnet}/actions/registerImmediateExec/invoke"
 $execUrl += "?manager=${managerHost}&serviceName=${schedulerService}"
 
+# リクエストボディ（managerとserviceNameを含める形式も試行）
+$execBody = @{
+    manager = $managerHost
+    serviceName = $schedulerService
+} | ConvertTo-Json -Compress
+
 $execIdFromRegister = $null
 
 # デバッグ: 即時実行対象を標準エラー出力に出力
 [Console]::Error.WriteLine("[DEBUG] 即時実行対象: $rootJobnetName")
 [Console]::Error.WriteLine("[DEBUG] エンコード後: $encodedRootJobnet")
 [Console]::Error.WriteLine("[DEBUG] リクエストURL: $execUrl")
+[Console]::Error.WriteLine("[DEBUG] リクエストボディ: $execBody")
 
 try {
-    # POSTリクエストには空のJSONボディが必要（415エラー対策）
-    $execResponse = Invoke-WebRequest -Uri $execUrl -Method POST -Headers $headers -Body "{}" -TimeoutSec 30 -UseBasicParsing
+    # POSTリクエスト（パラメータをボディに含める）
+    $execResponse = Invoke-WebRequest -Uri $execUrl -Method POST -Headers $headers -Body $execBody -TimeoutSec 30 -UseBasicParsing
 
     # UTF-8文字化け対策
     $execBytes = $execResponse.RawContentStream.ToArray()
