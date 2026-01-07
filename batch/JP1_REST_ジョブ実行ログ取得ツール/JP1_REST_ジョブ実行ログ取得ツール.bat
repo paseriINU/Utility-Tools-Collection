@@ -404,6 +404,8 @@ $execIdFromRegister = $null
 
 # デバッグ: 即時実行対象を標準エラー出力に出力
 [Console]::Error.WriteLine("[DEBUG] 即時実行対象: $rootJobnetName")
+[Console]::Error.WriteLine("[DEBUG] エンコード後: $encodedRootJobnet")
+[Console]::Error.WriteLine("[DEBUG] リクエストURL: $execUrl")
 
 try {
     # POSTリクエストには空のJSONボディが必要（415エラー対策）
