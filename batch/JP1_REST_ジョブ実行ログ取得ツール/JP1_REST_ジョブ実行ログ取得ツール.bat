@@ -235,9 +235,11 @@ $authBase64 = [System.Convert]::ToBase64String($authBytes)
 # ------------------------------------------------------------------------------
 # Accept-Language: 日本語でレスポンスを受け取る
 # X-AJS-Authorization: 認証情報（Base64エンコード）
+# Content-Type: POSTリクエスト用（即時実行登録APIで必要）
 $headers = @{
     "Accept-Language" = "ja"
     "X-AJS-Authorization" = $authBase64
+    "Content-Type" = "application/json"
 }
 
 # ------------------------------------------------------------------------------
@@ -404,7 +406,8 @@ $execIdFromRegister = $null
 [Console]::Error.WriteLine("[DEBUG] 即時実行対象: $rootJobnetName")
 
 try {
-    $execResponse = Invoke-WebRequest -Uri $execUrl -Method POST -Headers $headers -TimeoutSec 30 -UseBasicParsing
+    # POSTリクエストには空のJSONボディが必要（415エラー対策）
+    $execResponse = Invoke-WebRequest -Uri $execUrl -Method POST -Headers $headers -Body "{}" -TimeoutSec 30 -UseBasicParsing
 
     # UTF-8文字化け対策
     $execBytes = $execResponse.RawContentStream.ToArray()
