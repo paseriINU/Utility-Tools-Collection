@@ -397,8 +397,16 @@ try {
 
 $encodedRootJobnet = [System.Uri]::EscapeDataString($rootJobnetName)
 
+# URLにはクエリパラメータを含めない（パラメータはボディに指定）
 $execUrl = "${baseUrl}/objects/definitions/${encodedRootJobnet}/actions/registerImmediateExec/invoke"
-$execUrl += "?manager=${managerHost}&serviceName=${schedulerService}"
+
+# リクエストボディ（parametersオブジェクト内にmanager/serviceNameを指定）
+$execBody = @{
+    parameters = @{
+        manager = $managerHost
+        serviceName = $schedulerService
+    }
+} | ConvertTo-Json -Depth 3
 
 $execIdFromRegister = $null
 
@@ -406,10 +414,11 @@ $execIdFromRegister = $null
 [Console]::Error.WriteLine("[DEBUG] 即時実行対象: $rootJobnetName")
 [Console]::Error.WriteLine("[DEBUG] エンコード後: $encodedRootJobnet")
 [Console]::Error.WriteLine("[DEBUG] リクエストURL: $execUrl")
+[Console]::Error.WriteLine("[DEBUG] リクエストボディ: $execBody")
 
 try {
-    # POSTリクエスト（ボディなし、Content-Lengthを0に設定）
-    $execResponse = Invoke-WebRequest -Uri $execUrl -Method POST -Headers $headers -TimeoutSec 30 -UseBasicParsing
+    # POSTリクエスト（パラメータをボディに含める）
+    $execResponse = Invoke-WebRequest -Uri $execUrl -Method POST -Headers $headers -Body $execBody -TimeoutSec 30 -UseBasicParsing
 
     # UTF-8文字化け対策
     $execBytes = $execResponse.RawContentStream.ToArray()
