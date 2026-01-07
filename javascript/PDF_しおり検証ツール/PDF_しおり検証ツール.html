@@ -1069,6 +1069,62 @@
 
         /*
         ======================================================================
+          しおり階層レベル計算関数
+
+          ObjStmから抽出したしおりの親子関係（parentRef/objNum）を使用して
+          階層レベルを計算する。親参照が既知のオブジェクト番号を指していない
+          しおりはルートレベル（level: 1）とみなす。
+        ======================================================================
+        */
+        function calculateBookmarkLevels(items) {
+            if (!items || items.length === 0) return items;
+
+            // オブジェクト番号 -> アイテムのマップを作成
+            const objNumToItem = new Map();
+            for (const item of items) {
+                if (item.objNum !== null && item.objNum !== undefined) {
+                    objNumToItem.set(item.objNum, item);
+                }
+            }
+
+            // 各アイテムの階層レベルを計算
+            for (const item of items) {
+                let level = 1;
+                let currentParentRef = item.parentRef;
+                const visited = new Set(); // 循環参照防止
+
+                // 親を辿って深さを計算
+                while (currentParentRef) {
+                    // parentRef から親のオブジェクト番号を抽出（"N 0 R" 形式）
+                    const parentObjNumMatch = currentParentRef.match(/^(\d+)\s+0\s+R$/);
+                    if (!parentObjNumMatch) break;
+
+                    const parentObjNum = parseInt(parentObjNumMatch[1], 10);
+
+                    // 循環参照チェック
+                    if (visited.has(parentObjNum)) break;
+                    visited.add(parentObjNum);
+
+                    // 親がしおりアイテムとして存在するかチェック
+                    const parentItem = objNumToItem.get(parentObjNum);
+                    if (parentItem) {
+                        // 親もしおりなのでレベルを+1して続行
+                        level++;
+                        currentParentRef = parentItem.parentRef;
+                    } else {
+                        // 親はOutlines辞書など（しおりではない）→ここで終了
+                        break;
+                    }
+                }
+
+                item.level = level;
+            }
+
+            return items;
+        }
+
+        /*
+        ======================================================================
           全角・半角正規化関数
 
           全角数字・英字・記号を半角に変換し、テキスト比較の精度を向上させる
@@ -1202,6 +1258,9 @@
                 // JavaScript版: ObjStmからの抽出を強制使用（フォールバックなし）
                 // JavaScript版で作成されたPDFは0始まりのページ番号を使用するため、+1して1始まりに変換
                 if (objStmDecodedTitles.length > 0) {
+                    // 親子関係から階層レベルを計算
+                    calculateBookmarkLevels(objStmDecodedTitles);
+
                     // ObjStmからバイト直接抽出したタイトルを使用（JavaScript APIで作成されたしおり向け）
                     for (const item of objStmDecodedTitles) {
                         let pageNum = '';
@@ -1227,8 +1286,10 @@
                                 }
                             }
                         }
+                        // 階層レベルは計算済みのものを使用（取得できなかった場合はデフォルト1）
+                        const level = item.level || 1;
                         // source: 'javascript' に変更して、検証時の+1調整を適用しない
-                        bookmarks.push({ title: item.title, page: pageNum, level: 1, source: 'javascript' });
+                        bookmarks.push({ title: item.title, page: pageNum, level: level, source: 'javascript' });
                     }
                 }
                 // ObjStmから取得できない場合はbookmarksが空のまま（後続のエラー処理に任せる）
@@ -1972,10 +2033,32 @@
                                             }
                                         }
 
+                                        // /Parent N 0 R パターンを検索（階層構造解析用）
+                                        let parentRef = '';
+                                        const parentMatch = objStr.match(/\/Parent\s+(\d+)\s+0\s+R/);
+                                        if (parentMatch) {
+                                            parentRef = parentMatch[1] + ' 0 R';
+                                        }
+
+                                        // このタイトルが属するオブジェクト番号を特定
+                                        // i は decompressed 内の位置、firstOffset 以降がデータ部分
+                                        let objNum = null;
+                                        if (i >= firstOffset) {
+                                            const posInData = i - firstOffset;
+                                            for (let idx = 0; idx < objOffsets.length; idx++) {
+                                                const obj = objOffsets[idx];
+                                                const nextOffset = (idx + 1 < objOffsets.length) ? objOffsets[idx + 1].offset : Infinity;
+                                                if (posInData >= obj.offset && posInData < nextOffset) {
+                                                    objNum = obj.number;
+                                                    break;
+                                                }
+                                            }
+                                        }
+
                                         objStmTitleCount++;
                                         byteExtractedCount++;
-                                        // デコード済みタイトルとページ参照を追加
-                                        decodedTitles.push({ title: title.trim(), pageRef: pageRef });
+                                        // デコード済みタイトルとページ参照、親参照、オブジェクト番号を追加
+                                        decodedTitles.push({ title: title.trim(), pageRef: pageRef, parentRef: parentRef, objNum: objNum });
                                     }
                                 }
                             }
