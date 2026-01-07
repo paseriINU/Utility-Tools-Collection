@@ -1904,161 +1904,123 @@
                             // ObjStm解析エラー（無視して続行）
                         }
 
-                        // バイト配列から直接 /Title( を検索してタイトルを抽出
-                        // これにより文字列変換による00バイト問題を回避
+                        // オブジェクト単位でしおりを抽出（インデックスに基づく正確な範囲指定）
+                        // これにより、タイトルとページ参照の対応付けが正確になる
                         let byteExtractedCount = 0;  // このObjStmから抽出したタイトル数
                         const titlePattern = [0x2F, 0x54, 0x69, 0x74, 0x6C, 0x65, 0x28]; // "/Title("
-                        for (let i = 0; i <= decompressed.length - titlePattern.length; i++) {
-                            let found = true;
-                            for (let j = 0; j < titlePattern.length; j++) {
-                                if (decompressed[i + j] !== titlePattern[j]) {
-                                    found = false;
-                                    break;
-                                }
-                            }
-                            if (found) {
-                                // 括弧の開始位置
-                                const parenStart = i + titlePattern.length;
-                                // 括弧の終了位置を探す（ネストした括弧に対応）
-                                let depth = 1;
-                                let parenEnd = parenStart;
-                                while (parenEnd < decompressed.length && depth > 0) {
-                                    // エスケープされていない括弧のみカウント
-                                    const prevByte = parenEnd > 0 ? decompressed[parenEnd - 1] : 0;
-                                    if (decompressed[parenEnd] === 0x28 && prevByte !== 0x5C) { // '(' not escaped
-                                        depth++;
-                                    } else if (decompressed[parenEnd] === 0x29 && prevByte !== 0x5C) { // ')' not escaped
-                                        depth--;
+
+                        // 各オブジェクトを個別に処理
+                        for (let idx = 0; idx < objOffsets.length; idx++) {
+                            const obj = objOffsets[idx];
+                            const nextOffset = (idx + 1 < objOffsets.length) ? objOffsets[idx + 1].offset : (decompressed.length - firstOffset);
+
+                            // このオブジェクトのバイト範囲（decompressed内の絶対位置）
+                            const objByteStart = firstOffset + obj.offset;
+                            const objByteEnd = firstOffset + nextOffset;
+
+                            // オブジェクト範囲内で /Title( を検索
+                            for (let i = objByteStart; i <= objByteEnd - titlePattern.length; i++) {
+                                let found = true;
+                                for (let j = 0; j < titlePattern.length; j++) {
+                                    if (decompressed[i + j] !== titlePattern[j]) {
+                                        found = false;
+                                        break;
                                     }
-                                    if (depth > 0) parenEnd++;
                                 }
-
-                                if (parenEnd > parenStart) {
-                                    // タイトルバイトを抽出
-                                    const rawTitleBytes = decompressed.slice(parenStart, parenEnd);
-
-                                    // PDFエスケープシーケンスをデコード（\NNN形式の8進数）
-                                    // PDF内では 00 バイトは \000 などとエスケープされている
-                                    const titleBytes = decodePDFEscapeBytes(rawTitleBytes);
-
-                                    // UTF-16BE BOM (FE FF) をチェック
-                                    let title = '';
-                                    if (titleBytes.length >= 2 && titleBytes[0] === 0xFE && titleBytes[1] === 0xFF) {
-                                        // UTF-16BE
-                                        for (let k = 2; k + 1 < titleBytes.length; k += 2) {
-                                            const charCode = (titleBytes[k] << 8) | titleBytes[k + 1];
-                                            if (charCode > 0) title += String.fromCharCode(charCode);
+                                if (found) {
+                                    // 括弧の開始位置
+                                    const parenStart = i + titlePattern.length;
+                                    // 括弧の終了位置を探す（ネストした括弧に対応）
+                                    let depth = 1;
+                                    let parenEnd = parenStart;
+                                    while (parenEnd < decompressed.length && depth > 0) {
+                                        // エスケープされていない括弧のみカウント
+                                        const prevByte = parenEnd > 0 ? decompressed[parenEnd - 1] : 0;
+                                        if (decompressed[parenEnd] === 0x28 && prevByte !== 0x5C) { // '(' not escaped
+                                            depth++;
+                                        } else if (decompressed[parenEnd] === 0x29 && prevByte !== 0x5C) { // ')' not escaped
+                                            depth--;
                                         }
-                                    } else if (titleBytes.length >= 2 && titleBytes[0] === 0xFF && titleBytes[1] === 0xFE) {
-                                        // UTF-16LE
-                                        for (let k = 2; k + 1 < titleBytes.length; k += 2) {
-                                            const charCode = titleBytes[k] | (titleBytes[k + 1] << 8);
-                                            if (charCode > 0) title += String.fromCharCode(charCode);
-                                        }
+                                        if (depth > 0) parenEnd++;
                                     }
 
-                                    if (title && title.trim()) {
-                                        // このタイトルを含むオブジェクトの範囲からページ参照を取得
-                                        // /Titleの位置から前後を検索してオブジェクトの範囲を特定
-                                        let pageRef = '';
+                                    if (parenEnd > parenStart) {
+                                        // タイトルバイトを抽出
+                                        const rawTitleBytes = decompressed.slice(parenStart, parenEnd);
 
-                                        // /Titleの前にある << を探す（オブジェクトの開始）
-                                        let objStart = i;
-                                        let depth = 0;
-                                        for (let s = i - 1; s >= Math.max(0, i - 500); s--) {
-                                            if (decompressed[s] === 0x3C && s > 0 && decompressed[s - 1] === 0x3C) { // '<<'
-                                                if (depth === 0) {
-                                                    objStart = s - 1;
-                                                    break;
-                                                }
-                                                depth--;
-                                            } else if (decompressed[s] === 0x3E && s > 0 && decompressed[s - 1] === 0x3E) { // '>>'
-                                                depth++;
+                                        // PDFエスケープシーケンスをデコード（\NNN形式の8進数）
+                                        // PDF内では 00 バイトは \000 などとエスケープされている
+                                        const titleBytes = decodePDFEscapeBytes(rawTitleBytes);
+
+                                        // UTF-16BE BOM (FE FF) をチェック
+                                        let title = '';
+                                        if (titleBytes.length >= 2 && titleBytes[0] === 0xFE && titleBytes[1] === 0xFF) {
+                                            // UTF-16BE
+                                            for (let k = 2; k + 1 < titleBytes.length; k += 2) {
+                                                const charCode = (titleBytes[k] << 8) | titleBytes[k + 1];
+                                                if (charCode > 0) title += String.fromCharCode(charCode);
+                                            }
+                                        } else if (titleBytes.length >= 2 && titleBytes[0] === 0xFF && titleBytes[1] === 0xFE) {
+                                            // UTF-16LE
+                                            for (let k = 2; k + 1 < titleBytes.length; k += 2) {
+                                                const charCode = titleBytes[k] | (titleBytes[k + 1] << 8);
+                                                if (charCode > 0) title += String.fromCharCode(charCode);
                                             }
                                         }
 
-                                        // /Titleの後にある >> を探す（オブジェクトの終了）
-                                        let objEnd = parenEnd;
-                                        depth = 1; // << は既に1つ開いている
-                                        for (let e = parenEnd + 1; e < Math.min(decompressed.length, parenEnd + 500); e++) {
-                                            if (decompressed[e] === 0x3C && e + 1 < decompressed.length && decompressed[e + 1] === 0x3C) { // '<<'
-                                                depth++;
-                                                e++;
-                                            } else if (decompressed[e] === 0x3E && e + 1 < decompressed.length && decompressed[e + 1] === 0x3E) { // '>>'
-                                                depth--;
-                                                if (depth === 0) {
-                                                    objEnd = e + 2;
-                                                    break;
-                                                }
-                                                e++;
-                                            }
-                                        }
+                                        if (title && title.trim()) {
+                                            // このオブジェクト全体からページ参照を取得（インデックスに基づく正確な範囲）
+                                            const objBytes = decompressed.slice(objByteStart, objByteEnd);
+                                            const objStr = latin1Decode(objBytes);
+                                            let pageRef = '';
 
-                                        // オブジェクト範囲をlatin1Decodeして /Dest または /A を検索
-                                        const objBytes = decompressed.slice(objStart, objEnd);
-                                        const objStr = latin1Decode(objBytes);
-
-                                        // /Dest [N 0 R ...] パターンを検索（複数の形式に対応）
-                                        // 形式1: /Dest [N 0 R /XYZ ...]
-                                        // 形式2: /Dest[N 0 R ...]（スペースなし）
-                                        const destMatch = objStr.match(/\/Dest\s*\[\s*(\d+)\s+0\s+R/);
-                                        if (destMatch) {
-                                            pageRef = destMatch[1] + ' 0 R';
-                                        } else {
-                                            // /A <</S /GoTo /D [N 0 R ...]>> パターンを検索
-                                            // [^>]* では >> に対応できないので、[\s\S]*? で最短マッチ
-                                            const actionMatch = objStr.match(/\/A\s*<<[\s\S]*?\/D\s*\[\s*(\d+)\s+0\s+R/);
-                                            if (actionMatch) {
-                                                pageRef = actionMatch[1] + ' 0 R';
+                                            // /Dest [N 0 R ...] パターンを検索（複数の形式に対応）
+                                            // 形式1: /Dest [N 0 R /XYZ ...]
+                                            // 形式2: /Dest[N 0 R ...]（スペースなし）
+                                            const destMatch = objStr.match(/\/Dest\s*\[\s*(\d+)\s+0\s+R/);
+                                            if (destMatch) {
+                                                pageRef = destMatch[1] + ' 0 R';
                                             } else {
-                                                // /A N 0 R パターン（間接参照）を検索
-                                                const actionRefMatch = objStr.match(/\/A\s+(\d+)\s+0\s+R/);
-                                                if (actionRefMatch) {
-                                                    const actionObjNum = parseInt(actionRefMatch[1], 10);
-                                                    // グローバルアクションオブジェクトマップからページ参照を取得
-                                                    if (globalActionObjectMap.has(actionObjNum)) {
-                                                        pageRef = globalActionObjectMap.get(actionObjNum);
-                                                    } else {
-                                                        // マップにまだ存在しない場合、アクションオブジェクト番号を記録して後で解決
-                                                        pageRef = '__UNRESOLVED__' + actionObjNum;
-                                                        unresolvedActionObjNums.add(actionObjNum);
-                                                    }
+                                                // /A <</S /GoTo /D [N 0 R ...]>> パターンを検索
+                                                // [^>]* では >> に対応できないので、[\s\S]*? で最短マッチ
+                                                const actionMatch = objStr.match(/\/A\s*<<[\s\S]*?\/D\s*\[\s*(\d+)\s+0\s+R/);
+                                                if (actionMatch) {
+                                                    pageRef = actionMatch[1] + ' 0 R';
                                                 } else {
-                                                    // /D [N 0 R ...] パターンを直接検索（/A 外にある場合）
-                                                    const dMatch = objStr.match(/\/D\s*\[\s*(\d+)\s+0\s+R/);
-                                                    if (dMatch) {
-                                                        pageRef = dMatch[1] + ' 0 R';
+                                                    // /A N 0 R パターン（間接参照）を検索
+                                                    const actionRefMatch = objStr.match(/\/A\s+(\d+)\s+0\s+R/);
+                                                    if (actionRefMatch) {
+                                                        const actionObjNum = parseInt(actionRefMatch[1], 10);
+                                                        // グローバルアクションオブジェクトマップからページ参照を取得
+                                                        if (globalActionObjectMap.has(actionObjNum)) {
+                                                            pageRef = globalActionObjectMap.get(actionObjNum);
+                                                        } else {
+                                                            // マップにまだ存在しない場合、アクションオブジェクト番号を記録して後で解決
+                                                            pageRef = '__UNRESOLVED__' + actionObjNum;
+                                                            unresolvedActionObjNums.add(actionObjNum);
+                                                        }
+                                                    } else {
+                                                        // /D [N 0 R ...] パターンを直接検索（/A 外にある場合）
+                                                        const dMatch = objStr.match(/\/D\s*\[\s*(\d+)\s+0\s+R/);
+                                                        if (dMatch) {
+                                                            pageRef = dMatch[1] + ' 0 R';
+                                                        }
                                                     }
                                                 }
                                             }
-                                        }
 
-                                        // /Parent N 0 R パターンを検索（階層構造解析用）
-                                        let parentRef = '';
-                                        const parentMatch = objStr.match(/\/Parent\s+(\d+)\s+0\s+R/);
-                                        if (parentMatch) {
-                                            parentRef = parentMatch[1] + ' 0 R';
-                                        }
-
-                                        // このタイトルが属するオブジェクト番号を特定
-                                        // i は decompressed 内の位置、firstOffset 以降がデータ部分
-                                        let objNum = null;
-                                        if (i >= firstOffset) {
-                                            const posInData = i - firstOffset;
-                                            for (let idx = 0; idx < objOffsets.length; idx++) {
-                                                const obj = objOffsets[idx];
-                                                const nextOffset = (idx + 1 < objOffsets.length) ? objOffsets[idx + 1].offset : Infinity;
-                                                if (posInData >= obj.offset && posInData < nextOffset) {
-                                                    objNum = obj.number;
-                                                    break;
-                                                }
+                                            // /Parent N 0 R パターンを検索（階層構造解析用）
+                                            let parentRef = '';
+                                            const parentMatch = objStr.match(/\/Parent\s+(\d+)\s+0\s+R/);
+                                            if (parentMatch) {
+                                                parentRef = parentMatch[1] + ' 0 R';
                                             }
-                                        }
 
-                                        objStmTitleCount++;
-                                        byteExtractedCount++;
-                                        // デコード済みタイトルとページ参照、親参照、オブジェクト番号を追加
-                                        decodedTitles.push({ title: title.trim(), pageRef: pageRef, parentRef: parentRef, objNum: objNum });
+                                            objStmTitleCount++;
+                                            byteExtractedCount++;
+                                            // デコード済みタイトルとページ参照、親参照、オブジェクト番号を追加
+                                            decodedTitles.push({ title: title.trim(), pageRef: pageRef, parentRef: parentRef, objNum: obj.number });
+                                        }
                                     }
                                 }
                             }
