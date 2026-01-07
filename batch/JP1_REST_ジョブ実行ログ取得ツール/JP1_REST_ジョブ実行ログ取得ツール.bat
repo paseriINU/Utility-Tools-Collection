@@ -400,6 +400,9 @@ $execUrl += "?manager=${managerHost}&serviceName=${schedulerService}"
 
 $execIdFromRegister = $null
 
+# デバッグ: 即時実行対象を標準エラー出力に出力
+[Console]::Error.WriteLine("[DEBUG] 即時実行対象: $rootJobnetName")
+
 try {
     $execResponse = Invoke-WebRequest -Uri $execUrl -Method POST -Headers $headers -TimeoutSec 30 -UseBasicParsing
 
@@ -412,10 +415,33 @@ try {
     $execIdFromRegister = $execJson.execID
 
     if (-not $execIdFromRegister) {
+        [Console]::Error.WriteLine("[ERROR] execIDが取得できませんでした")
         exit 5  # 即時実行登録エラー（execIDが取得できない）
     }
 
+    [Console]::Error.WriteLine("[DEBUG] 即時実行登録成功: execID=$execIdFromRegister")
+
 } catch {
+    # エラー詳細を出力
+    $errMsg = $_.Exception.Message
+    [Console]::Error.WriteLine("[ERROR] 即時実行登録エラー: $errMsg")
+
+    # HTTPレスポンスがある場合は詳細を出力
+    if ($_.Exception.Response) {
+        $statusCode = [int]$_.Exception.Response.StatusCode
+        [Console]::Error.WriteLine("[ERROR] HTTPステータス: $statusCode")
+
+        # レスポンスボディを取得
+        try {
+            $reader = New-Object System.IO.StreamReader($_.Exception.Response.GetResponseStream())
+            $responseBody = $reader.ReadToEnd()
+            $reader.Close()
+            if ($responseBody) {
+                [Console]::Error.WriteLine("[ERROR] レスポンス: $responseBody")
+            }
+        } catch {}
+    }
+
     exit 5  # 即時実行登録エラー
 }
 
