@@ -35,7 +35,8 @@ rem === ここを編集してください（ジョブのパスを指定）===
 set "UNIT_PATH=/JobGroup/Jobnet/Job1"
 
 rem === スクロール位置の設定 ===
-rem メモ帳で開いた後、指定した文字列を検索してその位置にスクロールします
+rem メモ帳で開いた後、指定した文字列を含む行に自動でジャンプします
+rem 事前に行番号を特定し、Ctrl+Gで移動するため検索窓は開きません
 rem 空欄の場合はスクロールせずにファイル先頭を表示します
 rem 例: "エラー", "ERROR", "RC=", "異常終了" など
 set "SCROLL_TO_TEXT="
@@ -59,27 +60,6 @@ echo   JP1 ジョブ実行ログ取得サンプル
 echo ================================================================
 echo.
 echo   対象: %UNIT_PATH%
-echo.
-
-rem 実行確認
-echo ================================================================
-echo   [警告] ジョブを即時実行します
-echo ================================================================
-echo.
-echo   対象ジョブ: %UNIT_PATH%
-echo.
-echo   ルートジョブネットを即時実行し、指定ジョブの完了を待ちます。
-echo   続行しますか？
-echo.
-set /p "CONFIRM=実行する場合は y を入力してください (y/n): "
-if /i not "%CONFIRM%"=="y" (
-    echo.
-    echo キャンセルしました。
-    pause
-    popd
-    exit /b 0
-)
-
 echo.
 echo ジョブを実行中...
 echo （完了まで時間がかかる場合があります）
@@ -288,31 +268,45 @@ if "%JOB_STATUS%"=="NORMAL" (
 )
 echo.
 
+rem 検索文字列が指定されている場合、行番号を事前に特定
+set "SCROLL_LINE_NUM="
+if not "%SCROLL_TO_TEXT%"=="" (
+    echo スクロール位置: %SCROLL_TO_TEXT%
+    rem PowerShellで行番号を特定
+    for /f %%L in ('powershell -NoProfile -Command ^
+        "$searchText = [regex]::Escape('%SCROLL_TO_TEXT%');" ^
+        "$i = 0;" ^
+        "Get-Content -Path '%OUTPUT_FILE%' -Encoding UTF8 | ForEach-Object { $i++; if ($_ -match $searchText) { Write-Output $i; break } }"') do set "SCROLL_LINE_NUM=%%L"
+)
+
 rem メモ帳で開く
 start notepad "%OUTPUT_FILE%"
 
-rem 検索文字列が指定されている場合、その位置にスクロール
-if not "%SCROLL_TO_TEXT%"=="" (
-    echo スクロール位置: %SCROLL_TO_TEXT%
+rem 行番号が特定できた場合、その行にジャンプ（Ctrl+Gで行へ移動）
+if defined SCROLL_LINE_NUM (
+    echo ジャンプ先行番号: %SCROLL_LINE_NUM%
     echo.
-    rem PowerShellでSendKeysを使ってメモ帳の検索機能を操作
-    rem 注意: ウィンドウ名はファイル名で検索（日本語/英語環境両対応）
+    rem PowerShellでCtrl+Gを送信して行へ移動
+    rem ※検索ダイアログではなく「行へ移動」ダイアログを使用（移動後自動で閉じる）
     powershell -NoProfile -Command ^
-        "$searchText = '%SCROLL_TO_TEXT%';" ^
-        "Start-Sleep -Milliseconds 800;" ^
+        "$lineNum = '%SCROLL_LINE_NUM%';" ^
+        "Start-Sleep -Milliseconds 600;" ^
         "$wshell = New-Object -ComObject WScript.Shell;" ^
         "$activated = $wshell.AppActivate('メモ帳');" ^
         "if (-not $activated) { $activated = $wshell.AppActivate('Notepad') };" ^
         "if ($activated) {" ^
         "  Start-Sleep -Milliseconds 100;" ^
-        "  $wshell.SendKeys('^f');" ^
-        "  Start-Sleep -Milliseconds 300;" ^
-        "  $wshell.SendKeys($searchText);" ^
+        "  $wshell.SendKeys('^g');" ^
+        "  Start-Sleep -Milliseconds 200;" ^
+        "  $wshell.SendKeys($lineNum);" ^
         "  Start-Sleep -Milliseconds 100;" ^
         "  $wshell.SendKeys('{ENTER}');" ^
-        "  Start-Sleep -Milliseconds 100;" ^
-        "  $wshell.SendKeys('{ESCAPE}');" ^
         "}"
+) else (
+    if not "%SCROLL_TO_TEXT%"=="" (
+        echo [情報] 指定した文字列がファイル内に見つかりませんでした
+    )
+    echo.
 )
 
 popd

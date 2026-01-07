@@ -235,9 +235,11 @@ $authBase64 = [System.Convert]::ToBase64String($authBytes)
 # ------------------------------------------------------------------------------
 # Accept-Language: 日本語でレスポンスを受け取る
 # X-AJS-Authorization: 認証情報（Base64エンコード）
+# Content-Type: POSTリクエスト用（即時実行登録APIで必要）
 $headers = @{
     "Accept-Language" = "ja"
     "X-AJS-Authorization" = $authBase64
+    "Content-Type" = "application/json"
 }
 
 # ------------------------------------------------------------------------------
@@ -395,13 +397,22 @@ try {
 
 $encodedRootJobnet = [System.Uri]::EscapeDataString($rootJobnetName)
 
+# URLにはクエリパラメータを含めない（パラメータはボディに指定）
 $execUrl = "${baseUrl}/objects/definitions/${encodedRootJobnet}/actions/registerImmediateExec/invoke"
-$execUrl += "?manager=${managerHost}&serviceName=${schedulerService}"
+
+# リクエストボディ（parametersオブジェクト内にmanager/serviceNameを指定）
+$execBody = @{
+    parameters = @{
+        manager = $managerHost
+        serviceName = $schedulerService
+    }
+} | ConvertTo-Json -Depth 3
 
 $execIdFromRegister = $null
 
 try {
-    $execResponse = Invoke-WebRequest -Uri $execUrl -Method POST -Headers $headers -TimeoutSec 30 -UseBasicParsing
+    # POSTリクエスト（パラメータをボディに含める）
+    $execResponse = Invoke-WebRequest -Uri $execUrl -Method POST -Headers $headers -Body $execBody -TimeoutSec 30 -UseBasicParsing
 
     # UTF-8文字化け対策
     $execBytes = $execResponse.RawContentStream.ToArray()
