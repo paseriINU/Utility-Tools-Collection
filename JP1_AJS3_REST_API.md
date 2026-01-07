@@ -385,20 +385,72 @@ POST /ajs/api/v1/objects/definitions/{unitName}/actions/registerFixedExec/invoke
 POST /ajs/api/v1/objects/definitions/{unitName}/actions/registerImmediateExec/invoke
 ```
 
+**重要**: パラメータはクエリパラメータではなく、**メッセージボディの`parameters`オブジェクト内**に指定します。
+
+#### メッセージボディ形式
+
+```json
+{
+  "parameters": {
+    "manager": "マネージャーホスト名またはIPアドレス",
+    "serviceName": "スケジューラーサービス名",
+    "startCondition": 起動条件パラメーターのオブジェクト,
+    "holding": ジョブネットの実行を保留するかどうか,
+    "macro": [マクロ変数のオブジェクト,...]
+  }
+}
+```
+
 #### パラメータ
 
-| パラメータ | 説明 | 必須/任意 |
-|-----------|------|----------|
-| unitName | ユニット完全名 | 必須 |
-| manager | マネージャーホスト名またはIPアドレス | 必須 |
-| serviceName | スケジューラーサービス名 | 必須 |
-| startCondition | 起動条件パラメーター | 任意 |
-| holding | ジョブネット実行を保留するか | 任意（デフォルト: false） |
-| macro | マクロ変数設定（最大32個） | 任意 |
+| パラメータ | データ型 | 説明 | 必須/任意 |
+|-----------|---------|------|----------|
+| unitName | string | ユニット完全名（URLパス内に指定、1〜930バイト） | 必須 |
+| manager | string | マネージャーホスト名またはIPアドレス（1〜255バイト） | 必須 |
+| serviceName | string | スケジューラーサービス名（1〜30バイト） | 必須 |
+| startCondition | object | 起動条件パラメーター（nullまたは省略可） | 任意 |
+| holding | boolean | ジョブネット実行を保留するか（デフォルト: false） | 任意 |
+| macro | object[] | マクロ変数設定（最大32個、nullまたは省略可） | 任意 |
+
+#### ステータスコード
+
+| コード | メッセージ | 説明 |
+|--------|----------|------|
+| 200 | OK | 即時実行登録が成功 |
+| 400 | Bad Request | 引数が不正 |
+| 401 | Unauthorized | 認証が必要 |
+| 403 | Forbidden | 実行権限がない |
+| 404 | Not found | リソースがない |
+| 409 | Conflict | リクエストは現在のリソース状態と矛盾 |
+| 412 | Precondition failed | Web Consoleサーバが利用できない |
+| 500 | Server-side error | Web Consoleサーバ処理エラー |
 
 #### レスポンス
 
 成功時（200）: `execID`（実行ID）をJSON形式で返却
+
+```json
+{
+  "execID": "@A2895"
+}
+```
+
+#### 使用例
+
+```http
+POST /ajs/api/v1/objects/definitions/%2FJobGroup%2FJobnet/actions/registerImmediateExec/invoke HTTP/1.1
+Host: HOSTW:22252
+Accept-Language: ja
+Content-Type: application/json
+X-AJS-Authorization: dXNlcjpwYXNzd29yZA==
+
+{
+  "parameters": {
+    "manager": "HOSTM",
+    "serviceName": "AJSROOT1"
+  }
+}
+```
 
 ---
 
