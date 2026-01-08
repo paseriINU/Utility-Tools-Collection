@@ -1881,14 +1881,23 @@
                                 }
                             }
 
+                            // データ部分
+                            const dataPart = fullObjStmStr.substring(firstOffset);
+
                             // デバッグ: ObjStm 12594の詳細情報（1つのログにまとめる）
                             if (objNum === '12594' || objNum === 12594) {
                                 const objNums = objOffsets.map(o => o.number);
                                 console.log('★★★ ObjStm 12594 解析結果: firstOffset=' + firstOffset + ', indexNums.length=' + indexNums.length + ', objOffsets.length=' + objOffsets.length + ', 12456含む=' + objNums.includes(12456) + ', 12461含む=' + objNums.includes(12461));
-                            }
 
-                            // データ部分
-                            const dataPart = fullObjStmStr.substring(firstOffset);
+                                // オブジェクト12456の内容を確認
+                                const obj12456 = objOffsets.find(o => o.number === 12456);
+                                if (obj12456) {
+                                    const idx12456 = objOffsets.indexOf(obj12456);
+                                    const nextOffset = (idx12456 + 1 < objOffsets.length) ? objOffsets[idx12456 + 1].offset : dataPart.length;
+                                    const obj12456Data = dataPart.substring(obj12456.offset, nextOffset);
+                                    console.log('★ オブジェクト12456（修正履歴）の内容:', obj12456Data);
+                                }
+                            }
 
                             // 各オブジェクトを解析してアクションオブジェクト（/S /GoTo）を探す
                             for (let idx = 0; idx < objOffsets.length; idx++) {
