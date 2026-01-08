@@ -1773,9 +1773,12 @@
                     const dMatch = actionContent.match(/\/D\s*\[\s*(\d+)\s+0\s+R/);
                     if (dMatch) {
                         globalActionObjectMap.set(actionObjNum, dMatch[1] + ' 0 R');
+                        console.log('PDF本体からアクションオブジェクト登録:', actionObjNum, '→', dMatch[1] + ' 0 R');
+                        console.log('オブジェクト内容:', actionContent.substring(0, 300));
                     }
                 }
             }
+            console.log('=== PDF本体から登録されたアクションオブジェクト数:', globalActionObjectMap.size, '===');
 
             // 未解決アクションオブジェクト番号を収集（後で検索用）
             const unresolvedActionObjNums = new Set();
