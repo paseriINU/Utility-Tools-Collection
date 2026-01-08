@@ -1262,29 +1262,43 @@
                     calculateBookmarkLevels(objStmDecodedTitles);
 
                     // ObjStmからバイト直接抽出したタイトルを使用（JavaScript APIで作成されたしおり向け）
+                    // デバッグ: pageObjectsの内容を出力
+                    console.log('=== ページオブジェクトマッピング ===');
+                    console.log('pageObjects:', JSON.stringify(pageObjects, null, 2));
+
                     for (const item of objStmDecodedTitles) {
                         let pageNum = '';
+                        console.log('--- ページ番号変換 ---');
+                        console.log('タイトル:', item.title);
+                        console.log('pageRef:', item.pageRef);
+
                         if (item.pageRef) {
                             // PAGE:N 形式（JavaScriptアクションから取得）の場合
                             // JavaScript版PDFは0始まりなので+1する
                             if (item.pageRef.startsWith('PAGE:')) {
                                 const rawPageNum = parseInt(item.pageRef.substring(5), 10);
                                 pageNum = (typeof rawPageNum === 'number' && !isNaN(rawPageNum)) ? rawPageNum + 1 : '';
+                                console.log('PAGE:N形式 → ページ番号:', pageNum);
                             } else {
                                 // pageRefは "123 0 R" の形式なので、オブジェクト番号を抽出
                                 const objNumMatch = item.pageRef.match(/^(\d+)/);
                                 if (objNumMatch) {
                                     const objNum = objNumMatch[1];
+                                    console.log('オブジェクト番号:', objNum);
                                     if (pageObjects[objNum]) {
                                         // pageObjectsは既に1始まりなのでそのまま使用
                                         pageNum = pageObjects[objNum];
+                                        console.log('pageObjectsから取得 → ページ番号:', pageNum);
                                     } else {
                                         // フォールバック: オブジェクト番号を0始まりと想定して+1
                                         const rawNum = parseInt(objNum);
                                         pageNum = (typeof rawNum === 'number' && !isNaN(rawNum)) ? rawNum + 1 : '';
+                                        console.log('フォールバック（objNum+1） → ページ番号:', pageNum);
                                     }
                                 }
                             }
+                        } else {
+                            console.log('pageRefが空です');
                         }
                         // 階層レベルは計算済みのものを使用（取得できなかった場合はデフォルト1）
                         const level = item.level || 1;
@@ -1977,36 +1991,50 @@
                                             const objStr = latin1Decode(objBytes);
                                             let pageRef = '';
 
+                                            // デバッグログ: オブジェクト内容を出力
+                                            console.log('=== しおり検出 ===');
+                                            console.log('タイトル:', title.trim());
+                                            console.log('オブジェクト番号:', obj.number);
+                                            console.log('オブジェクト内容（先頭500文字）:', objStr.substring(0, 500));
+
                                             // /Dest [N 0 R ...] パターンを検索（複数の形式に対応）
                                             // 形式1: /Dest [N 0 R /XYZ ...]
                                             // 形式2: /Dest[N 0 R ...]（スペースなし）
                                             const destMatch = objStr.match(/\/Dest\s*\[\s*(\d+)\s+0\s+R/);
                                             if (destMatch) {
                                                 pageRef = destMatch[1] + ' 0 R';
+                                                console.log('パターン /Dest で検出:', pageRef);
                                             } else {
                                                 // /A <</S /GoTo /D [N 0 R ...]>> パターンを検索
                                                 // [^>]* では >> に対応できないので、[\s\S]*? で最短マッチ
                                                 const actionMatch = objStr.match(/\/A\s*<<[\s\S]*?\/D\s*\[\s*(\d+)\s+0\s+R/);
                                                 if (actionMatch) {
                                                     pageRef = actionMatch[1] + ' 0 R';
+                                                    console.log('パターン /A<<.../D で検出:', pageRef);
                                                 } else {
                                                     // /A N 0 R パターン（間接参照）を検索
                                                     const actionRefMatch = objStr.match(/\/A\s+(\d+)\s+0\s+R/);
                                                     if (actionRefMatch) {
                                                         const actionObjNum = parseInt(actionRefMatch[1], 10);
+                                                        console.log('パターン /A N 0 R で検出, アクションオブジェクト番号:', actionObjNum);
                                                         // グローバルアクションオブジェクトマップからページ参照を取得
                                                         if (globalActionObjectMap.has(actionObjNum)) {
                                                             pageRef = globalActionObjectMap.get(actionObjNum);
+                                                            console.log('マップから解決:', pageRef);
                                                         } else {
                                                             // マップにまだ存在しない場合、アクションオブジェクト番号を記録して後で解決
                                                             pageRef = '__UNRESOLVED__' + actionObjNum;
                                                             unresolvedActionObjNums.add(actionObjNum);
+                                                            console.log('未解決:', pageRef);
                                                         }
                                                     } else {
                                                         // /D [N 0 R ...] パターンを直接検索（/A 外にある場合）
                                                         const dMatch = objStr.match(/\/D\s*\[\s*(\d+)\s+0\s+R/);
                                                         if (dMatch) {
                                                             pageRef = dMatch[1] + ' 0 R';
+                                                            console.log('パターン /D で検出:', pageRef);
+                                                        } else {
+                                                            console.log('ページ参照パターン未検出');
                                                         }
                                                     }
                                                 }
