@@ -1911,6 +1911,18 @@
                                 }
                             }
 
+                            // デバッグ: このObjStmに含まれるオブジェクト番号の範囲を出力
+                            if (objOffsets.length > 0) {
+                                const objNums = objOffsets.map(o => o.number);
+                                const minObjNum = Math.min(...objNums);
+                                const maxObjNum = Math.max(...objNums);
+                                console.log('=== ObjStm', objNum, ': オブジェクト数', objOffsets.length, ', 範囲', minObjNum, '〜', maxObjNum, '===');
+                                // オブジェクト12461が含まれているか確認
+                                if (objNums.includes(12461)) {
+                                    console.log('★★★ オブジェクト 12461 はこのObjStm内に存在します ★★★');
+                                }
+                            }
+
                             // データ部分
                             const dataPart = fullObjStmStr.substring(firstOffset);
 
@@ -2150,15 +2162,59 @@
                 }
             }
 
+            // デバッグ: ObjStm処理完了後のマップ状態を確認
+            console.log('=== ObjStm処理完了 ===');
+            console.log('objStmObjectsMap サイズ:', objStmObjectsMap.size);
+            console.log('globalActionObjectMap サイズ:', globalActionObjectMap.size);
+            // オブジェクト12461がマップに含まれているか確認
+            if (objStmObjectsMap.has(12461)) {
+                console.log('★ オブジェクト 12461 は objStmObjectsMap に存在します');
+                console.log('内容:', objStmObjectsMap.get(12461));
+            } else {
+                console.log('✗ オブジェクト 12461 は objStmObjectsMap に存在しません');
+                // 12460〜12465の範囲のオブジェクトを確認
+                for (let checkNum = 12455; checkNum <= 12465; checkNum++) {
+                    if (objStmObjectsMap.has(checkNum)) {
+                        console.log('  オブジェクト', checkNum, '存在:', objStmObjectsMap.get(checkNum).substring(0, 100));
+                    }
+                }
+            }
+
             // 未解決の間接参照を解決
+            console.log('=== 未解決参照の再解決を開始 ===');
             for (let i = 0; i < decodedTitles.length; i++) {
                 const item = decodedTitles[i];
                 if (item.pageRef && item.pageRef.startsWith('__UNRESOLVED__')) {
                     const actionObjNum = parseInt(item.pageRef.substring(14), 10);
+                    console.log('未解決参照を解決中:', item.title, '→ オブジェクト', actionObjNum);
+
                     if (globalActionObjectMap.has(actionObjNum)) {
                         decodedTitles[i].pageRef = globalActionObjectMap.get(actionObjNum);
+                        console.log('  → 解決成功:', decodedTitles[i].pageRef);
+                    } else if (objStmObjectsMap.has(actionObjNum)) {
+                        // objStmObjectsMapにある場合、内容を解析してページ参照を取得
+                        const objContent = objStmObjectsMap.get(actionObjNum);
+                        console.log('  → objStmObjectsMapに存在、内容解析中:', objContent.substring(0, 200));
+
+                        // /D [N 0 R ...] パターンを検索
+                        const dMatch = objContent.match(/\/D\s*\[\s*(\d+)\s+0\s+R/);
+                        if (dMatch) {
+                            decodedTitles[i].pageRef = dMatch[1] + ' 0 R';
+                            console.log('  → /D パターンで解決:', decodedTitles[i].pageRef);
+                        } else {
+                            // this.pageNum パターンを検索
+                            const pageNumMatch = objContent.match(/this\.pageNum\s*=\s*(\d+)/);
+                            if (pageNumMatch) {
+                                decodedTitles[i].pageRef = 'PAGE:' + pageNumMatch[1];
+                                console.log('  → this.pageNum パターンで解決:', decodedTitles[i].pageRef);
+                            } else {
+                                console.log('  → パターンマッチ失敗、空文字に設定');
+                                decodedTitles[i].pageRef = '';
+                            }
+                        }
                     } else {
                         // 解決できなかった場合は空文字に
+                        console.log('  → どのマップにも存在せず、解決失敗');
                         decodedTitles[i].pageRef = '';
                     }
                 }
