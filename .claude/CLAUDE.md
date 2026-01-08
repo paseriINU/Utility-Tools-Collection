@@ -680,6 +680,19 @@ $ git checkout main && git pull
 
 ## Git Workflow
 
+### GitHub CLI (gh) の使用について
+
+**重要**: Claude Code on the Web環境では、サンドボックスのプロキシ設定の関係で、ghコマンドを使う場合は**`-R owner/repo`（または`--repo`）フラグが必須**です。
+
+```bash
+# ✅ 正しい使い方
+gh pr create -R paseriINU/Utility-Tools-Collection --title "タイトル" --body "本文"
+gh pr merge 123 -R paseriINU/Utility-Tools-Collection --merge
+
+# ❌ 動作しない（リモート認識エラー）
+gh pr create --title "タイトル" --body "本文"
+```
+
 ### コミットメッセージ
 
 - 日本語または英語で記載
