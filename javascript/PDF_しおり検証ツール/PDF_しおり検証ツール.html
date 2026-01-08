@@ -2777,10 +2777,16 @@
                 allObjects.set(objMatch[1], objMatch[2]);
             }
 
+            console.log('=== buildPageMapping デバッグ ===');
+            console.log('PDF本体から収集したオブジェクト数:', allObjects.size);
+            console.log('objStmObjectsMap のサイズ:', objStmObjectsMap.size);
+
             // ObjStmからオブジェクトを追加
             for (const [objNum, objData] of objStmObjectsMap.entries()) {
                 allObjects.set(String(objNum), objData);
             }
+
+            console.log('合計オブジェクト数:', allObjects.size);
 
             // /Pages ツリーからページ順序を取得
             const pageOrder = [];
@@ -2789,12 +2795,18 @@
             let pagesObjNum = null;
             for (const [objNum, objContent] of allObjects.entries()) {
                 if (objContent.match(/\/Type\s*\/Catalog/)) {
+                    console.log('/Catalog 発見: オブジェクト番号', objNum);
                     const pagesRef = objContent.match(/\/Pages\s+(\d+)\s+0\s+R/);
                     if (pagesRef) {
                         pagesObjNum = pagesRef[1];
+                        console.log('/Pages 参照:', pagesObjNum);
                         break;
                     }
                 }
+            }
+
+            if (!pagesObjNum) {
+                console.log('/Catalog または /Pages が見つかりません');
             }
 
             // /Pages ツリーを再帰的に辿ってページ順序を取得
@@ -2822,15 +2834,18 @@
 
             if (pagesObjNum) {
                 collectPagesFromTree(pagesObjNum);
+                console.log('/Pages ツリーから収集したページ数:', pageOrder.length);
             }
 
             // /Pages ツリーから取得できなかった場合はフォールバック
             if (pageOrder.length === 0) {
+                console.log('フォールバック: /Type /Page パターンで検索');
                 const pageObjPattern = /(\d+)\s+\d+\s+obj[\s\S]*?\/Type\s*\/Page[^s]/g;
                 let match;
                 while ((match = pageObjPattern.exec(content)) !== null) {
                     pageOrder.push(match[1]);
                 }
+                console.log('フォールバックで見つかったページ数:', pageOrder.length);
             }
 
             // ページ番号を割り当て
@@ -2838,6 +2853,11 @@
             for (const objNum of pageOrder) {
                 pageObjects[objNum] = pageNum;
                 pageNum++;
+            }
+
+            console.log('最終的なpageObjectsのキー数:', Object.keys(pageObjects).length);
+            if (pageOrder.length > 0) {
+                console.log('最初の5ページ:', pageOrder.slice(0, 5).map(n => n + ' → ' + pageObjects[n]).join(', '));
             }
 
             return pageObjects;
