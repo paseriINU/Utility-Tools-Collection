@@ -2807,16 +2807,30 @@
 
             if (!pagesObjNum) {
                 console.log('/Catalog または /Pages が見つかりません');
+            } else {
+                // /Pages オブジェクトの内容を確認
+                const pagesContent = allObjects.get(pagesObjNum);
+                console.log('/Pages オブジェクト(' + pagesObjNum + ')存在:', pagesContent ? 'あり' : 'なし');
+                if (pagesContent) {
+                    console.log('/Pages オブジェクト内容（先頭500文字）:', pagesContent.substring(0, 500));
+                }
             }
 
             // /Pages ツリーを再帰的に辿ってページ順序を取得
             function collectPagesFromTree(pagesObjNum, depth = 0) {
                 if (depth > 100) return;
                 const pagesContent = allObjects.get(pagesObjNum);
-                if (!pagesContent) return;
+                if (!pagesContent) {
+                    console.log('collectPagesFromTree: オブジェクト', pagesObjNum, 'の内容が見つかりません');
+                    return;
+                }
 
                 const kidsMatch = pagesContent.match(/\/Kids\s*\[([\s\S]*?)\]/);
-                if (!kidsMatch) return;
+                if (!kidsMatch) {
+                    console.log('collectPagesFromTree: オブジェクト', pagesObjNum, 'に /Kids が見つかりません');
+                    console.log('内容:', pagesContent.substring(0, 300));
+                    return;
+                }
 
                 const kidsRefs = kidsMatch[1].match(/(\d+)\s+0\s+R/g) || [];
                 for (const ref of kidsRefs) {
