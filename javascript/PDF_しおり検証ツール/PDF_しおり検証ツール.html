@@ -1910,6 +1910,11 @@
                                 // 注: /Pages の /Kids リストが長い場合があるため、十分な長さを確保
                                 objStmObjectsMap.set(obj.number, objData.substring(0, 5000));
 
+                                // デバッグ: オブジェクト12456の内容を出力
+                                if (obj.number === 12456 || obj.number === '12456') {
+                                    console.log('★★ obj12456内容: ' + objData.substring(0, 500));
+                                }
+
                                 // /S /GoTo と /D [N 0 R ...] を含むアクションオブジェクトを検出
                                 if (objData.includes('/S') && objData.includes('/GoTo')) {
                                     const dMatch = objData.match(/\/D\s*\[\s*(\d+)\s+0\s+R/);
