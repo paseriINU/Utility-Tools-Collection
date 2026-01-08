@@ -1898,9 +1898,24 @@
                             // ObjStm全体をlatin1Decodeしてインデックスを解析
                             const fullObjStmStr = latin1Decode(decompressed);
 
+                            // デバッグ: ObjStm 12594の解析状況
+                            if (objNum === '12594' || objNum === 12594) {
+                                console.log('=== ObjStm 12594 デバッグ ===');
+                                console.log('firstOffset:', firstOffset);
+                                console.log('fullObjStmStr長さ:', fullObjStmStr.length);
+                                console.log('インデックス部分(先頭200文字):', fullObjStmStr.substring(0, 200));
+                            }
+
                             // インデックス部分を取得（firstOffsetまで）
                             const indexPart = fullObjStmStr.substring(0, firstOffset);
                             const indexNums = indexPart.trim().split(/\s+/).filter(s => s.length > 0).map(n => parseInt(n, 10));
+
+                            // デバッグ: ObjStm 12594のインデックス解析結果
+                            if (objNum === '12594' || objNum === 12594) {
+                                console.log('indexPart:', indexPart.substring(0, 500));
+                                console.log('indexNums(先頭20個):', indexNums.slice(0, 20));
+                                console.log('indexNums長さ:', indexNums.length);
+                            }
 
                             // オブジェクト番号とオフセットのペアを解析
                             for (let idx = 0; idx < indexNums.length - 1; idx += 2) {
