@@ -1871,6 +1871,11 @@
                         }
                     }
 
+                    // デバッグ: ObjStm 12594の解凍結果
+                    if (objNum === '12594' || objNum === 12594) {
+                        console.log('★ ObjStm 12594: 解凍結果 decompressed.length =', decompressed ? decompressed.length : 'null');
+                    }
+
                     if (decompressed && decompressed.length > 0) {
                         // アクションオブジェクトをグローバルマップに追加（/A N 0 R 間接参照解決用）
                         // ObjStmのインデックスを解析して各オブジェクトのページ参照を取得
@@ -1879,6 +1884,11 @@
                         let objOffsets = [];
 
                         try {
+                            // デバッグ: ObjStm 12594がこのブロックに入ったか確認
+                            if (objNum === '12594' || objNum === 12594) {
+                                console.log('★ ObjStm 12594: tryブロック開始');
+                            }
+
                             // ObjStm全体をlatin1Decodeしてインデックスを解析
                             const fullObjStmStr = latin1Decode(decompressed);
 
@@ -1941,7 +1951,10 @@
                                 }
                             }
                         } catch (e) {
-                            // ObjStm解析エラー（無視して続行）
+                            // デバッグ: ObjStm 12594でエラー発生時に出力
+                            if (objNum === '12594' || objNum === 12594) {
+                                console.log('★ ObjStm 12594: エラー発生:', e.message);
+                            }
                         }
 
                         // オブジェクト単位でしおりを抽出（インデックスに基づく正確な範囲指定）
