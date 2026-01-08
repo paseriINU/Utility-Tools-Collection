@@ -1889,9 +1889,10 @@
                                 const objNums = objOffsets.map(o => o.number);
                                 console.log('★★★ ObjStm 12594 解析結果: firstOffset=' + firstOffset + ', indexNums.length=' + indexNums.length + ', objOffsets.length=' + objOffsets.length + ', 12456含む=' + objNums.includes(12456) + ', 12461含む=' + objNums.includes(12461));
 
-                                // オブジェクト12456の内容を確認
+                                // オブジェクト12456の内容を確認（緩い比較を使用）
+                                console.log('★ 12456検索開始, objOffsets[0].number=' + objOffsets[0].number + ', typeof=' + typeof objOffsets[0].number);
                                 for (let idx = 0; idx < objOffsets.length; idx++) {
-                                    if (objOffsets[idx].number === 12456) {
+                                    if (objOffsets[idx].number == 12456) {
                                         const nextOff = (idx + 1 < objOffsets.length) ? objOffsets[idx + 1].offset : dataPart.length;
                                         const content = dataPart.substring(objOffsets[idx].offset, nextOff);
                                         console.log('★ obj12456内容: ' + content);
