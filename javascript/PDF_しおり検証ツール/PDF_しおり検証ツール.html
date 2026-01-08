@@ -2041,6 +2041,12 @@
                                                             pageRef = '__UNRESOLVED__' + actionObjNum;
                                                             unresolvedActionObjNums.add(actionObjNum);
                                                             console.log('未解決:', pageRef);
+                                                            // 未解決オブジェクトの内容を確認
+                                                            if (objStmObjectsMap.has(actionObjNum)) {
+                                                                console.log('未解決オブジェクト', actionObjNum, 'の内容:', objStmObjectsMap.get(actionObjNum));
+                                                            } else {
+                                                                console.log('未解決オブジェクト', actionObjNum, 'はobjStmObjectsMapに存在しません');
+                                                            }
                                                         }
                                                     } else {
                                                         // /D [N 0 R ...] パターンを直接検索（/A 外にある場合）
