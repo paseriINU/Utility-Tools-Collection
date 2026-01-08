@@ -1921,6 +1921,10 @@
                                 if (objNums.includes(12461)) {
                                     console.log('★★★ オブジェクト 12461 はこのObjStm内に存在します ★★★');
                                 }
+                                // ObjStm 12596の全オブジェクト番号を出力
+                                if (objNum === '12596' || objNum === 12596) {
+                                    console.log('ObjStm 12596 の全オブジェクト番号:', objNums.join(', '));
+                                }
                             }
 
                             // データ部分
@@ -2098,6 +2102,7 @@
 
                                             // デバッグ: push直前の値を確認
                                             console.log('=== decodedTitles.push直前 ===');
+                                            console.log('抽出元ObjStm:', objNum);
                                             console.log('title:', title);
                                             console.log('pageRef:', pageRef);
                                             console.log('parentRef:', parentRef);
