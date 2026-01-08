@@ -1254,13 +1254,6 @@
             let bookmarks = [];
 
             // モードに応じて解析方法を切り替え
-            console.log('=== 解析モード ===');
-            console.log('mode:', mode);
-            console.log('objStmDecodedTitles.length:', objStmDecodedTitles.length);
-            if (objStmDecodedTitles.length > 0) {
-                console.log('最初のしおり:', JSON.stringify(objStmDecodedTitles[0]));
-            }
-
             if (mode === 'javascript') {
                 // JavaScript版: ObjStmからの抽出を強制使用（フォールバックなし）
                 // JavaScript版で作成されたPDFは0始まりのページ番号を使用するため、+1して1始まりに変換
@@ -1269,15 +1262,8 @@
                     calculateBookmarkLevels(objStmDecodedTitles);
 
                     // ObjStmからバイト直接抽出したタイトルを使用（JavaScript APIで作成されたしおり向け）
-                    // デバッグ: pageObjectsの内容を出力
-                    console.log('=== ページオブジェクトマッピング ===');
-                    console.log('pageObjects:', JSON.stringify(pageObjects, null, 2));
-
                     for (const item of objStmDecodedTitles) {
                         let pageNum = '';
-                        console.log('--- ページ番号変換 ---');
-                        console.log('タイトル:', item.title);
-                        console.log('pageRef:', item.pageRef);
 
                         if (item.pageRef) {
                             // PAGE:N 形式（JavaScriptアクションから取得）の場合
@@ -1871,11 +1857,6 @@
                         }
                     }
 
-                    // デバッグ: ObjStm 12594の解凍結果
-                    if (objNum === '12594' || objNum === 12594) {
-                        console.log('★ ObjStm 12594: 解凍結果 decompressed.length =', decompressed ? decompressed.length : 'null');
-                    }
-
                     if (decompressed && decompressed.length > 0) {
                         // アクションオブジェクトをグローバルマップに追加（/A N 0 R 間接参照解決用）
                         // ObjStmのインデックスを解析して各オブジェクトのページ参照を取得
@@ -1884,11 +1865,6 @@
                         let objOffsets = [];
 
                         try {
-                            // デバッグ: ObjStm 12594がこのブロックに入ったか確認
-                            if (objNum === '12594' || objNum === 12594) {
-                                console.log('★ ObjStm 12594: tryブロック開始');
-                            }
-
                             // ObjStm全体をlatin1Decodeしてインデックスを解析
                             const fullObjStmStr = latin1Decode(decompressed);
 
@@ -1905,19 +1881,10 @@
                                 }
                             }
 
-                            // デバッグ: ObjStm 12594の詳細情報
+                            // デバッグ: ObjStm 12594の詳細情報（1つのログにまとめる）
                             if (objNum === '12594' || objNum === 12594) {
-                                console.log('★★★ ObjStm 12594 解析結果 ★★★');
-                                console.log('firstOffset:', firstOffset);
-                                console.log('indexNums.length:', indexNums.length);
-                                console.log('indexNums(先頭10個):', JSON.stringify(indexNums.slice(0, 10)));
-                                console.log('objOffsets.length:', objOffsets.length);
-                                if (objOffsets.length > 0) {
-                                    const objNums = objOffsets.map(o => o.number);
-                                    console.log('オブジェクト番号一覧:', objNums.join(', '));
-                                    console.log('12456含む:', objNums.includes(12456));
-                                    console.log('12461含む:', objNums.includes(12461));
-                                }
+                                const objNums = objOffsets.map(o => o.number);
+                                console.log('★★★ ObjStm 12594 解析結果: firstOffset=' + firstOffset + ', indexNums.length=' + indexNums.length + ', objOffsets.length=' + objOffsets.length + ', 12456含む=' + objNums.includes(12456) + ', 12461含む=' + objNums.includes(12461));
                             }
 
                             // データ部分
@@ -1951,10 +1918,7 @@
                                 }
                             }
                         } catch (e) {
-                            // デバッグ: ObjStm 12594でエラー発生時に出力
-                            if (objNum === '12594' || objNum === 12594) {
-                                console.log('★ ObjStm 12594: エラー発生:', e.message);
-                            }
+                            // ObjStm解析エラー（無視して続行）
                         }
 
                         // オブジェクト単位でしおりを抽出（インデックスに基づく正確な範囲指定）
@@ -2803,16 +2767,10 @@
                 allObjects.set(objMatch[1], objMatch[2]);
             }
 
-            console.log('=== buildPageMapping デバッグ ===');
-            console.log('PDF本体から収集したオブジェクト数:', allObjects.size);
-            console.log('objStmObjectsMap のサイズ:', objStmObjectsMap.size);
-
             // ObjStmからオブジェクトを追加
             for (const [objNum, objData] of objStmObjectsMap.entries()) {
                 allObjects.set(String(objNum), objData);
             }
-
-            console.log('合計オブジェクト数:', allObjects.size);
 
             // /Pages ツリーからページ順序を取得
             const pageOrder = [];
