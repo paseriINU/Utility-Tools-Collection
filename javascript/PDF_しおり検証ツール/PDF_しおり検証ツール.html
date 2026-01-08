@@ -1780,23 +1780,7 @@
                     const dMatch = actionContent.match(/\/D\s*\[\s*(\d+)\s+0\s+R/);
                     if (dMatch) {
                         globalActionObjectMap.set(actionObjNum, dMatch[1] + ' 0 R');
-                        console.log('PDF本体からアクションオブジェクト登録:', actionObjNum, '→', dMatch[1] + ' 0 R');
-                        console.log('オブジェクト内容:', actionContent.substring(0, 300));
                     }
-                }
-            }
-            console.log('=== PDF本体から登録されたアクションオブジェクト数:', globalActionObjectMap.size, '===');
-
-            // デバッグ: 特定のオブジェクト（12461など）がPDF本体に存在するか確認
-            const debugObjNums = [12461];
-            for (const debugObjNum of debugObjNums) {
-                const debugPattern = new RegExp(debugObjNum + '\\s+0\\s+obj([\\s\\S]*?)endobj');
-                const debugMatch = content.match(debugPattern);
-                if (debugMatch) {
-                    console.log('=== PDF本体でオブジェクト', debugObjNum, 'を発見 ===');
-                    console.log('内容:', debugMatch[1].substring(0, 500));
-                } else {
-                    console.log('=== PDF本体にオブジェクト', debugObjNum, 'は存在しません ===');
                 }
             }
 
@@ -1825,15 +1809,6 @@
                 const numObjects = parseInt(nMatch[1], 10);
                 const firstOffset = parseInt(firstMatch[1], 10);
                 const hasFlate = !!filterMatch;
-
-                // デバッグ: ObjStm 12594の基本情報
-                if (objNum === '12594' || objNum === 12594) {
-                    console.log('★★★ ObjStm 12594 基本情報 ★★★');
-                    console.log('dictContent(先頭300文字):', dictContent.substring(0, 300));
-                    console.log('numObjects:', numObjects);
-                    console.log('firstOffset値:', String(firstOffset));
-                    console.log('hasFlate:', hasFlate);
-                }
 
                 const streamStart = match.index + match[0].length;
                 const endstreamPos = content.indexOf('endstream', streamStart);
@@ -1907,24 +1882,9 @@
                             // ObjStm全体をlatin1Decodeしてインデックスを解析
                             const fullObjStmStr = latin1Decode(decompressed);
 
-                            // デバッグ: ObjStm 12594の解析状況
-                            if (objNum === '12594' || objNum === 12594) {
-                                console.log('=== ObjStm 12594 デバッグ ===');
-                                console.log('firstOffset:', firstOffset);
-                                console.log('fullObjStmStr長さ:', fullObjStmStr.length);
-                                console.log('インデックス部分(先頭200文字):', fullObjStmStr.substring(0, 200));
-                            }
-
                             // インデックス部分を取得（firstOffsetまで）
                             const indexPart = fullObjStmStr.substring(0, firstOffset);
                             const indexNums = indexPart.trim().split(/\s+/).filter(s => s.length > 0).map(n => parseInt(n, 10));
-
-                            // デバッグ: ObjStm 12594のインデックス解析結果
-                            if (objNum === '12594' || objNum === 12594) {
-                                console.log('indexPart:', indexPart.substring(0, 500));
-                                console.log('indexNums(先頭20個):', indexNums.slice(0, 20));
-                                console.log('indexNums長さ:', indexNums.length);
-                            }
 
                             // オブジェクト番号とオフセットのペアを解析
                             for (let idx = 0; idx < indexNums.length - 1; idx += 2) {
@@ -1935,20 +1895,14 @@
                                 }
                             }
 
-                            // デバッグ: このObjStmに含まれるオブジェクト番号の範囲を出力
-                            if (objOffsets.length > 0) {
+                            // デバッグ: ObjStm 12594の詳細情報
+                            if (objNum === '12594' || objNum === 12594) {
                                 const objNums = objOffsets.map(o => o.number);
-                                const minObjNum = Math.min(...objNums);
-                                const maxObjNum = Math.max(...objNums);
-                                console.log('=== ObjStm', objNum, ': オブジェクト数', objOffsets.length, ', 範囲', minObjNum, '〜', maxObjNum, '===');
-                                // オブジェクト12461が含まれているか確認
-                                if (objNums.includes(12461)) {
-                                    console.log('★★★ オブジェクト 12461 はこのObjStm内に存在します ★★★');
-                                }
-                                // ObjStm 12596の全オブジェクト番号を出力
-                                if (objNum === '12596' || objNum === 12596) {
-                                    console.log('ObjStm 12596 の全オブジェクト番号:', objNums.join(', '));
-                                }
+                                console.log('★★★ ObjStm 12594 解析結果 ★★★');
+                                console.log('objOffsets.length:', objOffsets.length);
+                                console.log('オブジェクト番号一覧:', objNums.join(', '));
+                                console.log('12456含む:', objNums.includes(12456));
+                                console.log('12461含む:', objNums.includes(12461));
                             }
 
                             // データ部分
@@ -1969,8 +1923,6 @@
                                     const dMatch = objData.match(/\/D\s*\[\s*(\d+)\s+0\s+R/);
                                     if (dMatch) {
                                         globalActionObjectMap.set(obj.number, dMatch[1] + ' 0 R');
-                                        console.log('アクションオブジェクト登録 (GoTo):', obj.number, '→', dMatch[1] + ' 0 R');
-                                        console.log('オブジェクト内容:', objData.substring(0, 200));
                                     }
                                 }
                                 // /S /JavaScript 形式のアクションオブジェクトを検出
@@ -1980,8 +1932,6 @@
                                     if (pageNumMatch) {
                                         const pageNum = parseInt(pageNumMatch[1], 10);
                                         globalActionObjectMap.set(obj.number, 'PAGE:' + pageNum);
-                                        console.log('アクションオブジェクト登録 (JavaScript):', obj.number, '→ PAGE:', pageNum);
-                                        console.log('オブジェクト内容:', objData.substring(0, 200));
                                     }
                                 }
                             }
@@ -2084,31 +2034,19 @@
                                                     const actionRefMatch = objStr.match(/\/A\s+(\d+)\s+0\s+R/);
                                                     if (actionRefMatch) {
                                                         const actionObjNum = parseInt(actionRefMatch[1], 10);
-                                                        console.log('パターン /A N 0 R で検出, アクションオブジェクト番号:', actionObjNum);
                                                         // グローバルアクションオブジェクトマップからページ参照を取得
                                                         if (globalActionObjectMap.has(actionObjNum)) {
                                                             pageRef = globalActionObjectMap.get(actionObjNum);
-                                                            console.log('マップから解決:', pageRef);
                                                         } else {
                                                             // マップにまだ存在しない場合、アクションオブジェクト番号を記録して後で解決
                                                             pageRef = '__UNRESOLVED__' + actionObjNum;
                                                             unresolvedActionObjNums.add(actionObjNum);
-                                                            console.log('未解決:', pageRef);
-                                                            // 未解決オブジェクトの内容を確認
-                                                            if (objStmObjectsMap.has(actionObjNum)) {
-                                                                console.log('未解決オブジェクト', actionObjNum, 'の内容:', objStmObjectsMap.get(actionObjNum));
-                                                            } else {
-                                                                console.log('未解決オブジェクト', actionObjNum, 'はobjStmObjectsMapに存在しません');
-                                                            }
                                                         }
                                                     } else {
                                                         // /D [N 0 R ...] パターンを直接検索（/A 外にある場合）
                                                         const dMatch = objStr.match(/\/D\s*\[\s*(\d+)\s+0\s+R/);
                                                         if (dMatch) {
                                                             pageRef = dMatch[1] + ' 0 R';
-                                                            console.log('パターン /D で検出:', pageRef);
-                                                        } else {
-                                                            console.log('ページ参照パターン未検出');
                                                         }
                                                     }
                                                 }
@@ -2124,17 +2062,8 @@
                                             objStmTitleCount++;
                                             byteExtractedCount++;
 
-                                            // デバッグ: push直前の値を確認
-                                            console.log('=== decodedTitles.push直前 ===');
-                                            console.log('抽出元ObjStm:', objNum);
-                                            console.log('title:', title);
-                                            console.log('pageRef:', pageRef);
-                                            console.log('parentRef:', parentRef);
-                                            console.log('obj.number:', obj.number);
-
                                             // デコード済みタイトルとページ参照、親参照、オブジェクト番号を追加
                                             const bookmarkItem = { title: title.trim(), pageRef: pageRef, parentRef: parentRef, objNum: obj.number };
-                                            console.log('bookmarkItem:', JSON.stringify(bookmarkItem));
                                             decodedTitles.push(bookmarkItem);
                                         }
                                     }
@@ -2191,68 +2120,33 @@
                 }
             }
 
-            // デバッグ: ObjStm処理完了後のマップ状態を確認
-            console.log('=== ObjStm処理完了 ===');
-            console.log('objStmObjectsMap サイズ:', objStmObjectsMap.size);
-            console.log('globalActionObjectMap サイズ:', globalActionObjectMap.size);
-            // オブジェクト12461がマップに含まれているか確認
-            if (objStmObjectsMap.has(12461)) {
-                console.log('★ オブジェクト 12461 は objStmObjectsMap に存在します');
-                console.log('内容:', objStmObjectsMap.get(12461));
-            } else {
-                console.log('✗ オブジェクト 12461 は objStmObjectsMap に存在しません');
-                // 12455〜12465の範囲のオブジェクトを確認
-                console.log('=== 12455〜12465の範囲のオブジェクト確認 ===');
-                for (let checkNum = 12455; checkNum <= 12465; checkNum++) {
-                    if (objStmObjectsMap.has(checkNum)) {
-                        console.log('  オブジェクト', checkNum, '存在:', objStmObjectsMap.get(checkNum).substring(0, 200));
-                    } else {
-                        console.log('  オブジェクト', checkNum, '存在しない');
-                    }
-                }
-            }
-
-            // 「修正履歴」しおりオブジェクト12456の内容を確認
-            if (objStmObjectsMap.has(12456)) {
-                console.log('=== しおり「修正履歴」オブジェクト 12456 の内容 ===');
-                console.log(objStmObjectsMap.get(12456));
-            }
-
             // 未解決の間接参照を解決
-            console.log('=== 未解決参照の再解決を開始 ===');
             for (let i = 0; i < decodedTitles.length; i++) {
                 const item = decodedTitles[i];
                 if (item.pageRef && item.pageRef.startsWith('__UNRESOLVED__')) {
                     const actionObjNum = parseInt(item.pageRef.substring(14), 10);
-                    console.log('未解決参照を解決中:', item.title, '→ オブジェクト', actionObjNum);
 
                     if (globalActionObjectMap.has(actionObjNum)) {
                         decodedTitles[i].pageRef = globalActionObjectMap.get(actionObjNum);
-                        console.log('  → 解決成功:', decodedTitles[i].pageRef);
                     } else if (objStmObjectsMap.has(actionObjNum)) {
                         // objStmObjectsMapにある場合、内容を解析してページ参照を取得
                         const objContent = objStmObjectsMap.get(actionObjNum);
-                        console.log('  → objStmObjectsMapに存在、内容解析中:', objContent.substring(0, 200));
 
                         // /D [N 0 R ...] パターンを検索
                         const dMatch = objContent.match(/\/D\s*\[\s*(\d+)\s+0\s+R/);
                         if (dMatch) {
                             decodedTitles[i].pageRef = dMatch[1] + ' 0 R';
-                            console.log('  → /D パターンで解決:', decodedTitles[i].pageRef);
                         } else {
                             // this.pageNum パターンを検索
                             const pageNumMatch = objContent.match(/this\.pageNum\s*=\s*(\d+)/);
                             if (pageNumMatch) {
                                 decodedTitles[i].pageRef = 'PAGE:' + pageNumMatch[1];
-                                console.log('  → this.pageNum パターンで解決:', decodedTitles[i].pageRef);
                             } else {
-                                console.log('  → パターンマッチ失敗、空文字に設定');
                                 decodedTitles[i].pageRef = '';
                             }
                         }
                     } else {
                         // 解決できなかった場合は空文字に
-                        console.log('  → どのマップにも存在せず、解決失敗');
                         decodedTitles[i].pageRef = '';
                     }
                 }
