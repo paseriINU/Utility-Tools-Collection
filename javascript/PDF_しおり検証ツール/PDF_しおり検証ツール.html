@@ -1853,6 +1853,10 @@
                     if (decompressed && decompressed.length > 0) {
                         // アクションオブジェクトをグローバルマップに追加（/A N 0 R 間接参照解決用）
                         // ObjStmのインデックスを解析して各オブジェクトのページ参照を取得
+
+                        // objOffsetsをtryブロックの外で宣言（後続の処理で使用）
+                        let objOffsets = [];
+
                         try {
                             // ObjStm全体をlatin1Decodeしてインデックスを解析
                             const fullObjStmStr = latin1Decode(decompressed);
@@ -1862,7 +1866,6 @@
                             const indexNums = indexPart.trim().split(/\s+/).filter(s => s.length > 0).map(n => parseInt(n, 10));
 
                             // オブジェクト番号とオフセットのペアを解析
-                            const objOffsets = [];
                             for (let idx = 0; idx < indexNums.length - 1; idx += 2) {
                                 const objNumber = indexNums[idx];
                                 const objOffset = indexNums[idx + 1];
