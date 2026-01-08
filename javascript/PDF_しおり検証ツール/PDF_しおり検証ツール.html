@@ -1787,6 +1787,19 @@
             }
             console.log('=== PDF本体から登録されたアクションオブジェクト数:', globalActionObjectMap.size, '===');
 
+            // デバッグ: 特定のオブジェクト（12461など）がPDF本体に存在するか確認
+            const debugObjNums = [12461];
+            for (const debugObjNum of debugObjNums) {
+                const debugPattern = new RegExp(debugObjNum + '\\s+0\\s+obj([\\s\\S]*?)endobj');
+                const debugMatch = content.match(debugPattern);
+                if (debugMatch) {
+                    console.log('=== PDF本体でオブジェクト', debugObjNum, 'を発見 ===');
+                    console.log('内容:', debugMatch[1].substring(0, 500));
+                } else {
+                    console.log('=== PDF本体にオブジェクト', debugObjNum, 'は存在しません ===');
+                }
+            }
+
             // 未解決アクションオブジェクト番号を収集（後で検索用）
             const unresolvedActionObjNums = new Set();
             // ObjStm内の全オブジェクトを保存（後で検索用）
