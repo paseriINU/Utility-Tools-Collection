@@ -1826,6 +1826,15 @@
                 const firstOffset = parseInt(firstMatch[1], 10);
                 const hasFlate = !!filterMatch;
 
+                // デバッグ: ObjStm 12594の基本情報
+                if (objNum === '12594' || objNum === 12594) {
+                    console.log('★★★ ObjStm 12594 基本情報 ★★★');
+                    console.log('dictContent(先頭300文字):', dictContent.substring(0, 300));
+                    console.log('numObjects:', numObjects);
+                    console.log('firstOffset値:', String(firstOffset));
+                    console.log('hasFlate:', hasFlate);
+                }
+
                 const streamStart = match.index + match[0].length;
                 const endstreamPos = content.indexOf('endstream', streamStart);
                 if (endstreamPos === -1) continue;
