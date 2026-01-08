@@ -1897,12 +1897,17 @@
 
                             // デバッグ: ObjStm 12594の詳細情報
                             if (objNum === '12594' || objNum === 12594) {
-                                const objNums = objOffsets.map(o => o.number);
                                 console.log('★★★ ObjStm 12594 解析結果 ★★★');
+                                console.log('firstOffset:', firstOffset);
+                                console.log('indexNums.length:', indexNums.length);
+                                console.log('indexNums(先頭10個):', JSON.stringify(indexNums.slice(0, 10)));
                                 console.log('objOffsets.length:', objOffsets.length);
-                                console.log('オブジェクト番号一覧:', objNums.join(', '));
-                                console.log('12456含む:', objNums.includes(12456));
-                                console.log('12461含む:', objNums.includes(12461));
+                                if (objOffsets.length > 0) {
+                                    const objNums = objOffsets.map(o => o.number);
+                                    console.log('オブジェクト番号一覧:', objNums.join(', '));
+                                    console.log('12456含む:', objNums.includes(12456));
+                                    console.log('12461含む:', objNums.includes(12461));
+                                }
                             }
 
                             // データ部分
