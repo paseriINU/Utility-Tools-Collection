@@ -1254,6 +1254,13 @@
             let bookmarks = [];
 
             // モードに応じて解析方法を切り替え
+            console.log('=== 解析モード ===');
+            console.log('mode:', mode);
+            console.log('objStmDecodedTitles.length:', objStmDecodedTitles.length);
+            if (objStmDecodedTitles.length > 0) {
+                console.log('最初のしおり:', JSON.stringify(objStmDecodedTitles[0]));
+            }
+
             if (mode === 'javascript') {
                 // JavaScript版: ObjStmからの抽出を強制使用（フォールバックなし）
                 // JavaScript版で作成されたPDFは0始まりのページ番号を使用するため、+1して1始まりに変換
