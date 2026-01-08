@@ -1908,7 +1908,8 @@
                                 const objData = dataPart.substring(obj.offset, nextOffset);
 
                                 // ObjStm内の全オブジェクトをマップに保存（後で検索用）
-                                objStmObjectsMap.set(obj.number, objData.substring(0, 500));
+                                // 注: /Pages の /Kids リストが長い場合があるため、十分な長さを確保
+                                objStmObjectsMap.set(obj.number, objData.substring(0, 5000));
 
                                 // /S /GoTo と /D [N 0 R ...] を含むアクションオブジェクトを検出
                                 if (objData.includes('/S') && objData.includes('/GoTo')) {
