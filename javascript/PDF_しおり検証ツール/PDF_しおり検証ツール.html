@@ -2063,8 +2063,18 @@
 
                                             objStmTitleCount++;
                                             byteExtractedCount++;
+
+                                            // デバッグ: push直前の値を確認
+                                            console.log('=== decodedTitles.push直前 ===');
+                                            console.log('title:', title);
+                                            console.log('pageRef:', pageRef);
+                                            console.log('parentRef:', parentRef);
+                                            console.log('obj.number:', obj.number);
+
                                             // デコード済みタイトルとページ参照、親参照、オブジェクト番号を追加
-                                            decodedTitles.push({ title: title.trim(), pageRef: pageRef, parentRef: parentRef, objNum: obj.number });
+                                            const bookmarkItem = { title: title.trim(), pageRef: pageRef, parentRef: parentRef, objNum: obj.number };
+                                            console.log('bookmarkItem:', JSON.stringify(bookmarkItem));
+                                            decodedTitles.push(bookmarkItem);
                                         }
                                     }
                                 }
