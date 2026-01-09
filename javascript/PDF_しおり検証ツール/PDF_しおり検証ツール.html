@@ -1950,40 +1950,68 @@
                                     let parenEnd = parenStart;
 
                                     if (isUtf16BE) {
-                                        // UTF-16BE: 終端の ) は1バイト、ただし XX 29 (XX != 00, XX != 5C) は日本語文字
+                                        // UTF-16BE: デコード済みバイト数を追跡して2バイト境界を判定
+                                        // エスケープシーケンス（\NNN等）はrawでは4バイトだがデコード後は1バイト
+                                        let decodedByteCount = 0; // BOMから数えたデコード済みバイト数
+
                                         while (parenEnd < decompressed.length && depth > 0) {
                                             const byte = decompressed[parenEnd];
-                                            const prevByte = parenEnd > 0 ? decompressed[parenEnd - 1] : 0;
 
-                                            // エスケープされた文字はスキップ
-                                            if (prevByte === 0x5C) {
-                                                parenEnd++;
+                                            // エスケープシーケンスの処理
+                                            if (byte === 0x5C) { // バックスラッシュ
+                                                const nextByte = parenEnd + 1 < decompressed.length ? decompressed[parenEnd + 1] : 0;
+
+                                                // 8進数エスケープ \NNN をチェック
+                                                if (nextByte >= 0x30 && nextByte <= 0x37) { // '0'-'7'
+                                                    // 最大3桁の8進数
+                                                    let octalLen = 1;
+                                                    if (parenEnd + 2 < decompressed.length) {
+                                                        const b2 = decompressed[parenEnd + 2];
+                                                        if (b2 >= 0x30 && b2 <= 0x37) {
+                                                            octalLen = 2;
+                                                            if (parenEnd + 3 < decompressed.length) {
+                                                                const b3 = decompressed[parenEnd + 3];
+                                                                if (b3 >= 0x30 && b3 <= 0x37) {
+                                                                    octalLen = 3;
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                    parenEnd += 1 + octalLen; // \NNN をスキップ
+                                                    decodedByteCount++; // デコード後は1バイト
+                                                    continue;
+                                                }
+
+                                                // 特殊文字エスケープ \n, \r, \t, \\, \(, \) など
+                                                parenEnd += 2; // \ と次の1文字をスキップ
+                                                decodedByteCount++; // デコード後は1バイト
                                                 continue;
                                             }
 
-                                            if (byte === 0x28) {
-                                                // 00 28 (ASCII括弧) のみカウント
-                                                if (prevByte === 0x00) {
+                                            if (byte === 0x28) { // '('
+                                                // 2バイト境界で高バイト位置なら括弧、低バイト位置なら文字の一部
+                                                if (decodedByteCount >= 2 && (decodedByteCount - 2) % 2 === 0) {
+                                                    // 高バイト位置: 00 28 のパターンをチェック（前バイトが00か）
+                                                    // ただし実際は ( がそのまま来ることもある
                                                     depth++;
                                                 }
-                                            } else if (byte === 0x29) {
-                                                // 00 29 (ASCII括弧) または 終端の )
-                                                if (prevByte === 0x00) {
-                                                    // 00 29 = ASCII の )
+                                            } else if (byte === 0x29) { // ')'
+                                                // 2バイト境界をチェック
+                                                // BOM(2バイト)後、高バイト位置(偶数)なら終端、低バイト位置(奇数)なら文字の一部
+                                                if (decodedByteCount < 2) {
+                                                    // BOM内またはBOM直後 → 終端
                                                     depth--;
-                                                } else {
-                                                    // XX 29 (XX != 00): 2バイト境界をチェック
-                                                    // BOM(2バイト)後のデータは2バイト単位
-                                                    // 奇数位置なら終端、偶数位置なら日本語文字の一部
-                                                    const offsetFromBOM = parenEnd - parenStart - 2;
-                                                    if (offsetFromBOM < 0 || offsetFromBOM % 2 !== 0) {
-                                                        // 終端の )
-                                                        depth--;
-                                                    }
-                                                    // 偶数位置の XX 29 は日本語文字の下位バイト（スキップ）
+                                                } else if ((decodedByteCount - 2) % 2 === 0) {
+                                                    // 高バイト位置（偶数オフセット）→ 終端の )
+                                                    depth--;
                                                 }
+                                                // 低バイト位置（奇数オフセット）→ 日本語文字の下位バイト（スキップ）
                                             }
-                                            if (depth > 0) parenEnd++;
+
+                                            if (depth > 0) {
+                                                parenEnd++;
+                                                decodedByteCount++;
+                                            }
                                         }
                                     } else {
                                         // Latin-1/ASCII: 従来の1バイト単位検出
@@ -2006,24 +2034,6 @@
                                         // PDFエスケープシーケンスをデコード（\NNN形式の8進数）
                                         // PDF内では 00 バイトは \000 などとエスケープされている
                                         const titleBytes = decodePDFEscapeBytes(rawTitleBytes);
-
-                                        // デバッグ: rawTitleBytesの構造を確認
-                                        if (titleBytes.length > 20 && titleBytes.length < 100) {
-                                            let debugInfo = 'rawLen=' + rawTitleBytes.length + ', decoded=' + titleBytes.length + '\n';
-                                            debugInfo += '先頭10: ';
-                                            for (let d = 0; d < Math.min(10, rawTitleBytes.length); d++) {
-                                                debugInfo += rawTitleBytes[d].toString(16).padStart(2, '0') + ' ';
-                                            }
-                                            debugInfo += '\n末尾10(raw): ';
-                                            for (let d = Math.max(0, rawTitleBytes.length - 10); d < rawTitleBytes.length; d++) {
-                                                debugInfo += rawTitleBytes[d].toString(16).padStart(2, '0') + ' ';
-                                            }
-                                            debugInfo += '\nparenEnd後の5バイト: ';
-                                            for (let d = parenEnd; d < Math.min(parenEnd + 5, decompressed.length); d++) {
-                                                debugInfo += decompressed[d].toString(16).padStart(2, '0') + ' ';
-                                            }
-                                            alert(debugInfo);
-                                        }
 
                                         // UTF-16BE BOM (FE FF) をチェック
                                         let title = '';
