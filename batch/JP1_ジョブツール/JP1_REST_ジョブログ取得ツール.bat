@@ -382,6 +382,13 @@ $baseUrl = "${protocol}://${webConsoleHost}:${webConsolePort}/ajs/api/v1"
 # ■ ユーティリティ関数（メイン処理の前に定義が必要）
 # ==============================================================================
 
+# コンソールに直接出力する関数（ファイルリダイレクトの影響を受けない）
+# CONデバイスに書き込むことで、バッチファイルのリダイレクト（> file）を回避
+function Write-Console {
+    param([string]$Message)
+    $Message | Out-File -FilePath "CON" -Encoding Default
+}
+
 # ステータス値を日本語に変換する関数
 function Get-StatusDisplayName {
     param([string]$status)
@@ -484,9 +491,9 @@ if ($isCompareMode) {
         $waitTargetStatusDisplay = Get-StatusDisplayName -status $waitTargetStatus.Status
 
         if ($isRunning1 -and $isRunning2) {
-            Write-Host "COMPARE_INFO:両方のジョブが実行中です。$unitPath の終了を待機します" -ForegroundColor Yellow
+            Write-Console "COMPARE_INFO:両方のジョブが実行中です。$unitPath の終了を待機します"
         } else {
-            Write-Host "COMPARE_INFO:実行中のジョブを検出しました - $waitTargetPath の終了を待機します" -ForegroundColor Yellow
+            Write-Console "COMPARE_INFO:実行中のジョブを検出しました - $waitTargetPath の終了を待機します"
         }
 
         # 待機ループ
@@ -501,8 +508,8 @@ if ($isCompareMode) {
                 exit 11  # 実行中のジョブが検出された（タイムアウト）
             }
 
-            Write-Host "WAITING:実行中のジョブを検出しました。終了を待機しています...（${waitedSeconds}/${maxWaitSeconds}秒）" -ForegroundColor Yellow
-            Write-Host "WAITING_JOB:$waitTargetPath（ステータス: ${waitTargetStatusDisplay}, 開始日時: $($waitTargetStatus.StartTime), execID: ${waitingExecId}）" -ForegroundColor Yellow
+            Write-Console "WAITING:実行中のジョブを検出しました。終了を待機しています...（${waitedSeconds}/${maxWaitSeconds}秒）"
+            Write-Console "WAITING_JOB:$waitTargetPath（ステータス: ${waitTargetStatusDisplay}, 開始日時: $($waitTargetStatus.StartTime), execID: ${waitingExecId}）"
 
             Start-Sleep -Seconds $checkIntervalSeconds
             $waitedSeconds += $checkIntervalSeconds
@@ -511,7 +518,7 @@ if ($isCompareMode) {
             $recheckStatus = Get-JobRunningStatus -jobPath $waitTargetPath
             if (-not $recheckStatus -or -not $recheckStatus.IsRunning) {
                 $stillRunning = $false
-                Write-Host "WAIT_COMPLETE:ジョブの終了を確認しました（${waitedSeconds}秒待機、execID: ${waitingExecId}）" -ForegroundColor Green
+                Write-Console "WAIT_COMPLETE:ジョブの終了を確認しました（${waitedSeconds}秒待機、execID: ${waitingExecId}）"
             } else {
                 $waitTargetStatusDisplay = Get-StatusDisplayName -status $recheckStatus.Status
             }
@@ -529,7 +536,7 @@ if ($isCompareMode) {
         }
         $rejectedTime = "(実行中ジョブを優先)"
 
-        Write-Host "INFO:待機していたジョブのexecID（${waitingExecId}）を使用してログを取得します" -ForegroundColor Cyan
+        Write-Console "INFO:待機していたジョブのexecID（${waitingExecId}）を使用してログを取得します"
     } else {
         # どちらも実行中でない場合はSTART_TIMEで比較
         # START_TIMEを取得する関数
@@ -799,9 +806,9 @@ while ($isRunning) {
                 exit 11  # 実行中のジョブが検出された（タイムアウト）
             }
 
-            # 待機中メッセージを出力（コンソールへ直接表示）
-            Write-Host "WAITING:実行中のジョブを検出しました。終了を待機しています...（${waitedSeconds}/${maxWaitSeconds}秒）" -ForegroundColor Yellow
-            Write-Host "WAITING_JOB:$unitPath（ステータス: ${runningStatusDisplay}, 開始日時: ${runningStartTime}, execID: ${waitingExecId}）" -ForegroundColor Yellow
+            # 待機中メッセージを出力（CONデバイスに直接出力、リダイレクトの影響を受けない）
+            Write-Console "WAITING:実行中のジョブを検出しました。終了を待機しています...（${waitedSeconds}/${maxWaitSeconds}秒）"
+            Write-Console "WAITING_JOB:$unitPath（ステータス: ${runningStatusDisplay}, 開始日時: ${runningStartTime}, execID: ${waitingExecId}）"
 
             # 指定秒数待機
             Start-Sleep -Seconds $checkIntervalSeconds
@@ -812,7 +819,7 @@ while ($isRunning) {
 
             # 待機していた場合は完了メッセージを出力
             if ($waitedSeconds -gt 0) {
-                Write-Host "WAIT_COMPLETE:ジョブの終了を確認しました（${waitedSeconds}秒待機、execID: ${waitingExecId}）" -ForegroundColor Green
+                Write-Console "WAIT_COMPLETE:ジョブの終了を確認しました（${waitedSeconds}秒待機、execID: ${waitingExecId}）"
             }
         }
     } catch {
@@ -840,7 +847,7 @@ $statusUrl += "&unitNameMatchMethods=EQ"
 if ($waitingExecId) {
     $statusUrl += "&generation=EXECID"
     $statusUrl += "&execID=${waitingExecId}"
-    Write-Host "INFO:待機していたジョブのexecID（${waitingExecId}）を使用してログを取得します" -ForegroundColor Cyan
+    Write-Console "INFO:待機していたジョブのexecID（${waitingExecId}）を使用してログを取得します"
 } else {
     # 世代指定
     $statusUrl += "&generation=${generation}"
