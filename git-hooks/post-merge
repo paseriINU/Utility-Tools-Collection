@@ -1,0 +1,40 @@
+#!/bin/bash
+#
+# post-merge - Pull後に未追跡ファイルを自動削除するクライアント側フック
+#
+# 用途:
+#   リモートで削除されたファイルがローカルに残る問題を解決
+#   git pull 後に自動的に git clean -fd を実行
+#
+# インストール方法:
+#   git config core.hooksPath git-hooks
+#
+# 注意:
+#   - .gitignoreに含まれるファイルは削除されません
+#   - ローカルで作成した未追跡ファイルも削除されます
+#
+
+echo ""
+echo "========================================"
+echo "  post-merge: 未追跡ファイルをクリーン中..."
+echo "========================================"
+
+# 削除対象を確認（dry-run）
+files_to_clean=$(git clean -fd -n 2>/dev/null)
+
+if [ -z "$files_to_clean" ]; then
+    echo "  削除対象のファイルはありません"
+else
+    echo "  削除対象:"
+    echo "$files_to_clean" | sed 's/^/    /'
+    echo ""
+
+    # 実際に削除
+    git clean -fd
+
+    echo ""
+    echo "  削除完了"
+fi
+
+echo "========================================"
+echo ""
