@@ -1,15 +1,15 @@
 @echo off
-title JP1 ジョブツール サンプル
+title JP1　標準ログ
 setlocal enabledelayedexpansion
 
 rem UNCパス対応（PushD/PopDで自動マッピング）
 pushd "%~dp0"
 
 rem ============================================================================
-rem JP1 ジョブツール サンプル
+rem JP1　標準ログ
 rem
 rem 説明:
-rem   JP1_REST_ジョブ実行ログ取得ツール.bat または JP1_REST_ジョブ情報取得ツール.bat を呼び出し、
+rem   JP1ジョブ実行.bat または JP1ジョブログ取得.bat を呼び出し、
 rem   ジョブの実行結果をファイルに保存します。
 rem
 rem 機能:
@@ -96,14 +96,14 @@ if /i "%MODE%"=="EXEC" (
     echo ジョブを実行中...
     echo （完了まで時間がかかる場合があります）
     echo.
-    call "%SCRIPT_DIR%JP1_REST_ジョブ実行ログ取得ツール.bat" "%UNIT_PATH%" > "%TEMP_FILE%"
+    call "%SCRIPT_DIR%JP1ジョブ実行.bat" "%UNIT_PATH%" > "%TEMP_FILE%"
 ) else if /i "%MODE%"=="GET" (
     echo ログを取得中...
     echo.
     if "%UNIT_PATH_2%"=="" (
-        call "%SCRIPT_DIR%JP1_REST_ジョブ情報取得ツール.bat" "%UNIT_PATH%" > "%TEMP_FILE%"
+        call "%SCRIPT_DIR%JP1ジョブログ取得.bat" "%UNIT_PATH%" > "%TEMP_FILE%"
     ) else (
-        call "%SCRIPT_DIR%JP1_REST_ジョブ情報取得ツール.bat" "%UNIT_PATH%" "%UNIT_PATH_2%" > "%TEMP_FILE%"
+        call "%SCRIPT_DIR%JP1ジョブログ取得.bat" "%UNIT_PATH%" "%UNIT_PATH_2%" > "%TEMP_FILE%"
     )
 ) else (
     echo [エラー] 無効なモードです: %MODE%
@@ -357,7 +357,9 @@ if "%JOB_START_TIME%"=="" (
 
 rem 出力ファイル名を新形式で作成
 rem 形式: 【ジョブ実行結果】【{日時}実行分】【{終了状態}】{ジョブネット名}_{コメント}.txt
-set "OUTPUT_FILE=%~dp0【ジョブ実行結果】【%JOB_START_TIME%実行分】【%END_STATUS%】%JOBNET_NAME%_%JOBNET_COMMENT%.txt"
+set "OUTPUT_DIR=%~dp0..\02.Output"
+if not exist "%OUTPUT_DIR%" mkdir "%OUTPUT_DIR%"
+set "OUTPUT_FILE=%OUTPUT_DIR%\【ジョブ実行結果】【%JOB_START_TIME%実行分】【%END_STATUS%】%JOBNET_NAME%_%JOBNET_COMMENT%.txt"
 
 rem メタデータ行を除いた実行結果詳細を出力ファイルに保存
 rem 除外対象: START_TIME:, END_STATUS:, JOBNET_NAME:, JOBNET_COMMENT:, JOB_STATUS:, SELECTED_*, REJECTED_*

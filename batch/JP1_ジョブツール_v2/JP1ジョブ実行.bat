@@ -8,6 +8,15 @@ rem バッチファイル部分（PowerShellを起動するためのラッパー
 rem ============================================================================
 rem このファイルはバッチファイルとPowerShellスクリプトの両方として動作します。
 rem 引数にユニットパスを指定して実行してください。
+rem
+rem 使い方:
+rem   JP1ジョブ実行.bat "ジョブパス" [出力オプション]
+rem
+rem 出力オプション:
+rem   /LOG      - ログファイル出力のみ（デフォルト）
+rem   /NOTEPAD  - メモ帳で開く
+rem   /EXCEL    - Excelに貼り付け
+rem   /WINMERGE - WinMergeで比較
 rem ============================================================================
 
 rem 引数チェック: 引数が空の場合はエラーコード1で終了
@@ -15,6 +24,10 @@ if "%~1"=="" exit /b 1
 
 rem 第1引数（ジョブパス）を環境変数に設定（PowerShellに渡すため）
 set "JP1_UNIT_PATH=%~1"
+
+rem 第2引数（出力オプション）を環境変数に設定
+set "JP1_OUTPUT_MODE=%~2"
+if "%JP1_OUTPUT_MODE%"=="" exit /b 1
 
 rem UNCパス対応（PushD/PopDで自動マッピング）
 pushd "%~dp0"
@@ -43,7 +56,7 @@ exit /b %EXITCODE%
 #
 # 使い方:
 #   ジョブのパスを指定して実行します:
-#     JP1_REST_ジョブ実行ログ取得ツール.bat "/JobGroup/Jobnet/Job1"
+#     JP1ジョブ実行.bat "/JobGroup/Jobnet/Job1"
 #
 #   ※ ルートジョブネットを自動特定して即時実行し、指定ジョブの完了を待ちます
 #
@@ -564,24 +577,87 @@ try {
         $execResultContent = $resultJson.execResultDetails
     }
 
-    # 開始日時を最初の行に出力（ファイル名用フォーマット）
-    [Console]::WriteLine("START_TIME:$startTimeForFileName")
-
-    # 終了状態を出力（ファイル名用、日本語変換済み）
+    # 終了状態を取得（日本語変換済み）
     $endStatusDisplay = Get-StatusDisplayName -status $jobStatus
+
+    # 出力オプションを環境変数から取得
+    $outputMode = $env:JP1_OUTPUT_MODE
+    if (-not $outputMode) { $outputMode = "/LOG" }
+
+    # 出力ディレクトリを作成
+    $outputDir = Join-Path $scriptDir "..\02.Output"
+    if (-not (Test-Path $outputDir)) {
+        New-Item -ItemType Directory -Path $outputDir -Force | Out-Null
+    }
+
+    # 出力ファイル名を生成
+    $outputFileName = "【ジョブ実行結果】【${startTimeForFileName}実行分】【${endStatusDisplay}】${jobnetName}_${jobnetComment}.txt"
+    $outputFilePath = Join-Path $outputDir $outputFileName
+
+    # 実行結果詳細をファイルに出力
+    $execResultContent | Out-File -FilePath $outputFilePath -Encoding Default
+
+    # メタデータを標準出力に出力（後方互換性のため）
+    [Console]::WriteLine("START_TIME:$startTimeForFileName")
     [Console]::WriteLine("END_STATUS:$endStatusDisplay")
-
-    # ジョブネット名を出力（ファイル名用）
     [Console]::WriteLine("JOBNET_NAME:$jobnetName")
-
-    # ジョブネットコメントを出力（ファイル名用）
     [Console]::WriteLine("JOBNET_COMMENT:$jobnetComment")
-
-    # ジョブ終了ステータスを出力（英語、後方互換性のため維持）
     [Console]::WriteLine("JOB_STATUS:$jobStatus")
+    [Console]::WriteLine("OUTPUT_FILE:$outputFilePath")
 
-    # 実行結果詳細を出力
-    [Console]::WriteLine($execResultContent)
+    # 出力オプションに応じた後処理
+    switch ($outputMode.ToUpper()) {
+        "/NOTEPAD" {
+            # メモ帳で開く
+            Start-Process notepad $outputFilePath
+        }
+        "/EXCEL" {
+            # Excelに貼り付け
+            $excelFileName = $env:EXCEL_FILE_NAME
+            $excelSheetName = $env:EXCEL_SHEET_NAME
+            $excelPasteCell = $env:EXCEL_PASTE_CELL
+
+            if (-not $excelSheetName) { $excelSheetName = "Sheet1" }
+            if (-not $excelPasteCell) { $excelPasteCell = "A1" }
+
+            if ($excelFileName) {
+                $excelPath = Join-Path $scriptDir $excelFileName
+                if (Test-Path $excelPath) {
+                    try {
+                        $logContent = Get-Content $outputFilePath -Encoding Default -Raw
+                        $excel = New-Object -ComObject Excel.Application
+                        $excel.Visible = $true
+                        $workbook = $excel.Workbooks.Open($excelPath)
+                        $sheet = $workbook.Worksheets.Item($excelSheetName)
+                        $sheet.Range($excelPasteCell).Value2 = $logContent
+                        $workbook.Save()
+                        [System.Runtime.Interopservices.Marshal]::ReleaseComObject($sheet) | Out-Null
+                        [System.Runtime.Interopservices.Marshal]::ReleaseComObject($workbook) | Out-Null
+                        [System.Runtime.Interopservices.Marshal]::ReleaseComObject($excel) | Out-Null
+                        [Console]::WriteLine("[OK] Excelにログを貼り付けました: $excelSheetName $excelPasteCell")
+                    } catch {
+                        [Console]::WriteLine("[エラー] Excel貼り付けに失敗しました: $($_.Exception.Message)")
+                    }
+                } else {
+                    [Console]::WriteLine("[警告] Excelファイルが見つかりません: $excelPath")
+                }
+            } else {
+                [Console]::WriteLine("[警告] EXCEL_FILE_NAMEが設定されていません")
+            }
+        }
+        "/WINMERGE" {
+            # WinMergeで同じファイルを比較（TODO: ユーザーが実装）
+            [Console]::WriteLine("WinMerge比較は未実装です")
+        }
+        "/LOG" {
+            # ログファイル出力のみ（何もしない）
+        }
+        default {
+            # デフォルトはログファイル出力のみ
+        }
+    }
+
+    [Console]::WriteLine("出力完了: $outputFilePath")
 } catch {
     exit 8  # 詳細取得エラー
 }
