@@ -1759,8 +1759,8 @@
             while ((actionMatch = actionObjPattern.exec(content)) !== null) {
                 const actionObjNum = parseInt(actionMatch[1], 10);
                 const actionContent = actionMatch[2];
-                // /S /GoTo と /D [N 0 R ...] を含むアクションオブジェクトを検出
-                if (actionContent.includes('/S') && actionContent.includes('/GoTo')) {
+                // /S /GoTo と /D [N 0 R ...] を含むアクションオブジェクトを検出（大文字小文字を区別しない）
+                if (actionContent.includes('/S') && /\/goto/i.test(actionContent)) {
                     const dMatch = actionContent.match(/\/D\s*\[\s*(\d+)\s+0\s+R/);
                     if (dMatch) {
                         globalActionObjectMap.set(actionObjNum, dMatch[1] + ' 0 R');
@@ -1892,8 +1892,8 @@
                                 // 注: /Pages の /Kids リストが長い場合があるため、十分な長さを確保
                                 objStmObjectsMap.set(obj.number, objData.substring(0, 5000));
 
-                                // /S /GoTo と /D [N 0 R ...] を含むアクションオブジェクトを検出
-                                if (objData.includes('/S') && objData.includes('/GoTo')) {
+                                // /S /GoTo と /D [N 0 R ...] を含むアクションオブジェクトを検出（大文字小文字を区別しない）
+                                if (objData.includes('/S') && /\/goto/i.test(objData)) {
                                     const dMatch = objData.match(/\/D\s*\[\s*(\d+)\s+0\s+R/);
                                     if (dMatch) {
                                         globalActionObjectMap.set(obj.number, dMatch[1] + ' 0 R');
@@ -2117,9 +2117,6 @@
                         const objContentMatch = content.match(objContentPattern);
                         if (objContentMatch) {
                             const objContent = objContentMatch[1];
-                            // デバッグ: オブジェクトの内容を表示
-                            alert('オブジェクト ' + actionObjNum + ' の内容:\n' + objContent.substring(0, 500));
-
                             // /D [N 0 R ...] パターンを検索
                             const dMatch = objContent.match(/\/D\s*\[\s*(\d+)\s+0\s+R/);
                             if (dMatch) {
