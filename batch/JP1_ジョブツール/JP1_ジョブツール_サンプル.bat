@@ -53,13 +53,6 @@ rem 2つのジョブを比較して新しい方を取得する場合に設定
 rem 空欄の場合は比較なし
 set "UNIT_PATH_2="
 
-rem === スクロール位置の設定 ===
-rem メモ帳で開いた後、指定した文字列を含む行に自動でジャンプします
-rem 事前に行番号を特定し、Ctrl+Gで移動するため検索窓は開きません
-rem 空欄の場合はスクロールせずにファイル先頭を表示します
-rem 例: "エラー", "ERROR", "RC=", "異常終了" など
-set "SCROLL_TO_TEXT="
-
 rem === Excel貼り付け設定 ===
 rem ログをExcelファイルに貼り付ける場合は以下を設定してください
 rem 空欄の場合はExcel貼り付けを行いません
@@ -447,47 +440,6 @@ if not "%EXCEL_FILE_NAME%"=="" (
         echo [警告] Excelファイルが見つかりません: !EXCEL_PATH!
         echo.
     )
-)
-
-rem 検索文字列が指定されている場合、行番号を事前に特定
-set "SCROLL_LINE_NUM="
-if not "%SCROLL_TO_TEXT%"=="" (
-    echo スクロール位置: %SCROLL_TO_TEXT%
-    rem PowerShellで行番号を特定
-    for /f %%L in ('powershell -NoProfile -Command ^
-        "$searchText = [regex]::Escape('%SCROLL_TO_TEXT%');" ^
-        "$i = 0;" ^
-        "Get-Content -Path '%OUTPUT_FILE%' -Encoding UTF8 | ForEach-Object { $i++; if ($_ -match $searchText) { Write-Output $i; break } }"') do set "SCROLL_LINE_NUM=%%L"
-)
-
-rem メモ帳で開く
-start notepad "%OUTPUT_FILE%"
-
-rem 行番号が特定できた場合、その行にジャンプ（Ctrl+Gで行へ移動）
-if defined SCROLL_LINE_NUM (
-    echo ジャンプ先行番号: %SCROLL_LINE_NUM%
-    echo.
-    rem PowerShellでCtrl+Gを送信して行へ移動
-    rem ※検索ダイアログではなく「行へ移動」ダイアログを使用（移動後自動で閉じる）
-    powershell -NoProfile -Command ^
-        "$lineNum = '%SCROLL_LINE_NUM%';" ^
-        "Start-Sleep -Milliseconds 600;" ^
-        "$wshell = New-Object -ComObject WScript.Shell;" ^
-        "$activated = $wshell.AppActivate('メモ帳');" ^
-        "if (-not $activated) { $activated = $wshell.AppActivate('Notepad') };" ^
-        "if ($activated) {" ^
-        "  Start-Sleep -Milliseconds 100;" ^
-        "  $wshell.SendKeys('^g');" ^
-        "  Start-Sleep -Milliseconds 200;" ^
-        "  $wshell.SendKeys($lineNum);" ^
-        "  Start-Sleep -Milliseconds 100;" ^
-        "  $wshell.SendKeys('{ENTER}');" ^
-        "}"
-) else (
-    if not "%SCROLL_TO_TEXT%"=="" (
-        echo [情報] 指定した文字列がファイル内に見つかりませんでした
-    )
-    echo.
 )
 
 popd
