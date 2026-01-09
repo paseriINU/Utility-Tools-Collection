@@ -78,6 +78,15 @@ exit /b %EXITCODE%
 # これにより、日本語Windowsのコマンドプロンプトで正しく表示されます。
 [Console]::OutputEncoding = [System.Text.Encoding]::GetEncoding(932)
 
+# ------------------------------------------------------------------------------
+# コンソール出力関数
+# ------------------------------------------------------------------------------
+# ファイルリダイレクト時でもコンソールに出力するための関数
+function Write-Console {
+    param([string]$Message)
+    $Message | Out-File -FilePath "CON" -Encoding Default
+}
+
 # ==============================================================================
 # ■ 接続設定セクション
 # ==============================================================================
@@ -299,6 +308,8 @@ $encodedJobName = [System.Uri]::EscapeDataString($jobName)
 #   - 指定したユニットが存在するか
 #   - 指定したユニットがジョブ（JOB系）かどうか
 
+Write-Console "[STEP 1] ユニット存在確認中..."
+
 $defUrl = "${baseUrl}/objects/statuses?mode=search"
 $defUrl += "&manager=${managerHost}"
 $defUrl += "&serviceName=${schedulerService}"
@@ -348,6 +359,8 @@ try {
 # ==============================================================================
 # STEP 1で取得した rootJobnetName を使用してルートジョブネットを特定します。
 
+Write-Console "[STEP 2] ルートジョブネット特定中..."
+
 if (-not $rootJobnetName) {
     exit 4  # ルートジョブネット特定エラー
 }
@@ -356,6 +369,8 @@ if (-not $rootJobnetName) {
 # STEP 3: 親ジョブネットのコメント取得
 # ==============================================================================
 # 親ジョブネットの定義を取得し、コメント（cm属性）を取得します。
+
+Write-Console "[STEP 3] 親ジョブネットのコメント取得中..."
 
 $encodedGrandParentPath = [System.Uri]::EscapeDataString($grandParentPath)
 $encodedJobnetName = [System.Uri]::EscapeDataString($jobnetName)
@@ -396,6 +411,8 @@ try {
 # ルートジョブネットを即時実行します。
 # API: POST /ajs/api/v1/objects/definitions/{unitName}/actions/registerImmediateExec/invoke
 
+Write-Console "[STEP 4] 即時実行登録中..."
+
 $encodedRootJobnet = [System.Uri]::EscapeDataString($rootJobnetName)
 
 # URLにはクエリパラメータを含めない（パラメータはボディに指定）
@@ -435,6 +452,8 @@ try {
 # STEP 5: 状態監視（指定ジョブの完了待ち）
 # ==============================================================================
 # 指定したジョブの状態を監視し、終了を待ちます。
+
+Write-Console "[STEP 5] ジョブ完了待機中..."
 
 $statusUrl = "${baseUrl}/objects/statuses?mode=search"
 $statusUrl += "&manager=${managerHost}"
@@ -516,6 +535,8 @@ if ($jobStartTime) {
 # STEP 6: 実行結果詳細取得API
 # ==============================================================================
 # ジョブの実行結果詳細を取得します。
+
+Write-Console "[STEP 6] 実行結果詳細取得中..."
 
 # ステータス値を日本語に変換する関数
 function Get-StatusDisplayName {
