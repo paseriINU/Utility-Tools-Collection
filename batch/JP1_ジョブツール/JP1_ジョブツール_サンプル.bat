@@ -60,6 +60,20 @@ rem 空欄の場合はスクロールせずにファイル先頭を表示しま�
 rem 例: "エラー", "ERROR", "RC=", "異常終了" など
 set "SCROLL_TO_TEXT="
 
+rem === Excel貼り付け設定 ===
+rem ログをExcelファイルに貼り付ける場合は以下を設定してください
+rem 空欄の場合はExcel貼り付けを行いません
+rem
+rem Excelファイル名（このバッチと同じフォルダに配置）
+set "EXCEL_FILE_NAME="
+rem 例: set "EXCEL_FILE_NAME=ログ貼り付け用.xlsx"
+
+rem 貼り付け先シート名
+set "EXCEL_SHEET_NAME=Sheet1"
+
+rem 貼り付け先セル位置
+set "EXCEL_PASTE_CELL=A1"
+
 rem === ファイル名の設定 ===
 rem ファイル名形式: 【ジョブ実行結果】【{日時}実行分】【{終了状態}】{ジョブネット名}_{コメント}.txt
 rem 例: 【ジョブ実行結果】【20251010_163520実行分】【正常終了】Jobnet_テスト.txt
@@ -400,6 +414,40 @@ if not "%JOB_STATUS%"=="" (
     )
 )
 echo.
+
+rem ======================================================================
+rem Excel貼り付け処理（EXCEL_FILE_NAMEが設定されている場合のみ）
+rem ======================================================================
+if not "%EXCEL_FILE_NAME%"=="" (
+    set "EXCEL_PATH=%~dp0%EXCEL_FILE_NAME%"
+    if exist "!EXCEL_PATH!" (
+        echo Excelにログを貼り付け中...
+        powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+            "$logFile = '%OUTPUT_FILE%';" ^
+            "$excelPath = '!EXCEL_PATH!';" ^
+            "$sheetName = '%EXCEL_SHEET_NAME%';" ^
+            "$pasteCell = '%EXCEL_PASTE_CELL%';" ^
+            "try {" ^
+            "  $logContent = Get-Content $logFile -Encoding Default -Raw;" ^
+            "  $excel = New-Object -ComObject Excel.Application;" ^
+            "  $excel.Visible = $true;" ^
+            "  $workbook = $excel.Workbooks.Open($excelPath);" ^
+            "  $sheet = $workbook.Worksheets.Item($sheetName);" ^
+            "  $sheet.Range($pasteCell).Value2 = $logContent;" ^
+            "  $workbook.Save();" ^
+            "  [System.Runtime.Interopservices.Marshal]::ReleaseComObject($sheet) | Out-Null;" ^
+            "  [System.Runtime.Interopservices.Marshal]::ReleaseComObject($workbook) | Out-Null;" ^
+            "  [System.Runtime.Interopservices.Marshal]::ReleaseComObject($excel) | Out-Null;" ^
+            "  Write-Host '[OK] Excelにログを貼り付けました:' $sheetName $pasteCell;" ^
+            "} catch {" ^
+            "  Write-Host '[エラー] Excel貼り付けに失敗しました:' $_.Exception.Message;" ^
+            "}"
+        echo.
+    ) else (
+        echo [警告] Excelファイルが見つかりません: !EXCEL_PATH!
+        echo.
+    )
+)
 
 rem 検索文字列が指定されている場合、行番号を事前に特定
 set "SCROLL_LINE_NUM="
