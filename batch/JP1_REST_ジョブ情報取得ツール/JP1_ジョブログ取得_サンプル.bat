@@ -237,24 +237,30 @@ if not "%RUNNING_WARNING%"=="" (
     pause >nul
 )
 
-rem 一時ファイルから SELECTED_PATH: 行を取得して選択されたパスを抽出
+rem 一時ファイルから比較結果情報を抽出
 set "SELECTED_PATH="
+set "SELECTED_TIME="
+set "REJECTED_PATH="
+set "REJECTED_TIME="
 for /f "tokens=1,* delims=:" %%a in ('type "%TEMP_FILE%" 2^>nul') do (
-    if "%%a"=="SELECTED_PATH" (
-        set "SELECTED_PATH=%%b"
-        goto :GOT_SELECTED_PATH
-    )
+    if "%%a"=="SELECTED_PATH" set "SELECTED_PATH=%%b"
+    if "%%a"=="SELECTED_TIME" set "SELECTED_TIME=%%b"
+    if "%%a"=="REJECTED_PATH" set "REJECTED_PATH=%%b"
+    if "%%a"=="REJECTED_TIME" set "REJECTED_TIME=%%b"
 )
-:GOT_SELECTED_PATH
 
-rem 比較モードで選択されたパスがある場合、表示して確認を求める
+rem 比較モードで選択されたパスがある場合、両方の情報を表示して確認を求める
 if not "%SELECTED_PATH%"=="" (
     echo.
     echo ================================================================
     echo   [比較結果] 新しい方のジョブを選択しました
     echo ================================================================
     echo.
-    echo   選択されたジョブ: %SELECTED_PATH%
+    echo   [選択] %SELECTED_PATH%
+    echo          開始日時: %SELECTED_TIME%
+    echo.
+    echo   [除外] %REJECTED_PATH%
+    echo          開始日時: %REJECTED_TIME%
     echo.
     echo   続行する場合は任意のキーを押してください...
     echo.
@@ -345,13 +351,16 @@ rem 形式: 【ジョブ実行結果】【{日時}実行分】【{終了状態}�
 set "OUTPUT_FILE=%~dp0【ジョブ実行結果】【%JOB_START_TIME%実行分】【%END_STATUS%】%JOBNET_NAME%_%JOBNET_COMMENT%.txt"
 
 rem メタデータ行を除いた実行結果詳細を出力ファイルに保存
-rem 除外対象: RUNNING_WARNING:, SELECTED_PATH:, START_TIME:, END_STATUS:, JOBNET_NAME:, JOBNET_COMMENT:
+rem 除外対象: RUNNING_WARNING:, SELECTED_*:, REJECTED_*:, START_TIME:, END_STATUS:, JOBNET_*:
 (for /f "usebackq tokens=* delims=" %%L in ("%TEMP_FILE%") do (
     set "LINE=%%L"
     setlocal enabledelayedexpansion
     set "SKIP="
     if "!LINE:~0,16!"=="RUNNING_WARNING:" set "SKIP=1"
     if "!LINE:~0,14!"=="SELECTED_PATH:" set "SKIP=1"
+    if "!LINE:~0,14!"=="SELECTED_TIME:" set "SKIP=1"
+    if "!LINE:~0,14!"=="REJECTED_PATH:" set "SKIP=1"
+    if "!LINE:~0,14!"=="REJECTED_TIME:" set "SKIP=1"
     if "!LINE:~0,11!"=="START_TIME:" set "SKIP=1"
     if "!LINE:~0,11!"=="END_STATUS:" set "SKIP=1"
     if "!LINE:~0,12!"=="JOBNET_NAME:" set "SKIP=1"

@@ -374,6 +374,9 @@ $baseUrl = "${protocol}://${webConsoleHost}:${webConsolePort}/ajs/api/v1"
 # 3. どちらも実行中でなければ、START_TIMEを比較して新しい方を選択
 
 $selectedPath = ""  # 比較モードで選択されたパス
+$selectedTime = ""  # 比較モードで選択されたジョブの時間
+$rejectedPath = ""  # 比較モードで選択されなかったパス
+$rejectedTime = ""  # 比較モードで選択されなかったジョブの時間
 
 if ($isCompareMode) {
     # ジョブが実行中かどうかをチェックする関数
@@ -500,13 +503,22 @@ if ($isCompareMode) {
         exit 8  # 比較モードで両方のジョブ取得に失敗
     }
 
+    # 元のunitPathを保存（比較結果表示用）
+    $originalUnitPath = $unitPath
+
     # 片方だけ失敗した場合
     if (-not $startTime1) {
         $unitPath = $unitPath2
         $selectedPath = $unitPath2
+        $selectedTime = $startTime2
+        $rejectedPath = $originalUnitPath
+        $rejectedTime = "(取得失敗)"
     } elseif (-not $startTime2) {
         # $unitPath はそのまま
         $selectedPath = $unitPath
+        $selectedTime = $startTime1
+        $rejectedPath = $unitPath2
+        $rejectedTime = "(取得失敗)"
     } else {
         # 両方成功した場合、日時を比較
         try {
@@ -516,16 +528,28 @@ if ($isCompareMode) {
             if ($dt2 -gt $dt1) {
                 $unitPath = $unitPath2
                 $selectedPath = $unitPath2
+                $selectedTime = $startTime2
+                $rejectedPath = $originalUnitPath
+                $rejectedTime = $startTime1
             } else {
                 $selectedPath = $unitPath
+                $selectedTime = $startTime1
+                $rejectedPath = $unitPath2
+                $rejectedTime = $startTime2
             }
         } catch {
             # パースエラーの場合は文字列比較
             if ($startTime2 -gt $startTime1) {
                 $unitPath = $unitPath2
                 $selectedPath = $unitPath2
+                $selectedTime = $startTime2
+                $rejectedPath = $originalUnitPath
+                $rejectedTime = $startTime1
             } else {
                 $selectedPath = $unitPath
+                $selectedTime = $startTime1
+                $rejectedPath = $unitPath2
+                $rejectedTime = $startTime2
             }
         }
     }
@@ -850,9 +874,12 @@ if ($execIdList.Count -gt 0) {
                 [Console]::WriteLine($runningWarning)
             }
 
-            # 比較モードで選択されたパスを出力（存在する場合）
+            # 比較モードで選択されたパスと時間を出力（存在する場合）
             if ($selectedPath) {
                 [Console]::WriteLine("SELECTED_PATH:$selectedPath")
+                [Console]::WriteLine("SELECTED_TIME:$selectedTime")
+                [Console]::WriteLine("REJECTED_PATH:$rejectedPath")
+                [Console]::WriteLine("REJECTED_TIME:$rejectedTime")
             }
 
             # 開始日時を最初の行に出力（ファイル名用フォーマット）
