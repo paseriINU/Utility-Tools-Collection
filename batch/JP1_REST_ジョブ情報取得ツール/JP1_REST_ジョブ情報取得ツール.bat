@@ -69,6 +69,7 @@ exit /b %EXITCODE%
 #   6: 詳細取得エラー（STEP 3: 実行結果詳細の取得に失敗）
 #   8: 比較モードで両方のジョブ取得に失敗
 #   9: API接続エラー（各STEPでの接続失敗）
+#  10: 比較モードで実行中のジョブが検出された
 #
 # 参考:
 #   https://itpfdoc.hitachi.co.jp/manuals/3021/30213b1920/AJSO0280.HTM
@@ -365,14 +366,89 @@ if ($useHttps) {
 $baseUrl = "${protocol}://${webConsoleHost}:${webConsolePort}/ajs/api/v1"
 
 # ==============================================================================
-# 2引数モード: START_TIME比較処理
+# 2引数モード: 実行中チェック＆START_TIME比較処理
 # ==============================================================================
-# 2つのジョブパスが指定された場合、両方のSTART_TIMEを取得して比較し、
-# 新しい方のジョブパスを $unitPath に設定します。
+# 2つのジョブパスが指定された場合:
+# 1. まず両方のジョブが実行中かどうかをチェック
+# 2. 実行中のジョブがあれば、そのジョブが最新として警告を出力して終了
+# 3. どちらも実行中でなければ、START_TIMEを比較して新しい方を選択
 
 $selectedPath = ""  # 比較モードで選択されたパス
 
 if ($isCompareMode) {
+    # ジョブが実行中かどうかをチェックする関数
+    function Get-JobRunningStatus {
+        param([string]$jobPath)
+
+        $lastSlash = $jobPath.LastIndexOf("/")
+        if ($lastSlash -le 0) { return $null }
+
+        $parent = $jobPath.Substring(0, $lastSlash)
+        $name = $jobPath.Substring($lastSlash + 1)
+        if (-not $name) { return $null }
+
+        $encParent = [System.Uri]::EscapeDataString($parent)
+        $encName = [System.Uri]::EscapeDataString($name)
+
+        $url = "${baseUrl}/objects/statuses?mode=search"
+        $url += "&manager=${managerHost}"
+        $url += "&serviceName=${schedulerService}"
+        $url += "&location=${encParent}"
+        $url += "&searchLowerUnits=NO"
+        $url += "&searchTarget=DEFINITION_AND_STATUS"
+        $url += "&unitName=${encName}"
+        $url += "&unitNameMatchMethods=EQ"
+        $url += "&generation=STATUS"
+        $url += "&status=GRP_RUN"
+
+        try {
+            $resp = Invoke-WebRequest -Uri $url -Method GET -Headers $headers -TimeoutSec 30 -UseBasicParsing
+            $bytes = $resp.RawContentStream.ToArray()
+            $text = [System.Text.Encoding]::UTF8.GetString($bytes)
+            $json = $text | ConvertFrom-Json
+
+            if ($json.statuses -and $json.statuses.Count -gt 0) {
+                $status = $json.statuses[0].unitStatus
+                if ($status) {
+                    return @{
+                        IsRunning = $true
+                        Status = $status.status
+                        StartTime = $status.startTime
+                    }
+                }
+            }
+        } catch {
+            return $null
+        }
+        return @{ IsRunning = $false }
+    }
+
+    # 両方のジョブの実行中状態をチェック
+    $runStatus1 = Get-JobRunningStatus -jobPath $unitPath
+    $runStatus2 = Get-JobRunningStatus -jobPath $unitPath2
+
+    $isRunning1 = $runStatus1 -and $runStatus1.IsRunning
+    $isRunning2 = $runStatus2 -and $runStatus2.IsRunning
+
+    # 実行中のジョブがある場合
+    if ($isRunning1 -or $isRunning2) {
+        if ($isRunning1 -and $isRunning2) {
+            # 両方実行中
+            [Console]::WriteLine("COMPARE_RUNNING_WARNING:両方のジョブが実行中です")
+            [Console]::WriteLine("RUNNING_JOB1:$unitPath（ステータス: $($runStatus1.Status), 開始日時: $($runStatus1.StartTime)）")
+            [Console]::WriteLine("RUNNING_JOB2:$unitPath2（ステータス: $($runStatus2.Status), 開始日時: $($runStatus2.StartTime)）")
+        } elseif ($isRunning1) {
+            # ジョブ1が実行中
+            [Console]::WriteLine("COMPARE_RUNNING_WARNING:実行中のジョブが検出されました - $unitPath が最新です")
+            [Console]::WriteLine("RUNNING_JOB:$unitPath（ステータス: $($runStatus1.Status), 開始日時: $($runStatus1.StartTime)）")
+        } else {
+            # ジョブ2が実行中
+            [Console]::WriteLine("COMPARE_RUNNING_WARNING:実行中のジョブが検出されました - $unitPath2 が最新です")
+            [Console]::WriteLine("RUNNING_JOB:$unitPath2（ステータス: $($runStatus2.Status), 開始日時: $($runStatus2.StartTime)）")
+        }
+        exit 10  # 比較モードで実行中のジョブが検出された
+    }
+
     # START_TIMEを取得する関数
     function Get-JobStartTime {
         param([string]$jobPath)

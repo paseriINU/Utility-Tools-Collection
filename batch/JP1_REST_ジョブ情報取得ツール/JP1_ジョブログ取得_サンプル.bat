@@ -32,6 +32,7 @@ rem   6: 詳細取得エラー（STEP 3）
 rem   7: ジョブ開始日時取得エラー（START_TIMEが空）
 rem   8: 比較モードで両方のジョブ取得に失敗
 rem   9: API接続エラー（各STEP）
+rem  10: 比較モードで実行中のジョブが検出された
 rem ============================================================================
 
 rem === ここを編集してください（ジョブのパスを指定）===
@@ -106,6 +107,7 @@ if %EXIT_CODE% equ 5 goto :ERR_5MB_EXCEEDED
 if %EXIT_CODE% equ 6 goto :ERR_DETAIL_FETCH
 if %EXIT_CODE% equ 8 goto :ERR_BOTH_FAILED
 if %EXIT_CODE% equ 9 goto :ERR_API_CONNECTION
+if %EXIT_CODE% equ 10 goto :ERR_COMPARE_RUNNING
 goto :ERR_UNKNOWN
 
 :ERR_ARGUMENT
@@ -159,6 +161,25 @@ echo [エラー] API接続エラー（Web Consoleへの接続に失敗しまし�
 echo          - Web Consoleが起動しているか確認してください
 echo          - 接続設定（ホスト名・ポート）を確認してください
 echo          - 認証情報（ユーザー名・パスワード）を確認してください
+goto :ERROR_EXIT
+
+:ERR_COMPARE_RUNNING
+echo.
+echo ================================================================
+echo   [警告] 比較モードで実行中のジョブが検出されました
+echo ================================================================
+echo.
+rem 一時ファイルからCOMPARE_RUNNING_WARNING:とRUNNING_JOB:を表示
+for /f "tokens=1,* delims=:" %%a in ('type "%TEMP_FILE%" 2^>nul') do (
+    if "%%a"=="COMPARE_RUNNING_WARNING" echo   %%b
+    if "%%a"=="RUNNING_JOB" echo   %%b
+    if "%%a"=="RUNNING_JOB1" echo   ジョブ1: %%b
+    if "%%a"=="RUNNING_JOB2" echo   ジョブ2: %%b
+)
+echo.
+echo   実行中のジョブがあるため、ログ取得を中止しました。
+echo   ジョブの終了を待ってから再度実行してください。
+echo.
 goto :ERROR_EXIT
 
 :ERR_UNKNOWN
