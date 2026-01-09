@@ -33,7 +33,7 @@ rem   7: ジョブ開始日時取得エラー（START_TIMEが空）
 rem   8: 比較モードで両方のジョブ取得に失敗
 rem   9: API接続エラー（各STEP）
 rem  10: 比較モードで実行中のジョブが検出された
-rem  11: 実行中のジョブが検出された
+rem  11: 実行中のジョブが検出された（待機タイムアウト）
 rem ============================================================================
 
 rem === ここを編集してください（ジョブのパスを指定）===
@@ -187,16 +187,17 @@ goto :ERROR_EXIT
 :ERR_RUNNING
 echo.
 echo ================================================================
-echo   [エラー] 実行中のジョブが検出されました
+echo   [エラー] 実行中のジョブが検出されました（待機タイムアウト）
 echo ================================================================
 echo.
-rem 一時ファイルからRUNNING_ERROR:とRUNNING_JOB:を表示
+rem 一時ファイルからRUNNING_ERROR:, RUNNING_JOB:, WAIT_TIMEOUT:を表示
 for /f "tokens=1,* delims=:" %%a in ('type "%TEMP_FILE%" 2^>nul') do (
     if "%%a"=="RUNNING_ERROR" echo   %%b
     if "%%a"=="RUNNING_JOB" echo   %%b
+    if "%%a"=="WAIT_TIMEOUT" echo   %%b
 )
 echo.
-echo   実行中のジョブがあるため、ログ取得を中止しました。
+echo   最大待機時間を超えてもジョブが終了しなかったため、ログ取得を中止しました。
 echo   ジョブの終了を待ってから再度実行してください。
 echo.
 goto :ERROR_EXIT
