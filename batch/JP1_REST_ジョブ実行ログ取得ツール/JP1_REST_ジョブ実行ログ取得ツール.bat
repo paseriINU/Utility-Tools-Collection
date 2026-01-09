@@ -516,6 +516,30 @@ if ($jobStartTime) {
 # ==============================================================================
 # ジョブの実行結果詳細を取得します。
 
+# ステータス値を日本語に変換する関数
+function Get-StatusDisplayName {
+    param([string]$status)
+    switch ($status) {
+        "NORMAL"        { return "正常終了" }
+        "WARNING"       { return "警告検出終了" }
+        "ABNORMAL"      { return "異常検出終了" }
+        "KILL"          { return "強制終了" }
+        "INTERRUPT"     { return "中断" }
+        "FAIL"          { return "起動失敗" }
+        "UNKNOWN"       { return "終了状態不正" }
+        "MONITORCLOSE"  { return "監視打ち切り終了" }
+        "INVALIDSEQ"    { return "順序不正" }
+        "NORMALFALSE"   { return "正常終了-偽" }
+        "UNEXECMONITOR" { return "監視未起動終了" }
+        "MONITORINTRPT" { return "監視中断" }
+        "MONITORNORMAL" { return "監視正常終了" }
+        "RUNNING"       { return "実行中" }
+        "WACONT"        { return "警告検出実行中" }
+        "ABCONT"        { return "異常検出実行中" }
+        default         { return $status }
+    }
+}
+
 $encodedPath = [System.Uri]::EscapeDataString($unitPath)
 
 # 実行結果詳細取得APIのURL構築
@@ -543,13 +567,17 @@ try {
     # 開始日時を最初の行に出力（ファイル名用フォーマット）
     [Console]::WriteLine("START_TIME:$startTimeForFileName")
 
+    # 終了状態を出力（ファイル名用、日本語変換済み）
+    $endStatusDisplay = Get-StatusDisplayName -status $jobStatus
+    [Console]::WriteLine("END_STATUS:$endStatusDisplay")
+
     # ジョブネット名を出力（ファイル名用）
     [Console]::WriteLine("JOBNET_NAME:$jobnetName")
 
     # ジョブネットコメントを出力（ファイル名用）
     [Console]::WriteLine("JOBNET_COMMENT:$jobnetComment")
 
-    # ジョブ終了ステータスを出力
+    # ジョブ終了ステータスを出力（英語、後方互換性のため維持）
     [Console]::WriteLine("JOB_STATUS:$jobStatus")
 
     # 実行結果詳細を出力

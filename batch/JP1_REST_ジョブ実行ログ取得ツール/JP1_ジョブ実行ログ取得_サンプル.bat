@@ -187,6 +187,16 @@ for /f "tokens=1,* delims=:" %%a in ('type "%TEMP_FILE%" 2^>nul') do (
 )
 :GOT_JOBNET_NAME
 
+rem 一時ファイルから END_STATUS: 行を取得して終了状態（日本語）を抽出
+set "END_STATUS="
+for /f "tokens=1,* delims=:" %%a in ('type "%TEMP_FILE%" 2^>nul') do (
+    if "%%a"=="END_STATUS" (
+        set "END_STATUS=%%b"
+        goto :GOT_END_STATUS
+    )
+)
+:GOT_END_STATUS
+
 rem 一時ファイルから JOBNET_COMMENT: 行を取得してジョブネットコメントを抽出
 set "JOBNET_COMMENT="
 for /f "tokens=1,* delims=:" %%a in ('type "%TEMP_FILE%" 2^>nul') do (
@@ -213,6 +223,9 @@ if "%JOBNET_COMMENT%"=="" set "JOBNET_COMMENT=%DEFAULT_COMMENT%"
 rem ジョブネット名が空の場合はデフォルト値を使用
 if "%JOBNET_NAME%"=="" set "JOBNET_NAME=UnknownJobnet"
 
+rem 終了状態が空の場合はデフォルト値を使用
+if "%END_STATUS%"=="" set "END_STATUS=不明"
+
 rem ジョブ開始日時が取得できなかった場合はエラー
 if "%JOB_START_TIME%"=="" (
     echo.
@@ -225,15 +238,17 @@ if "%JOB_START_TIME%"=="" (
 )
 
 rem 出力ファイル名を新形式で作成
-rem 形式: 【ジョブ実行結果】【{日時}実行分】{ジョブネット名}_{コメント}.txt
-set "OUTPUT_FILE=%~dp0【ジョブ実行結果】【%JOB_START_TIME%実行分】%JOBNET_NAME%_%JOBNET_COMMENT%.txt"
+rem 形式: 【ジョブ実行結果】【{日時}実行分】【{終了状態}】{ジョブネット名}_{コメント}.txt
+set "OUTPUT_FILE=%~dp0【ジョブ実行結果】【%JOB_START_TIME%実行分】【%END_STATUS%】%JOBNET_NAME%_%JOBNET_COMMENT%.txt"
 
 rem メタデータ行を除いた実行結果詳細を出力ファイルに保存
+rem 除外対象: START_TIME:, END_STATUS:, JOBNET_NAME:, JOBNET_COMMENT:, JOB_STATUS:
 (for /f "usebackq tokens=* delims=" %%L in ("%TEMP_FILE%") do (
     set "LINE=%%L"
     setlocal enabledelayedexpansion
     set "SKIP="
     if "!LINE:~0,11!"=="START_TIME:" set "SKIP=1"
+    if "!LINE:~0,11!"=="END_STATUS:" set "SKIP=1"
     if "!LINE:~0,12!"=="JOBNET_NAME:" set "SKIP=1"
     if "!LINE:~0,15!"=="JOBNET_COMMENT:" set "SKIP=1"
     if "!LINE:~0,11!"=="JOB_STATUS:" set "SKIP=1"
@@ -252,7 +267,7 @@ echo.
 echo ジョブネット名: %JOBNET_NAME%
 echo コメント:       %JOBNET_COMMENT%
 echo ジョブ開始日時: %JOB_START_TIME%
-echo ジョブ終了状態: %JOB_STATUS%
+echo 終了状態:       %END_STATUS%
 echo 出力ファイル:   %OUTPUT_FILE%
 echo.
 
@@ -264,7 +279,7 @@ if "%JOB_STATUS%"=="NORMAL" (
 ) else if "%JOB_STATUS%"=="WARNING" (
     echo [警告] ジョブは警告終了しました
 ) else (
-    echo [情報] ジョブ終了状態: %JOB_STATUS%
+    echo [情報] ジョブ終了状態: %END_STATUS%
 )
 echo.
 
