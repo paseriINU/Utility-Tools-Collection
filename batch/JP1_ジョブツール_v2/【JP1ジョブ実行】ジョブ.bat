@@ -27,18 +27,6 @@ rem   /EXCEL    - Excelに貼り付け
 rem   /WINMERGE - WinMergeで比較
 set "OUTPUT_MODE=/NOTEPAD"
 
-rem === Excel貼り付け設定（OUTPUT_MODE=/EXCEL の場合のみ使用）===
-rem Excelファイル名（このバッチと同じフォルダに配置）
-rem 空欄の場合はExcel貼り付けを行いません
-set "EXCEL_FILE_NAME="
-rem 例: set "EXCEL_FILE_NAME=ログ貼り付け用.xlsx"
-
-rem 貼り付け先シート名
-set "EXCEL_SHEET_NAME=Sheet1"
-
-rem 貼り付け先セル位置
-set "EXCEL_PASTE_CELL=A1"
-
 rem ===================================
 
 rem UNCパス対応
