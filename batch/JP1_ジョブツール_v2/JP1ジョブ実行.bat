@@ -654,37 +654,46 @@ try {
             $excelSheetName = if ($excelSheetNameSetting) { $excelSheetNameSetting } else { $env:EXCEL_SHEET_NAME }
             $excelPasteCell = if ($excelPasteCellSetting) { $excelPasteCellSetting } else { $env:EXCEL_PASTE_CELL }
 
-            if (-not $excelSheetName) { $excelSheetName = "Sheet1" }
-            if (-not $excelPasteCell) { $excelPasteCell = "A1" }
+            # Excel設定の検証（必須項目チェック）
+            if (-not $excelFileName) {
+                Write-Console "[エラー] Excel設定が未設定です。設定セクションの excelFileNameSetting を設定してください。"
+                exit 10  # Excel設定エラー
+            }
+            if (-not $excelSheetName) {
+                Write-Console "[エラー] Excelシート名が未設定です。設定セクションの excelSheetNameSetting を設定してください。"
+                exit 10  # Excel設定エラー
+            }
+            if (-not $excelPasteCell) {
+                Write-Console "[エラー] Excel貼り付けセルが未設定です。設定セクションの excelPasteCellSetting を設定してください。"
+                exit 10  # Excel設定エラー
+            }
 
-            if ($excelFileName) {
-                # フルパスと相対パスの両方に対応
-                if ([System.IO.Path]::IsPathRooted($excelFileName)) {
-                    $excelPath = $excelFileName
-                } else {
-                    $excelPath = Join-Path $scriptDir $excelFileName
-                }
-                if (Test-Path $excelPath) {
-                    try {
-                        $logContent = Get-Content $outputFilePath -Encoding Default -Raw
-                        $excel = New-Object -ComObject Excel.Application
-                        $excel.Visible = $true
-                        $workbook = $excel.Workbooks.Open($excelPath)
-                        $sheet = $workbook.Worksheets.Item($excelSheetName)
-                        $sheet.Range($excelPasteCell).Value2 = $logContent
-                        $workbook.Save()
-                        [System.Runtime.Interopservices.Marshal]::ReleaseComObject($sheet) | Out-Null
-                        [System.Runtime.Interopservices.Marshal]::ReleaseComObject($workbook) | Out-Null
-                        [System.Runtime.Interopservices.Marshal]::ReleaseComObject($excel) | Out-Null
-                        [Console]::WriteLine("[OK] Excelにログを貼り付けました: $excelSheetName $excelPasteCell")
-                    } catch {
-                        [Console]::WriteLine("[エラー] Excel貼り付けに失敗しました: $($_.Exception.Message)")
-                    }
-                } else {
-                    [Console]::WriteLine("[警告] Excelファイルが見つかりません: $excelPath")
+            # フルパスと相対パスの両方に対応
+            if ([System.IO.Path]::IsPathRooted($excelFileName)) {
+                $excelPath = $excelFileName
+            } else {
+                $excelPath = Join-Path $scriptDir $excelFileName
+            }
+            if (Test-Path $excelPath) {
+                try {
+                    $logContent = Get-Content $outputFilePath -Encoding Default -Raw
+                    $excel = New-Object -ComObject Excel.Application
+                    $excel.Visible = $true
+                    $workbook = $excel.Workbooks.Open($excelPath)
+                    $sheet = $workbook.Worksheets.Item($excelSheetName)
+                    $sheet.Range($excelPasteCell).Value2 = $logContent
+                    $workbook.Save()
+                    [System.Runtime.Interopservices.Marshal]::ReleaseComObject($sheet) | Out-Null
+                    [System.Runtime.Interopservices.Marshal]::ReleaseComObject($workbook) | Out-Null
+                    [System.Runtime.Interopservices.Marshal]::ReleaseComObject($excel) | Out-Null
+                    Write-Console "[完了] Excelにログを貼り付けました: $excelSheetName $excelPasteCell"
+                } catch {
+                    Write-Console "[エラー] Excel貼り付けに失敗しました: $($_.Exception.Message)"
+                    exit 11  # Excel貼り付けエラー
                 }
             } else {
-                [Console]::WriteLine("[警告] EXCEL_FILE_NAMEが設定されていません")
+                Write-Console "[エラー] Excelファイルが見つかりません: $excelPath"
+                exit 12  # Excelファイル未検出エラー
             }
         }
         "/WINMERGE" {
