@@ -2188,19 +2188,23 @@
                 }
             }
 
-            // デバッグ: 12455（前のブックマーク）と12456（修正履歴）の内容を確認
-            let debugInfo = 'obj12455: ';
-            if (objStmObjectsMap.has(12455)) {
-                debugInfo += objStmObjectsMap.get(12455).substring(0, 300);
-            } else {
-                debugInfo += '(なし)';
+            // デバッグ: すべてのブックマークの/A参照を確認
+            let actionRefs = [];
+            for (const [objNum, objContent] of objStmObjectsMap.entries()) {
+                if (objContent.includes('/Title')) {
+                    const aMatch = objContent.match(/\/A\s+(\d+)\s+0\s+R/);
+                    if (aMatch) {
+                        const actionNum = parseInt(aMatch[1], 10);
+                        const exists = objStmObjectsMap.has(actionNum) || globalActionObjectMap.has(actionNum);
+                        actionRefs.push({ bookmark: objNum, action: actionNum, exists });
+                    }
+                }
             }
-            debugInfo += '\n\nobj12456: ';
-            if (objStmObjectsMap.has(12456)) {
-                debugInfo += objStmObjectsMap.get(12456).substring(0, 300);
-            } else {
-                debugInfo += '(なし)';
-            }
+            // 存在しないアクションオブジェクトのみ表示
+            const missingActions = actionRefs.filter(r => !r.exists);
+            let debugInfo = '欠落アクションオブジェクト数: ' + missingActions.length + '/' + actionRefs.length;
+            debugInfo += '\n欠落リスト(最大10件): ';
+            debugInfo += missingActions.slice(0, 10).map(r => r.bookmark + '→' + r.action).join(', ');
             alert(debugInfo);
 
             // 未解決の間接参照を解決
