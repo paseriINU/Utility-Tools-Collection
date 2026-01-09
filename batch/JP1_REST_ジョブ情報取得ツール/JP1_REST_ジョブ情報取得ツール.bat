@@ -379,6 +379,34 @@ if ($useHttps) {
 $baseUrl = "${protocol}://${webConsoleHost}:${webConsolePort}/ajs/api/v1"
 
 # ==============================================================================
+# ■ ユーティリティ関数（メイン処理の前に定義が必要）
+# ==============================================================================
+
+# ステータス値を日本語に変換する関数
+function Get-StatusDisplayName {
+    param([string]$status)
+    switch ($status) {
+        "NORMAL"        { return "正常終了" }
+        "WARNING"       { return "警告検出終了" }
+        "ABNORMAL"      { return "異常検出終了" }
+        "KILL"          { return "強制終了" }
+        "INTERRUPT"     { return "中断" }
+        "FAIL"          { return "起動失敗" }
+        "UNKNOWN"       { return "終了状態不正" }
+        "MONITORCLOSE"  { return "監視打ち切り終了" }
+        "INVALIDSEQ"    { return "順序不正" }
+        "NORMALFALSE"   { return "正常終了-偽" }
+        "UNEXECMONITOR" { return "監視未起動終了" }
+        "MONITORINTRPT" { return "監視中断" }
+        "MONITORNORMAL" { return "監視正常終了" }
+        "RUNNING"       { return "実行中" }
+        "WACONT"        { return "警告検出実行中" }
+        "ABCONT"        { return "異常検出実行中" }
+        default         { return $status }
+    }
+}
+
+# ==============================================================================
 # 2引数モード: 実行中チェック＆START_TIME比較処理
 # ==============================================================================
 # 2つのジョブパスが指定された場合:
@@ -894,30 +922,6 @@ try {
 # ==============================================================================
 # STEP 2で取得した各ジョブについて、実行結果詳細を取得します。
 # 実行結果詳細には、標準出力・標準エラー出力の内容が含まれます。
-
-# ステータス値を日本語に変換する関数
-function Get-StatusDisplayName {
-    param([string]$status)
-    switch ($status) {
-        "NORMAL"        { return "正常終了" }
-        "WARNING"       { return "警告検出終了" }
-        "ABNORMAL"      { return "異常検出終了" }
-        "KILL"          { return "強制終了" }
-        "INTERRUPT"     { return "中断" }
-        "FAIL"          { return "起動失敗" }
-        "UNKNOWN"       { return "終了状態不正" }
-        "MONITORCLOSE"  { return "監視打ち切り終了" }
-        "INVALIDSEQ"    { return "順序不正" }
-        "NORMALFALSE"   { return "正常終了-偽" }
-        "UNEXECMONITOR" { return "監視未起動終了" }
-        "MONITORINTRPT" { return "監視中断" }
-        "MONITORNORMAL" { return "監視正常終了" }
-        "RUNNING"       { return "実行中" }
-        "WACONT"        { return "警告検出実行中" }
-        "ABCONT"        { return "異常検出実行中" }
-        default         { return $status }
-    }
-}
 
 if ($execIdList.Count -gt 0) {
     foreach ($item in $execIdList) {
