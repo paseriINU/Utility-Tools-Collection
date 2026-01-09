@@ -1940,7 +1940,7 @@
                                     // 括弧の開始位置
                                     const parenStart = i + titlePattern.length;
 
-                                    // UTF-16BE BOM (FE FF) をチェックして、括弧検出方法を決定
+                                    // UTF-16BE BOM (FE FF) をチェック
                                     const isUtf16BE = (parenStart + 1 < decompressed.length &&
                                                        decompressed[parenStart] === 0xFE &&
                                                        decompressed[parenStart + 1] === 0xFF);
@@ -1950,19 +1950,38 @@
                                     let parenEnd = parenStart;
 
                                     if (isUtf16BE) {
-                                        // UTF-16BE: 括弧は 00 28 と 00 29 として検出（2バイト単位）
-                                        while (parenEnd + 1 < decompressed.length && depth > 0) {
-                                            const highByte = decompressed[parenEnd];
-                                            const lowByte = decompressed[parenEnd + 1];
-                                            // エスケープチェック: 直前の2バイトが 00 5C (\) かどうか
-                                            const isEscaped = (parenEnd >= 2 &&
-                                                              decompressed[parenEnd - 2] === 0x00 &&
-                                                              decompressed[parenEnd - 1] === 0x5C);
+                                        // UTF-16BE: 終端の ) は1バイト、ただし XX 29 (XX != 00, XX != 5C) は日本語文字
+                                        while (parenEnd < decompressed.length && depth > 0) {
+                                            const byte = decompressed[parenEnd];
+                                            const prevByte = parenEnd > 0 ? decompressed[parenEnd - 1] : 0;
 
-                                            if (highByte === 0x00 && lowByte === 0x28 && !isEscaped) { // '(' in UTF-16BE
-                                                depth++;
-                                            } else if (highByte === 0x00 && lowByte === 0x29 && !isEscaped) { // ')' in UTF-16BE
-                                                depth--;
+                                            // エスケープされた文字はスキップ
+                                            if (prevByte === 0x5C) {
+                                                parenEnd++;
+                                                continue;
+                                            }
+
+                                            if (byte === 0x28) {
+                                                // 00 28 (ASCII括弧) のみカウント
+                                                if (prevByte === 0x00) {
+                                                    depth++;
+                                                }
+                                            } else if (byte === 0x29) {
+                                                // 00 29 (ASCII括弧) または 終端の )
+                                                if (prevByte === 0x00) {
+                                                    // 00 29 = ASCII の )
+                                                    depth--;
+                                                } else {
+                                                    // XX 29 (XX != 00): 2バイト境界をチェック
+                                                    // BOM(2バイト)後のデータは2バイト単位
+                                                    // 奇数位置なら終端、偶数位置なら日本語文字の一部
+                                                    const offsetFromBOM = parenEnd - parenStart - 2;
+                                                    if (offsetFromBOM < 0 || offsetFromBOM % 2 !== 0) {
+                                                        // 終端の )
+                                                        depth--;
+                                                    }
+                                                    // 偶数位置の XX 29 は日本語文字の下位バイト（スキップ）
+                                                }
                                             }
                                             if (depth > 0) parenEnd++;
                                         }
