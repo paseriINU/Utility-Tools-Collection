@@ -16,6 +16,9 @@ if "%~1"=="" exit /b 1
 rem 第1引数（ジョブパス）を環境変数に設定（PowerShellに渡すため）
 set "JP1_UNIT_PATH=%~1"
 
+rem 第2引数（比較用ジョブパス、オプション）を環境変数に設定
+set "JP1_UNIT_PATH_2=%~2"
+
 rem UNCパス対応（PushD/PopDで自動マッピング）
 pushd "%~dp0"
 
@@ -45,12 +48,16 @@ exit /b %EXITCODE%
 #   ジョブのパスを指定して実行します:
 #     JP1_REST_ジョブ情報取得ツール.bat "/JobGroup/Jobnet/Job1"
 #
+#   2つのジョブを比較して新しい方を取得する場合:
+#     JP1_REST_ジョブ情報取得ツール.bat "/JobGroup/Jobnet/Job1" "/JobGroup/Jobnet/Job2"
+#
 #   ※ 親パス（ジョブネット）を検索対象とし、ジョブ名でフィルタします
 #
 # 処理フロー:
 #   STEP 1: DEFINITION で存在確認・ユニット種別確認
 #   STEP 2: DEFINITION_AND_STATUS で execID 取得
 #   STEP 3: 実行結果詳細取得
+#   ※ 2引数モード: 両方のジョブを取得し、START_TIMEを比較して新しい方を出力
 #
 # 終了コード（実行順）:
 #   0: 正常終了
@@ -60,6 +67,7 @@ exit /b %EXITCODE%
 #   4: 実行世代なし（STEP 2: 実行履歴が存在しません）
 #   5: 5MB超過エラー（STEP 3: 実行結果が切り捨てられました）
 #   6: 詳細取得エラー（STEP 3: 実行結果詳細の取得に失敗）
+#   8: 比較モードで両方のジョブ取得に失敗
 #   9: API接続エラー（各STEPでの接続失敗）
 #
 # 参考:
@@ -239,6 +247,13 @@ $holdPlan = "NO"
 # ------------------------------------------------------------------------------
 # バッチファイルから渡された引数（ユニットパス）を取得します
 $unitPath = $env:JP1_UNIT_PATH
+$unitPath2 = $env:JP1_UNIT_PATH_2
+
+# 2引数モードかどうかを判定
+$isCompareMode = $false
+if ($unitPath2 -and $unitPath2.Trim() -ne "") {
+    $isCompareMode = $true
+}
 
 # ------------------------------------------------------------------------------
 # プロトコル設定
@@ -348,6 +363,88 @@ if ($useHttps) {
 
 # ベースURLの構築
 $baseUrl = "${protocol}://${webConsoleHost}:${webConsolePort}/ajs/api/v1"
+
+# ==============================================================================
+# 2引数モード: START_TIME比較処理
+# ==============================================================================
+# 2つのジョブパスが指定された場合、両方のSTART_TIMEを取得して比較し、
+# 新しい方のジョブパスを $unitPath に設定します。
+
+if ($isCompareMode) {
+    # START_TIMEを取得する関数
+    function Get-JobStartTime {
+        param([string]$jobPath)
+
+        $lastSlash = $jobPath.LastIndexOf("/")
+        if ($lastSlash -le 0) { return $null }
+
+        $parent = $jobPath.Substring(0, $lastSlash)
+        $name = $jobPath.Substring($lastSlash + 1)
+        if (-not $name) { return $null }
+
+        $encParent = [System.Uri]::EscapeDataString($parent)
+        $encName = [System.Uri]::EscapeDataString($name)
+
+        $url = "${baseUrl}/objects/statuses?mode=search"
+        $url += "&manager=${managerHost}"
+        $url += "&serviceName=${schedulerService}"
+        $url += "&location=${encParent}"
+        $url += "&searchLowerUnits=NO"
+        $url += "&searchTarget=DEFINITION_AND_STATUS"
+        $url += "&unitName=${encName}"
+        $url += "&unitNameMatchMethods=EQ"
+        $url += "&generation=${generation}"
+
+        try {
+            $resp = Invoke-WebRequest -Uri $url -Method GET -Headers $headers -TimeoutSec 30 -UseBasicParsing
+            $bytes = $resp.RawContentStream.ToArray()
+            $text = [System.Text.Encoding]::UTF8.GetString($bytes)
+            $json = $text | ConvertFrom-Json
+
+            if ($json.statuses -and $json.statuses.Count -gt 0) {
+                $status = $json.statuses[0].unitStatus
+                if ($status -and $status.startTime) {
+                    return $status.startTime
+                }
+            }
+        } catch {
+            return $null
+        }
+        return $null
+    }
+
+    # 両方のジョブのSTART_TIMEを取得
+    $startTime1 = Get-JobStartTime -jobPath $unitPath
+    $startTime2 = Get-JobStartTime -jobPath $unitPath2
+
+    # 両方失敗した場合
+    if (-not $startTime1 -and -not $startTime2) {
+        exit 8  # 比較モードで両方のジョブ取得に失敗
+    }
+
+    # 片方だけ失敗した場合
+    if (-not $startTime1) {
+        $unitPath = $unitPath2
+    } elseif (-not $startTime2) {
+        # $unitPath はそのまま
+    } else {
+        # 両方成功した場合、日時を比較
+        try {
+            $dt1 = [DateTime]::Parse($startTime1)
+            $dt2 = [DateTime]::Parse($startTime2)
+
+            if ($dt2 -gt $dt1) {
+                $unitPath = $unitPath2
+            }
+            # $dt1 >= $dt2 の場合は $unitPath のまま
+        } catch {
+            # パースエラーの場合は文字列比較
+            if ($startTime2 -gt $startTime1) {
+                $unitPath = $unitPath2
+            }
+        }
+    }
+}
 
 # ------------------------------------------------------------------------------
 # ジョブパスの解析
