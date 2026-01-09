@@ -373,22 +373,12 @@ set "OUTPUT_FILE=%~dp0【ジョブ実行結果】【%JOB_START_TIME%実行分】
 
 rem メタデータ行を除いた実行結果詳細を出力ファイルに保存
 rem 除外対象: RUNNING_WARNING:, SELECTED_*:, REJECTED_*:, START_TIME:, END_STATUS:, JOBNET_*:
-(for /f "usebackq tokens=* delims=" %%L in ("%TEMP_FILE%") do (
-    set "LINE=%%L"
-    setlocal enabledelayedexpansion
-    set "SKIP="
-    if "!LINE:~0,16!"=="RUNNING_WARNING:" set "SKIP=1"
-    if "!LINE:~0,14!"=="SELECTED_PATH:" set "SKIP=1"
-    if "!LINE:~0,14!"=="SELECTED_TIME:" set "SKIP=1"
-    if "!LINE:~0,14!"=="REJECTED_PATH:" set "SKIP=1"
-    if "!LINE:~0,14!"=="REJECTED_TIME:" set "SKIP=1"
-    if "!LINE:~0,11!"=="START_TIME:" set "SKIP=1"
-    if "!LINE:~0,11!"=="END_STATUS:" set "SKIP=1"
-    if "!LINE:~0,12!"=="JOBNET_NAME:" set "SKIP=1"
-    if "!LINE:~0,15!"=="JOBNET_COMMENT:" set "SKIP=1"
-    if not defined SKIP echo !LINE!
-    endlocal
-)) > "%OUTPUT_FILE%"
+rem ※空行を保持するためPowerShellで処理（for /fは空行をスキップしてしまうため）
+powershell -NoProfile -Command ^
+    "$excludePatterns = @('^RUNNING_WARNING:', '^SELECTED_PATH:', '^SELECTED_TIME:', '^REJECTED_PATH:', '^REJECTED_TIME:', '^START_TIME:', '^END_STATUS:', '^JOBNET_NAME:', '^JOBNET_COMMENT:');" ^
+    "$content = Get-Content -Path '%TEMP_FILE%' -Encoding UTF8;" ^
+    "$filtered = $content | Where-Object { $line = $_; -not ($excludePatterns | Where-Object { $line -match $_ }) };" ^
+    "$filtered | Out-File -FilePath '%OUTPUT_FILE%' -Encoding UTF8"
 
 rem 一時ファイルを削除
 del "%TEMP_FILE%" >nul 2>&1
