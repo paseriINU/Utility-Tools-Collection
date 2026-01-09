@@ -17,6 +17,10 @@ rem   1. 下記の UNIT_PATH を取得したいジョブのパスに変更
 rem      例: /JobGroup/Jobnet/Job1
 rem   2. このバッチをダブルクリックで実行
 rem
+rem 比較モード:
+rem   UNIT_PATH_2 を設定すると、2つのジョブの実行日時を比較して
+rem   新しい方のログのみを取得します。
+rem
 rem 終了コード（実行順）:
 rem   0: 正常終了
 rem   1: 引数エラー
@@ -26,11 +30,17 @@ rem   4: 実行世代なし（STEP 2）
 rem   5: 5MB超過エラー（STEP 3）
 rem   6: 詳細取得エラー（STEP 3）
 rem   7: ジョブ開始日時取得エラー（START_TIMEが空）
+rem   8: 比較モードで両方のジョブ取得に失敗
 rem   9: API接続エラー（各STEP）
 rem ============================================================================
 
 rem === ここを編集してください（ジョブのパスを指定）===
 set "UNIT_PATH=/JobGroup/Jobnet/Job1"
+
+rem === 比較用ジョブパス（オプション）===
+rem 2つ目のジョブパスを指定すると、両方の実行日時を比較して
+rem 新しい方のログのみを取得します。不要な場合は空欄のまま。
+set "UNIT_PATH_2="
 
 rem === スクロール位置の設定 ===
 rem メモ帳で開いた後、指定した文字列を含む行に自動でジャンプします
@@ -48,6 +58,7 @@ set "DEFAULT_COMMENT=NoComment"
 
 rem 一時ファイル名（後でジョブ開始日時を使用してリネーム）
 set "TEMP_FILE=%~dp0temp_output.txt"
+set "TEMP_FILE_2=%~dp0temp_output_2.txt"
 
 rem スクリプトのディレクトリを取得
 set "SCRIPT_DIR=%~dp0"
@@ -57,9 +68,27 @@ echo ================================================================
 echo   JP1 ジョブログ取得サンプル
 echo ================================================================
 echo.
-echo   対象: %UNIT_PATH%
-echo.
-echo ログを取得中...
+
+rem 比較モードかどうかを判定
+if "%UNIT_PATH_2%"=="" (
+    echo   対象: %UNIT_PATH%
+    echo.
+    echo ログを取得中...
+    goto :SINGLE_MODE
+) else (
+    echo   対象1: %UNIT_PATH%
+    echo   対象2: %UNIT_PATH_2%
+    echo.
+    echo   [比較モード] 新しい方のログを取得します
+    echo.
+    echo ログを取得中...
+    goto :COMPARE_MODE
+)
+
+rem ============================================================================
+rem 単一モード（従来通り）
+rem ============================================================================
+:SINGLE_MODE
 
 rem JP1_REST_ジョブ情報取得ツール.bat を呼び出し、結果を一時ファイルに保存
 call "%SCRIPT_DIR%JP1_REST_ジョブ情報取得ツール.bat" "%UNIT_PATH%" > "%TEMP_FILE%" 2>&1
@@ -67,6 +96,100 @@ set "EXIT_CODE=%ERRORLEVEL%"
 
 rem エラーコード別のハンドリング（実行順）
 if %EXIT_CODE% equ 0 goto :SUCCESS
+set "ERROR_TARGET=%UNIT_PATH%"
+goto :HANDLE_ERROR
+
+rem ============================================================================
+rem 比較モード（2つのジョブを比較）
+rem ============================================================================
+:COMPARE_MODE
+
+rem 1つ目のジョブを取得
+echo.
+echo   [1/2] %UNIT_PATH% を取得中...
+call "%SCRIPT_DIR%JP1_REST_ジョブ情報取得ツール.bat" "%UNIT_PATH%" > "%TEMP_FILE%" 2>&1
+set "EXIT_CODE_1=%ERRORLEVEL%"
+
+rem 2つ目のジョブを取得
+echo   [2/2] %UNIT_PATH_2% を取得中...
+call "%SCRIPT_DIR%JP1_REST_ジョブ情報取得ツール.bat" "%UNIT_PATH_2%" > "%TEMP_FILE_2%" 2>&1
+set "EXIT_CODE_2=%ERRORLEVEL%"
+
+rem 両方失敗した場合
+if %EXIT_CODE_1% neq 0 if %EXIT_CODE_2% neq 0 (
+    echo.
+    echo [エラー] 両方のジョブ取得に失敗しました
+    echo   対象1: %UNIT_PATH% （終了コード: %EXIT_CODE_1%）
+    echo   対象2: %UNIT_PATH_2% （終了コード: %EXIT_CODE_2%）
+    del "%TEMP_FILE%" >nul 2>&1
+    del "%TEMP_FILE_2%" >nul 2>&1
+    pause
+    popd
+    exit /b 8
+)
+
+rem 1つ目だけ失敗した場合、2つ目を使用
+if %EXIT_CODE_1% neq 0 (
+    echo.
+    echo   [情報] 対象1の取得に失敗（終了コード: %EXIT_CODE_1%）、対象2を使用します
+    del "%TEMP_FILE%" >nul 2>&1
+    move "%TEMP_FILE_2%" "%TEMP_FILE%" >nul
+    set "SELECTED_PATH=%UNIT_PATH_2%"
+    goto :SUCCESS
+)
+
+rem 2つ目だけ失敗した場合、1つ目を使用
+if %EXIT_CODE_2% neq 0 (
+    echo.
+    echo   [情報] 対象2の取得に失敗（終了コード: %EXIT_CODE_2%）、対象1を使用します
+    del "%TEMP_FILE_2%" >nul 2>&1
+    set "SELECTED_PATH=%UNIT_PATH%"
+    goto :SUCCESS
+)
+
+rem 両方成功した場合、START_TIMEを比較
+set "START_TIME_1="
+for /f "tokens=1,* delims=:" %%a in ('type "%TEMP_FILE%" 2^>nul') do (
+    if "%%a"=="START_TIME" (
+        set "START_TIME_1=%%b"
+        goto :GOT_ST1
+    )
+)
+:GOT_ST1
+
+set "START_TIME_2="
+for /f "tokens=1,* delims=:" %%a in ('type "%TEMP_FILE_2%" 2^>nul') do (
+    if "%%a"=="START_TIME" (
+        set "START_TIME_2=%%b"
+        goto :GOT_ST2
+    )
+)
+:GOT_ST2
+
+echo.
+echo   対象1 開始日時: %START_TIME_1%
+echo   対象2 開始日時: %START_TIME_2%
+
+rem 日時を比較（文字列比較でOK: yyyyMMdd_HHmmss形式）
+if "%START_TIME_1%" geq "%START_TIME_2%" (
+    echo.
+    echo   → 対象1 の方が新しい（または同じ）ため、対象1 のログを取得します
+    del "%TEMP_FILE_2%" >nul 2>&1
+    set "SELECTED_PATH=%UNIT_PATH%"
+) else (
+    echo.
+    echo   → 対象2 の方が新しいため、対象2 のログを取得します
+    del "%TEMP_FILE%" >nul 2>&1
+    move "%TEMP_FILE_2%" "%TEMP_FILE%" >nul
+    set "SELECTED_PATH=%UNIT_PATH_2%"
+)
+
+goto :SUCCESS
+
+rem ============================================================================
+rem エラーハンドリング
+rem ============================================================================
+:HANDLE_ERROR
 if %EXIT_CODE% equ 1 goto :ERR_ARGUMENT
 if %EXIT_CODE% equ 2 goto :ERR_UNIT_NOT_FOUND
 if %EXIT_CODE% equ 3 goto :ERR_UNIT_TYPE
@@ -84,7 +207,7 @@ goto :ERROR_EXIT
 :ERR_UNIT_NOT_FOUND
 echo.
 echo [エラー] ユニット未検出（指定したユニットが存在しません）
-echo          - ユニットパスが正しいか確認してください: %UNIT_PATH%
+echo          - ユニットパスが正しいか確認してください: %ERROR_TARGET%
 echo          - スケジューラーサービス名が正しいか確認してください
 goto :ERROR_EXIT
 
@@ -130,10 +253,14 @@ goto :ERROR_EXIT
 :ERROR_EXIT
 echo.
 del "%TEMP_FILE%" >nul 2>&1
+del "%TEMP_FILE_2%" >nul 2>&1
 pause
 popd
 exit /b %EXIT_CODE%
 
+rem ============================================================================
+rem 成功時の処理
+rem ============================================================================
 :SUCCESS
 rem 結果が空かチェック
 for %%A in ("%TEMP_FILE%") do set "FILE_SIZE=%%~zA"
@@ -266,6 +393,9 @@ echo ================================================================
 echo   取得完了 - ファイルに保存しました
 echo ================================================================
 echo.
+if defined SELECTED_PATH (
+    echo 選択されたジョブ: %SELECTED_PATH%
+)
 echo ジョブネット名: %JOBNET_NAME%
 echo コメント:       %JOBNET_COMMENT%
 echo ジョブ開始日時: %JOB_START_TIME%
