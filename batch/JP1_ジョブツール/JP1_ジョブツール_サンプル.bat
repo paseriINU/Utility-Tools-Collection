@@ -34,7 +34,7 @@ rem   7: 5MB超過エラー（EXEC版のみ）
 rem   8: 詳細取得エラー（EXEC版） / 比較モードで両方取得失敗（GET版）
 rem   9: API接続エラー（各STEP）
 rem   10: ジョブ開始日時取得エラー / 比較モードで実行中検出（GET版）
-rem   11: 実行中のジョブが検出された（GET版）
+rem   11: 実行中のジョブが検出された（待機タイムアウト、GET版）
 rem ============================================================================
 
 rem === ここを編集してください ===
@@ -213,15 +213,16 @@ goto :ERROR_EXIT
 
 :ERR_RUNNING_DETECTED
 echo.
-echo [エラー] 実行中のジョブが検出されました
+echo [エラー] 実行中のジョブが検出されました（待機タイムアウト）
 echo.
-rem 一時ファイルからRUNNING_ERROR:とRUNNING_JOB:を表示
+rem 一時ファイルからRUNNING_ERROR:, RUNNING_JOB:, WAIT_TIMEOUT:を表示
 for /f "tokens=1,* delims=:" %%a in ('type "%TEMP_FILE%" 2^>nul') do (
     if "%%a"=="RUNNING_ERROR" echo          %%b
     if "%%a"=="RUNNING_JOB" echo          %%b
+    if "%%a"=="WAIT_TIMEOUT" echo          %%b
 )
 echo.
-echo          実行中のジョブがあるため、ログ取得を中止しました。
+echo          最大待機時間を超えてもジョブが終了しなかったため、ログ取得を中止しました。
 echo          ジョブの終了を待ってから再度実行してください。
 goto :ERROR_EXIT
 

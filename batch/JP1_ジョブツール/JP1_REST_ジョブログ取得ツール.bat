@@ -70,7 +70,7 @@ exit /b %EXITCODE%
 #   8: 比較モードで両方のジョブ取得に失敗
 #   9: API接続エラー（各STEPでの接続失敗）
 #  10: 比較モードで実行中のジョブが検出された
-#  11: 実行中のジョブが検出された
+#  11: 実行中のジョブが検出された（待機タイムアウト）
 #
 # 参考:
 #   https://itpfdoc.hitachi.co.jp/manuals/3021/30213b1920/AJSO0280.HTM
@@ -135,6 +135,18 @@ $jp1Password = ""
 #   cmdkey /generic:JP1_WebConsole /user:jp1admin /pass:yourpassword
 # または「資格情報マネージャー」（コントロールパネル）からGUIで登録
 $credentialTarget = "JP1_WebConsole"
+
+# ------------------------------------------------------------------------------
+# 実行中ジョブ待機設定
+# ------------------------------------------------------------------------------
+# ジョブが実行中の場合、終了するまで待機する最大秒数を指定します。
+# 0を指定すると待機せずに即座にエラー終了します。
+# デフォルト: 60秒（1分）
+$maxWaitSeconds = 60
+
+# 実行中ジョブのチェック間隔（秒）を指定します。
+# デフォルト: 10秒
+$checkIntervalSeconds = 10
 
 # ==============================================================================
 # ■ 検索条件設定セクション
@@ -669,10 +681,11 @@ try {
 }
 
 # ==============================================================================
-# STEP 1.8: 実行中ジョブチェック
+# STEP 1.8: 実行中ジョブチェック（待機機能付き）
 # ==============================================================================
 # 同じジョブが現在実行中かどうかを確認します。
-# 実行中の場合はエラーメッセージを出力して終了します。
+# 実行中の場合は、終了するまで待機します（最大待機秒数まで）。
+# 最大待機秒数を超えても終了しない場合はエラー終了します。
 
 $runningUrl = "${baseUrl}/objects/statuses?mode=search"
 $runningUrl += "&manager=${managerHost}"
@@ -685,25 +698,53 @@ $runningUrl += "&unitNameMatchMethods=EQ"
 $runningUrl += "&generation=STATUS"
 $runningUrl += "&status=GRP_RUN"
 
-try {
-    $runningResponse = Invoke-WebRequest -Uri $runningUrl -Method GET -Headers $headers -TimeoutSec 30 -UseBasicParsing
+$waitedSeconds = 0
+$isRunning = $true
 
-    # UTF-8文字化け対策
-    $runningBytes = $runningResponse.RawContentStream.ToArray()
-    $runningText = [System.Text.Encoding]::UTF8.GetString($runningBytes)
-    $runningJson = $runningText | ConvertFrom-Json
+while ($isRunning) {
+    try {
+        $runningResponse = Invoke-WebRequest -Uri $runningUrl -Method GET -Headers $headers -TimeoutSec 30 -UseBasicParsing
 
-    # 実行中のジョブが存在するか確認
-    if ($runningJson.statuses -and $runningJson.statuses.Count -gt 0) {
-        $runningUnit = $runningJson.statuses[0]
-        $runningStatus = $runningUnit.unitStatus.status
-        $runningStartTime = $runningUnit.unitStatus.startTime
-        [Console]::WriteLine("RUNNING_ERROR:実行中のジョブが検出されました")
-        [Console]::WriteLine("RUNNING_JOB:$unitPath（ステータス: ${runningStatus}, 開始日時: ${runningStartTime}）")
-        exit 11  # 実行中のジョブが検出された
+        # UTF-8文字化け対策
+        $runningBytes = $runningResponse.RawContentStream.ToArray()
+        $runningText = [System.Text.Encoding]::UTF8.GetString($runningBytes)
+        $runningJson = $runningText | ConvertFrom-Json
+
+        # 実行中のジョブが存在するか確認
+        if ($runningJson.statuses -and $runningJson.statuses.Count -gt 0) {
+            $runningUnit = $runningJson.statuses[0]
+            $runningStatus = $runningUnit.unitStatus.status
+            $runningStartTime = $runningUnit.unitStatus.startTime
+            $runningStatusDisplay = Get-StatusDisplayName -status $runningStatus
+
+            # 最大待機秒数を超えた場合はエラー終了
+            if ($waitedSeconds -ge $maxWaitSeconds) {
+                [Console]::WriteLine("RUNNING_ERROR:実行中のジョブが検出されました（待機タイムアウト）")
+                [Console]::WriteLine("RUNNING_JOB:$unitPath（ステータス: ${runningStatusDisplay}, 開始日時: ${runningStartTime}）")
+                [Console]::WriteLine("WAIT_TIMEOUT:${maxWaitSeconds}秒待機しましたが、ジョブが終了しませんでした")
+                exit 11  # 実行中のジョブが検出された（タイムアウト）
+            }
+
+            # 待機中メッセージを出力（標準エラー出力へ）
+            [Console]::Error.WriteLine("WAITING:実行中のジョブを検出しました。終了を待機しています...（${waitedSeconds}/${maxWaitSeconds}秒）")
+            [Console]::Error.WriteLine("WAITING_JOB:$unitPath（ステータス: ${runningStatusDisplay}, 開始日時: ${runningStartTime}）")
+
+            # 指定秒数待機
+            Start-Sleep -Seconds $checkIntervalSeconds
+            $waitedSeconds += $checkIntervalSeconds
+        } else {
+            # 実行中ではない → ループを抜ける
+            $isRunning = $false
+
+            # 待機していた場合は完了メッセージを出力
+            if ($waitedSeconds -gt 0) {
+                [Console]::Error.WriteLine("WAIT_COMPLETE:ジョブの終了を確認しました（${waitedSeconds}秒待機）")
+            }
+        }
+    } catch {
+        # 実行中チェック失敗は無視して続行（必須ではない）
+        $isRunning = $false
     }
-} catch {
-    # 実行中チェック失敗は無視して続行（必須ではない）
 }
 
 # ==============================================================================
