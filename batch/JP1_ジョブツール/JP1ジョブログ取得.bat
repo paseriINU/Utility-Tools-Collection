@@ -676,6 +676,8 @@ $encodedJobName = [System.Uri]::EscapeDataString($jobName)
 #   - 指定したユニットが存在するか
 #   - 指定したユニットがジョブ（JOB系）かどうか
 
+Write-Console "[STEP 1] ユニット存在確認中..."
+
 $defUrl = "${baseUrl}/objects/statuses?mode=search"
 $defUrl += "&manager=${managerHost}"
 $defUrl += "&serviceName=${schedulerService}"
@@ -723,6 +725,8 @@ try {
 # ==============================================================================
 # 親ジョブネットの定義を取得し、コメント（cm属性）を取得します。
 
+Write-Console "[STEP 2] 親ジョブネットのコメント取得中..."
+
 $encodedGrandParentPath = [System.Uri]::EscapeDataString($grandParentPath)
 $encodedJobnetName = [System.Uri]::EscapeDataString($jobnetName)
 
@@ -762,6 +766,8 @@ try {
 # 同じジョブが現在実行中かどうかを確認します。
 # 実行中の場合は、終了するまで待機します（最大待機秒数まで）。
 # 最大待機秒数を超えても終了しない場合はエラー終了します。
+
+Write-Console "[STEP 3] 実行中ジョブチェック中..."
 
 $runningUrl = "${baseUrl}/objects/statuses?mode=search"
 $runningUrl += "&manager=${managerHost}"
@@ -834,6 +840,8 @@ while ($isRunning) {
 # ==============================================================================
 # 存在確認・種別確認が成功したら、DEFINITION_AND_STATUS で execID を取得します。
 # ※ 待機していた場合は、待機中に保存したexecIDを使用します。
+
+Write-Console "[STEP 4] execID取得中..."
 
 $statusUrl = "${baseUrl}/objects/statuses?mode=search"
 $statusUrl += "&manager=${managerHost}"
@@ -931,6 +939,8 @@ try {
 # ==============================================================================
 # STEP 4で取得した各ジョブについて、実行結果詳細を取得します。
 # 実行結果詳細には、標準出力・標準エラー出力の内容が含まれます。
+
+Write-Console "[STEP 5] 実行結果詳細取得中..."
 
 if ($execIdList.Count -gt 0) {
     foreach ($item in $execIdList) {
