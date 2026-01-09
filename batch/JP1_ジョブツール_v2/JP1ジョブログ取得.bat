@@ -68,8 +68,10 @@ exit /b %EXITCODE%
 #
 # 処理フロー:
 #   STEP 1: DEFINITION で存在確認・ユニット種別確認
-#   STEP 2: DEFINITION_AND_STATUS で execID 取得
-#   STEP 3: 実行結果詳細取得
+#   STEP 2: 親ジョブネットのコメント取得
+#   STEP 3: 実行中ジョブチェック（待機機能付き）
+#   STEP 4: DEFINITION_AND_STATUS で execID 取得
+#   STEP 5: 実行結果詳細取得
 #   ※ 2引数モード: 両方のジョブを取得し、START_TIMEを比較して新しい方を出力
 #
 # 終了コード（実行順）:
@@ -77,9 +79,9 @@ exit /b %EXITCODE%
 #   1: 引数エラー（ユニットパスが指定されていません）
 #   2: ユニット未検出（STEP 1: 指定したユニットが存在しません）
 #   3: ユニット種別エラー（STEP 1: 指定したユニットがジョブではありません）
-#   4: 実行世代なし（STEP 2: 実行履歴が存在しません）
-#   5: 5MB超過エラー（STEP 3: 実行結果が切り捨てられました）
-#   6: 詳細取得エラー（STEP 3: 実行結果詳細の取得に失敗）
+#   4: 実行世代なし（STEP 4: 実行履歴が存在しません）
+#   5: 5MB超過エラー（STEP 5: 実行結果が切り捨てられました）
+#   6: 詳細取得エラー（STEP 5: 実行結果詳細の取得に失敗）
 #   8: 比較モードで両方のジョブ取得に失敗
 #   9: API接続エラー（各STEPでの接続失敗）
 #  10: 比較モードで実行中のジョブが検出された
@@ -687,6 +689,8 @@ $encodedJobName = [System.Uri]::EscapeDataString($jobName)
 #   - 指定したユニットが存在するか
 #   - 指定したユニットがジョブ（JOB系）かどうか
 
+Write-Console "[STEP 1] ユニット存在確認中..."
+
 $defUrl = "${baseUrl}/objects/statuses?mode=search"
 $defUrl += "&manager=${managerHost}"
 $defUrl += "&serviceName=${schedulerService}"
@@ -730,9 +734,11 @@ try {
 }
 
 # ==============================================================================
-# STEP 1.5: 親ジョブネットのコメント取得
+# STEP 2: 親ジョブネットのコメント取得
 # ==============================================================================
 # 親ジョブネットの定義を取得し、コメント（cm属性）を取得します。
+
+Write-Console "[STEP 2] 親ジョブネットのコメント取得中..."
 
 $encodedGrandParentPath = [System.Uri]::EscapeDataString($grandParentPath)
 $encodedJobnetName = [System.Uri]::EscapeDataString($jobnetName)
@@ -768,11 +774,13 @@ try {
 }
 
 # ==============================================================================
-# STEP 1.8: 実行中ジョブチェック（待機機能付き）
+# STEP 3: 実行中ジョブチェック（待機機能付き）
 # ==============================================================================
 # 同じジョブが現在実行中かどうかを確認します。
 # 実行中の場合は、終了するまで待機します（最大待機秒数まで）。
 # 最大待機秒数を超えても終了しない場合はエラー終了します。
+
+Write-Console "[STEP 3] 実行中ジョブチェック中..."
 
 $runningUrl = "${baseUrl}/objects/statuses?mode=search"
 $runningUrl += "&manager=${managerHost}"
@@ -841,10 +849,12 @@ while ($isRunning) {
 }
 
 # ==============================================================================
-# STEP 2: 実行状態・execID取得（DEFINITION_AND_STATUS）
+# STEP 4: 実行状態・execID取得（DEFINITION_AND_STATUS）
 # ==============================================================================
 # 存在確認・種別確認が成功したら、DEFINITION_AND_STATUS で execID を取得します。
 # ※ 待機していた場合は、待機中に保存したexecIDを使用します。
+
+Write-Console "[STEP 4] execID取得中..."
 
 $statusUrl = "${baseUrl}/objects/statuses?mode=search"
 $statusUrl += "&manager=${managerHost}"
@@ -938,10 +948,12 @@ try {
 }
 
 # ==============================================================================
-# STEP 3: 実行結果詳細取得API
+# STEP 5: 実行結果詳細取得API
 # ==============================================================================
-# STEP 2で取得した各ジョブについて、実行結果詳細を取得します。
+# STEP 4で取得した各ジョブについて、実行結果詳細を取得します。
 # 実行結果詳細には、標準出力・標準エラー出力の内容が含まれます。
+
+Write-Console "[STEP 5] 実行結果詳細取得中..."
 
 if ($execIdList.Count -gt 0) {
     foreach ($item in $execIdList) {
@@ -1073,7 +1085,7 @@ if ($execIdList.Count -gt 0) {
                 }
             }
 
-            [Console]::WriteLine("出力完了: $outputFilePath")
+            Write-Console "[完了] 出力ファイル: $outputFilePath"
         } catch {
             exit 6  # 詳細取得エラー
         }

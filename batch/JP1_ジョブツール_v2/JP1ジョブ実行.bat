@@ -63,9 +63,10 @@ exit /b %EXITCODE%
 # 処理フロー:
 #   STEP 1: DEFINITION で存在確認・ユニット種別確認
 #   STEP 2: ルートジョブネットを特定
-#   STEP 3: 即時実行登録API でルートジョブネットを実行
-#   STEP 4: 状態監視（指定ジョブの完了待ち）
-#   STEP 5: 実行結果詳細取得
+#   STEP 3: 親ジョブネットのコメント取得
+#   STEP 4: 即時実行登録API でルートジョブネットを実行
+#   STEP 5: 状態監視（指定ジョブの完了待ち）
+#   STEP 6: 実行結果詳細取得
 #
 # 終了コード（実行順）:
 #   0: 正常終了
@@ -73,10 +74,10 @@ exit /b %EXITCODE%
 #   2: ユニット未検出（STEP 1: 指定したユニットが存在しません）
 #   3: ユニット種別エラー（STEP 1: 指定したユニットがジョブではありません）
 #   4: ルートジョブネット特定エラー（STEP 2）
-#   5: 即時実行登録エラー（STEP 3: API呼び出し失敗）
-#   6: タイムアウト（STEP 4: 指定時間内に完了しませんでした）
-#   7: 5MB超過エラー（STEP 5: 実行結果が切り捨てられました）
-#   8: 詳細取得エラー（STEP 5: 実行結果詳細の取得に失敗）
+#   5: 即時実行登録エラー（STEP 4: API呼び出し失敗）
+#   6: タイムアウト（STEP 5: 指定時間内に完了しませんでした）
+#   7: 5MB超過エラー（STEP 6: 実行結果が切り捨てられました）
+#   8: 詳細取得エラー（STEP 6: 実行結果詳細の取得に失敗）
 #   9: API接続エラー（各STEPでの接続失敗）
 #
 # 参考:
@@ -89,6 +90,13 @@ exit /b %EXITCODE%
 # 出力をShift-JIS（コードページ932）に設定します。
 # これにより、日本語Windowsのコマンドプロンプトで正しく表示されます。
 [Console]::OutputEncoding = [System.Text.Encoding]::GetEncoding(932)
+
+# コンソールに直接出力する関数（ファイルリダイレクトの影響を受けない）
+# CONデバイスに書き込むことで、バッチファイルのリダイレクト（> file）を回避
+function Write-Console {
+    param([string]$Message)
+    $Message | Out-File -FilePath "CON" -Encoding Default
+}
 
 # ==============================================================================
 # ■ 接続設定セクション
@@ -311,6 +319,8 @@ $encodedJobName = [System.Uri]::EscapeDataString($jobName)
 #   - 指定したユニットが存在するか
 #   - 指定したユニットがジョブ（JOB系）かどうか
 
+Write-Console "[STEP 1] ユニット存在確認中..."
+
 $defUrl = "${baseUrl}/objects/statuses?mode=search"
 $defUrl += "&manager=${managerHost}"
 $defUrl += "&serviceName=${schedulerService}"
@@ -360,14 +370,18 @@ try {
 # ==============================================================================
 # STEP 1で取得した rootJobnetName を使用してルートジョブネットを特定します。
 
+Write-Console "[STEP 2] ルートジョブネット特定中..."
+
 if (-not $rootJobnetName) {
     exit 4  # ルートジョブネット特定エラー
 }
 
 # ==============================================================================
-# STEP 2.5: 親ジョブネットのコメント取得
+# STEP 3: 親ジョブネットのコメント取得
 # ==============================================================================
 # 親ジョブネットの定義を取得し、コメント（cm属性）を取得します。
+
+Write-Console "[STEP 3] 親ジョブネットのコメント取得中..."
 
 $encodedGrandParentPath = [System.Uri]::EscapeDataString($grandParentPath)
 $encodedJobnetName = [System.Uri]::EscapeDataString($jobnetName)
@@ -403,10 +417,12 @@ try {
 }
 
 # ==============================================================================
-# STEP 3: 即時実行登録API
+# STEP 4: 即時実行登録API
 # ==============================================================================
 # ルートジョブネットを即時実行します。
 # API: POST /ajs/api/v1/objects/definitions/{unitName}/actions/registerImmediateExec/invoke
+
+Write-Console "[STEP 4] 即時実行登録中..."
 
 $encodedRootJobnet = [System.Uri]::EscapeDataString($rootJobnetName)
 
@@ -444,9 +460,11 @@ try {
 }
 
 # ==============================================================================
-# STEP 4: 状態監視（指定ジョブの完了待ち）
+# STEP 5: 状態監視（指定ジョブの完了待ち）
 # ==============================================================================
 # 指定したジョブの状態を監視し、終了を待ちます。
+
+Write-Console "[STEP 5] ジョブ完了待機中..."
 
 $statusUrl = "${baseUrl}/objects/statuses?mode=search"
 $statusUrl += "&manager=${managerHost}"
@@ -525,9 +543,11 @@ if ($jobStartTime) {
 }
 
 # ==============================================================================
-# STEP 5: 実行結果詳細取得API
+# STEP 6: 実行結果詳細取得API
 # ==============================================================================
 # ジョブの実行結果詳細を取得します。
+
+Write-Console "[STEP 6] 実行結果詳細取得中..."
 
 # ステータス値を日本語に変換する関数
 function Get-StatusDisplayName {
@@ -657,7 +677,7 @@ try {
         }
     }
 
-    [Console]::WriteLine("出力完了: $outputFilePath")
+    Write-Console "[完了] 出力ファイル: $outputFilePath"
 } catch {
     exit 8  # 詳細取得エラー
 }
