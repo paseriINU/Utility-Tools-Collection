@@ -2118,11 +2118,9 @@
             }
 
             // デバッグ: objStmObjectsMapから12456の内容を取得
-            if (objStmObjectsMap.has(12456)) {
-                console.log('★★★ obj12456 from map: ' + objStmObjectsMap.get(12456));
-            } else {
-                console.log('★★★ obj12456 not in map, size=' + objStmObjectsMap.size);
-            }
+            const has12456 = objStmObjectsMap.has(12456);
+            const content12456 = has12456 ? objStmObjectsMap.get(12456).substring(0, 200) : 'なし';
+            alert('obj12456: has=' + has12456 + ', content=' + content12456);
 
             // 未解決の間接参照を解決
             for (let i = 0; i < decodedTitles.length; i++) {
