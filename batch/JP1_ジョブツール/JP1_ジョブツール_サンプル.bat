@@ -9,7 +9,7 @@ rem ============================================================================
 rem JP1 ジョブツール サンプル
 rem
 rem 説明:
-rem   JP1_REST_ジョブ実行ツール.bat または JP1_REST_ジョブログ取得ツール.bat を呼び出し、
+rem   JP1_REST_ジョブ実行ログ取得ツール.bat または JP1_REST_ジョブ情報取得ツール.bat を呼び出し、
 rem   ジョブの実行結果をファイルに保存します。
 rem
 rem 機能:
@@ -103,14 +103,14 @@ if /i "%MODE%"=="EXEC" (
     echo ジョブを実行中...
     echo （完了まで時間がかかる場合があります）
     echo.
-    call "%SCRIPT_DIR%JP1_REST_ジョブ実行ツール.bat" "%UNIT_PATH%" > "%TEMP_FILE%"
+    call "%SCRIPT_DIR%JP1_REST_ジョブ実行ログ取得ツール.bat" "%UNIT_PATH%" > "%TEMP_FILE%"
 ) else if /i "%MODE%"=="GET" (
     echo ログを取得中...
     echo.
     if "%UNIT_PATH_2%"=="" (
-        call "%SCRIPT_DIR%JP1_REST_ジョブログ取得ツール.bat" "%UNIT_PATH%" > "%TEMP_FILE%"
+        call "%SCRIPT_DIR%JP1_REST_ジョブ情報取得ツール.bat" "%UNIT_PATH%" > "%TEMP_FILE%"
     ) else (
-        call "%SCRIPT_DIR%JP1_REST_ジョブログ取得ツール.bat" "%UNIT_PATH%" "%UNIT_PATH_2%" > "%TEMP_FILE%"
+        call "%SCRIPT_DIR%JP1_REST_ジョブ情報取得ツール.bat" "%UNIT_PATH%" "%UNIT_PATH_2%" > "%TEMP_FILE%"
     )
 ) else (
     echo [エラー] 無効なモードです: %MODE%
