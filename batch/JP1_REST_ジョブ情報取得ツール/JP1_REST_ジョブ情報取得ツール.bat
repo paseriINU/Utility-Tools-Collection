@@ -370,6 +370,8 @@ $baseUrl = "${protocol}://${webConsoleHost}:${webConsolePort}/ajs/api/v1"
 # 2つのジョブパスが指定された場合、両方のSTART_TIMEを取得して比較し、
 # 新しい方のジョブパスを $unitPath に設定します。
 
+$selectedPath = ""  # 比較モードで選択されたパス
+
 if ($isCompareMode) {
     # START_TIMEを取得する関数
     function Get-JobStartTime {
@@ -425,8 +427,10 @@ if ($isCompareMode) {
     # 片方だけ失敗した場合
     if (-not $startTime1) {
         $unitPath = $unitPath2
+        $selectedPath = $unitPath2
     } elseif (-not $startTime2) {
         # $unitPath はそのまま
+        $selectedPath = $unitPath
     } else {
         # 両方成功した場合、日時を比較
         try {
@@ -435,12 +439,17 @@ if ($isCompareMode) {
 
             if ($dt2 -gt $dt1) {
                 $unitPath = $unitPath2
+                $selectedPath = $unitPath2
+            } else {
+                $selectedPath = $unitPath
             }
-            # $dt1 >= $dt2 の場合は $unitPath のまま
         } catch {
             # パースエラーの場合は文字列比較
             if ($startTime2 -gt $startTime1) {
                 $unitPath = $unitPath2
+                $selectedPath = $unitPath2
+            } else {
+                $selectedPath = $unitPath
             }
         }
     }
@@ -670,6 +679,7 @@ try {
                     Status = $statusValue
                     UnitType = $unitTypeValue
                     StartTime = $startTimeValue
+                    EndStatus = $statusValue  # 終了状態を保持
                 }
             }
         }
@@ -690,11 +700,36 @@ try {
 # STEP 2で取得した各ジョブについて、実行結果詳細を取得します。
 # 実行結果詳細には、標準出力・標準エラー出力の内容が含まれます。
 
+# ステータス値を日本語に変換する関数
+function Get-StatusDisplayName {
+    param([string]$status)
+    switch ($status) {
+        "NORMAL"        { return "正常終了" }
+        "WARNING"       { return "警告検出終了" }
+        "ABNORMAL"      { return "異常検出終了" }
+        "KILL"          { return "強制終了" }
+        "INTERRUPT"     { return "中断" }
+        "FAIL"          { return "起動失敗" }
+        "UNKNOWN"       { return "終了状態不正" }
+        "MONITORCLOSE"  { return "監視打ち切り終了" }
+        "INVALIDSEQ"    { return "順序不正" }
+        "NORMALFALSE"   { return "正常終了-偽" }
+        "UNEXECMONITOR" { return "監視未起動終了" }
+        "MONITORINTRPT" { return "監視中断" }
+        "MONITORNORMAL" { return "監視正常終了" }
+        "RUNNING"       { return "実行中" }
+        "WACONT"        { return "警告検出実行中" }
+        "ABCONT"        { return "異常検出実行中" }
+        default         { return $status }
+    }
+}
+
 if ($execIdList.Count -gt 0) {
     foreach ($item in $execIdList) {
         $targetPath = $item.Path
         $targetExecId = $item.ExecId
         $targetStartTime = $item.StartTime
+        $targetEndStatus = $item.EndStatus
 
         # 開始日時をファイル名用フォーマットに変換（yyyyMMdd_HHmmss）
         # 例: "2015-09-02T22:50:28+09:00" → "20150902_225028"
@@ -739,8 +774,17 @@ if ($execIdList.Count -gt 0) {
                 [Console]::WriteLine($runningWarning)
             }
 
+            # 比較モードで選択されたパスを出力（存在する場合）
+            if ($selectedPath) {
+                [Console]::WriteLine("SELECTED_PATH:$selectedPath")
+            }
+
             # 開始日時を最初の行に出力（ファイル名用フォーマット）
             [Console]::WriteLine("START_TIME:$startTimeForFileName")
+
+            # 終了状態を出力（ファイル名用、日本語変換済み）
+            $endStatusDisplay = Get-StatusDisplayName -status $targetEndStatus
+            [Console]::WriteLine("END_STATUS:$endStatusDisplay")
 
             # ジョブネット名を出力（ファイル名用）
             [Console]::WriteLine("JOBNET_NAME:$jobnetName")

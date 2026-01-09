@@ -216,6 +216,30 @@ if not "%RUNNING_WARNING%"=="" (
     pause >nul
 )
 
+rem 一時ファイルから SELECTED_PATH: 行を取得して選択されたパスを抽出
+set "SELECTED_PATH="
+for /f "tokens=1,* delims=:" %%a in ('type "%TEMP_FILE%" 2^>nul') do (
+    if "%%a"=="SELECTED_PATH" (
+        set "SELECTED_PATH=%%b"
+        goto :GOT_SELECTED_PATH
+    )
+)
+:GOT_SELECTED_PATH
+
+rem 比較モードで選択されたパスがある場合、表示して確認を求める
+if not "%SELECTED_PATH%"=="" (
+    echo.
+    echo ================================================================
+    echo   [比較結果] 新しい方のジョブを選択しました
+    echo ================================================================
+    echo.
+    echo   選択されたジョブ: %SELECTED_PATH%
+    echo.
+    echo   続行する場合は任意のキーを押してください...
+    echo.
+    pause >nul
+)
+
 rem 一時ファイルから START_TIME: 行を取得してジョブ開始日時を抽出
 set "JOB_START_TIME="
 for /f "tokens=1,* delims=:" %%a in ('type "%TEMP_FILE%" 2^>nul') do (
@@ -236,6 +260,16 @@ for /f "tokens=1,* delims=:" %%a in ('type "%TEMP_FILE%" 2^>nul') do (
 )
 :GOT_JOBNET_NAME
 
+rem 一時ファイルから END_STATUS: 行を取得して終了状態を抽出
+set "END_STATUS="
+for /f "tokens=1,* delims=:" %%a in ('type "%TEMP_FILE%" 2^>nul') do (
+    if "%%a"=="END_STATUS" (
+        set "END_STATUS=%%b"
+        goto :GOT_END_STATUS
+    )
+)
+:GOT_END_STATUS
+
 rem 一時ファイルから JOBNET_COMMENT: 行を取得してジョブネットコメントを抽出
 set "JOBNET_COMMENT="
 for /f "tokens=1,* delims=:" %%a in ('type "%TEMP_FILE%" 2^>nul') do (
@@ -251,6 +285,9 @@ if "%JOBNET_COMMENT%"=="" set "JOBNET_COMMENT=%DEFAULT_COMMENT%"
 
 rem ジョブネット名が空の場合はデフォルト値を使用
 if "%JOBNET_NAME%"=="" set "JOBNET_NAME=UnknownJobnet"
+
+rem 終了状態が空の場合はデフォルト値を使用
+if "%END_STATUS%"=="" set "END_STATUS=不明"
 
 rem ジョブ開始日時が取得できなかった場合はエラー
 if "%JOB_START_TIME%"=="" (
@@ -283,17 +320,19 @@ if "%OLD_DATA_WARNING%"=="OLD" (
 )
 
 rem 出力ファイル名を新形式で作成
-rem 形式: 【ジョブ実行結果】【{日時}実行分】{ジョブネット名}_{コメント}.txt
-set "OUTPUT_FILE=%~dp0【ジョブ実行結果】【%JOB_START_TIME%実行分】%JOBNET_NAME%_%JOBNET_COMMENT%.txt"
+rem 形式: 【ジョブ実行結果】【{日時}実行分】【{終了状態}】{ジョブネット名}_{コメント}.txt
+set "OUTPUT_FILE=%~dp0【ジョブ実行結果】【%JOB_START_TIME%実行分】【%END_STATUS%】%JOBNET_NAME%_%JOBNET_COMMENT%.txt"
 
 rem メタデータ行を除いた実行結果詳細を出力ファイルに保存
-rem 除外対象: RUNNING_WARNING:, START_TIME:, JOBNET_NAME:, JOBNET_COMMENT:
+rem 除外対象: RUNNING_WARNING:, SELECTED_PATH:, START_TIME:, END_STATUS:, JOBNET_NAME:, JOBNET_COMMENT:
 (for /f "usebackq tokens=* delims=" %%L in ("%TEMP_FILE%") do (
     set "LINE=%%L"
     setlocal enabledelayedexpansion
     set "SKIP="
     if "!LINE:~0,16!"=="RUNNING_WARNING:" set "SKIP=1"
+    if "!LINE:~0,14!"=="SELECTED_PATH:" set "SKIP=1"
     if "!LINE:~0,11!"=="START_TIME:" set "SKIP=1"
+    if "!LINE:~0,11!"=="END_STATUS:" set "SKIP=1"
     if "!LINE:~0,12!"=="JOBNET_NAME:" set "SKIP=1"
     if "!LINE:~0,15!"=="JOBNET_COMMENT:" set "SKIP=1"
     if not defined SKIP echo !LINE!
@@ -311,6 +350,7 @@ echo.
 echo ジョブネット名: %JOBNET_NAME%
 echo コメント:       %JOBNET_COMMENT%
 echo ジョブ開始日時: %JOB_START_TIME%
+echo 終了状態:       %END_STATUS%
 echo 出力ファイル:   %OUTPUT_FILE%
 echo.
 
