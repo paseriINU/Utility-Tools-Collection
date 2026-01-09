@@ -1977,6 +1977,18 @@
                                             }
                                         }
 
+                                        // デバッグ: 「その他」を含むタイトルの生データを表示
+                                        if (title.includes('その他')) {
+                                            let debugInfo = 'タイトル: ' + title + '\n';
+                                            debugInfo += 'titleBytes.length: ' + titleBytes.length + '\n';
+                                            debugInfo += 'rawTitleBytes.length: ' + rawTitleBytes.length + '\n';
+                                            debugInfo += '最後の10バイト(hex): ';
+                                            for (let d = Math.max(0, titleBytes.length - 10); d < titleBytes.length; d++) {
+                                                debugInfo += titleBytes[d].toString(16).padStart(2, '0') + ' ';
+                                            }
+                                            alert(debugInfo);
+                                        }
+
                                         if (title && title.trim()) {
                                             // このオブジェクト全体からページ参照を取得（インデックスに基づく正確な範囲）
                                             const objBytes = decompressed.slice(objByteStart, objByteEnd);
