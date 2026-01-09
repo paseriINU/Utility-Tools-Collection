@@ -462,6 +462,44 @@ try {
 }
 
 # ==============================================================================
+# STEP 1.8: 実行中ジョブチェック
+# ==============================================================================
+# 同じジョブが現在実行中かどうかを確認します。
+# 実行中の場合は警告を出力しますが、処理は続行します。
+
+$runningUrl = "${baseUrl}/objects/statuses?mode=search"
+$runningUrl += "&manager=${managerHost}"
+$runningUrl += "&serviceName=${schedulerService}"
+$runningUrl += "&location=${encodedParentPath}"
+$runningUrl += "&searchLowerUnits=NO"
+$runningUrl += "&searchTarget=DEFINITION_AND_STATUS"
+$runningUrl += "&unitName=${encodedJobName}"
+$runningUrl += "&unitNameMatchMethods=EQ"
+$runningUrl += "&generation=STATUS"
+$runningUrl += "&status=GRP_RUN"
+
+$runningWarning = ""
+
+try {
+    $runningResponse = Invoke-WebRequest -Uri $runningUrl -Method GET -Headers $headers -TimeoutSec 30 -UseBasicParsing
+
+    # UTF-8文字化け対策
+    $runningBytes = $runningResponse.RawContentStream.ToArray()
+    $runningText = [System.Text.Encoding]::UTF8.GetString($runningBytes)
+    $runningJson = $runningText | ConvertFrom-Json
+
+    # 実行中のジョブが存在するか確認
+    if ($runningJson.statuses -and $runningJson.statuses.Count -gt 0) {
+        $runningUnit = $runningJson.statuses[0]
+        $runningStatus = $runningUnit.unitStatus.status
+        $runningStartTime = $runningUnit.unitStatus.startTime
+        $runningWarning = "RUNNING_WARNING:実行中のジョブがあります（ステータス: ${runningStatus}, 開始日時: ${runningStartTime}）"
+    }
+} catch {
+    # 実行中チェック失敗は無視して続行（必須ではない）
+}
+
+# ==============================================================================
 # STEP 2: 実行状態・execID取得（DEFINITION_AND_STATUS）
 # ==============================================================================
 # 存在確認・種別確認が成功したら、DEFINITION_AND_STATUS で execID を取得します。
@@ -597,6 +635,11 @@ if ($execIdList.Count -gt 0) {
             $execResultContent = ""
             if ($resultJson.execResultDetails) {
                 $execResultContent = $resultJson.execResultDetails
+            }
+
+            # 実行中警告を出力（存在する場合）
+            if ($runningWarning) {
+                [Console]::WriteLine($runningWarning)
             }
 
             # 開始日時を最初の行に出力（ファイル名用フォーマット）
