@@ -484,9 +484,9 @@ if ($isCompareMode) {
         $waitTargetStatusDisplay = Get-StatusDisplayName -status $waitTargetStatus.Status
 
         if ($isRunning1 -and $isRunning2) {
-            [Console]::Error.WriteLine("COMPARE_INFO:両方のジョブが実行中です。$unitPath の終了を待機します")
+            Write-Host "COMPARE_INFO:両方のジョブが実行中です。$unitPath の終了を待機します" -ForegroundColor Yellow
         } else {
-            [Console]::Error.WriteLine("COMPARE_INFO:実行中のジョブを検出しました - $waitTargetPath の終了を待機します")
+            Write-Host "COMPARE_INFO:実行中のジョブを検出しました - $waitTargetPath の終了を待機します" -ForegroundColor Yellow
         }
 
         # 待機ループ
@@ -501,8 +501,8 @@ if ($isCompareMode) {
                 exit 11  # 実行中のジョブが検出された（タイムアウト）
             }
 
-            [Console]::Error.WriteLine("WAITING:実行中のジョブを検出しました。終了を待機しています...（${waitedSeconds}/${maxWaitSeconds}秒）")
-            [Console]::Error.WriteLine("WAITING_JOB:$waitTargetPath（ステータス: ${waitTargetStatusDisplay}, 開始日時: $($waitTargetStatus.StartTime), execID: ${waitingExecId}）")
+            Write-Host "WAITING:実行中のジョブを検出しました。終了を待機しています...（${waitedSeconds}/${maxWaitSeconds}秒）" -ForegroundColor Yellow
+            Write-Host "WAITING_JOB:$waitTargetPath（ステータス: ${waitTargetStatusDisplay}, 開始日時: $($waitTargetStatus.StartTime), execID: ${waitingExecId}）" -ForegroundColor Yellow
 
             Start-Sleep -Seconds $checkIntervalSeconds
             $waitedSeconds += $checkIntervalSeconds
@@ -511,7 +511,7 @@ if ($isCompareMode) {
             $recheckStatus = Get-JobRunningStatus -jobPath $waitTargetPath
             if (-not $recheckStatus -or -not $recheckStatus.IsRunning) {
                 $stillRunning = $false
-                [Console]::Error.WriteLine("WAIT_COMPLETE:ジョブの終了を確認しました（${waitedSeconds}秒待機、execID: ${waitingExecId}）")
+                Write-Host "WAIT_COMPLETE:ジョブの終了を確認しました（${waitedSeconds}秒待機、execID: ${waitingExecId}）" -ForegroundColor Green
             } else {
                 $waitTargetStatusDisplay = Get-StatusDisplayName -status $recheckStatus.Status
             }
@@ -529,7 +529,7 @@ if ($isCompareMode) {
         }
         $rejectedTime = "(実行中ジョブを優先)"
 
-        [Console]::Error.WriteLine("INFO:待機していたジョブのexecID（${waitingExecId}）を使用してログを取得します")
+        Write-Host "INFO:待機していたジョブのexecID（${waitingExecId}）を使用してログを取得します" -ForegroundColor Cyan
     } else {
         # どちらも実行中でない場合はSTART_TIMEで比較
         # START_TIMEを取得する関数
@@ -799,9 +799,9 @@ while ($isRunning) {
                 exit 11  # 実行中のジョブが検出された（タイムアウト）
             }
 
-            # 待機中メッセージを出力（標準エラー出力へ）
-            [Console]::Error.WriteLine("WAITING:実行中のジョブを検出しました。終了を待機しています...（${waitedSeconds}/${maxWaitSeconds}秒）")
-            [Console]::Error.WriteLine("WAITING_JOB:$unitPath（ステータス: ${runningStatusDisplay}, 開始日時: ${runningStartTime}, execID: ${waitingExecId}）")
+            # 待機中メッセージを出力（コンソールへ直接表示）
+            Write-Host "WAITING:実行中のジョブを検出しました。終了を待機しています...（${waitedSeconds}/${maxWaitSeconds}秒）" -ForegroundColor Yellow
+            Write-Host "WAITING_JOB:$unitPath（ステータス: ${runningStatusDisplay}, 開始日時: ${runningStartTime}, execID: ${waitingExecId}）" -ForegroundColor Yellow
 
             # 指定秒数待機
             Start-Sleep -Seconds $checkIntervalSeconds
@@ -812,7 +812,7 @@ while ($isRunning) {
 
             # 待機していた場合は完了メッセージを出力
             if ($waitedSeconds -gt 0) {
-                [Console]::Error.WriteLine("WAIT_COMPLETE:ジョブの終了を確認しました（${waitedSeconds}秒待機、execID: ${waitingExecId}）")
+                Write-Host "WAIT_COMPLETE:ジョブの終了を確認しました（${waitedSeconds}秒待機、execID: ${waitingExecId}）" -ForegroundColor Green
             }
         }
     } catch {
@@ -840,7 +840,7 @@ $statusUrl += "&unitNameMatchMethods=EQ"
 if ($waitingExecId) {
     $statusUrl += "&generation=EXECID"
     $statusUrl += "&execID=${waitingExecId}"
-    [Console]::Error.WriteLine("INFO:待機していたジョブのexecID（${waitingExecId}）を使用してログを取得します")
+    Write-Host "INFO:待機していたジョブのexecID（${waitingExecId}）を使用してログを取得します" -ForegroundColor Cyan
 } else {
     # 世代指定
     $statusUrl += "&generation=${generation}"
