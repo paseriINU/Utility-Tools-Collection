@@ -2007,6 +2007,24 @@
                                         // PDF内では 00 バイトは \000 などとエスケープされている
                                         const titleBytes = decodePDFEscapeBytes(rawTitleBytes);
 
+                                        // デバッグ: rawTitleBytesの構造を確認
+                                        if (titleBytes.length > 20 && titleBytes.length < 100) {
+                                            let debugInfo = 'rawLen=' + rawTitleBytes.length + ', decoded=' + titleBytes.length + '\n';
+                                            debugInfo += '先頭10: ';
+                                            for (let d = 0; d < Math.min(10, rawTitleBytes.length); d++) {
+                                                debugInfo += rawTitleBytes[d].toString(16).padStart(2, '0') + ' ';
+                                            }
+                                            debugInfo += '\n末尾10(raw): ';
+                                            for (let d = Math.max(0, rawTitleBytes.length - 10); d < rawTitleBytes.length; d++) {
+                                                debugInfo += rawTitleBytes[d].toString(16).padStart(2, '0') + ' ';
+                                            }
+                                            debugInfo += '\nparenEnd後の5バイト: ';
+                                            for (let d = parenEnd; d < Math.min(parenEnd + 5, decompressed.length); d++) {
+                                                debugInfo += decompressed[d].toString(16).padStart(2, '0') + ' ';
+                                            }
+                                            alert(debugInfo);
+                                        }
+
                                         // UTF-16BE BOM (FE FF) をチェック
                                         let title = '';
                                         if (titleBytes.length >= 2 && titleBytes[0] === 0xFE && titleBytes[1] === 0xFF) {
