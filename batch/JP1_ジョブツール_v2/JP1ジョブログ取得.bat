@@ -1049,7 +1049,12 @@ if ($execIdList.Count -gt 0) {
                     if (-not $excelPasteCell) { $excelPasteCell = "A1" }
 
                     if ($excelFileName) {
-                        $excelPath = Join-Path $scriptDir $excelFileName
+                        # フルパスと相対パスの両方に対応
+                        if ([System.IO.Path]::IsPathRooted($excelFileName)) {
+                            $excelPath = $excelFileName
+                        } else {
+                            $excelPath = Join-Path $scriptDir $excelFileName
+                        }
                         if (Test-Path $excelPath) {
                             try {
                                 $logContent = Get-Content $outputFilePath -Encoding Default -Raw
