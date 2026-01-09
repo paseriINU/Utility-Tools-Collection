@@ -24,6 +24,7 @@ JP1/AJS3 Web Console REST APIを使用して、ジョブの実行とログ取得
 | 管理者権限 | 不要 |
 | 認証方式 | Windows資格情報マネージャー対応 |
 | 比較モード | 2つのジョブを比較して新しい方を取得（GET版） |
+| Excel貼り付け | ログをExcelファイルに自動貼り付け（オプション） |
 
 ## ファイル構成
 
@@ -46,11 +47,21 @@ set "MODE=GET"
 
 rem ジョブパス
 set "UNIT_PATH=/JobGroup/Jobnet/Job1"
+
+rem === Excel貼り付け設定（オプション）===
+rem Excelファイル名（このバッチと同じフォルダに配置）
+set "EXCEL_FILE_NAME=ログ貼り付け用.xlsx"
+rem 貼り付け先シート名
+set "EXCEL_SHEET_NAME=Sheet1"
+rem 貼り付け先セル位置
+set "EXCEL_PASTE_CELL=A1"
 ```
 
 2. バッチファイルをダブルクリックで実行
 
 3. 結果がテキストファイルに保存され、メモ帳で自動表示
+
+4. Excel設定がある場合は、指定したExcelファイルにもログを貼り付け
 
 ### メインツールを直接使用する場合
 
