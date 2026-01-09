@@ -84,18 +84,19 @@ echo   モード: %MODE%
 echo.
 
 rem モードに応じてツールを選択
+rem ※標準出力のみファイルにリダイレクト（標準エラー出力は待機メッセージ等をコンソールに表示）
 if /i "%MODE%"=="EXEC" (
     echo ジョブを実行中...
     echo （完了まで時間がかかる場合があります）
     echo.
-    call "%SCRIPT_DIR%JP1_REST_ジョブ実行ツール.bat" "%UNIT_PATH%" > "%TEMP_FILE%" 2>&1
+    call "%SCRIPT_DIR%JP1_REST_ジョブ実行ツール.bat" "%UNIT_PATH%" > "%TEMP_FILE%"
 ) else if /i "%MODE%"=="GET" (
     echo ログを取得中...
     echo.
     if "%UNIT_PATH_2%"=="" (
-        call "%SCRIPT_DIR%JP1_REST_ジョブログ取得ツール.bat" "%UNIT_PATH%" > "%TEMP_FILE%" 2>&1
+        call "%SCRIPT_DIR%JP1_REST_ジョブログ取得ツール.bat" "%UNIT_PATH%" > "%TEMP_FILE%"
     ) else (
-        call "%SCRIPT_DIR%JP1_REST_ジョブログ取得ツール.bat" "%UNIT_PATH%" "%UNIT_PATH_2%" > "%TEMP_FILE%" 2>&1
+        call "%SCRIPT_DIR%JP1_REST_ジョブログ取得ツール.bat" "%UNIT_PATH%" "%UNIT_PATH_2%" > "%TEMP_FILE%"
     )
 ) else (
     echo [エラー] 無効なモードです: %MODE%
@@ -353,22 +354,12 @@ set "OUTPUT_FILE=%~dp0【ジョブ実行結果】【%JOB_START_TIME%実行分】
 
 rem メタデータ行を除いた実行結果詳細を出力ファイルに保存
 rem 除外対象: START_TIME:, END_STATUS:, JOBNET_NAME:, JOBNET_COMMENT:, JOB_STATUS:, SELECTED_*, REJECTED_*
-(for /f "usebackq tokens=* delims=" %%L in ("%TEMP_FILE%") do (
-    set "LINE=%%L"
-    setlocal enabledelayedexpansion
-    set "SKIP="
-    if "!LINE:~0,11!"=="START_TIME:" set "SKIP=1"
-    if "!LINE:~0,11!"=="END_STATUS:" set "SKIP=1"
-    if "!LINE:~0,12!"=="JOBNET_NAME:" set "SKIP=1"
-    if "!LINE:~0,15!"=="JOBNET_COMMENT:" set "SKIP=1"
-    if "!LINE:~0,11!"=="JOB_STATUS:" set "SKIP=1"
-    if "!LINE:~0,14!"=="SELECTED_PATH:" set "SKIP=1"
-    if "!LINE:~0,14!"=="SELECTED_TIME:" set "SKIP=1"
-    if "!LINE:~0,14!"=="REJECTED_PATH:" set "SKIP=1"
-    if "!LINE:~0,14!"=="REJECTED_TIME:" set "SKIP=1"
-    if not defined SKIP echo !LINE!
-    endlocal
-)) > "%OUTPUT_FILE%"
+rem ※空行を保持するためPowerShellで処理（for /fは空行をスキップしてしまうため）
+powershell -NoProfile -Command ^
+    "$excludePatterns = @('^START_TIME:', '^END_STATUS:', '^JOBNET_NAME:', '^JOBNET_COMMENT:', '^JOB_STATUS:', '^SELECTED_PATH:', '^SELECTED_TIME:', '^REJECTED_PATH:', '^REJECTED_TIME:');" ^
+    "$content = Get-Content -Path '%TEMP_FILE%' -Encoding UTF8;" ^
+    "$filtered = $content | Where-Object { $line = $_; -not ($excludePatterns | Where-Object { $line -match $_ }) };" ^
+    "$filtered | Out-File -FilePath '%OUTPUT_FILE%' -Encoding UTF8"
 
 rem 一時ファイルを削除
 del "%TEMP_FILE%" >nul 2>&1
