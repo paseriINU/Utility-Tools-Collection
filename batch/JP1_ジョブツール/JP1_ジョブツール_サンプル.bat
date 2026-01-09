@@ -357,9 +357,9 @@ rem 除外対象: START_TIME:, END_STATUS:, JOBNET_NAME:, JOBNET_COMMENT:, JOB_S
 rem ※空行を保持するためPowerShellで処理（for /fは空行をスキップしてしまうため）
 powershell -NoProfile -Command ^
     "$excludePatterns = @('^START_TIME:', '^END_STATUS:', '^JOBNET_NAME:', '^JOBNET_COMMENT:', '^JOB_STATUS:', '^SELECTED_PATH:', '^SELECTED_TIME:', '^REJECTED_PATH:', '^REJECTED_TIME:');" ^
-    "$content = Get-Content -Path '%TEMP_FILE%' -Encoding UTF8;" ^
+    "$content = Get-Content -Path '%TEMP_FILE%' -Encoding Default;" ^
     "$filtered = $content | Where-Object { $line = $_; -not ($excludePatterns | Where-Object { $line -match $_ }) };" ^
-    "$filtered | Out-File -FilePath '%OUTPUT_FILE%' -Encoding UTF8"
+    "$filtered | Out-File -FilePath '%OUTPUT_FILE%' -Encoding Default"
 
 rem 一時ファイルを削除
 del "%TEMP_FILE%" >nul 2>&1
