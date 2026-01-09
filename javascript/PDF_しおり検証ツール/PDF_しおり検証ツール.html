@@ -1264,10 +1264,15 @@
                     // ObjStmからバイト直接抽出したタイトルを使用（JavaScript APIで作成されたしおり向け）
                     for (const item of objStmDecodedTitles) {
                         let pageNum = '';
+
                         if (item.pageRef) {
+                            // (ページ不明) の場合（アクションオブジェクトがPDF内に存在しない）
+                            if (item.pageRef === '(ページ不明)') {
+                                pageNum = '(不明)';
+                            }
                             // PAGE:N 形式（JavaScriptアクションから取得）の場合
                             // JavaScript版PDFは0始まりなので+1する
-                            if (item.pageRef.startsWith('PAGE:')) {
+                            else if (item.pageRef.startsWith('PAGE:')) {
                                 const rawPageNum = parseInt(item.pageRef.substring(5), 10);
                                 pageNum = (typeof rawPageNum === 'number' && !isNaN(rawPageNum)) ? rawPageNum + 1 : '';
                             } else {
@@ -1754,8 +1759,8 @@
             while ((actionMatch = actionObjPattern.exec(content)) !== null) {
                 const actionObjNum = parseInt(actionMatch[1], 10);
                 const actionContent = actionMatch[2];
-                // /S /GoTo と /D [N 0 R ...] を含むアクションオブジェクトを検出
-                if (actionContent.includes('/S') && actionContent.includes('/GoTo')) {
+                // /S /GoTo と /D [N 0 R ...] を含むアクションオブジェクトを検出（大文字小文字を区別しない）
+                if (actionContent.includes('/S') && /\/goto/i.test(actionContent)) {
                     const dMatch = actionContent.match(/\/D\s*\[\s*(\d+)\s+0\s+R/);
                     if (dMatch) {
                         globalActionObjectMap.set(actionObjNum, dMatch[1] + ' 0 R');
@@ -1853,6 +1858,10 @@
                     if (decompressed && decompressed.length > 0) {
                         // アクションオブジェクトをグローバルマップに追加（/A N 0 R 間接参照解決用）
                         // ObjStmのインデックスを解析して各オブジェクトのページ参照を取得
+
+                        // objOffsetsをtryブロックの外で宣言（後続の処理で使用）
+                        let objOffsets = [];
+
                         try {
                             // ObjStm全体をlatin1Decodeしてインデックスを解析
                             const fullObjStmStr = latin1Decode(decompressed);
@@ -1862,7 +1871,6 @@
                             const indexNums = indexPart.trim().split(/\s+/).filter(s => s.length > 0).map(n => parseInt(n, 10));
 
                             // オブジェクト番号とオフセットのペアを解析
-                            const objOffsets = [];
                             for (let idx = 0; idx < indexNums.length - 1; idx += 2) {
                                 const objNumber = indexNums[idx];
                                 const objOffset = indexNums[idx + 1];
@@ -1881,10 +1889,11 @@
                                 const objData = dataPart.substring(obj.offset, nextOffset);
 
                                 // ObjStm内の全オブジェクトをマップに保存（後で検索用）
-                                objStmObjectsMap.set(obj.number, objData.substring(0, 500));
+                                // 注: /Pages の /Kids リストが長い場合があるため、十分な長さを確保
+                                objStmObjectsMap.set(obj.number, objData.substring(0, 5000));
 
-                                // /S /GoTo と /D [N 0 R ...] を含むアクションオブジェクトを検出
-                                if (objData.includes('/S') && objData.includes('/GoTo')) {
+                                // /S /GoTo と /D [N 0 R ...] を含むアクションオブジェクトを検出（大文字小文字を区別しない）
+                                if (objData.includes('/S') && /\/goto/i.test(objData)) {
                                     const dMatch = objData.match(/\/D\s*\[\s*(\d+)\s+0\s+R/);
                                     if (dMatch) {
                                         globalActionObjectMap.set(obj.number, dMatch[1] + ' 0 R');
@@ -1930,18 +1939,92 @@
                                 if (found) {
                                     // 括弧の開始位置
                                     const parenStart = i + titlePattern.length;
+
+                                    // UTF-16BE BOM (FE FF) をチェック
+                                    const isUtf16BE = (parenStart + 1 < decompressed.length &&
+                                                       decompressed[parenStart] === 0xFE &&
+                                                       decompressed[parenStart + 1] === 0xFF);
+
                                     // 括弧の終了位置を探す（ネストした括弧に対応）
                                     let depth = 1;
                                     let parenEnd = parenStart;
-                                    while (parenEnd < decompressed.length && depth > 0) {
-                                        // エスケープされていない括弧のみカウント
-                                        const prevByte = parenEnd > 0 ? decompressed[parenEnd - 1] : 0;
-                                        if (decompressed[parenEnd] === 0x28 && prevByte !== 0x5C) { // '(' not escaped
-                                            depth++;
-                                        } else if (decompressed[parenEnd] === 0x29 && prevByte !== 0x5C) { // ')' not escaped
-                                            depth--;
+
+                                    if (isUtf16BE) {
+                                        // UTF-16BE: デコード済みバイト数を追跡して2バイト境界を判定
+                                        // エスケープシーケンス（\NNN等）はrawでは4バイトだがデコード後は1バイト
+                                        let decodedByteCount = 0; // BOMから数えたデコード済みバイト数
+
+                                        while (parenEnd < decompressed.length && depth > 0) {
+                                            const byte = decompressed[parenEnd];
+
+                                            // エスケープシーケンスの処理
+                                            if (byte === 0x5C) { // バックスラッシュ
+                                                const nextByte = parenEnd + 1 < decompressed.length ? decompressed[parenEnd + 1] : 0;
+
+                                                // 8進数エスケープ \NNN をチェック
+                                                if (nextByte >= 0x30 && nextByte <= 0x37) { // '0'-'7'
+                                                    // 最大3桁の8進数
+                                                    let octalLen = 1;
+                                                    if (parenEnd + 2 < decompressed.length) {
+                                                        const b2 = decompressed[parenEnd + 2];
+                                                        if (b2 >= 0x30 && b2 <= 0x37) {
+                                                            octalLen = 2;
+                                                            if (parenEnd + 3 < decompressed.length) {
+                                                                const b3 = decompressed[parenEnd + 3];
+                                                                if (b3 >= 0x30 && b3 <= 0x37) {
+                                                                    octalLen = 3;
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                    parenEnd += 1 + octalLen; // \NNN をスキップ
+                                                    decodedByteCount++; // デコード後は1バイト
+                                                    continue;
+                                                }
+
+                                                // 特殊文字エスケープ \n, \r, \t, \\, \(, \) など
+                                                parenEnd += 2; // \ と次の1文字をスキップ
+                                                decodedByteCount++; // デコード後は1バイト
+                                                continue;
+                                            }
+
+                                            if (byte === 0x28) { // '('
+                                                // 2バイト境界で高バイト位置なら括弧、低バイト位置なら文字の一部
+                                                if (decodedByteCount >= 2 && (decodedByteCount - 2) % 2 === 0) {
+                                                    // 高バイト位置: 00 28 のパターンをチェック（前バイトが00か）
+                                                    // ただし実際は ( がそのまま来ることもある
+                                                    depth++;
+                                                }
+                                            } else if (byte === 0x29) { // ')'
+                                                // 2バイト境界をチェック
+                                                // BOM(2バイト)後、高バイト位置(偶数)なら終端、低バイト位置(奇数)なら文字の一部
+                                                if (decodedByteCount < 2) {
+                                                    // BOM内またはBOM直後 → 終端
+                                                    depth--;
+                                                } else if ((decodedByteCount - 2) % 2 === 0) {
+                                                    // 高バイト位置（偶数オフセット）→ 終端の )
+                                                    depth--;
+                                                }
+                                                // 低バイト位置（奇数オフセット）→ 日本語文字の下位バイト（スキップ）
+                                            }
+
+                                            if (depth > 0) {
+                                                parenEnd++;
+                                                decodedByteCount++;
+                                            }
                                         }
-                                        if (depth > 0) parenEnd++;
+                                    } else {
+                                        // Latin-1/ASCII: 従来の1バイト単位検出
+                                        while (parenEnd < decompressed.length && depth > 0) {
+                                            // エスケープされていない括弧のみカウント
+                                            const prevByte = parenEnd > 0 ? decompressed[parenEnd - 1] : 0;
+                                            if (decompressed[parenEnd] === 0x28 && prevByte !== 0x5C) { // '(' not escaped
+                                                depth++;
+                                            } else if (decompressed[parenEnd] === 0x29 && prevByte !== 0x5C) { // ')' not escaped
+                                                depth--;
+                                            }
+                                            if (depth > 0) parenEnd++;
+                                        }
                                     }
 
                                     if (parenEnd > parenStart) {
@@ -2018,8 +2101,10 @@
 
                                             objStmTitleCount++;
                                             byteExtractedCount++;
+
                                             // デコード済みタイトルとページ参照、親参照、オブジェクト番号を追加
-                                            decodedTitles.push({ title: title.trim(), pageRef: pageRef, parentRef: parentRef, objNum: obj.number });
+                                            const bookmarkItem = { title: title.trim(), pageRef: pageRef, parentRef: parentRef, objNum: obj.number };
+                                            decodedTitles.push(bookmarkItem);
                                         }
                                     }
                                 }
@@ -2080,11 +2165,42 @@
                 const item = decodedTitles[i];
                 if (item.pageRef && item.pageRef.startsWith('__UNRESOLVED__')) {
                     const actionObjNum = parseInt(item.pageRef.substring(14), 10);
+
                     if (globalActionObjectMap.has(actionObjNum)) {
                         decodedTitles[i].pageRef = globalActionObjectMap.get(actionObjNum);
+                    } else if (objStmObjectsMap.has(actionObjNum)) {
+                        // objStmObjectsMapにある場合、内容を解析してページ参照を取得
+                        const objContent = objStmObjectsMap.get(actionObjNum);
+
+                        // /D [N 0 R ...] パターンを検索
+                        const dMatch = objContent.match(/\/D\s*\[\s*(\d+)\s+0\s+R/);
+                        if (dMatch) {
+                            decodedTitles[i].pageRef = dMatch[1] + ' 0 R';
+                        } else {
+                            // this.pageNum パターンを検索
+                            const pageNumMatch = objContent.match(/this\.pageNum\s*=\s*(\d+)/);
+                            if (pageNumMatch) {
+                                decodedTitles[i].pageRef = 'PAGE:' + pageNumMatch[1];
+                            } else {
+                                decodedTitles[i].pageRef = '';
+                            }
+                        }
                     } else {
-                        // 解決できなかった場合は空文字に
-                        decodedTitles[i].pageRef = '';
+                        // 解決できなかった場合 - PDFボディから直接オブジェクトを検索
+                        const objContentPattern = new RegExp(actionObjNum + '\\s+0\\s+obj([\\s\\S]*?)endobj');
+                        const objContentMatch = content.match(objContentPattern);
+                        if (objContentMatch) {
+                            const objContent = objContentMatch[1];
+                            // /D [N 0 R ...] パターンを検索
+                            const dMatch = objContent.match(/\/D\s*\[\s*(\d+)\s+0\s+R/);
+                            if (dMatch) {
+                                decodedTitles[i].pageRef = dMatch[1] + ' 0 R';
+                            } else {
+                                decodedTitles[i].pageRef = '(ページ不明)';
+                            }
+                        } else {
+                            decodedTitles[i].pageRef = '(ページ不明)';
+                        }
                     }
                 }
             }
