@@ -1266,32 +1266,30 @@
                         let pageNum = '';
 
                         if (item.pageRef) {
+                            // (ページ不明) の場合（アクションオブジェクトがPDF内に存在しない）
+                            if (item.pageRef === '(ページ不明)') {
+                                pageNum = '(不明)';
+                            }
                             // PAGE:N 形式（JavaScriptアクションから取得）の場合
                             // JavaScript版PDFは0始まりなので+1する
-                            if (item.pageRef.startsWith('PAGE:')) {
+                            else if (item.pageRef.startsWith('PAGE:')) {
                                 const rawPageNum = parseInt(item.pageRef.substring(5), 10);
                                 pageNum = (typeof rawPageNum === 'number' && !isNaN(rawPageNum)) ? rawPageNum + 1 : '';
-                                console.log('PAGE:N形式 → ページ番号:', pageNum);
                             } else {
                                 // pageRefは "123 0 R" の形式なので、オブジェクト番号を抽出
                                 const objNumMatch = item.pageRef.match(/^(\d+)/);
                                 if (objNumMatch) {
                                     const objNum = objNumMatch[1];
-                                    console.log('オブジェクト番号:', objNum);
                                     if (pageObjects[objNum]) {
                                         // pageObjectsは既に1始まりなのでそのまま使用
                                         pageNum = pageObjects[objNum];
-                                        console.log('pageObjectsから取得 → ページ番号:', pageNum);
                                     } else {
                                         // フォールバック: オブジェクト番号を0始まりと想定して+1
                                         const rawNum = parseInt(objNum);
                                         pageNum = (typeof rawNum === 'number' && !isNaN(rawNum)) ? rawNum + 1 : '';
-                                        console.log('フォールバック（objNum+1） → ページ番号:', pageNum);
                                     }
                                 }
                             }
-                        } else {
-                            console.log('pageRefが空です');
                         }
                         // 階層レベルは計算済みのものを使用（取得できなかった場合はデフォルト1）
                         const level = item.level || 1;
@@ -1884,22 +1882,6 @@
                             // データ部分
                             const dataPart = fullObjStmStr.substring(firstOffset);
 
-                            // デバッグ: ObjStm 12594の詳細情報
-                            if (objNum === '12594' || objNum === 12594) {
-                                try {
-                                    const objNums = objOffsets.map(o => o.number);
-                                    const idx12456 = objNums.indexOf(12456);
-                                    console.log('★★★ ObjStm 12594: len=' + objOffsets.length + ', idx12456=' + idx12456);
-                                    if (idx12456 >= 0) {
-                                        const off = objOffsets[idx12456].offset;
-                                        const nextOff = (idx12456 + 1 < objOffsets.length) ? objOffsets[idx12456 + 1].offset : dataPart.length;
-                                        console.log('★ obj12456内容: ' + dataPart.substring(off, nextOff));
-                                    }
-                                } catch (e) {
-                                    console.log('★ エラー: ' + e.message);
-                                }
-                            }
-
                             // 各オブジェクトを解析してアクションオブジェクト（/S /GoTo）を探す
                             for (let idx = 0; idx < objOffsets.length; idx++) {
                                 const obj = objOffsets[idx];
@@ -1909,11 +1891,6 @@
                                 // ObjStm内の全オブジェクトをマップに保存（後で検索用）
                                 // 注: /Pages の /Kids リストが長い場合があるため、十分な長さを確保
                                 objStmObjectsMap.set(obj.number, objData.substring(0, 5000));
-
-                                // デバッグ: オブジェクト12456の内容を出力
-                                if (obj.number === 12456 || obj.number === '12456') {
-                                    console.log('★★ obj12456内容: ' + objData.substring(0, 500));
-                                }
 
                                 // /S /GoTo と /D [N 0 R ...] を含むアクションオブジェクトを検出
                                 if (objData.includes('/S') && objData.includes('/GoTo')) {
@@ -2006,26 +1983,18 @@
                                             const objStr = latin1Decode(objBytes);
                                             let pageRef = '';
 
-                                            // デバッグログ: オブジェクト内容を出力
-                                            console.log('=== しおり検出 ===');
-                                            console.log('タイトル:', title.trim());
-                                            console.log('オブジェクト番号:', obj.number);
-                                            console.log('オブジェクト内容（先頭500文字）:', objStr.substring(0, 500));
-
                                             // /Dest [N 0 R ...] パターンを検索（複数の形式に対応）
                                             // 形式1: /Dest [N 0 R /XYZ ...]
                                             // 形式2: /Dest[N 0 R ...]（スペースなし）
                                             const destMatch = objStr.match(/\/Dest\s*\[\s*(\d+)\s+0\s+R/);
                                             if (destMatch) {
                                                 pageRef = destMatch[1] + ' 0 R';
-                                                console.log('パターン /Dest で検出:', pageRef);
                                             } else {
                                                 // /A <</S /GoTo /D [N 0 R ...]>> パターンを検索
                                                 // [^>]* では >> に対応できないので、[\s\S]*? で最短マッチ
                                                 const actionMatch = objStr.match(/\/A\s*<<[\s\S]*?\/D\s*\[\s*(\d+)\s+0\s+R/);
                                                 if (actionMatch) {
                                                     pageRef = actionMatch[1] + ' 0 R';
-                                                    console.log('パターン /A<<.../D で検出:', pageRef);
                                                 } else {
                                                     // /A N 0 R パターン（間接参照）を検索
                                                     const actionRefMatch = objStr.match(/\/A\s+(\d+)\s+0\s+R/);
@@ -2117,96 +2086,6 @@
                 }
             }
 
-            // デバッグ: xrefストリームを解析してオブジェクト12461の位置を特定
-            const xrefStreamPattern = /(\d+)\s+0\s+obj\s*<<([\s\S]*?\/Type\s*\/XRef[\s\S]*?)>>\s*stream\r?\n/g;
-            let xrefMatch;
-            let obj12461Info = null;
-            while ((xrefMatch = xrefStreamPattern.exec(content)) !== null) {
-                const xrefObjNum = xrefMatch[1];
-                const xrefDict = xrefMatch[2];
-                // /W 配列を取得
-                const wMatch = xrefDict.match(/\/W\s*\[\s*(\d+)\s+(\d+)\s+(\d+)\s*\]/);
-                // /Index 配列を取得
-                const indexMatch = xrefDict.match(/\/Index\s*\[([^\]]+)\]/);
-                if (wMatch) {
-                    const w1 = parseInt(wMatch[1], 10);
-                    const w2 = parseInt(wMatch[2], 10);
-                    const w3 = parseInt(wMatch[3], 10);
-                    const entrySize = w1 + w2 + w3;
-
-                    // xrefストリームデータを取得して解凍
-                    const streamStart = xrefMatch.index + xrefMatch[0].length;
-                    const endstreamPos = content.indexOf('endstream', streamStart);
-                    if (endstreamPos !== -1) {
-                        const streamData = content.substring(streamStart, endstreamPos);
-                        const streamBytes = new Uint8Array(streamData.length);
-                        for (let i = 0; i < streamData.length; i++) {
-                            streamBytes[i] = streamData.charCodeAt(i) & 0xFF;
-                        }
-                        try {
-                            const decompressed = pako.inflate(streamBytes);
-                            // Indexを解析
-                            let indices = [];
-                            if (indexMatch) {
-                                const idxParts = indexMatch[1].trim().split(/\s+/).map(n => parseInt(n, 10));
-                                for (let i = 0; i < idxParts.length; i += 2) {
-                                    indices.push({ start: idxParts[i], count: idxParts[i+1] });
-                                }
-                            } else {
-                                // Indexがない場合は0から始まる
-                                const sizeMatch = xrefDict.match(/\/Size\s+(\d+)/);
-                                if (sizeMatch) {
-                                    indices.push({ start: 0, count: parseInt(sizeMatch[1], 10) });
-                                }
-                            }
-                            // オブジェクト12461のエントリを検索
-                            let entryIndex = 0;
-                            for (const idx of indices) {
-                                for (let objNum = idx.start; objNum < idx.start + idx.count; objNum++) {
-                                    const offset = entryIndex * entrySize;
-                                    if (offset + entrySize <= decompressed.length) {
-                                        let type = 0, field2 = 0, field3 = 0;
-                                        let pos = offset;
-                                        // タイプフィールド
-                                        for (let b = 0; b < w1; b++) { type = (type << 8) | decompressed[pos++]; }
-                                        // フィールド2
-                                        for (let b = 0; b < w2; b++) { field2 = (field2 << 8) | decompressed[pos++]; }
-                                        // フィールド3
-                                        for (let b = 0; b < w3; b++) { field3 = (field3 << 8) | decompressed[pos++]; }
-
-                                        if (objNum === 12461) {
-                                            obj12461Info = { type, field2, field3, xrefObj: xrefObjNum };
-                                        }
-                                    }
-                                    entryIndex++;
-                                }
-                            }
-                        } catch (e) {
-                            // 解凍失敗
-                        }
-                    }
-                }
-            }
-
-            // デバッグ: すべてのブックマークの/A参照を確認
-            let actionRefs = [];
-            for (const [objNum, objContent] of objStmObjectsMap.entries()) {
-                if (objContent.includes('/Title')) {
-                    const aMatch = objContent.match(/\/A\s+(\d+)\s+0\s+R/);
-                    if (aMatch) {
-                        const actionNum = parseInt(aMatch[1], 10);
-                        const exists = objStmObjectsMap.has(actionNum) || globalActionObjectMap.has(actionNum);
-                        actionRefs.push({ bookmark: objNum, action: actionNum, exists });
-                    }
-                }
-            }
-            // 存在しないアクションオブジェクトのみ表示
-            const missingActions = actionRefs.filter(r => !r.exists);
-            let debugInfo = '欠落アクションオブジェクト数: ' + missingActions.length + '/' + actionRefs.length;
-            debugInfo += '\n欠落リスト(最大10件): ';
-            debugInfo += missingActions.slice(0, 10).map(r => r.bookmark + '→' + r.action).join(', ');
-            alert(debugInfo);
-
             // 未解決の間接参照を解決
             for (let i = 0; i < decodedTitles.length; i++) {
                 const item = decodedTitles[i];
@@ -2233,8 +2112,8 @@
                             }
                         }
                     } else {
-                        // 解決できなかった場合は空文字に
-                        decodedTitles[i].pageRef = '';
+                        // 解決できなかった場合（アクションオブジェクトがPDF内に存在しない）
+                        decodedTitles[i].pageRef = '(ページ不明)';
                     }
                 }
             }
@@ -2884,24 +2763,11 @@
             let pagesObjNum = null;
             for (const [objNum, objContent] of allObjects.entries()) {
                 if (objContent.match(/\/Type\s*\/Catalog/)) {
-                    console.log('/Catalog 発見: オブジェクト番号', objNum);
                     const pagesRef = objContent.match(/\/Pages\s+(\d+)\s+0\s+R/);
                     if (pagesRef) {
                         pagesObjNum = pagesRef[1];
-                        console.log('/Pages 参照:', pagesObjNum);
                         break;
                     }
-                }
-            }
-
-            if (!pagesObjNum) {
-                console.log('/Catalog または /Pages が見つかりません');
-            } else {
-                // /Pages オブジェクトの内容を確認
-                const pagesContent = allObjects.get(pagesObjNum);
-                console.log('/Pages オブジェクト(' + pagesObjNum + ')存在:', pagesContent ? 'あり' : 'なし');
-                if (pagesContent) {
-                    console.log('/Pages オブジェクト内容（先頭500文字）:', pagesContent.substring(0, 500));
                 }
             }
 
@@ -2909,17 +2775,10 @@
             function collectPagesFromTree(pagesObjNum, depth = 0) {
                 if (depth > 100) return;
                 const pagesContent = allObjects.get(pagesObjNum);
-                if (!pagesContent) {
-                    console.log('collectPagesFromTree: オブジェクト', pagesObjNum, 'の内容が見つかりません');
-                    return;
-                }
+                if (!pagesContent) return;
 
                 const kidsMatch = pagesContent.match(/\/Kids\s*\[([\s\S]*?)\]/);
-                if (!kidsMatch) {
-                    console.log('collectPagesFromTree: オブジェクト', pagesObjNum, 'に /Kids が見つかりません');
-                    console.log('内容:', pagesContent.substring(0, 300));
-                    return;
-                }
+                if (!kidsMatch) return;
 
                 const kidsRefs = kidsMatch[1].match(/(\d+)\s+0\s+R/g) || [];
                 for (const ref of kidsRefs) {
@@ -2937,18 +2796,15 @@
 
             if (pagesObjNum) {
                 collectPagesFromTree(pagesObjNum);
-                console.log('/Pages ツリーから収集したページ数:', pageOrder.length);
             }
 
             // /Pages ツリーから取得できなかった場合はフォールバック
             if (pageOrder.length === 0) {
-                console.log('フォールバック: /Type /Page パターンで検索');
                 const pageObjPattern = /(\d+)\s+\d+\s+obj[\s\S]*?\/Type\s*\/Page[^s]/g;
                 let match;
                 while ((match = pageObjPattern.exec(content)) !== null) {
                     pageOrder.push(match[1]);
                 }
-                console.log('フォールバックで見つかったページ数:', pageOrder.length);
             }
 
             // ページ番号を割り当て
@@ -2956,11 +2812,6 @@
             for (const objNum of pageOrder) {
                 pageObjects[objNum] = pageNum;
                 pageNum++;
-            }
-
-            console.log('最終的なpageObjectsのキー数:', Object.keys(pageObjects).length);
-            if (pageOrder.length > 0) {
-                console.log('最初の5ページ:', pageOrder.slice(0, 5).map(n => n + ' → ' + pageObjects[n]).join(', '));
             }
 
             return pageObjects;
