@@ -70,6 +70,7 @@ exit /b %EXITCODE%
 #   8: 比較モードで両方のジョブ取得に失敗
 #   9: API接続エラー（各STEPでの接続失敗）
 #  10: 比較モードで実行中のジョブが検出された
+#  11: 実行中のジョブが検出された
 #
 # 参考:
 #   https://itpfdoc.hitachi.co.jp/manuals/3021/30213b1920/AJSO0280.HTM
@@ -671,7 +672,7 @@ try {
 # STEP 1.8: 実行中ジョブチェック
 # ==============================================================================
 # 同じジョブが現在実行中かどうかを確認します。
-# 実行中の場合は警告を出力しますが、処理は続行します。
+# 実行中の場合はエラーメッセージを出力して終了します。
 
 $runningUrl = "${baseUrl}/objects/statuses?mode=search"
 $runningUrl += "&manager=${managerHost}"
@@ -683,8 +684,6 @@ $runningUrl += "&unitName=${encodedJobName}"
 $runningUrl += "&unitNameMatchMethods=EQ"
 $runningUrl += "&generation=STATUS"
 $runningUrl += "&status=GRP_RUN"
-
-$runningWarning = ""
 
 try {
     $runningResponse = Invoke-WebRequest -Uri $runningUrl -Method GET -Headers $headers -TimeoutSec 30 -UseBasicParsing
@@ -699,7 +698,9 @@ try {
         $runningUnit = $runningJson.statuses[0]
         $runningStatus = $runningUnit.unitStatus.status
         $runningStartTime = $runningUnit.unitStatus.startTime
-        $runningWarning = "RUNNING_WARNING:実行中のジョブがあります（ステータス: ${runningStatus}, 開始日時: ${runningStartTime}）"
+        [Console]::WriteLine("RUNNING_ERROR:実行中のジョブが検出されました")
+        [Console]::WriteLine("RUNNING_JOB:$unitPath（ステータス: ${runningStatus}, 開始日時: ${runningStartTime}）")
+        exit 11  # 実行中のジョブが検出された
     }
 } catch {
     # 実行中チェック失敗は無視して続行（必須ではない）
@@ -867,11 +868,6 @@ if ($execIdList.Count -gt 0) {
             $execResultContent = ""
             if ($resultJson.execResultDetails) {
                 $execResultContent = $resultJson.execResultDetails
-            }
-
-            # 実行中警告を出力（存在する場合）
-            if ($runningWarning) {
-                [Console]::WriteLine($runningWarning)
             }
 
             # 比較モードで選択されたパスと時間を出力（存在する場合）

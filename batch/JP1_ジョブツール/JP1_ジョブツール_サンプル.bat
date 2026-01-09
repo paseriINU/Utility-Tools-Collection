@@ -33,7 +33,8 @@ rem   6: タイムアウト / 詳細取得エラー
 rem   7: 5MB超過エラー（EXEC版のみ）
 rem   8: 詳細取得エラー（EXEC版） / 比較モードで両方取得失敗（GET版）
 rem   9: API接続エラー（各STEP）
-rem   10: ジョブ開始日時取得エラー / 比較モードで実行中検出
+rem   10: ジョブ開始日時取得エラー / 比較モードで実行中検出（GET版）
+rem   11: 実行中のジョブが検出された（GET版）
 rem ============================================================================
 
 rem === ここを編集してください ===
@@ -118,6 +119,7 @@ if %EXIT_CODE% equ 7 goto :ERR_5MB_EXCEEDED
 if %EXIT_CODE% equ 8 goto :ERR_DETAIL_OR_COMPARE
 if %EXIT_CODE% equ 9 goto :ERR_API_CONNECTION
 if %EXIT_CODE% equ 10 goto :ERR_RUNNING_JOB
+if %EXIT_CODE% equ 11 goto :ERR_RUNNING_DETECTED
 goto :ERR_UNKNOWN
 
 :ERR_ARGUMENT
@@ -202,11 +204,25 @@ goto :ERROR_EXIT
 
 :ERR_RUNNING_JOB
 echo.
-echo [警告] 実行中のジョブが検出されました
+echo [エラー] 比較モードで実行中のジョブが検出されました
 echo          - 実行中のジョブがあるため、処理を中断しました
 echo          - ジョブの完了後に再実行してください
-rem 一時ファイルの内容を表示（警告メッセージ確認用）
+rem 一時ファイルの内容を表示（エラーメッセージ確認用）
 type "%TEMP_FILE%"
+goto :ERROR_EXIT
+
+:ERR_RUNNING_DETECTED
+echo.
+echo [エラー] 実行中のジョブが検出されました
+echo.
+rem 一時ファイルからRUNNING_ERROR:とRUNNING_JOB:を表示
+for /f "tokens=1,* delims=:" %%a in ('type "%TEMP_FILE%" 2^>nul') do (
+    if "%%a"=="RUNNING_ERROR" echo          %%b
+    if "%%a"=="RUNNING_JOB" echo          %%b
+)
+echo.
+echo          実行中のジョブがあるため、ログ取得を中止しました。
+echo          ジョブの終了を待ってから再度実行してください。
 goto :ERROR_EXIT
 
 :ERR_UNKNOWN
@@ -335,7 +351,7 @@ rem 形式: 【ジョブ実行結果】【{日時}実行分】【{終了状態}�
 set "OUTPUT_FILE=%~dp0【ジョブ実行結果】【%JOB_START_TIME%実行分】【%END_STATUS%】%JOBNET_NAME%_%JOBNET_COMMENT%.txt"
 
 rem メタデータ行を除いた実行結果詳細を出力ファイルに保存
-rem 除外対象: START_TIME:, END_STATUS:, JOBNET_NAME:, JOBNET_COMMENT:, JOB_STATUS:, SELECTED_*, REJECTED_*, RUNNING_WARNING:
+rem 除外対象: START_TIME:, END_STATUS:, JOBNET_NAME:, JOBNET_COMMENT:, JOB_STATUS:, SELECTED_*, REJECTED_*
 (for /f "usebackq tokens=* delims=" %%L in ("%TEMP_FILE%") do (
     set "LINE=%%L"
     setlocal enabledelayedexpansion
@@ -349,7 +365,6 @@ rem 除外対象: START_TIME:, END_STATUS:, JOBNET_NAME:, JOBNET_COMMENT:, JOB_S
     if "!LINE:~0,14!"=="SELECTED_TIME:" set "SKIP=1"
     if "!LINE:~0,14!"=="REJECTED_PATH:" set "SKIP=1"
     if "!LINE:~0,14!"=="REJECTED_TIME:" set "SKIP=1"
-    if "!LINE:~0,16!"=="RUNNING_WARNING:" set "SKIP=1"
     if not defined SKIP echo !LINE!
     endlocal
 )) > "%OUTPUT_FILE%"
