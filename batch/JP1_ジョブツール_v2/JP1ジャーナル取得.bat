@@ -1,9 +1,9 @@
 @echo off
-title JP1　標準ログ
+title JP1 標準ログ
 setlocal
 
 rem ============================================================================
-rem JP1　標準ログ
+rem JP1 標準ログ
 rem
 rem 説明:
 rem   JP1ジョブ実行.bat または JP1ジョブログ取得.bat を呼び出し、
