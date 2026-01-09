@@ -66,7 +66,8 @@ echo （完了まで時間がかかる場合があります）
 echo.
 
 rem JP1_REST_ジョブ実行ログ取得ツール.bat を呼び出し、結果を一時ファイルに保存
-call "%SCRIPT_DIR%JP1_REST_ジョブ実行ログ取得ツール.bat" "%UNIT_PATH%" > "%TEMP_FILE%" 2>&1
+rem ※標準出力のみファイルにリダイレクト（標準エラー出力は待機メッセージ等をコンソールに表示）
+call "%SCRIPT_DIR%JP1_REST_ジョブ実行ログ取得ツール.bat" "%UNIT_PATH%" > "%TEMP_FILE%"
 set "EXIT_CODE=%ERRORLEVEL%"
 
 rem エラーコード別のハンドリング（実行順）

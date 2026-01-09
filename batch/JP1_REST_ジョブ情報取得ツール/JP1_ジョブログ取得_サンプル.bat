@@ -84,10 +84,11 @@ echo ログを取得中...
 
 rem JP1_REST_ジョブ情報取得ツール.bat を呼び出し、結果を一時ファイルに保存
 rem 2つ目の引数がある場合は比較モードとしてメインツールに渡す
+rem ※標準出力のみファイルにリダイレクト（標準エラー出力は待機メッセージ等をコンソールに表示）
 if "%UNIT_PATH_2%"=="" (
-    call "%SCRIPT_DIR%JP1_REST_ジョブ情報取得ツール.bat" "%UNIT_PATH%" > "%TEMP_FILE%" 2>&1
+    call "%SCRIPT_DIR%JP1_REST_ジョブ情報取得ツール.bat" "%UNIT_PATH%" > "%TEMP_FILE%"
 ) else (
-    call "%SCRIPT_DIR%JP1_REST_ジョブ情報取得ツール.bat" "%UNIT_PATH%" "%UNIT_PATH_2%" > "%TEMP_FILE%" 2>&1
+    call "%SCRIPT_DIR%JP1_REST_ジョブ情報取得ツール.bat" "%UNIT_PATH%" "%UNIT_PATH_2%" > "%TEMP_FILE%"
 )
 set "EXIT_CODE=%ERRORLEVEL%"
 
