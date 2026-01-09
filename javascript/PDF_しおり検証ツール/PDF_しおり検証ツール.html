@@ -2117,10 +2117,28 @@
                 }
             }
 
-            // デバッグ: objStmObjectsMapから12456の内容を取得
-            const has12456 = objStmObjectsMap.has(12456);
-            const content12456 = has12456 ? objStmObjectsMap.get(12456).substring(0, 200) : 'なし';
-            alert('obj12456: has=' + has12456 + ', content=' + content12456);
+            // デバッグ: オブジェクト12461がPDF内のどこにあるか直接検索
+            const obj12461Pattern = /12461\s+0\s+obj/;
+            const obj12461Match = content.match(obj12461Pattern);
+            let debugInfo = '';
+            if (obj12461Match) {
+                const idx = content.indexOf(obj12461Match[0]);
+                const contextStart = Math.max(0, idx - 20);
+                const contextEnd = Math.min(content.length, idx + 200);
+                debugInfo = 'obj12461 found at index ' + idx + ':\n' + content.substring(contextStart, contextEnd);
+            } else {
+                debugInfo = 'obj12461定義が見つかりません。';
+                // objStmObjectsMapの全キーを確認
+                const allObjNums = Array.from(objStmObjectsMap.keys());
+                const range12450_12470 = allObjNums.filter(n => n >= 12450 && n <= 12470);
+                debugInfo += '\nObjStm内12450-12470範囲: ' + range12450_12470.join(',');
+                // 12461への参照を検索
+                const ref12461Pattern = /12461\s+0\s+R/g;
+                let refCount = 0;
+                while (ref12461Pattern.exec(content) !== null) refCount++;
+                debugInfo += '\n参照数(12461 0 R): ' + refCount;
+            }
+            alert(debugInfo);
 
             // 未解決の間接参照を解決
             for (let i = 0; i < decodedTitles.length; i++) {
