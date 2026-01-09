@@ -40,7 +40,7 @@ rem   /LOG      - ログファイル出力のみ（デフォルト）
 rem   /NOTEPAD  - メモ帳で開く
 rem   /EXCEL    - Excelに貼り付け
 rem   /WINMERGE - WinMergeで比較
-set "OUTPUT_MODE=/NOTEPAD"
+set "OUTPUT_MODE=/EXCEL"
 
 rem === Excel貼り付け設定（OUTPUT_MODE=/EXCEL の場合のみ使用）===
 rem Excelファイル名（このバッチと同じフォルダに配置）
