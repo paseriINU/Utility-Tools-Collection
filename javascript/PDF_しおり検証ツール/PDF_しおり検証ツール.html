@@ -1939,18 +1939,45 @@
                                 if (found) {
                                     // 括弧の開始位置
                                     const parenStart = i + titlePattern.length;
+
+                                    // UTF-16BE BOM (FE FF) をチェックして、括弧検出方法を決定
+                                    const isUtf16BE = (parenStart + 1 < decompressed.length &&
+                                                       decompressed[parenStart] === 0xFE &&
+                                                       decompressed[parenStart + 1] === 0xFF);
+
                                     // 括弧の終了位置を探す（ネストした括弧に対応）
                                     let depth = 1;
                                     let parenEnd = parenStart;
-                                    while (parenEnd < decompressed.length && depth > 0) {
-                                        // エスケープされていない括弧のみカウント
-                                        const prevByte = parenEnd > 0 ? decompressed[parenEnd - 1] : 0;
-                                        if (decompressed[parenEnd] === 0x28 && prevByte !== 0x5C) { // '(' not escaped
-                                            depth++;
-                                        } else if (decompressed[parenEnd] === 0x29 && prevByte !== 0x5C) { // ')' not escaped
-                                            depth--;
+
+                                    if (isUtf16BE) {
+                                        // UTF-16BE: 括弧は 00 28 と 00 29 として検出（2バイト単位）
+                                        while (parenEnd + 1 < decompressed.length && depth > 0) {
+                                            const highByte = decompressed[parenEnd];
+                                            const lowByte = decompressed[parenEnd + 1];
+                                            // エスケープチェック: 直前の2バイトが 00 5C (\) かどうか
+                                            const isEscaped = (parenEnd >= 2 &&
+                                                              decompressed[parenEnd - 2] === 0x00 &&
+                                                              decompressed[parenEnd - 1] === 0x5C);
+
+                                            if (highByte === 0x00 && lowByte === 0x28 && !isEscaped) { // '(' in UTF-16BE
+                                                depth++;
+                                            } else if (highByte === 0x00 && lowByte === 0x29 && !isEscaped) { // ')' in UTF-16BE
+                                                depth--;
+                                            }
+                                            if (depth > 0) parenEnd++;
                                         }
-                                        if (depth > 0) parenEnd++;
+                                    } else {
+                                        // Latin-1/ASCII: 従来の1バイト単位検出
+                                        while (parenEnd < decompressed.length && depth > 0) {
+                                            // エスケープされていない括弧のみカウント
+                                            const prevByte = parenEnd > 0 ? decompressed[parenEnd - 1] : 0;
+                                            if (decompressed[parenEnd] === 0x28 && prevByte !== 0x5C) { // '(' not escaped
+                                                depth++;
+                                            } else if (decompressed[parenEnd] === 0x29 && prevByte !== 0x5C) { // ')' not escaped
+                                                depth--;
+                                            }
+                                            if (depth > 0) parenEnd++;
+                                        }
                                     }
 
                                     if (parenEnd > parenStart) {
@@ -1975,18 +2002,6 @@
                                                 const charCode = titleBytes[k] | (titleBytes[k + 1] << 8);
                                                 if (charCode > 0) title += String.fromCharCode(charCode);
                                             }
-                                        }
-
-                                        // デバッグ: 「その他」を含むタイトルの生データを表示
-                                        if (title.includes('その他')) {
-                                            let debugInfo = 'タイトル: ' + title + '\n';
-                                            debugInfo += 'titleBytes.length: ' + titleBytes.length + '\n';
-                                            debugInfo += 'rawTitleBytes.length: ' + rawTitleBytes.length + '\n';
-                                            debugInfo += '最後の10バイト(hex): ';
-                                            for (let d = Math.max(0, titleBytes.length - 10); d < titleBytes.length; d++) {
-                                                debugInfo += titleBytes[d].toString(16).padStart(2, '0') + ' ';
-                                            }
-                                            alert(debugInfo);
                                         }
 
                                         if (title && title.trim()) {
