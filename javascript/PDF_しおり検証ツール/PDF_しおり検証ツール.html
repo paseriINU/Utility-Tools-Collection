@@ -2188,21 +2188,18 @@
                 }
             }
 
-            // デバッグ情報を表示
-            let debugInfo = '';
-            if (obj12461Info) {
-                if (obj12461Info.type === 1) {
-                    debugInfo = 'obj12461: type=1(非圧縮), offset=' + obj12461Info.field2;
-                } else if (obj12461Info.type === 2) {
-                    debugInfo = 'obj12461: type=2(ObjStm内), ObjStm=' + obj12461Info.field2 + ', index=' + obj12461Info.field3;
-                } else {
-                    debugInfo = 'obj12461: type=' + obj12461Info.type + '(未使用/不明)';
-                }
+            // デバッグ: 12455（前のブックマーク）と12456（修正履歴）の内容を確認
+            let debugInfo = 'obj12455: ';
+            if (objStmObjectsMap.has(12455)) {
+                debugInfo += objStmObjectsMap.get(12455).substring(0, 300);
             } else {
-                debugInfo = 'obj12461: xrefストリームに未登録';
-                const allObjNums = Array.from(objStmObjectsMap.keys());
-                const range12450_12470 = allObjNums.filter(n => n >= 12450 && n <= 12470);
-                debugInfo += '\nObjStm内12450-12470: ' + range12450_12470.join(',');
+                debugInfo += '(なし)';
+            }
+            debugInfo += '\n\nobj12456: ';
+            if (objStmObjectsMap.has(12456)) {
+                debugInfo += objStmObjectsMap.get(12456).substring(0, 300);
+            } else {
+                debugInfo += '(なし)';
             }
             alert(debugInfo);
 
