@@ -2117,26 +2117,92 @@
                 }
             }
 
-            // デバッグ: オブジェクト12461がPDF内のどこにあるか直接検索
-            const obj12461Pattern = /12461\s+0\s+obj/;
-            const obj12461Match = content.match(obj12461Pattern);
+            // デバッグ: xrefストリームを解析してオブジェクト12461の位置を特定
+            const xrefStreamPattern = /(\d+)\s+0\s+obj\s*<<([\s\S]*?\/Type\s*\/XRef[\s\S]*?)>>\s*stream\r?\n/g;
+            let xrefMatch;
+            let obj12461Info = null;
+            while ((xrefMatch = xrefStreamPattern.exec(content)) !== null) {
+                const xrefObjNum = xrefMatch[1];
+                const xrefDict = xrefMatch[2];
+                // /W 配列を取得
+                const wMatch = xrefDict.match(/\/W\s*\[\s*(\d+)\s+(\d+)\s+(\d+)\s*\]/);
+                // /Index 配列を取得
+                const indexMatch = xrefDict.match(/\/Index\s*\[([^\]]+)\]/);
+                if (wMatch) {
+                    const w1 = parseInt(wMatch[1], 10);
+                    const w2 = parseInt(wMatch[2], 10);
+                    const w3 = parseInt(wMatch[3], 10);
+                    const entrySize = w1 + w2 + w3;
+
+                    // xrefストリームデータを取得して解凍
+                    const streamStart = xrefMatch.index + xrefMatch[0].length;
+                    const endstreamPos = content.indexOf('endstream', streamStart);
+                    if (endstreamPos !== -1) {
+                        const streamData = content.substring(streamStart, endstreamPos);
+                        const streamBytes = new Uint8Array(streamData.length);
+                        for (let i = 0; i < streamData.length; i++) {
+                            streamBytes[i] = streamData.charCodeAt(i) & 0xFF;
+                        }
+                        try {
+                            const decompressed = pako.inflate(streamBytes);
+                            // Indexを解析
+                            let indices = [];
+                            if (indexMatch) {
+                                const idxParts = indexMatch[1].trim().split(/\s+/).map(n => parseInt(n, 10));
+                                for (let i = 0; i < idxParts.length; i += 2) {
+                                    indices.push({ start: idxParts[i], count: idxParts[i+1] });
+                                }
+                            } else {
+                                // Indexがない場合は0から始まる
+                                const sizeMatch = xrefDict.match(/\/Size\s+(\d+)/);
+                                if (sizeMatch) {
+                                    indices.push({ start: 0, count: parseInt(sizeMatch[1], 10) });
+                                }
+                            }
+                            // オブジェクト12461のエントリを検索
+                            let entryIndex = 0;
+                            for (const idx of indices) {
+                                for (let objNum = idx.start; objNum < idx.start + idx.count; objNum++) {
+                                    const offset = entryIndex * entrySize;
+                                    if (offset + entrySize <= decompressed.length) {
+                                        let type = 0, field2 = 0, field3 = 0;
+                                        let pos = offset;
+                                        // タイプフィールド
+                                        for (let b = 0; b < w1; b++) { type = (type << 8) | decompressed[pos++]; }
+                                        // フィールド2
+                                        for (let b = 0; b < w2; b++) { field2 = (field2 << 8) | decompressed[pos++]; }
+                                        // フィールド3
+                                        for (let b = 0; b < w3; b++) { field3 = (field3 << 8) | decompressed[pos++]; }
+
+                                        if (objNum === 12461) {
+                                            obj12461Info = { type, field2, field3, xrefObj: xrefObjNum };
+                                        }
+                                    }
+                                    entryIndex++;
+                                }
+                            }
+                        } catch (e) {
+                            // 解凍失敗
+                        }
+                    }
+                }
+            }
+
+            // デバッグ情報を表示
             let debugInfo = '';
-            if (obj12461Match) {
-                const idx = content.indexOf(obj12461Match[0]);
-                const contextStart = Math.max(0, idx - 20);
-                const contextEnd = Math.min(content.length, idx + 200);
-                debugInfo = 'obj12461 found at index ' + idx + ':\n' + content.substring(contextStart, contextEnd);
+            if (obj12461Info) {
+                if (obj12461Info.type === 1) {
+                    debugInfo = 'obj12461: type=1(非圧縮), offset=' + obj12461Info.field2;
+                } else if (obj12461Info.type === 2) {
+                    debugInfo = 'obj12461: type=2(ObjStm内), ObjStm=' + obj12461Info.field2 + ', index=' + obj12461Info.field3;
+                } else {
+                    debugInfo = 'obj12461: type=' + obj12461Info.type + '(未使用/不明)';
+                }
             } else {
-                debugInfo = 'obj12461定義が見つかりません。';
-                // objStmObjectsMapの全キーを確認
+                debugInfo = 'obj12461: xrefストリームに未登録';
                 const allObjNums = Array.from(objStmObjectsMap.keys());
                 const range12450_12470 = allObjNums.filter(n => n >= 12450 && n <= 12470);
-                debugInfo += '\nObjStm内12450-12470範囲: ' + range12450_12470.join(',');
-                // 12461への参照を検索
-                const ref12461Pattern = /12461\s+0\s+R/g;
-                let refCount = 0;
-                while (ref12461Pattern.exec(content) !== null) refCount++;
-                debugInfo += '\n参照数(12461 0 R): ' + refCount;
+                debugInfo += '\nObjStm内12450-12470: ' + range12450_12470.join(',');
             }
             alert(debugInfo);
 
