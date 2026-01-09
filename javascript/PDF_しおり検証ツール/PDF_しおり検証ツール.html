@@ -2112,47 +2112,24 @@
                             }
                         }
                     } else {
-                        // 解決できなかった場合（アクションオブジェクトがPDF内に存在しない）
-                        decodedTitles[i].pageRef = '(ページ不明)';
+                        // 解決できなかった場合 - PDFボディから直接オブジェクトを検索
+                        const objContentPattern = new RegExp(actionObjNum + '\\s+0\\s+obj([\\s\\S]*?)endobj');
+                        const objContentMatch = content.match(objContentPattern);
+                        if (objContentMatch) {
+                            const objContent = objContentMatch[1];
+                            // デバッグ: オブジェクトの内容を表示
+                            alert('オブジェクト ' + actionObjNum + ' の内容:\n' + objContent.substring(0, 500));
 
-                        // デバッグ: PDF内のすべてのxrefセクションを検索
-                        let debugInfo = '=== アクションオブジェクト ' + actionObjNum + ' 調査 ===\n';
-
-                        // 1. startxref の数を確認（インクリメンタル更新の回数）
-                        const startxrefMatches = content.match(/startxref/g) || [];
-                        debugInfo += 'startxref数: ' + startxrefMatches.length + '\n';
-
-                        // 2. xrefストリーム（/Type /XRef）の数を確認
-                        const xrefStreamMatches = content.match(/\/Type\s*\/XRef/g) || [];
-                        debugInfo += 'xrefストリーム数: ' + xrefStreamMatches.length + '\n';
-
-                        // 3. 従来のxrefテーブル（テキスト形式）を確認
-                        const xrefTableMatches = content.match(/^xref\s*$/gm) || [];
-                        debugInfo += 'xrefテーブル数: ' + xrefTableMatches.length + '\n';
-
-                        // 4. オブジェクト定義を直接検索
-                        const objPattern = new RegExp(actionObjNum + '\\s+0\\s+obj');
-                        const objMatch = content.match(objPattern);
-                        debugInfo += 'オブジェクト定義(' + actionObjNum + ' 0 obj): ' + (objMatch ? '存在' : 'なし') + '\n';
-
-                        // 5. すべてのxrefストリームを解析してオブジェクトの位置を確認
-                        const xrefStreamPattern = /(\d+)\s+0\s+obj\s*<<([\s\S]*?\/Type\s*\/XRef[\s\S]*?)>>\s*stream/g;
-                        let xrefMatch;
-                        let xrefCount = 0;
-                        while ((xrefMatch = xrefStreamPattern.exec(content)) !== null) {
-                            xrefCount++;
-                            const xrefObjNum = xrefMatch[1];
-                            const xrefDict = xrefMatch[2];
-                            const indexMatch = xrefDict.match(/\/Index\s*\[([^\]]+)\]/);
-                            const sizeMatch = xrefDict.match(/\/Size\s+(\d+)/);
-                            debugInfo += '\nxrefストリーム#' + xrefCount + ' (obj ' + xrefObjNum + '):\n';
-                            debugInfo += '  /Size: ' + (sizeMatch ? sizeMatch[1] : '不明') + '\n';
-                            if (indexMatch) {
-                                debugInfo += '  /Index: [' + indexMatch[1].trim() + ']\n';
+                            // /D [N 0 R ...] パターンを検索
+                            const dMatch = objContent.match(/\/D\s*\[\s*(\d+)\s+0\s+R/);
+                            if (dMatch) {
+                                decodedTitles[i].pageRef = dMatch[1] + ' 0 R';
+                            } else {
+                                decodedTitles[i].pageRef = '(ページ不明)';
                             }
+                        } else {
+                            decodedTitles[i].pageRef = '(ページ不明)';
                         }
-
-                        alert(debugInfo);
                     }
                 }
             }
