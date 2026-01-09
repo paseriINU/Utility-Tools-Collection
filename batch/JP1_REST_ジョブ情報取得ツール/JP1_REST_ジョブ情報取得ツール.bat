@@ -383,7 +383,7 @@ $baseUrl = "${protocol}://${webConsoleHost}:${webConsolePort}/ajs/api/v1"
 # ==============================================================================
 # 2つのジョブパスが指定された場合:
 # 1. まず両方のジョブが実行中かどうかをチェック
-# 2. 実行中のジョブがあれば、そのジョブが最新として警告を出力して終了
+# 2. 実行中のジョブがあれば、終了を待機してそのジョブを最新として選択
 # 3. どちらも実行中でなければ、START_TIMEを比較して新しい方を選択
 
 $selectedPath = ""  # 比較モードで選択されたパス
@@ -392,7 +392,7 @@ $rejectedPath = ""  # 比較モードで選択されなかったパス
 $rejectedTime = ""  # 比較モードで選択されなかったジョブの時間
 
 if ($isCompareMode) {
-    # ジョブが実行中かどうかをチェックする関数
+    # ジョブが実行中かどうかをチェックする関数（execIDも取得）
     function Get-JobRunningStatus {
         param([string]$jobPath)
 
@@ -430,6 +430,7 @@ if ($isCompareMode) {
                         IsRunning = $true
                         Status = $status.status
                         StartTime = $status.startTime
+                        ExecID = $status.execID
                     }
                 }
             }
@@ -446,123 +447,161 @@ if ($isCompareMode) {
     $isRunning1 = $runStatus1 -and $runStatus1.IsRunning
     $isRunning2 = $runStatus2 -and $runStatus2.IsRunning
 
-    # 実行中のジョブがある場合
+    # 実行中のジョブがある場合は待機
     if ($isRunning1 -or $isRunning2) {
+        # 待機対象のジョブを決定（両方実行中の場合はジョブ1を優先）
+        $waitTargetPath = if ($isRunning1) { $unitPath } else { $unitPath2 }
+        $waitTargetStatus = if ($isRunning1) { $runStatus1 } else { $runStatus2 }
+        $waitingExecId = $waitTargetStatus.ExecID
+        $waitTargetStatusDisplay = Get-StatusDisplayName -status $waitTargetStatus.Status
+
         if ($isRunning1 -and $isRunning2) {
-            # 両方実行中
-            [Console]::WriteLine("COMPARE_RUNNING_WARNING:両方のジョブが実行中です")
-            [Console]::WriteLine("RUNNING_JOB1:$unitPath（ステータス: $($runStatus1.Status), 開始日時: $($runStatus1.StartTime)）")
-            [Console]::WriteLine("RUNNING_JOB2:$unitPath2（ステータス: $($runStatus2.Status), 開始日時: $($runStatus2.StartTime)）")
-        } elseif ($isRunning1) {
-            # ジョブ1が実行中
-            [Console]::WriteLine("COMPARE_RUNNING_WARNING:実行中のジョブが検出されました - $unitPath が最新です")
-            [Console]::WriteLine("RUNNING_JOB:$unitPath（ステータス: $($runStatus1.Status), 開始日時: $($runStatus1.StartTime)）")
+            [Console]::Error.WriteLine("COMPARE_INFO:両方のジョブが実行中です。$unitPath の終了を待機します")
         } else {
-            # ジョブ2が実行中
-            [Console]::WriteLine("COMPARE_RUNNING_WARNING:実行中のジョブが検出されました - $unitPath2 が最新です")
-            [Console]::WriteLine("RUNNING_JOB:$unitPath2（ステータス: $($runStatus2.Status), 開始日時: $($runStatus2.StartTime)）")
+            [Console]::Error.WriteLine("COMPARE_INFO:実行中のジョブを検出しました - $waitTargetPath の終了を待機します")
         }
-        exit 10  # 比較モードで実行中のジョブが検出された
-    }
 
-    # START_TIMEを取得する関数
-    function Get-JobStartTime {
-        param([string]$jobPath)
-
-        $lastSlash = $jobPath.LastIndexOf("/")
-        if ($lastSlash -le 0) { return $null }
-
-        $parent = $jobPath.Substring(0, $lastSlash)
-        $name = $jobPath.Substring($lastSlash + 1)
-        if (-not $name) { return $null }
-
-        $encParent = [System.Uri]::EscapeDataString($parent)
-        $encName = [System.Uri]::EscapeDataString($name)
-
-        $url = "${baseUrl}/objects/statuses?mode=search"
-        $url += "&manager=${managerHost}"
-        $url += "&serviceName=${schedulerService}"
-        $url += "&location=${encParent}"
-        $url += "&searchLowerUnits=NO"
-        $url += "&searchTarget=DEFINITION_AND_STATUS"
-        $url += "&unitName=${encName}"
-        $url += "&unitNameMatchMethods=EQ"
-        $url += "&generation=${generation}"
-
-        try {
-            $resp = Invoke-WebRequest -Uri $url -Method GET -Headers $headers -TimeoutSec 30 -UseBasicParsing
-            $bytes = $resp.RawContentStream.ToArray()
-            $text = [System.Text.Encoding]::UTF8.GetString($bytes)
-            $json = $text | ConvertFrom-Json
-
-            if ($json.statuses -and $json.statuses.Count -gt 0) {
-                $status = $json.statuses[0].unitStatus
-                if ($status -and $status.startTime) {
-                    return $status.startTime
-                }
+        # 待機ループ
+        $waitedSeconds = 0
+        $stillRunning = $true
+        while ($stillRunning) {
+            # 最大待機秒数を超えた場合はエラー終了
+            if ($waitedSeconds -ge $maxWaitSeconds) {
+                [Console]::WriteLine("RUNNING_ERROR:実行中のジョブが検出されました（待機タイムアウト）")
+                [Console]::WriteLine("RUNNING_JOB:$waitTargetPath（ステータス: ${waitTargetStatusDisplay}, 開始日時: $($waitTargetStatus.StartTime)）")
+                [Console]::WriteLine("WAIT_TIMEOUT:${maxWaitSeconds}秒待機しましたが、ジョブが終了しませんでした")
+                exit 11  # 実行中のジョブが検出された（タイムアウト）
             }
-        } catch {
+
+            [Console]::Error.WriteLine("WAITING:実行中のジョブを検出しました。終了を待機しています...（${waitedSeconds}/${maxWaitSeconds}秒）")
+            [Console]::Error.WriteLine("WAITING_JOB:$waitTargetPath（ステータス: ${waitTargetStatusDisplay}, 開始日時: $($waitTargetStatus.StartTime), execID: ${waitingExecId}）")
+
+            Start-Sleep -Seconds $checkIntervalSeconds
+            $waitedSeconds += $checkIntervalSeconds
+
+            # 再度チェック
+            $recheckStatus = Get-JobRunningStatus -jobPath $waitTargetPath
+            if (-not $recheckStatus -or -not $recheckStatus.IsRunning) {
+                $stillRunning = $false
+                [Console]::Error.WriteLine("WAIT_COMPLETE:ジョブの終了を確認しました（${waitedSeconds}秒待機、execID: ${waitingExecId}）")
+            } else {
+                $waitTargetStatusDisplay = Get-StatusDisplayName -status $recheckStatus.Status
+            }
+        }
+
+        # 待機完了後、実行中だったジョブを選択
+        $originalUnitPath = $unitPath
+        $unitPath = $waitTargetPath
+        $selectedPath = $waitTargetPath
+        $selectedTime = $waitTargetStatus.StartTime
+        if ($waitTargetPath -eq $originalUnitPath) {
+            $rejectedPath = $unitPath2
+        } else {
+            $rejectedPath = $originalUnitPath
+        }
+        $rejectedTime = "(実行中ジョブを優先)"
+
+        [Console]::Error.WriteLine("INFO:待機していたジョブのexecID（${waitingExecId}）を使用してログを取得します")
+    } else {
+        # どちらも実行中でない場合はSTART_TIMEで比較
+        function Get-JobStartTime {
+            param([string]$jobPath)
+
+            $lastSlash = $jobPath.LastIndexOf("/")
+            if ($lastSlash -le 0) { return $null }
+
+            $parent = $jobPath.Substring(0, $lastSlash)
+            $name = $jobPath.Substring($lastSlash + 1)
+            if (-not $name) { return $null }
+
+            $encParent = [System.Uri]::EscapeDataString($parent)
+            $encName = [System.Uri]::EscapeDataString($name)
+
+            $url = "${baseUrl}/objects/statuses?mode=search"
+            $url += "&manager=${managerHost}"
+            $url += "&serviceName=${schedulerService}"
+            $url += "&location=${encParent}"
+            $url += "&searchLowerUnits=NO"
+            $url += "&searchTarget=DEFINITION_AND_STATUS"
+            $url += "&unitName=${encName}"
+            $url += "&unitNameMatchMethods=EQ"
+            $url += "&generation=${generation}"
+
+            try {
+                $resp = Invoke-WebRequest -Uri $url -Method GET -Headers $headers -TimeoutSec 30 -UseBasicParsing
+                $bytes = $resp.RawContentStream.ToArray()
+                $text = [System.Text.Encoding]::UTF8.GetString($bytes)
+                $json = $text | ConvertFrom-Json
+
+                if ($json.statuses -and $json.statuses.Count -gt 0) {
+                    $status = $json.statuses[0].unitStatus
+                    if ($status -and $status.startTime) {
+                        return $status.startTime
+                    }
+                }
+            } catch {
+                return $null
+            }
             return $null
         }
-        return $null
-    }
 
-    # 両方のジョブのSTART_TIMEを取得
-    $startTime1 = Get-JobStartTime -jobPath $unitPath
-    $startTime2 = Get-JobStartTime -jobPath $unitPath2
+        # 両方のジョブのSTART_TIMEを取得
+        $startTime1 = Get-JobStartTime -jobPath $unitPath
+        $startTime2 = Get-JobStartTime -jobPath $unitPath2
 
-    # 両方失敗した場合
-    if (-not $startTime1 -and -not $startTime2) {
-        exit 8  # 比較モードで両方のジョブ取得に失敗
-    }
+        # 両方失敗した場合
+        if (-not $startTime1 -and -not $startTime2) {
+            exit 8  # 比較モードで両方のジョブ取得に失敗
+        }
 
-    # 元のunitPathを保存（比較結果表示用）
-    $originalUnitPath = $unitPath
+        # 元のunitPathを保存（比較結果表示用）
+        $originalUnitPath = $unitPath
 
-    # 片方だけ失敗した場合
-    if (-not $startTime1) {
-        $unitPath = $unitPath2
-        $selectedPath = $unitPath2
-        $selectedTime = $startTime2
-        $rejectedPath = $originalUnitPath
-        $rejectedTime = "(取得失敗)"
-    } elseif (-not $startTime2) {
-        # $unitPath はそのまま
-        $selectedPath = $unitPath
-        $selectedTime = $startTime1
-        $rejectedPath = $unitPath2
-        $rejectedTime = "(取得失敗)"
-    } else {
-        # 両方成功した場合、日時を比較
-        try {
-            $dt1 = [DateTime]::Parse($startTime1)
-            $dt2 = [DateTime]::Parse($startTime2)
+        # 片方だけ失敗した場合
+        if (-not $startTime1) {
+            $unitPath = $unitPath2
+            $selectedPath = $unitPath2
+            $selectedTime = $startTime2
+            $rejectedPath = $originalUnitPath
+            $rejectedTime = "(取得失敗)"
+        } elseif (-not $startTime2) {
+            # $unitPath はそのまま
+            $selectedPath = $unitPath
+            $selectedTime = $startTime1
+            $rejectedPath = $unitPath2
+            $rejectedTime = "(取得失敗)"
+        } else {
+            # 両方成功した場合、日時を比較
+            try {
+                $dt1 = [DateTime]::Parse($startTime1)
+                $dt2 = [DateTime]::Parse($startTime2)
 
-            if ($dt2 -gt $dt1) {
-                $unitPath = $unitPath2
-                $selectedPath = $unitPath2
-                $selectedTime = $startTime2
-                $rejectedPath = $originalUnitPath
-                $rejectedTime = $startTime1
-            } else {
-                $selectedPath = $unitPath
-                $selectedTime = $startTime1
-                $rejectedPath = $unitPath2
-                $rejectedTime = $startTime2
-            }
-        } catch {
-            # パースエラーの場合は文字列比較
-            if ($startTime2 -gt $startTime1) {
-                $unitPath = $unitPath2
-                $selectedPath = $unitPath2
-                $selectedTime = $startTime2
-                $rejectedPath = $originalUnitPath
-                $rejectedTime = $startTime1
-            } else {
-                $selectedPath = $unitPath
-                $selectedTime = $startTime1
-                $rejectedPath = $unitPath2
-                $rejectedTime = $startTime2
+                if ($dt2 -gt $dt1) {
+                    $unitPath = $unitPath2
+                    $selectedPath = $unitPath2
+                    $selectedTime = $startTime2
+                    $rejectedPath = $originalUnitPath
+                    $rejectedTime = $startTime1
+                } else {
+                    $selectedPath = $unitPath
+                    $selectedTime = $startTime1
+                    $rejectedPath = $unitPath2
+                    $rejectedTime = $startTime2
+                }
+            } catch {
+                # パースエラーの場合は文字列比較
+                if ($startTime2 -gt $startTime1) {
+                    $unitPath = $unitPath2
+                    $selectedPath = $unitPath2
+                    $selectedTime = $startTime2
+                    $rejectedPath = $originalUnitPath
+                    $rejectedTime = $startTime1
+                } else {
+                    $selectedPath = $unitPath
+                    $selectedTime = $startTime1
+                    $rejectedPath = $unitPath2
+                    $rejectedTime = $startTime2
+                }
             }
         }
     }
@@ -700,6 +739,7 @@ $runningUrl += "&status=GRP_RUN"
 
 $waitedSeconds = 0
 $isRunning = $true
+$waitingExecId = $null  # 待機中のジョブのexecIDを保存
 
 while ($isRunning) {
     try {
@@ -717,6 +757,11 @@ while ($isRunning) {
             $runningStartTime = $runningUnit.unitStatus.startTime
             $runningStatusDisplay = Get-StatusDisplayName -status $runningStatus
 
+            # 最初の検出時にexecIDを保存（待機完了後にこのexecIDでログを取得）
+            if (-not $waitingExecId) {
+                $waitingExecId = $runningUnit.unitStatus.execID
+            }
+
             # 最大待機秒数を超えた場合はエラー終了
             if ($waitedSeconds -ge $maxWaitSeconds) {
                 [Console]::WriteLine("RUNNING_ERROR:実行中のジョブが検出されました（待機タイムアウト）")
@@ -727,7 +772,7 @@ while ($isRunning) {
 
             # 待機中メッセージを出力（標準エラー出力へ）
             [Console]::Error.WriteLine("WAITING:実行中のジョブを検出しました。終了を待機しています...（${waitedSeconds}/${maxWaitSeconds}秒）")
-            [Console]::Error.WriteLine("WAITING_JOB:$unitPath（ステータス: ${runningStatusDisplay}, 開始日時: ${runningStartTime}）")
+            [Console]::Error.WriteLine("WAITING_JOB:$unitPath（ステータス: ${runningStatusDisplay}, 開始日時: ${runningStartTime}, execID: ${waitingExecId}）")
 
             # 指定秒数待機
             Start-Sleep -Seconds $checkIntervalSeconds
@@ -738,7 +783,7 @@ while ($isRunning) {
 
             # 待機していた場合は完了メッセージを出力
             if ($waitedSeconds -gt 0) {
-                [Console]::Error.WriteLine("WAIT_COMPLETE:ジョブの終了を確認しました（${waitedSeconds}秒待機）")
+                [Console]::Error.WriteLine("WAIT_COMPLETE:ジョブの終了を確認しました（${waitedSeconds}秒待機、execID: ${waitingExecId}）")
             }
         }
     } catch {
@@ -751,6 +796,7 @@ while ($isRunning) {
 # STEP 2: 実行状態・execID取得（DEFINITION_AND_STATUS）
 # ==============================================================================
 # 存在確認・種別確認が成功したら、DEFINITION_AND_STATUS で execID を取得します。
+# ※ 待機していた場合は、待機中に保存したexecIDを使用します。
 
 $statusUrl = "${baseUrl}/objects/statuses?mode=search"
 $statusUrl += "&manager=${managerHost}"
@@ -761,18 +807,25 @@ $statusUrl += "&searchTarget=DEFINITION_AND_STATUS"
 $statusUrl += "&unitName=${encodedJobName}"
 $statusUrl += "&unitNameMatchMethods=EQ"
 
-# 世代指定
-$statusUrl += "&generation=${generation}"
+# 待機していた場合は、そのexecIDを使用（設定ファイルの世代指定を上書き）
+if ($waitingExecId) {
+    $statusUrl += "&generation=EXECID"
+    $statusUrl += "&execID=${waitingExecId}"
+    [Console]::Error.WriteLine("INFO:待機していたジョブのexecID（${waitingExecId}）を使用してログを取得します")
+} else {
+    # 世代指定
+    $statusUrl += "&generation=${generation}"
 
-# 期間指定（generation=PERIOD の場合）
-if ($generation -eq "PERIOD") {
-    $statusUrl += "&periodBegin=${periodBegin}"
-    $statusUrl += "&periodEnd=${periodEnd}"
-}
+    # 期間指定（generation=PERIOD の場合）
+    if ($generation -eq "PERIOD") {
+        $statusUrl += "&periodBegin=${periodBegin}"
+        $statusUrl += "&periodEnd=${periodEnd}"
+    }
 
-# 実行ID指定（generation=EXECID の場合）
-if ($generation -eq "EXECID" -and $execID) {
-    $statusUrl += "&execID=${execID}"
+    # 実行ID指定（generation=EXECID の場合）
+    if ($generation -eq "EXECID" -and $execID) {
+        $statusUrl += "&execID=${execID}"
+    }
 }
 
 # ステータスフィルタ
