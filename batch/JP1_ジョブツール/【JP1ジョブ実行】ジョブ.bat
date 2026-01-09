@@ -1,15 +1,15 @@
 @echo off
-title JP1 ジョブ実行ログ取得サンプル
+title JP1　ジョブ実行
 setlocal enabledelayedexpansion
 
 rem UNCパス対応（PushD/PopDで自動マッピング）
 pushd "%~dp0"
 
 rem ============================================================================
-rem JP1 ジョブ実行ログ取得サンプル
+rem JP1　ジョブ実行
 rem
 rem 説明:
-rem   JP1_REST_ジョブ実行ログ取得ツール.bat を呼び出し、
+rem   JP1ジョブ実行.bat を呼び出し、
 rem   ジョブを即時実行してからログをファイルに保存します。
 rem
 rem 使い方:
@@ -65,9 +65,9 @@ echo ジョブを実行中...
 echo （完了まで時間がかかる場合があります）
 echo.
 
-rem JP1_REST_ジョブ実行ログ取得ツール.bat を呼び出し、結果を一時ファイルに保存
+rem JP1ジョブ実行.bat を呼び出し、結果を一時ファイルに保存
 rem ※標準出力のみファイルにリダイレクト（標準エラー出力は待機メッセージ等をコンソールに表示）
-call "%SCRIPT_DIR%JP1_REST_ジョブ実行ログ取得ツール.bat" "%UNIT_PATH%" > "%TEMP_FILE%"
+call "%SCRIPT_DIR%JP1ジョブ実行.bat" "%UNIT_PATH%" > "%TEMP_FILE%"
 set "EXIT_CODE=%ERRORLEVEL%"
 
 rem エラーコード別のハンドリング（実行順）
@@ -240,7 +240,9 @@ if "%JOB_START_TIME%"=="" (
 
 rem 出力ファイル名を新形式で作成
 rem 形式: 【ジョブ実行結果】【{日時}実行分】【{終了状態}】{ジョブネット名}_{コメント}.txt
-set "OUTPUT_FILE=%~dp0【ジョブ実行結果】【%JOB_START_TIME%実行分】【%END_STATUS%】%JOBNET_NAME%_%JOBNET_COMMENT%.txt"
+set "OUTPUT_DIR=%~dp0..\02.Output"
+if not exist "%OUTPUT_DIR%" mkdir "%OUTPUT_DIR%"
+set "OUTPUT_FILE=%OUTPUT_DIR%\【ジョブ実行結果】【%JOB_START_TIME%実行分】【%END_STATUS%】%JOBNET_NAME%_%JOBNET_COMMENT%.txt"
 
 rem メタデータ行を除いた実行結果詳細を出力ファイルに保存
 rem 除外対象: START_TIME:, END_STATUS:, JOBNET_NAME:, JOBNET_COMMENT:, JOB_STATUS:
