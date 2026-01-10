@@ -10,9 +10,9 @@ rem このファイルはバッチファイルとPowerShellスクリプトの両
 rem 引数にユニットパスを指定して実行してください。
 rem
 rem 使い方:
-rem   JP1ジョブ実行.bat "ジョブパス" [出力オプション]
+rem   JP1ジョブ実行.bat "ジョブパス"
 rem
-rem 出力オプション:
+rem 出力オプション（環境変数 JP1_OUTPUT_MODE で指定、必須）:
 rem   /NOTEPAD  - メモ帳で開く
 rem   /EXCEL    - Excelに貼り付け
 rem   /WINMERGE - WinMergeで比較
@@ -24,8 +24,7 @@ if "%~1"=="" exit /b 1
 rem 第1引数（ジョブパス）を環境変数に設定（PowerShellに渡すため）
 set "JP1_UNIT_PATH=%~1"
 
-rem 第2引数（出力オプション）を環境変数に設定
-set "JP1_OUTPUT_MODE=%~2"
+rem 出力オプションは環境変数 JP1_OUTPUT_MODE から取得（必須）
 if "%JP1_OUTPUT_MODE%"=="" exit /b 1
 
 rem UNCパス対応（PushD/PopDで自動マッピング）
@@ -645,6 +644,36 @@ try {
         "/NOTEPAD" {
             # メモ帳で開く
             Start-Process notepad $outputFilePath
+
+            # スクロール位置の設定（環境変数から取得）
+            $scrollToText = $env:JP1_SCROLL_TO_TEXT
+            if ($scrollToText) {
+                # ファイル内容を読み込んで検索
+                $lines = Get-Content $outputFilePath -Encoding Default
+                $scrollLineNum = 0
+                for ($i = 0; $i -lt $lines.Count; $i++) {
+                    if ($lines[$i] -match [regex]::Escape($scrollToText)) {
+                        $scrollLineNum = $i + 1  # 1始まりの行番号
+                        break
+                    }
+                }
+
+                if ($scrollLineNum -gt 0) {
+                    # メモ帳が起動するのを待つ
+                    Start-Sleep -Milliseconds 500
+
+                    # WScript.Shellを使用してキー入力を送信
+                    $wshell = New-Object -ComObject WScript.Shell
+                    # Ctrl+G（行ジャンプダイアログ）を送信
+                    $wshell.SendKeys("^g")
+                    Start-Sleep -Milliseconds 200
+                    # 行番号を入力
+                    $wshell.SendKeys($scrollLineNum.ToString())
+                    Start-Sleep -Milliseconds 100
+                    # Enterキーで確定
+                    $wshell.SendKeys("{ENTER}")
+                }
+            }
         }
         "/EXCEL" {
             # Excelに貼り付け
