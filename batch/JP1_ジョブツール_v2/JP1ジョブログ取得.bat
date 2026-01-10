@@ -1101,17 +1101,17 @@ if ($execIdList.Count -gt 0) {
                     # Excel設定の検証（必須項目チェック）
                     if (-not $excelFileName) {
                         Write-Console "[エラー] Excelファイルパスが未設定です。"
-                        Write-Console "        呼び出し元バッチファイルの EXCEL_FILE を設定してください。"
+                        Write-Console "        呼び出し元バッチファイルの EXCEL_FILE_NAME を設定してください。"
                         exit 10  # Excel設定エラー
                     }
                     if (-not $excelSheetName) {
                         Write-Console "[エラー] Excelシート名が未設定です。"
-                        Write-Console "        呼び出し元バッチファイルの EXCEL_SHEET を設定してください。"
+                        Write-Console "        呼び出し元バッチファイルの EXCEL_SHEET_NAME を設定してください。"
                         exit 10  # Excel設定エラー
                     }
                     if (-not $excelPasteCell) {
                         Write-Console "[エラー] Excel貼り付けセルが未設定です。"
-                        Write-Console "        呼び出し元バッチファイルの EXCEL_CELL を設定してください。"
+                        Write-Console "        呼び出し元バッチファイルの EXCEL_PASTE_CELL を設定してください。"
                         exit 10  # Excel設定エラー
                     }
 
