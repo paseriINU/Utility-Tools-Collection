@@ -21,7 +21,7 @@ JP1/AJS3 Web Console REST APIを使用して、ジョブの実行とログ取得
 |---------|------|
 | `JP1ジョブ実行.bat` | メインツール（実行+ログ取得） |
 | `JP1ジョブログ取得.bat` | メインツール（ログ取得のみ） |
-| `JP1ジャーナル取得.bat` | 標準ログバッチ（EXEC/GET切替対応） |
+| `【JP1ジョブログ取得】ジャーナル取得.bat` | 標準ログバッチ（取得専用・Excel出力） |
 | `【JP1ジョブ実行】ジョブ.bat` | 標準ログバッチ（実行専用） |
 | `【JP1ジョブログ取得】ジョブ.bat` | 標準ログバッチ（取得専用） |
 
@@ -49,8 +49,8 @@ set "OUTPUT_MODE=/NOTEPAD"
 rem 実行してログ取得（メモ帳で開く）
 JP1ジョブ実行.bat "/JobGroup/Jobnet/Job1" /NOTEPAD
 
-rem ログ取得のみ（ファイル出力のみ）
-JP1ジョブログ取得.bat "/JobGroup/Jobnet/Job1" "" /LOG
+rem ログ取得のみ（メモ帳で開く）
+JP1ジョブログ取得.bat "/JobGroup/Jobnet/Job1" "" /NOTEPAD
 
 rem 2つのジョブを比較（メモ帳で開く）
 JP1ジョブログ取得.bat "/JobGroup/Jobnet/Job1" "/JobGroup/Jobnet/Job2" /NOTEPAD
@@ -60,25 +60,23 @@ JP1ジョブログ取得.bat "/JobGroup/Jobnet/Job1" "/JobGroup/Jobnet/Job2" /NO
 
 | オプション | 説明 |
 |-----------|------|
-| `/LOG` | ログファイル出力のみ（デフォルト） |
-| `/NOTEPAD` | メモ帳で開く |
+| `/NOTEPAD` | メモ帳で開く（デフォルト） |
 | `/EXCEL` | Excelに貼り付け |
 | `/WINMERGE` | WinMergeで比較（TODO: 実装予定） |
 
 ### Excel貼り付け設定（/EXCELオプション使用時）
 
-`/EXCEL`オプションを使用する場合は、標準ログバッチで以下の環境変数を設定してください：
+`/EXCEL`オプションを使用する場合は、メインツール（JP1ジョブ実行.bat / JP1ジョブログ取得.bat）の設定セクションを編集してください：
 
-```batch
-rem Excelファイル名（バッチと同じフォルダに配置）
-set "EXCEL_FILE_NAME=ログ貼り付け用.xlsx"
-
-rem 貼り付け先シート名
-set "EXCEL_SHEET_NAME=Sheet1"
-
-rem 貼り付け先セル位置
-set "EXCEL_PASTE_CELL=A1"
+```powershell
+# Excel貼り付け設定（/EXCEL オプション使用時）
+# フルパスまたは相対パス（バッチと同じフォルダからの相対パス）で指定
+$excelFileNameSetting = "ログ貼り付け用.xlsx"
+$excelSheetNameSetting = "Sheet1"
+$excelPasteCellSetting = "A1"
 ```
+
+**注意**: `/EXCEL`オプション使用時にこれらの設定が空の場合、エラー（終了コード10）で終了します。
 
 ## 出力先
 
@@ -129,6 +127,9 @@ cmdkey /generic:JP1_WebConsole /user:jp1admin /pass:yourpassword
 | 6 | タイムアウト / 詳細取得エラー |
 | 8 | 詳細取得エラー / 比較モードで両方取得失敗 |
 | 9 | API接続エラー |
+| 10 | Excel設定エラー（設定が未入力） |
+| 11 | Excel貼り付けエラー |
+| 12 | Excelファイル未検出 |
 
 ## ライセンス
 

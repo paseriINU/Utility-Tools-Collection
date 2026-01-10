@@ -21,7 +21,6 @@ rem 例: /JobGroup/Jobnet/Job1
 set "UNIT_PATH=/JobGroup/Jobnet/Job1"
 
 rem 出力オプション
-rem   /LOG      - ログファイル出力のみ（デフォルト）
 rem   /NOTEPAD  - メモ帳で開く
 rem   /EXCEL    - Excelに貼り付け
 rem   /WINMERGE - WinMergeで比較

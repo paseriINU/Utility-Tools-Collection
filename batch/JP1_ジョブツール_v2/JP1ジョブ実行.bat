@@ -13,7 +13,6 @@ rem 使い方:
 rem   JP1ジョブ実行.bat "ジョブパス" [出力オプション]
 rem
 rem 出力オプション:
-rem   /LOG      - ログファイル出力のみ（デフォルト）
 rem   /NOTEPAD  - メモ帳で開く
 rem   /EXCEL    - Excelに貼り付け
 rem   /WINMERGE - WinMergeで比較
@@ -618,7 +617,7 @@ try {
 
     # 出力オプションを環境変数から取得
     $outputMode = $env:JP1_OUTPUT_MODE
-    if (-not $outputMode) { $outputMode = "/LOG" }
+    if (-not $outputMode) { $outputMode = "/NOTEPAD" }
 
     # 出力ディレクトリを作成
     $outputDir = Join-Path $scriptDir "..\02.Output"
@@ -699,9 +698,6 @@ try {
         "/WINMERGE" {
             # WinMergeで同じファイルを比較（TODO: ユーザーが実装）
             [Console]::WriteLine("WinMerge比較は未実装です")
-        }
-        "/LOG" {
-            # ログファイル出力のみ（何もしない）
         }
         default {
             # デフォルトはログファイル出力のみ

@@ -25,7 +25,6 @@ rem 2つのジョブを比較して新しい方を取得する場合に設定
 set "UNIT_PATH_2="
 
 rem 出力オプション
-rem   /LOG      - ログファイル出力のみ（デフォルト）
 rem   /NOTEPAD  - メモ帳で開く
 rem   /EXCEL    - Excelに貼り付け
 rem   /WINMERGE - WinMergeで比較
