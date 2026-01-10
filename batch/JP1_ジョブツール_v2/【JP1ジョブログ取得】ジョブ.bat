@@ -28,7 +28,7 @@ rem 出力オプション
 rem   /NOTEPAD  - メモ帳で開く
 rem   /EXCEL    - Excelに貼り付け
 rem   /WINMERGE - WinMergeで比較
-set "OUTPUT_MODE=/NOTEPAD"
+set "JP1_OUTPUT_MODE=/NOTEPAD"
 
 rem スクロール位置の設定（/NOTEPAD モード時のみ有効）
 rem メモ帳で開いた後、指定した文字列を含む行に自動でジャンプします
@@ -56,7 +56,7 @@ rem UNCパス対応
 pushd "%~dp0"
 
 rem メインツールを呼び出し
-call "JP1ジョブログ取得.bat" "%UNIT_PATH%" "%UNIT_PATH_2%" "%OUTPUT_MODE%"
+call "JP1ジョブログ取得.bat" "%UNIT_PATH%" "%UNIT_PATH_2%"
 
 set "EXITCODE=%ERRORLEVEL%"
 
