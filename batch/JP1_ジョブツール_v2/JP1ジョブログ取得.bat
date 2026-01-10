@@ -10,10 +10,10 @@ rem このファイルはバッチファイルとPowerShellスクリプトの両
 rem 引数にユニットパスを指定して実行してください。
 rem
 rem 使い方:
-rem   JP1ジョブログ取得.bat "ジョブパス" [比較用パス] [出力オプション]
+rem   JP1ジョブログ取得.bat "ジョブパス" [比較用パス]
 rem
-rem 出力オプション:
-rem   /NOTEPAD  - メモ帳で開く
+rem 出力オプション（環境変数 JP1_OUTPUT_MODE で指定）:
+rem   /NOTEPAD  - メモ帳で開く（デフォルト）
 rem   /EXCEL    - Excelに貼り付け
 rem   /WINMERGE - WinMergeで比較
 rem ============================================================================
@@ -27,9 +27,8 @@ set "JP1_UNIT_PATH=%~1"
 rem 第2引数（比較用ジョブパス、オプション）を環境変数に設定
 set "JP1_UNIT_PATH_2=%~2"
 
-rem 第3引数（出力オプション）を環境変数に設定
-set "JP1_OUTPUT_MODE=%~3"
-if "%JP1_OUTPUT_MODE%"=="" exit /b 1
+rem 出力オプションは環境変数 JP1_OUTPUT_MODE から取得（デフォルト: /NOTEPAD）
+if "%JP1_OUTPUT_MODE%"=="" set "JP1_OUTPUT_MODE=/NOTEPAD"
 
 rem UNCパス対応（PushD/PopDで自動マッピング）
 pushd "%~dp0"
