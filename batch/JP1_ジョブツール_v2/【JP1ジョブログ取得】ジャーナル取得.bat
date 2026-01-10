@@ -37,10 +37,28 @@ rem 空欄の場合はスクロールせずにファイル先頭を表示しま�
 rem 例: "エラー", "ERROR", "RC=", "異常終了" など
 set "SCROLL_TO_TEXT="
 
+rem Excel貼り付け設定（/EXCEL モード時のみ有効）
+rem Excelファイルパス（相対パスまたはフルパス）
+rem 例: "ログ貼り付け用.xlsx" または "C:\Users\Documents\ログ.xlsx"
+set "EXCEL_FILE="
+
+rem 貼り付け先シート名
+rem 例: "Sheet1", "ログ貼り付け" など
+set "EXCEL_SHEET="
+
+rem 貼り付け先セル位置
+rem 例: "A1", "B2" など
+set "EXCEL_CELL="
+
 rem ===================================
 
 rem 環境変数にスクロール設定を設定（メインツールに渡すため）
 set "JP1_SCROLL_TO_TEXT=%SCROLL_TO_TEXT%"
+
+rem 環境変数にExcel設定を設定（メインツールに渡すため）
+set "EXCEL_FILE_NAME=%EXCEL_FILE%"
+set "EXCEL_SHEET_NAME=%EXCEL_SHEET%"
+set "EXCEL_PASTE_CELL=%EXCEL_CELL%"
 
 rem UNCパス対応
 pushd "%~dp0"
