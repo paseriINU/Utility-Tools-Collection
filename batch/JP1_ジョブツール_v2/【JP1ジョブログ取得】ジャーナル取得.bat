@@ -30,7 +30,17 @@ rem   /EXCEL    - Excelに貼り付け
 rem   /WINMERGE - WinMergeで比較
 set "OUTPUT_MODE=/EXCEL"
 
+rem スクロール位置の設定（/NOTEPAD モード時のみ有効）
+rem メモ帳で開いた後、指定した文字列を含む行に自動でジャンプします
+rem 事前に行番号を特定し、Ctrl+Gで移動するため検索窓は開きません
+rem 空欄の場合はスクロールせずにファイル先頭を表示します
+rem 例: "エラー", "ERROR", "RC=", "異常終了" など
+set "SCROLL_TO_TEXT="
+
 rem ===================================
+
+rem 環境変数にスクロール設定を設定（メインツールに渡すため）
+set "JP1_SCROLL_TO_TEXT=%SCROLL_TO_TEXT%"
 
 rem UNCパス対応
 pushd "%~dp0"

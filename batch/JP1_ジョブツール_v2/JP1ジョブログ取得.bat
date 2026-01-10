@@ -1053,6 +1053,44 @@ if ($execIdList.Count -gt 0) {
                 "/NOTEPAD" {
                     # メモ帳で開く
                     Start-Process notepad $outputFilePath
+
+                    # スクロール位置の設定を環境変数から取得
+                    $scrollToText = $env:JP1_SCROLL_TO_TEXT
+                    if ($scrollToText) {
+                        Write-Console "スクロール位置: $scrollToText"
+
+                        # 検索文字列を含む最初の行番号を特定
+                        $scrollLineNum = $null
+                        $lineIndex = 0
+                        $fileContent = Get-Content -Path $outputFilePath -Encoding Default
+                        foreach ($line in $fileContent) {
+                            $lineIndex++
+                            if ($line -match [regex]::Escape($scrollToText)) {
+                                $scrollLineNum = $lineIndex
+                                break
+                            }
+                        }
+
+                        if ($scrollLineNum) {
+                            Write-Console "ジャンプ先行番号: $scrollLineNum"
+
+                            # メモ帳がアクティブになるまで待機し、Ctrl+Gで行へ移動
+                            Start-Sleep -Milliseconds 600
+                            $wshell = New-Object -ComObject WScript.Shell
+                            $activated = $wshell.AppActivate("メモ帳")
+                            if (-not $activated) { $activated = $wshell.AppActivate("Notepad") }
+                            if ($activated) {
+                                Start-Sleep -Milliseconds 100
+                                $wshell.SendKeys("^g")  # Ctrl+G で「行へ移動」ダイアログを開く
+                                Start-Sleep -Milliseconds 200
+                                $wshell.SendKeys($scrollLineNum.ToString())
+                                Start-Sleep -Milliseconds 100
+                                $wshell.SendKeys("{ENTER}")
+                            }
+                        } else {
+                            Write-Console "[情報] 指定した文字列がファイル内に見つかりませんでした"
+                        }
+                    }
                 }
                 "/EXCEL" {
                     # Excelに貼り付け
