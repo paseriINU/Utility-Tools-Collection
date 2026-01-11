@@ -1196,14 +1196,17 @@
             const height = Math.min(canvas1.height, canvas2.height);
 
             // --------------------------------------------------------------------
-            // 差分検出パラメータ
+            // 差分検出パラメータ（ピクセル単位比較 + ノイズ除去）
             // --------------------------------------------------------------------
-            const blockSize = 8;      // ブロックサイズ（8x8ピクセル）
-            let changedBlocks = 0;    // 変更されたブロック数
-            let addedBlocks = 0;      // 追加されたブロック数
-            let deletedBlocks = 0;    // 削除されたブロック数
-            let totalBlocks = 0;      // 全ブロック数
-            let diffPixels = 0;       // 差分ピクセル数
+            // 差分検出用の閾値設定
+            const colorThreshold = 40;     // グレースケール差の閾値（アンチエイリアス対策で30→40に調整）
+            const contentThreshold = 240;  // コンテンツ判定閾値（240未満ならコンテンツあり）
+            const noiseFilterSize = 2;     // ノイズフィルタのサイズ（周囲2ピクセル以内に差分がなければノイズ）
+
+            let changedBlocks = 0;    // 変更されたピクセル数
+            let addedBlocks = 0;      // 追加されたピクセル数
+            let deletedBlocks = 0;    // 削除されたピクセル数
+            let diffPixels = 0;       // 差分ピクセル数（ノイズ除去後）
             let totalPixels = width * height;  // 全ピクセル数
 
             // オーバーレイをクリア（前回のハイライトを消去）
@@ -1211,78 +1214,127 @@
             octx2.clearRect(0, 0, overlay2.width, overlay2.height);
 
             // --------------------------------------------------------------------
-            // ブロック単位での差分検出
+            // Phase 1: ピクセル単位での差分マップ作成
             // --------------------------------------------------------------------
-            // 2重ループでブロックを走査
-            // y: 縦方向、x: 横方向
-            for (let y = 0; y < height; y += blockSize) {
-                for (let x = 0; x < width; x += blockSize) {
-                    totalBlocks++;
+            // 差分マップ: 0=差分なし, 1=変更, 2=削除, 3=追加
+            const diffMap = new Uint8Array(width * height);
 
-                    let diff = 0;            // ブロック内の差分カウント
-                    let hasContent1 = false; // PDF1にコンテンツがあるか
-                    let hasContent2 = false; // PDF2にコンテンツがあるか
+            for (let y = 0; y < height; y++) {
+                for (let x = 0; x < width; x++) {
+                    // ピクセルのインデックスを計算（RGBA形式なので4を掛ける）
+                    const idx1 = (y * canvas1.width + x) * 4;
+                    const idx2 = (y * canvas2.width + x) * 4;
+                    const mapIdx = y * width + x;
 
-                    // ブロック内のピクセルを比較
-                    for (let by = 0; by < blockSize && y + by < height; by++) {
-                        for (let bx = 0; bx < blockSize && x + bx < width; bx++) {
-                            // ピクセルのインデックスを計算
-                            // ※RGBA形式なので4を掛ける
-                            const idx1 = ((y + by) * canvas1.width + (x + bx)) * 4;
-                            const idx2 = ((y + by) * canvas2.width + (x + bx)) * 4;
+                    // グレースケール値に変換して比較
+                    const gray1 = (imgData1.data[idx1] + imgData1.data[idx1 + 1] + imgData1.data[idx1 + 2]) / 3;
+                    const gray2 = (imgData2.data[idx2] + imgData2.data[idx2 + 1] + imgData2.data[idx2 + 2]) / 3;
 
-                            // グレースケール値に変換して比較
-                            // ※グレースケール: RGBの平均値で明るさを表現
-                            const gray1 = (imgData1.data[idx1] + imgData1.data[idx1 + 1] + imgData1.data[idx1 + 2]) / 3;
-                            const gray2 = (imgData2.data[idx2] + imgData2.data[idx2 + 1] + imgData2.data[idx2 + 2]) / 3;
+                    // コンテンツの有無を判定
+                    const hasContent1 = gray1 < contentThreshold;
+                    const hasContent2 = gray2 < contentThreshold;
 
-                            // コンテンツの有無を判定（240より暗ければコンテンツあり）
-                            // ※白=255、黒=0
-                            if (gray1 < 240) hasContent1 = true;
-                            if (gray2 < 240) hasContent2 = true;
+                    // 差分を検出
+                    if (Math.abs(gray1 - gray2) > colorThreshold) {
+                        if (hasContent1 && hasContent2) {
+                            diffMap[mapIdx] = 1;  // 変更
+                        } else if (hasContent1 && !hasContent2) {
+                            diffMap[mapIdx] = 2;  // 削除
+                        } else if (!hasContent1 && hasContent2) {
+                            diffMap[mapIdx] = 3;  // 追加
+                        }
+                    }
+                }
+            }
 
-                            // 差分を検出（明るさの差が30以上なら差分としてカウント）
-                            if (Math.abs(gray1 - gray2) > 30) {
-                                diff++;
+            // --------------------------------------------------------------------
+            // Phase 2: ノイズ除去フィルター適用
+            // --------------------------------------------------------------------
+            // 孤立した差分ピクセル（周囲に差分がない）を除去
+            const filteredMap = new Uint8Array(width * height);
+
+            for (let y = 0; y < height; y++) {
+                for (let x = 0; x < width; x++) {
+                    const mapIdx = y * width + x;
+                    if (diffMap[mapIdx] === 0) continue;  // 差分がなければスキップ
+
+                    // 周囲のピクセルに差分があるかチェック
+                    let neighborCount = 0;
+                    for (let dy = -noiseFilterSize; dy <= noiseFilterSize; dy++) {
+                        for (let dx = -noiseFilterSize; dx <= noiseFilterSize; dx++) {
+                            if (dx === 0 && dy === 0) continue;  // 自分自身はスキップ
+                            const ny = y + dy;
+                            const nx = x + dx;
+                            if (ny >= 0 && ny < height && nx >= 0 && nx < width) {
+                                if (diffMap[ny * width + nx] > 0) {
+                                    neighborCount++;
+                                }
                             }
                         }
                     }
 
-                    // --------------------------------------------------------------------
-                    // 差分のハイライト
-                    // --------------------------------------------------------------------
-                    // 閾値: ブロックの10%以上のピクセルに差分があればハイライト
-                    const threshold = (blockSize * blockSize) * 0.1;
-                    
-                    if (diff > threshold) {
-                        diffPixels += blockSize * blockSize;
-
-                        if (hasContent1 && hasContent2) {
-                            // 変更（両方にコンテンツがある）→ 黄色
-                            changedBlocks++;
-                            octx1.fillStyle = 'rgba(255, 193, 7, 0.4)';   // 半透明の黄色
-                            octx2.fillStyle = 'rgba(255, 193, 7, 0.4)';
-                        } else if (hasContent1 && !hasContent2) {
-                            // 削除（PDF1にのみコンテンツがある）→ 赤色
-                            deletedBlocks++;
-                            octx1.fillStyle = 'rgba(244, 67, 54, 0.4)';   // 半透明の赤色
-                            octx2.fillStyle = 'rgba(244, 67, 54, 0.2)';   // 薄い赤色
-                        } else if (!hasContent1 && hasContent2) {
-                            // 追加（PDF2にのみコンテンツがある）→ 緑色
-                            addedBlocks++;
-                            octx1.fillStyle = 'rgba(76, 175, 80, 0.2)';   // 薄い緑色
-                            octx2.fillStyle = 'rgba(76, 175, 80, 0.4)';   // 半透明の緑色
-                        } else {
-                            // 両方にコンテンツがない場合はスキップ
-                            continue;
-                        }
-
-                        // ブロックを塗りつぶし
-                        octx1.fillRect(x, y, blockSize, blockSize);
-                        octx2.fillRect(x, y, blockSize, blockSize);
+                    // 周囲に2つ以上の差分ピクセルがあれば有効な差分として保持
+                    if (neighborCount >= 2) {
+                        filteredMap[mapIdx] = diffMap[mapIdx];
                     }
                 }
             }
+
+            // --------------------------------------------------------------------
+            // Phase 3: 差分のハイライト描画
+            // --------------------------------------------------------------------
+            // ImageDataを作成してオーバーレイに描画
+            const overlayData1 = octx1.createImageData(width, height);
+            const overlayData2 = octx2.createImageData(width, height);
+
+            for (let y = 0; y < height; y++) {
+                for (let x = 0; x < width; x++) {
+                    const mapIdx = y * width + x;
+                    const overlayIdx = mapIdx * 4;
+                    const diffType = filteredMap[mapIdx];
+
+                    if (diffType === 0) continue;  // 差分がなければスキップ
+
+                    diffPixels++;
+
+                    // 差分タイプに応じて色を設定
+                    let r1, g1, b1, a1, r2, g2, b2, a2;
+
+                    if (diffType === 1) {
+                        // 変更 → 黄色
+                        changedBlocks++;
+                        r1 = r2 = 255; g1 = g2 = 193; b1 = b2 = 7;
+                        a1 = a2 = 102;  // 0.4 * 255
+                    } else if (diffType === 2) {
+                        // 削除 → 赤色
+                        deletedBlocks++;
+                        r1 = r2 = 244; g1 = g2 = 67; b1 = b2 = 54;
+                        a1 = 102;  // 0.4 * 255
+                        a2 = 51;   // 0.2 * 255
+                    } else if (diffType === 3) {
+                        // 追加 → 緑色
+                        addedBlocks++;
+                        r1 = r2 = 76; g1 = g2 = 175; b1 = b2 = 80;
+                        a1 = 51;   // 0.2 * 255
+                        a2 = 102;  // 0.4 * 255
+                    }
+
+                    // オーバーレイピクセルを設定
+                    overlayData1.data[overlayIdx] = r1;
+                    overlayData1.data[overlayIdx + 1] = g1;
+                    overlayData1.data[overlayIdx + 2] = b1;
+                    overlayData1.data[overlayIdx + 3] = a1;
+
+                    overlayData2.data[overlayIdx] = r2;
+                    overlayData2.data[overlayIdx + 1] = g2;
+                    overlayData2.data[overlayIdx + 2] = b2;
+                    overlayData2.data[overlayIdx + 3] = a2;
+                }
+            }
+
+            // オーバーレイを描画
+            octx1.putImageData(overlayData1, 0, 0);
+            octx2.putImageData(overlayData2, 0, 0);
 
             // --------------------------------------------------------------------
             // 統計情報の更新
