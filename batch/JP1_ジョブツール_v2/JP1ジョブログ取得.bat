@@ -161,22 +161,6 @@ $maxWaitSeconds = 60
 # デフォルト: 10秒
 $checkIntervalSeconds = 10
 
-# ------------------------------------------------------------------------------
-# Excel貼り付け設定（/EXCEL オプション使用時）
-# ------------------------------------------------------------------------------
-# Excelファイルパスを指定します。
-# ・相対パス: スクリプトと同じフォルダからの相対パス
-# ・フルパス: 絶対パスで指定
-# ・空欄の場合: 環境変数 EXCEL_FILE_NAME から取得（呼び出し元で設定）
-# 例: "ログ貼り付け用.xlsx" または "C:\Users\Documents\ログ.xlsx"
-$excelFileNameSetting = ""
-
-# 貼り付け先シート名（空欄の場合は "Sheet1"）
-$excelSheetNameSetting = ""
-
-# 貼り付け先セル位置（空欄の場合は "A1"）
-$excelPasteCellSetting = ""
-
 # ==============================================================================
 # ■ 検索条件設定セクション
 # ==============================================================================
@@ -1092,11 +1076,10 @@ if ($execIdList.Count -gt 0) {
                     }
                 }
                 "/EXCEL" {
-                    # Excelに貼り付け
-                    # 設定セクションの値を優先、なければ環境変数から取得
-                    $excelFileName = if ($excelFileNameSetting) { $excelFileNameSetting } else { $env:EXCEL_FILE_NAME }
-                    $excelSheetName = if ($excelSheetNameSetting) { $excelSheetNameSetting } else { $env:EXCEL_SHEET_NAME }
-                    $excelPasteCell = if ($excelPasteCellSetting) { $excelPasteCellSetting } else { $env:EXCEL_PASTE_CELL }
+                    # Excelに貼り付け（設定は呼び出し元の環境変数から取得）
+                    $excelFileName = $env:EXCEL_FILE_NAME
+                    $excelSheetName = $env:EXCEL_SHEET_NAME
+                    $excelPasteCell = $env:EXCEL_PASTE_CELL
 
                     # Excel設定の検証（必須項目チェック）
                     if (-not $excelFileName) {
