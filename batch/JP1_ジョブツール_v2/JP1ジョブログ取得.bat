@@ -170,6 +170,11 @@ $checkIntervalSeconds = 10
 # ・フォルダが存在しない場合は自動作成されます
 $outputFolder = "..\02.Output"
 
+# 出力ファイル名のプレフィックスを指定します。
+# ファイル名は「{プレフィックス}【{開始日時}実行分】【{終了状態}】{ジョブネット名}_{コメント}.txt」
+# となります。
+$outputFilePrefix = "【ジョブ実行結果】"
+
 # ==============================================================================
 # ■ 検索条件設定セクション
 # ==============================================================================
@@ -1025,8 +1030,8 @@ if ($execIdList.Count -gt 0) {
                 New-Item -ItemType Directory -Path $outputDir -Force | Out-Null
             }
 
-            # 出力ファイル名を生成
-            $outputFileName = "【ジョブ実行結果】【${startTimeForFileName}実行分】【${endStatusDisplay}】${jobnetName}_${jobnetComment}.txt"
+            # 出力ファイル名を生成（設定セクションの$outputFilePrefixを使用）
+            $outputFileName = "${outputFilePrefix}【${startTimeForFileName}実行分】【${endStatusDisplay}】${jobnetName}_${jobnetComment}.txt"
             $outputFilePath = Join-Path $outputDir $outputFileName
 
             # 実行結果詳細をファイルに出力
