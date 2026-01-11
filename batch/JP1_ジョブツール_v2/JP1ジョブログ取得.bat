@@ -953,6 +953,11 @@ try {
 
 Write-Console "[STEP 5] 実行結果詳細取得中..."
 
+# 出力用の変数を初期化
+$outputFilePath = ""
+$startTimeForFileName = ""
+$endStatusDisplay = ""
+
 if ($execIdList.Count -gt 0) {
     foreach ($item in $execIdList) {
         $targetPath = $item.Path
@@ -1001,10 +1006,6 @@ if ($execIdList.Count -gt 0) {
             # 終了状態を取得（日本語変換済み）
             $endStatusDisplay = Get-StatusDisplayName -status $targetEndStatus
 
-            # 出力オプションを環境変数から取得
-            $outputMode = $env:JP1_OUTPUT_MODE
-            if (-not $outputMode) { $outputMode = "/NOTEPAD" }
-
             # 出力ディレクトリを作成
             $outputDir = Join-Path $scriptDir "..\02.Output"
             if (-not (Test-Path $outputDir)) {
@@ -1031,116 +1032,128 @@ if ($execIdList.Count -gt 0) {
             [Console]::WriteLine("JOBNET_COMMENT:$jobnetComment")
             [Console]::WriteLine("OUTPUT_FILE:$outputFilePath")
 
-            # 出力オプションに応じた後処理
-            switch ($outputMode.ToUpper()) {
-                "/NOTEPAD" {
-                    # メモ帳で開く
-                    Start-Process notepad $outputFilePath
-
-                    # スクロール位置の設定を環境変数から取得
-                    $scrollToText = $env:JP1_SCROLL_TO_TEXT
-                    if ($scrollToText) {
-                        Write-Console "スクロール位置: $scrollToText"
-
-                        # 検索文字列を含む最初の行番号を特定
-                        $scrollLineNum = $null
-                        $lineIndex = 0
-                        $fileContent = Get-Content -Path $outputFilePath -Encoding Default
-                        foreach ($line in $fileContent) {
-                            $lineIndex++
-                            if ($line -match [regex]::Escape($scrollToText)) {
-                                $scrollLineNum = $lineIndex
-                                break
-                            }
-                        }
-
-                        if ($scrollLineNum) {
-                            Write-Console "ジャンプ先行番号: $scrollLineNum"
-
-                            # メモ帳がアクティブになるまで待機し、Ctrl+Gで行へ移動
-                            Start-Sleep -Milliseconds 600
-                            $wshell = New-Object -ComObject WScript.Shell
-                            $activated = $wshell.AppActivate("メモ帳")
-                            if (-not $activated) { $activated = $wshell.AppActivate("Notepad") }
-                            if ($activated) {
-                                Start-Sleep -Milliseconds 100
-                                $wshell.SendKeys("^g")  # Ctrl+G で「行へ移動」ダイアログを開く
-                                Start-Sleep -Milliseconds 200
-                                $wshell.SendKeys($scrollLineNum.ToString())
-                                Start-Sleep -Milliseconds 100
-                                $wshell.SendKeys("{ENTER}")
-                            }
-                        } else {
-                            Write-Console "[情報] 指定した文字列がファイル内に見つかりませんでした"
-                        }
-                    }
-                }
-                "/EXCEL" {
-                    # Excelに貼り付け（設定は呼び出し元の環境変数から取得）
-                    $excelFileName = $env:EXCEL_FILE_NAME
-                    $excelSheetName = $env:EXCEL_SHEET_NAME
-                    $excelPasteCell = $env:EXCEL_PASTE_CELL
-
-                    # Excel設定の検証（必須項目チェック）
-                    if (-not $excelFileName) {
-                        Write-Console "[エラー] Excelファイルパスが未設定です。"
-                        Write-Console "        呼び出し元バッチファイルの EXCEL_FILE_NAME を設定してください。"
-                        exit 10  # Excel設定エラー
-                    }
-                    if (-not $excelSheetName) {
-                        Write-Console "[エラー] Excelシート名が未設定です。"
-                        Write-Console "        呼び出し元バッチファイルの EXCEL_SHEET_NAME を設定してください。"
-                        exit 10  # Excel設定エラー
-                    }
-                    if (-not $excelPasteCell) {
-                        Write-Console "[エラー] Excel貼り付けセルが未設定です。"
-                        Write-Console "        呼び出し元バッチファイルの EXCEL_PASTE_CELL を設定してください。"
-                        exit 10  # Excel設定エラー
-                    }
-
-                    # フルパスと相対パスの両方に対応
-                    if ([System.IO.Path]::IsPathRooted($excelFileName)) {
-                        $excelPath = $excelFileName
-                    } else {
-                        $excelPath = Join-Path $scriptDir $excelFileName
-                    }
-                    if (Test-Path $excelPath) {
-                        try {
-                            $logContent = Get-Content $outputFilePath -Encoding Default -Raw
-                            $excel = New-Object -ComObject Excel.Application
-                            $excel.Visible = $true
-                            $workbook = $excel.Workbooks.Open($excelPath)
-                            $sheet = $workbook.Worksheets.Item($excelSheetName)
-                            $sheet.Range($excelPasteCell).Value2 = $logContent
-                            $workbook.Save()
-                            [System.Runtime.Interopservices.Marshal]::ReleaseComObject($sheet) | Out-Null
-                            [System.Runtime.Interopservices.Marshal]::ReleaseComObject($workbook) | Out-Null
-                            [System.Runtime.Interopservices.Marshal]::ReleaseComObject($excel) | Out-Null
-                            Write-Console "[完了] Excelにログを貼り付けました: $excelSheetName $excelPasteCell"
-                        } catch {
-                            Write-Console "[エラー] Excel貼り付けに失敗しました: $($_.Exception.Message)"
-                            exit 11  # Excel貼り付けエラー
-                        }
-                    } else {
-                        Write-Console "[エラー] Excelファイルが見つかりません: $excelPath"
-                        exit 12  # Excelファイル未検出エラー
-                    }
-                }
-                "/WINMERGE" {
-                    # WinMergeで同じファイルを比較（TODO: ユーザーが実装）
-                    [Console]::WriteLine("WinMerge比較は未実装です")
-                }
-                default {
-                    # デフォルトはログファイル出力のみ
-                }
-            }
-
-            Write-Console "[完了] 出力ファイル: $outputFilePath"
         } catch {
             exit 6  # 詳細取得エラー
         }
     }
 }
+
+# ==============================================================================
+# STEP 6: 出力処理
+# ==============================================================================
+# 出力オプションに応じて、メモ帳で開く/Excelに貼り付け/WinMergeで比較を行います。
+
+Write-Console "[STEP 6] 出力処理中..."
+
+# 出力オプションを環境変数から取得
+$outputMode = $env:JP1_OUTPUT_MODE
+if (-not $outputMode) { $outputMode = "/NOTEPAD" }
+
+# 出力オプションに応じた後処理
+switch ($outputMode.ToUpper()) {
+    "/NOTEPAD" {
+        # メモ帳で開く
+        Start-Process notepad $outputFilePath
+
+        # スクロール位置の設定を環境変数から取得
+        $scrollToText = $env:JP1_SCROLL_TO_TEXT
+        if ($scrollToText) {
+            Write-Console "スクロール位置: $scrollToText"
+
+            # 検索文字列を含む最初の行番号を特定
+            $scrollLineNum = $null
+            $lineIndex = 0
+            $fileContent = Get-Content -Path $outputFilePath -Encoding Default
+            foreach ($line in $fileContent) {
+                $lineIndex++
+                if ($line -match [regex]::Escape($scrollToText)) {
+                    $scrollLineNum = $lineIndex
+                    break
+                }
+            }
+
+            if ($scrollLineNum) {
+                Write-Console "ジャンプ先行番号: $scrollLineNum"
+
+                # メモ帳がアクティブになるまで待機し、Ctrl+Gで行へ移動
+                Start-Sleep -Milliseconds 600
+                $wshell = New-Object -ComObject WScript.Shell
+                $activated = $wshell.AppActivate("メモ帳")
+                if (-not $activated) { $activated = $wshell.AppActivate("Notepad") }
+                if ($activated) {
+                    Start-Sleep -Milliseconds 100
+                    $wshell.SendKeys("^g")  # Ctrl+G で「行へ移動」ダイアログを開く
+                    Start-Sleep -Milliseconds 200
+                    $wshell.SendKeys($scrollLineNum.ToString())
+                    Start-Sleep -Milliseconds 100
+                    $wshell.SendKeys("{ENTER}")
+                }
+            } else {
+                Write-Console "[情報] 指定した文字列がファイル内に見つかりませんでした"
+            }
+        }
+    }
+    "/EXCEL" {
+        # Excelに貼り付け（設定は呼び出し元の環境変数から取得）
+        $excelFileName = $env:EXCEL_FILE_NAME
+        $excelSheetName = $env:EXCEL_SHEET_NAME
+        $excelPasteCell = $env:EXCEL_PASTE_CELL
+
+        # Excel設定の検証（必須項目チェック）
+        if (-not $excelFileName) {
+            Write-Console "[エラー] Excelファイルパスが未設定です。"
+            Write-Console "        呼び出し元バッチファイルの EXCEL_FILE_NAME を設定してください。"
+            exit 10  # Excel設定エラー
+        }
+        if (-not $excelSheetName) {
+            Write-Console "[エラー] Excelシート名が未設定です。"
+            Write-Console "        呼び出し元バッチファイルの EXCEL_SHEET_NAME を設定してください。"
+            exit 10  # Excel設定エラー
+        }
+        if (-not $excelPasteCell) {
+            Write-Console "[エラー] Excel貼り付けセルが未設定です。"
+            Write-Console "        呼び出し元バッチファイルの EXCEL_PASTE_CELL を設定してください。"
+            exit 10  # Excel設定エラー
+        }
+
+        # フルパスと相対パスの両方に対応
+        if ([System.IO.Path]::IsPathRooted($excelFileName)) {
+            $excelPath = $excelFileName
+        } else {
+            $excelPath = Join-Path $scriptDir $excelFileName
+        }
+        if (Test-Path $excelPath) {
+            try {
+                $logContent = Get-Content $outputFilePath -Encoding Default -Raw
+                $excel = New-Object -ComObject Excel.Application
+                $excel.Visible = $true
+                $workbook = $excel.Workbooks.Open($excelPath)
+                $sheet = $workbook.Worksheets.Item($excelSheetName)
+                $sheet.Range($excelPasteCell).Value2 = $logContent
+                $workbook.Save()
+                [System.Runtime.Interopservices.Marshal]::ReleaseComObject($sheet) | Out-Null
+                [System.Runtime.Interopservices.Marshal]::ReleaseComObject($workbook) | Out-Null
+                [System.Runtime.Interopservices.Marshal]::ReleaseComObject($excel) | Out-Null
+                Write-Console "[完了] Excelにログを貼り付けました: $excelSheetName $excelPasteCell"
+            } catch {
+                Write-Console "[エラー] Excel貼り付けに失敗しました: $($_.Exception.Message)"
+                exit 11  # Excel貼り付けエラー
+            }
+        } else {
+            Write-Console "[エラー] Excelファイルが見つかりません: $excelPath"
+            exit 12  # Excelファイル未検出エラー
+        }
+    }
+    "/WINMERGE" {
+        # WinMergeで同じファイルを比較（TODO: ユーザーが実装）
+        [Console]::WriteLine("WinMerge比較は未実装です")
+    }
+    default {
+        # デフォルトはログファイル出力のみ
+    }
+}
+
+Write-Console "[完了] 出力ファイル: $outputFilePath"
 
 # 正常終了
 exit 0
