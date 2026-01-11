@@ -1590,8 +1590,8 @@ if ($execIdList.Count -gt 0) {
 #     - EXCEL_SHEET_NAME: シート名
 #     - EXCEL_PASTE_CELL: 貼り付け先セル（例: "B5"）
 #
-# /WINMERGE - WinMergeで比較（未実装）
-#   - 2つのログを比較する機能（将来の拡張用）
+# /WINMERGE - WinMergeで比較
+#   - 2つのログファイルを比較表示します
 #
 # 【エラー時の終了コード】
 # - 終了コード 10: Excel設定エラー（必要な環境変数が未設定）
@@ -1649,12 +1649,27 @@ switch ($outputMode.ToUpper()) {
         }
     }
     "/EXCEL" {
-        # Excelに貼り付け（設定は呼び出し元の環境変数から取得）
-        $excelFileName = $env:EXCEL_FILE_NAME
-        $excelSheetName = $env:EXCEL_SHEET_NAME
-        $excelPasteCell = $env:EXCEL_PASTE_CELL
+        # ======================================================================
+        # Excel貼り付け処理
+        # ======================================================================
+        # 【処理概要】
+        # 取得したログ内容を、指定したExcelファイルの指定セルに貼り付けます。
+        # COM（Component Object Model）を使用してExcelを操作します。
+        # ======================================================================
 
-        # Excel設定の検証（必須項目チェック）
+        # ------------------------------------------------------------------
+        # 環境変数から設定値を取得
+        # ------------------------------------------------------------------
+        # 呼び出し元のバッチファイルで設定された環境変数を読み取ります
+        $excelFileName = $env:EXCEL_FILE_NAME    # Excelファイルのパス
+        $excelSheetName = $env:EXCEL_SHEET_NAME  # 貼り付け先のシート名
+        $excelPasteCell = $env:EXCEL_PASTE_CELL  # 貼り付け先のセル番地（例: "B5"）
+
+        # ------------------------------------------------------------------
+        # 必須パラメータのバリデーション（検証）
+        # ------------------------------------------------------------------
+        # 必要な環境変数がすべて設定されているかを確認します
+        # 未設定の場合はエラーメッセージを表示して終了します
         if (-not $excelFileName) {
             Write-Console "[エラー] Excelファイルパスが未設定です。"
             Write-Console "        呼び出し元バッチファイルの EXCEL_FILE_NAME を設定してください。"
@@ -1671,37 +1686,117 @@ switch ($outputMode.ToUpper()) {
             exit 10  # Excel設定エラー
         }
 
-        # フルパスと相対パスの両方に対応
+        # ------------------------------------------------------------------
+        # Excelファイルパスの解決（相対パス→絶対パス変換）
+        # ------------------------------------------------------------------
+        # IsPathRooted: パスが絶対パス（C:\...）かどうかを判定
+        # 相対パスの場合は、スクリプトのディレクトリを基準に絶対パスに変換
         if ([System.IO.Path]::IsPathRooted($excelFileName)) {
+            # 絶対パスの場合: そのまま使用
             $excelPath = $excelFileName
         } else {
+            # 相対パスの場合: スクリプトディレクトリと結合
             $excelPath = Join-Path $scriptDir $excelFileName
         }
+
+        # ------------------------------------------------------------------
+        # Excelファイル存在確認
+        # ------------------------------------------------------------------
         if (Test-Path $excelPath) {
             try {
+                # ----------------------------------------------------------
+                # ログファイルの内容を読み込み
+                # ----------------------------------------------------------
+                # -Encoding Default: Shift-JISで読み込み
+                # -Raw: ファイル全体を1つの文字列として読み込み（改行を保持）
                 $logContent = Get-Content $outputFilePath -Encoding Default -Raw
+
+                # ----------------------------------------------------------
+                # Excel COMオブジェクトの作成
+                # ----------------------------------------------------------
+                # New-Object -ComObject: ExcelアプリケーションのCOMオブジェクトを作成
+                # これにより、PowerShellからExcelを操作できるようになります
                 $excel = New-Object -ComObject Excel.Application
+
+                # ----------------------------------------------------------
+                # Excelウィンドウを表示
+                # ----------------------------------------------------------
+                # $true: Excelを画面に表示する（ユーザーが結果を確認できる）
+                # $false: バックグラウンドで処理（非表示）
                 $excel.Visible = $true
+
+                # ----------------------------------------------------------
+                # Excelファイルを開く
+                # ----------------------------------------------------------
+                # Workbooks.Open: 指定したパスのExcelファイルを開く
+                # 戻り値: Workbook（ブック）オブジェクト
                 $workbook = $excel.Workbooks.Open($excelPath)
+
+                # ----------------------------------------------------------
+                # シートを取得
+                # ----------------------------------------------------------
+                # Worksheets.Item: シート名またはインデックスでシートを取得
+                # シート名が見つからない場合はエラーになります
                 $sheet = $workbook.Worksheets.Item($excelSheetName)
+
+                # ----------------------------------------------------------
+                # セルにログ内容を貼り付け
+                # ----------------------------------------------------------
+                # Range: セル範囲を指定（例: "B5", "A1:C10"）
+                # Value2: セルの値（書式なしの純粋な値）
+                # ※ Value ではなく Value2 を使うとパフォーマンスが向上
                 $sheet.Range($excelPasteCell).Value2 = $logContent
+
+                # ----------------------------------------------------------
+                # ブックを保存
+                # ----------------------------------------------------------
+                # Save: 上書き保存（元のファイルに保存）
+                # SaveAs: 別名保存する場合に使用
                 $workbook.Save()
+
+                # ----------------------------------------------------------
+                # COMオブジェクトの解放（メモリリーク防止）
+                # ----------------------------------------------------------
+                # COMオブジェクトは明示的に解放しないとメモリに残り続けます
+                # 解放順序: 内側（Sheet）→ 外側（Workbook → Excel）の順に解放
+                # Out-Null: 戻り値を破棄（画面に表示しない）
                 [System.Runtime.Interopservices.Marshal]::ReleaseComObject($sheet) | Out-Null
                 [System.Runtime.Interopservices.Marshal]::ReleaseComObject($workbook) | Out-Null
                 [System.Runtime.Interopservices.Marshal]::ReleaseComObject($excel) | Out-Null
+
                 Write-Console "[完了] Excelにログを貼り付けました: $excelSheetName $excelPasteCell"
             } catch {
+                # Excel操作中にエラーが発生した場合
                 Write-Console "[エラー] Excel貼り付けに失敗しました: $($_.Exception.Message)"
                 exit 11  # Excel貼り付けエラー
             }
         } else {
+            # Excelファイルが見つからない場合
             Write-Console "[エラー] Excelファイルが見つかりません: $excelPath"
             exit 12  # Excelファイル未検出エラー
         }
     }
     "/WINMERGE" {
-        # WinMergeで同じファイルを比較（TODO: ユーザーが実装）
-        [Console]::WriteLine("WinMerge比較は未実装です")
+        # ======================================================================
+        # WinMerge比較処理
+        # ======================================================================
+        # 【処理概要】
+        # WinMergeを使用してログファイルを比較表示します。
+        # WinMergeがインストールされている必要があります。
+        # ======================================================================
+
+        # WinMergeの実行ファイルパス（デフォルトのインストール先）
+        $winMergePath = "C:\Program Files\WinMerge\WinMergeU.exe"
+
+        # WinMergeが存在するか確認
+        if (Test-Path $winMergePath) {
+            # WinMergeを起動してログファイルを開く
+            Start-Process $winMergePath -ArgumentList "`"$outputFilePath`""
+            Write-Console "[完了] WinMergeでファイルを開きました"
+        } else {
+            Write-Console "[エラー] WinMergeが見つかりません: $winMergePath"
+            Write-Console "        WinMergeをインストールするか、パスを確認してください。"
+        }
     }
     default {
         # デフォルトはログファイル出力のみ
