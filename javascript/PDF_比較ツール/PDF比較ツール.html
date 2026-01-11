@@ -15,20 +15,9 @@
             return false;
         };
     </script>
-    <!-- CDN優先: オフライン環境では埋め込みにフォールバック -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <script>
-        // CDNロード後の初期化チェック
-        if (typeof pdfjsLib !== 'undefined') {
-            pdfjsLib.GlobalWorkerOptions.workerSrc = '';
-            window.pdfJsLoaded = true;
-            window.pdfJsSource = 'CDN';
-        }
-    </script>
-    <script>
-        // PDF.js ライブラリ埋め込み (v3.11.174) - CDN失敗時のフォールバック
-        // CDNが成功した場合はスキップ
-        if (typeof pdfjsLib === 'undefined') {
+        // PDF.js ライブラリ埋め込み (v3.11.174) - オフライン対応
+        // 外部ネットワークに依存せず動作
 /**
  * @licstart The following is the entire license notice for the
  * JavaScript code in this page
@@ -85,7 +74,7 @@
                 if (typeof pdfjsLib !== 'undefined') {
                     pdfjsLib.GlobalWorkerOptions.workerSrc = '';
                     window.pdfJsLoaded = true;
-                    window.pdfJsSource = window.pdfJsSource || '埋め込み';
+                    window.pdfJsSource = '埋め込み';
                 } else {
                     window.pdfJsLoaded = false;
                     window.pdfJsSource = '読み込み失敗';
