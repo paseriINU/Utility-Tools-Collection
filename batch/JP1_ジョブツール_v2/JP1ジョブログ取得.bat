@@ -161,6 +161,15 @@ $maxWaitSeconds = 60
 # デフォルト: 10秒
 $checkIntervalSeconds = 10
 
+# ------------------------------------------------------------------------------
+# 出力設定
+# ------------------------------------------------------------------------------
+# 実行結果詳細の出力先フォルダを指定します。
+# ・相対パス: スクリプトフォルダからの相対パス（例: "..\02.Output"）
+# ・フルパス: 絶対パスで指定（例: "C:\Logs\JP1"）
+# ・フォルダが存在しない場合は自動作成されます
+$outputFolder = "..\02.Output"
+
 # ==============================================================================
 # ■ 検索条件設定セクション
 # ==============================================================================
@@ -1006,8 +1015,12 @@ if ($execIdList.Count -gt 0) {
             # 終了状態を取得（日本語変換済み）
             $endStatusDisplay = Get-StatusDisplayName -status $targetEndStatus
 
-            # 出力ディレクトリを作成
-            $outputDir = Join-Path $scriptDir "..\02.Output"
+            # 出力ディレクトリを作成（設定セクションの$outputFolderを使用）
+            if ([System.IO.Path]::IsPathRooted($outputFolder)) {
+                $outputDir = $outputFolder
+            } else {
+                $outputDir = Join-Path $scriptDir $outputFolder
+            }
             if (-not (Test-Path $outputDir)) {
                 New-Item -ItemType Directory -Path $outputDir -Force | Out-Null
             }
