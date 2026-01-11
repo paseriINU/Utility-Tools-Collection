@@ -83,6 +83,11 @@ $ENVIRONMENTS = @(
 $LINUX_CHMOD_DIR = "777"   # ディレクトリのパーミッション
 $LINUX_CHMOD_FILE = "777"  # ファイルのパーミッション
 
+# 一括転送の自動切り替えしきい値
+# このファイル数以上で一括転送に自動切り替え（変更ファイルモード時）
+# 目安: 個別転送は1ファイル約3秒、10ファイルで約30秒
+$BULK_TRANSFER_THRESHOLD = 10
+
 #==============================================================================
 #endregion
 
@@ -170,9 +175,9 @@ if ($workDirNormalized.StartsWith($gitRootNormalized + "\")) {
 }
 Write-Host ""
 
-#region ブランチ確認・切り替え
+#region ブランチ確認・環境選択
 Write-Color "================================================================" "Cyan"
-Write-Color "ブランチの確認" "Cyan"
+Write-Color "転送先環境を選択してください" "Cyan"
 Write-Color "================================================================" "Cyan"
 Write-Host ""
 
@@ -184,88 +189,6 @@ if ($LASTEXITCODE -ne 0) {
 
 Write-Host "  現在のブランチ: " -NoNewline
 Write-Color $currentBranch "Yellow"
-Write-Host ""
-Write-Host " 1. このブランチで続行"
-Write-Host " 2. ブランチを切り替える"
-Write-Host ""
-Write-Host " 0. キャンセル"
-Write-Host ""
-
-do {
-    $branchChoice = Read-Host "番号を入力 (0-2)"
-    if ($branchChoice -eq "0") {
-        Write-Color "[キャンセル] 処理を中止しました" "Yellow"
-        exit 0
-    }
-} while ($branchChoice -notin @("1", "2"))
-
-if ($branchChoice -eq "2") {
-    # ブランチ一覧を取得
-    Write-Host ""
-    Write-Color "================================================================" "Cyan"
-    Write-Color "ブランチを選択してください" "Cyan"
-    Write-Color "================================================================" "Cyan"
-    Write-Host ""
-
-    $branches = @(git branch --list 2>&1 | ForEach-Object {
-        $_ -replace '^\*?\s*', ''
-    })
-
-    $currentBranchTrimmed = $currentBranch -replace '\s', ''
-
-    $branchIndex = 1
-    foreach ($branch in $branches) {
-        $branchTrimmed = $branch -replace '\s', ''
-        if ($branchTrimmed -eq $currentBranchTrimmed) {
-            Write-Host ("{0,3}. {1} (現在)" -f $branchIndex, $branch) -ForegroundColor Yellow
-        } else {
-            Write-Host ("{0,3}. {1}" -f $branchIndex, $branch)
-        }
-        $branchIndex++
-    }
-    Write-Host ""
-    Write-Host " 0. キャンセル"
-    Write-Host ""
-
-    do {
-        $selectedBranchNum = Read-Host "番号を入力 (0-$($branches.Count))"
-        if ($selectedBranchNum -eq "0") {
-            Write-Color "[キャンセル] 処理を中止しました" "Yellow"
-            exit 0
-        }
-        $selectedBranchIndex = [int]$selectedBranchNum - 1
-    } while ($selectedBranchIndex -lt 0 -or $selectedBranchIndex -ge $branches.Count)
-
-    $targetBranch = $branches[$selectedBranchIndex]
-    $targetBranchTrimmed = $targetBranch -replace '\s', ''
-
-    if ($targetBranchTrimmed -ne $currentBranchTrimmed) {
-        Write-Host ""
-        Write-Color "[実行] ブランチを切り替え中: $targetBranch" "Yellow"
-
-        $checkoutResult = git checkout $targetBranch 2>&1
-        if ($LASTEXITCODE -ne 0) {
-            Write-Color "[エラー] ブランチの切り替えに失敗しました" "Red"
-            Write-Host $checkoutResult
-            exit 1
-        }
-
-        Write-Color "[OK] ブランチを切り替えました: $targetBranch" "Green"
-        $currentBranch = $targetBranch
-    } else {
-        Write-Color "[情報] 同じブランチが選択されました" "Yellow"
-    }
-}
-
-Write-Host ""
-Write-Color "[選択] ブランチ: $currentBranch" "Green"
-Write-Host ""
-#endregion
-
-#region 環境選択
-Write-Color "================================================================" "Cyan"
-Write-Color "転送先環境を選択してください" "Cyan"
-Write-Color "================================================================" "Cyan"
 Write-Host ""
 
 for ($i = 0; $i -lt $ENVIRONMENTS.Count; $i++) {
@@ -301,7 +224,8 @@ Write-Color "転送するファイルを選択" "Cyan"
 Write-Color "================================================================" "Cyan"
 Write-Host ""
 Write-Host " 1. 変更されたファイルのみ (git status)"
-Write-Host " 2. すべてのファイル"
+Write-Host " 2. すべてのファイル" -NoNewline
+Write-Host " ※転送先を事前にクリーンアップします" -ForegroundColor Yellow
 Write-Host ""
 Write-Host " 0. キャンセル"
 Write-Host ""
@@ -470,157 +394,74 @@ foreach ($file in $fileList) {
 Write-Host ""
 #endregion
 
-#region 転送確認
-Write-Color "これらのファイルを転送しますか？" "Yellow"
-Write-Host ""
-Write-Host " 1. すべて転送"
-Write-Host " 2. 個別に選択"
-Write-Host ""
-Write-Host " 0. キャンセル"
+#region 転送設定
+# 転送するファイルリスト
+$filesToTransfer = $fileList
+
+# 転送モードの自動判断
+Write-Color "================================================================" "Cyan"
+Write-Color "転送モードの決定" "Cyan"
+Write-Color "================================================================" "Cyan"
 Write-Host ""
 
-do {
-    $choice = Read-Host "番号を入力 (0-2)"
-} while ($choice -notin @("0", "1", "2"))
+if ($transferMode -eq "all") {
+    # 「すべてのファイル」モード → 常に一括転送
+    $useBulkTransfer = $true
+    Write-Color "[自動選択] 一括転送モード（すべてのファイル転送のため）" "Green"
+} else {
+    # 「変更されたファイルのみ」モード → ファイル数で自動判断
+    $fileCount = $filesToTransfer.Count
+    $estimatedTimeIndividual = $fileCount * 3  # 個別転送: 1ファイル約3秒
+    $estimatedTimeBulk = 8 + [math]::Ceiling($fileCount / 10)  # 一括転送: 固定8秒 + α
 
-if ($choice -eq "0") {
-    Write-Color "[キャンセル] 転送を中止しました" "Yellow"
-    exit 0
+    if ($fileCount -ge $BULK_TRANSFER_THRESHOLD) {
+        # しきい値以上 → 一括転送
+        $useBulkTransfer = $true
+        Write-Color "[自動選択] 一括転送モード" "Green"
+        Write-Host ""
+        Write-Host "  ファイル数: $fileCount 個（しきい値: $BULK_TRANSFER_THRESHOLD 個以上）"
+        Write-Host "  推定時間: 約${estimatedTimeBulk}秒（個別転送の場合: 約${estimatedTimeIndividual}秒）"
+    } else {
+        # しきい値未満 → 個別転送（進捗表示あり）
+        $useBulkTransfer = $false
+        Write-Color "[自動選択] 個別転送モード（進捗表示あり）" "Green"
+        Write-Host ""
+        Write-Host "  ファイル数: $fileCount 個（しきい値: $BULK_TRANSFER_THRESHOLD 個未満）"
+        Write-Host "  推定時間: 約${estimatedTimeIndividual}秒"
+    }
 }
 
-# 転送するファイルリスト
-$filesToTransfer = @()
-
-if ($choice -eq "1") {
-    # すべて転送
-    $filesToTransfer = $fileList
-    Write-Color "[選択] すべてのファイルを転送します" "Green"
-
-    # 転送速度オプションを選択
-    Write-Host ""
-    Write-Color "================================================================" "Cyan"
-    Write-Color "転送速度を選択してください" "Cyan"
-    Write-Color "================================================================" "Cyan"
-    Write-Host ""
-    Write-Host " 1. 個別転送（進捗表示あり・低速）"
-    Write-Host " 2. 一括転送（tar圧縮・高速）"
-    Write-Host ""
-    Write-Host " 0. キャンセル"
-    Write-Host ""
-
-    do {
-        $speedChoice = Read-Host "番号を入力 (0-2)"
-        if ($speedChoice -eq "0") {
-            Write-Color "[キャンセル] 処理を中止しました" "Yellow"
-            exit 0
-        }
-    } while ($speedChoice -notin @("1", "2"))
-
-    $useBulkTransfer = ($speedChoice -eq "2")
-    if ($useBulkTransfer) {
-        Write-Color "[選択] 一括転送モード（高速）" "Green"
-    } else {
-        Write-Color "[選択] 個別転送モード（進捗表示）" "Green"
-    }
-
-    # 「すべてのファイル」モードの場合、転送方法を選択
-    if ($transferMode -eq "all") {
-        # 転送ファイルの親ディレクトリを収集（重複排除）
-        $parentDirs = @{}
-        foreach ($file in $filesToTransfer) {
-            $linuxPath = $file.Path.Replace("\", "/")
-            $parentDir = Split-Path $linuxPath -Parent
-            if ($parentDir) {
-                $parentDir = $parentDir.Replace("\", "/")
-            } else {
-                $parentDir = ""  # ルート直下のファイル
-            }
-            $remoteParentDir = "${REMOTE_DIR}${parentDir}".TrimEnd("/")
-            if (-not $parentDirs.ContainsKey($remoteParentDir)) {
-                $parentDirs[$remoteParentDir] = $true
-            }
-        }
-
-        Write-Host ""
-        Write-Color "================================================================" "Cyan"
-        Write-Color "転送方法を選択してください" "Cyan"
-        Write-Color "================================================================" "Cyan"
-        Write-Host ""
-        Write-Host " 1. 上書き転送（既存ファイルを残す）"
-        Write-Host " 2. クリーンアップしてから転送（対象フォルダの中身を削除）"
-        Write-Host ""
-        Write-Host " 0. キャンセル"
-        Write-Host ""
-
-        do {
-            $transferMethod = Read-Host "番号を入力 (0-2)"
-            if ($transferMethod -eq "0") {
-                Write-Color "[キャンセル] 処理を中止しました" "Yellow"
-                exit 0
-            }
-        } while ($transferMethod -notin @("1", "2"))
-
-        if ($transferMethod -eq "2") {
-            Write-Host ""
-            Write-Color "================================================================" "Yellow"
-            Write-Color "  警告: 転送先フォルダのクリーンアップ" "Yellow"
-            Write-Color "================================================================" "Yellow"
-            Write-Host ""
-            Write-Color "以下のフォルダ内のファイルが削除されます:" "Yellow"
-            Write-Host ""
-            Write-Color "削除対象フォルダ:" "Red"
-            foreach ($dir in $parentDirs.Keys | Sort-Object) {
-                Write-Host "  - ${dir}/*"
-            }
-            Write-Host ""
-            Write-Color "※ ファイルのみ再帰的に削除（ディレクトリ構造は残ります）" "Gray"
-            Write-Host ""
-
-            do {
-                $cleanupConfirm = Read-Host "本当にクリーンアップしますか？ (y/n)"
-                $cleanupConfirm = $cleanupConfirm.ToLower()
-            } while ($cleanupConfirm -notin @("y", "n"))
-
-            if ($cleanupConfirm -eq "y") {
-                $doCleanup = $true
-                $cleanupDirs = $parentDirs.Keys
-                Write-Color "[選択] 転送前にクリーンアップを実行します" "Green"
-            } else {
-                $doCleanup = $false
-                Write-Color "[選択] クリーンアップをキャンセルしました（上書きモード）" "Yellow"
-            }
+# 「すべてのファイル」モードの場合、クリーンアップを自動実行
+if ($transferMode -eq "all") {
+    # 転送ファイルの親ディレクトリを収集（重複排除）
+    $parentDirs = @{}
+    foreach ($file in $filesToTransfer) {
+        $linuxPath = $file.Path.Replace("\", "/")
+        $parentDir = Split-Path $linuxPath -Parent
+        if ($parentDir) {
+            $parentDir = $parentDir.Replace("\", "/")
         } else {
-            $doCleanup = $false
-            Write-Color "[選択] 上書きモードで転送します" "Green"
+            $parentDir = ""  # ルート直下のファイル
         }
-    }
-} else {
-    # 個別選択
-    $useBulkTransfer = $false
-    Write-Host ""
-    Write-Color "================================================================" "Cyan"
-    Write-Color "個別ファイル選択" "Cyan"
-    Write-Color "================================================================" "Cyan"
-    Write-Host ""
-
-    foreach ($file in $fileList) {
-        do {
-            $answer = Read-Host "転送: $($file.Path) (y/n)"
-            $answer = $answer.ToLower()
-        } while ($answer -notin @("y", "n"))
-
-        if ($answer -eq "y") {
-            $filesToTransfer += $file
+        $remoteParentDir = "${REMOTE_DIR}${parentDir}".TrimEnd("/")
+        if (-not $parentDirs.ContainsKey($remoteParentDir)) {
+            $parentDirs[$remoteParentDir] = $true
         }
     }
 
-    if ($filesToTransfer.Count -eq 0) {
-        Write-Color "[情報] 転送するファイルが選択されませんでした" "Yellow"
-        exit 0
-    }
+    # クリーンアップ固定
+    $doCleanup = $true
+    $cleanupDirs = $parentDirs.Keys
 
     Write-Host ""
-    Write-Color "[選択] $($filesToTransfer.Count) 個のファイルを転送します" "Green"
+    Write-Color "[自動設定] 転送前にクリーンアップを実行します" "Yellow"
+    Write-Host ""
+    Write-Host "  削除対象フォルダ:"
+    foreach ($dir in $parentDirs.Keys | Sort-Object) {
+        Write-Host "    - ${dir}/*"
+    }
+    Write-Host ""
+    Write-Color "  ※ ファイルのみ再帰的に削除（ディレクトリ構造は残ります）" "Gray"
 }
 
 Write-Host ""
