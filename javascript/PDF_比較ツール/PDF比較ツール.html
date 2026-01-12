@@ -823,8 +823,15 @@
                 // --------------------------------------------------------------------
                 // getDocument: PDF.jsのメイン関数。PDFデータを解析してオブジェクトを作成
                 // disableWorker: Web Workerを無効化（シングルスレッドで処理）
+                // useWorkerFetch: Worker内でのfetchを無効化
+                // isEvalSupported: evalを使用しない（セキュリティ対策）
                 // ※Web Worker無効化の理由: ローカルHTMLファイルでの動作を保証するため
-                const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer, disableWorker: true });
+                const loadingTask = pdfjsLib.getDocument({
+                    data: arrayBuffer,
+                    disableWorker: true,
+                    useWorkerFetch: false,
+                    isEvalSupported: false
+                });
                 
                 // PDFの読み込みが完了するまで待機
                 // ※promise: 非同期処理の結果を表すオブジェクト
