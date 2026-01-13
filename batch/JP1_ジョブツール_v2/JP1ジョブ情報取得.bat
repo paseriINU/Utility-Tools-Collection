@@ -1786,17 +1786,10 @@ switch ($outputMode.ToUpper()) {
         Write-Console "[情報] Excel: $excelFileName / シート: $excelSheetName / セル: $excelPasteCell"
 
         # ------------------------------------------------------------------
-        # STEP 2: yyyymmddフォルダを作成
+        # STEP 2: yyyymmddフォルダを作成（バッチのカレントフォルダ直下）
         # ------------------------------------------------------------------
         $dateFolder = Get-Date -Format "yyyyMMdd"
-        $outputBasePath = Join-Path $scriptDir $outputFolderName
-        $dateFolderPath = Join-Path $outputBasePath $dateFolder
-
-        # outputフォルダが存在しない場合は作成
-        if (-not (Test-Path $outputBasePath)) {
-            New-Item -Path $outputBasePath -ItemType Directory -Force | Out-Null
-            Write-Console "[情報] outputフォルダを作成しました: $outputBasePath"
-        }
+        $dateFolderPath = Join-Path $scriptDir $dateFolder
 
         # yyyymmddフォルダが存在しない場合は作成
         if (-not (Test-Path $dateFolderPath)) {
