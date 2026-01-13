@@ -1767,11 +1767,18 @@ switch ($outputMode.ToUpper()) {
         if (Test-Path $excelPath) {
             try {
                 # ----------------------------------------------------------
-                # ログファイルの内容を読み込み（行ごとに分割）
+                # ログファイルの内容を読み込み
                 # ----------------------------------------------------------
                 # -Encoding Default: Shift-JISで読み込み
-                # 各行を配列として読み込み、別々のセルに貼り付けます
-                $logLines = Get-Content $outputFilePath -Encoding Default
+                # -Raw: ファイル全体を1つの文字列として読み込み
+                $logContent = Get-Content $outputFilePath -Encoding Default -Raw
+
+                # ----------------------------------------------------------
+                # クリップボードにコピー
+                # ----------------------------------------------------------
+                # Excelの通常の貼り付け動作を利用するため、クリップボード経由で貼り付けます
+                # これにより改行区切りのテキストが各行別々のセルに入ります
+                Set-Clipboard -Value $logContent
 
                 # ----------------------------------------------------------
                 # Excel COMオブジェクトの作成
@@ -1804,27 +1811,14 @@ switch ($outputMode.ToUpper()) {
                 # ----------------------------------------------------------
                 # セルにログ内容を貼り付け（各行を別々のセルに）
                 # ----------------------------------------------------------
-                # 開始セルから行数分の範囲に一括で貼り付けます
+                # クリップボードからPasteすることで、各行が自動的に別々のセルに入ります
                 # 例: A1を指定した場合、A1, A2, A3... に各行が入ります
 
-                # 行数を取得
-                $rowCount = $logLines.Count
+                # 貼り付け先のセルを選択
+                $sheet.Range($excelPasteCell).Select()
 
-                # 2次元配列を作成（Excel用）
-                $array = New-Object 'object[,]' $rowCount, 1
-                for ($i = 0; $i -lt $rowCount; $i++) {
-                    $array[$i, 0] = $logLines[$i]
-                }
-
-                # 開始セルから終了セルの範囲を計算
-                # 例: "A1" → 列="A", 行=1 → 終了セル="A100"（100行の場合）
-                $startRow = [int]($excelPasteCell -replace '[A-Za-z]', '')
-                $column = $excelPasteCell -replace '[0-9]', ''
-                $endRow = $startRow + $rowCount - 1
-                $endCell = "$column$endRow"
-
-                # 範囲に配列を一括貼り付け
-                $sheet.Range("$excelPasteCell`:$endCell").Value2 = $array
+                # クリップボードから貼り付け
+                $sheet.Paste()
 
                 # ----------------------------------------------------------
                 # ブックを保存
