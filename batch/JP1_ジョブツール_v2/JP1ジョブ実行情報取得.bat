@@ -95,6 +95,13 @@ function Write-Console {
     [Console]::WriteLine($Message)
 }
 
+# タイトル表示
+Write-Host ""
+Write-Host "================================================================" -ForegroundColor Cyan
+Write-Host "  JP1ジョブ実行情報取得ツール" -ForegroundColor Cyan
+Write-Host "================================================================" -ForegroundColor Cyan
+Write-Host ""
+
 # ==============================================================================
 # ■ 接続設定セクション
 # ==============================================================================
@@ -171,7 +178,7 @@ $pollIntervalSeconds = 5
 $templateFolderName = "【雛形】【コピーして使うこと！】ツール・手順書フォルダ"
 
 # 出力先フォルダ名（スクリプトと同じフォルダに作成）
-$outputFolderName = "output"
+$outputFolderName = "02_output"
 
 # ジョブパスとExcelファイルの紐づけ設定
 # ★ キー: ジョブパス（部分一致で検索）
