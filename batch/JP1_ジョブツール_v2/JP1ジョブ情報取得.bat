@@ -1786,10 +1786,17 @@ switch ($outputMode.ToUpper()) {
         Write-Console "[情報] Excel: $excelFileName / シート: $excelSheetName / セル: $excelPasteCell"
 
         # ------------------------------------------------------------------
-        # STEP 2: yyyymmddフォルダを作成（バッチのカレントフォルダ直下）
+        # STEP 2: 02_output/yyyymmddフォルダを作成
         # ------------------------------------------------------------------
         $dateFolder = Get-Date -Format "yyyyMMdd"
-        $dateFolderPath = Join-Path $scriptDir $dateFolder
+        $outputBasePath = Join-Path $scriptDir $outputFolderName
+        $dateFolderPath = Join-Path $outputBasePath $dateFolder
+
+        # 02_outputフォルダが存在しない場合は作成
+        if (-not (Test-Path $outputBasePath)) {
+            New-Item -Path $outputBasePath -ItemType Directory -Force | Out-Null
+            Write-Console "[情報] 出力フォルダを作成しました: $outputBasePath"
+        }
 
         # yyyymmddフォルダが存在しない場合は作成
         if (-not (Test-Path $dateFolderPath)) {
@@ -1798,28 +1805,30 @@ switch ($outputMode.ToUpper()) {
         }
 
         # ------------------------------------------------------------------
-        # STEP 3: 雛形フォルダをコピー
+        # STEP 3: 雛形フォルダの中身をコピー
         # ------------------------------------------------------------------
         $templatePath = Join-Path $scriptDir $templateFolderName
-        $destTemplatePath = Join-Path $dateFolderPath $templateFolderName
 
         if (-not (Test-Path $templatePath)) {
             Write-Console "[エラー] 雛形フォルダが見つかりません: $templatePath"
             exit 13  # 雛形フォルダ未検出エラー
         }
 
-        # コピー先に雛形フォルダが存在しない場合のみコピー
-        if (-not (Test-Path $destTemplatePath)) {
-            Copy-Item -Path $templatePath -Destination $destTemplatePath -Recurse -Force
-            Write-Console "[情報] 雛形フォルダをコピーしました: $destTemplatePath"
-        } else {
-            Write-Console "[情報] 雛形フォルダは既に存在します: $destTemplatePath"
+        # 雛形フォルダの中身をyyyymmddフォルダに直接コピー
+        # （雛形フォルダ自体はコピーせず、中のファイルのみ）
+        $templateItems = Get-ChildItem -Path $templatePath
+        foreach ($item in $templateItems) {
+            $destPath = Join-Path $dateFolderPath $item.Name
+            if (-not (Test-Path $destPath)) {
+                Copy-Item -Path $item.FullName -Destination $destPath -Recurse -Force
+            }
         }
+        Write-Console "[情報] 雛形フォルダの中身をコピーしました: $dateFolderPath"
 
         # ------------------------------------------------------------------
         # STEP 4: Excelファイルにログを貼り付け
         # ------------------------------------------------------------------
-        $excelPath = Join-Path $destTemplatePath $excelFileName
+        $excelPath = Join-Path $dateFolderPath $excelFileName
 
         if (-not (Test-Path $excelPath)) {
             Write-Console "[エラー] Excelファイルが見つかりません: $excelPath"
