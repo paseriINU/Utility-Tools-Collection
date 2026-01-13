@@ -10,7 +10,7 @@ rem このファイルはバッチファイルとPowerShellスクリプトの両
 rem 引数にユニットパスを指定して実行してください。
 rem
 rem 使い方:
-rem   JP1ジョブ実行.bat "ジョブパス"
+rem   JP1ジョブ実行情報取得.bat "ジョブパス"
 rem
 rem 出力オプション（環境変数 JP1_OUTPUT_MODE で指定、必須）:
 rem   /NOTEPAD  - メモ帳で開く
@@ -54,7 +54,7 @@ exit /b %EXITCODE%
 #
 # 使い方:
 #   ジョブのパスを指定して実行します:
-#     JP1ジョブ実行.bat "/JobGroup/Jobnet/Job1"
+#     JP1ジョブ実行情報取得.bat "/JobGroup/Jobnet/Job1"
 #
 #   ※ ルートジョブネットを自動特定して即時実行し、指定ジョブの完了を待ちます
 #
@@ -90,10 +90,9 @@ exit /b %EXITCODE%
 [Console]::OutputEncoding = [System.Text.Encoding]::GetEncoding(932)
 
 # コンソールに直接出力する関数（ファイルリダイレクトの影響を受けない）
-# CONデバイスに書き込むことで、バッチファイルのリダイレクト（> file）を回避
 function Write-Console {
     param([string]$Message)
-    $Message | Out-File -FilePath "CON" -Encoding Default
+    [Console]::WriteLine($Message)
 }
 
 # ==============================================================================
@@ -704,12 +703,29 @@ try {
             }
             if (Test-Path $excelPath) {
                 try {
-                    $logContent = Get-Content $outputFilePath -Encoding Default -Raw
+                    # ログを行ごとに読み込み（各行を別々のセルに貼り付け）
+                    $logLines = Get-Content $outputFilePath -Encoding Default
                     $excel = New-Object -ComObject Excel.Application
                     $excel.Visible = $true
                     $workbook = $excel.Workbooks.Open($excelPath)
                     $sheet = $workbook.Worksheets.Item($excelSheetName)
-                    $sheet.Range($excelPasteCell).Value2 = $logContent
+
+                    # 行数を取得して2次元配列を作成
+                    $rowCount = $logLines.Count
+                    $array = New-Object 'object[,]' $rowCount, 1
+                    for ($i = 0; $i -lt $rowCount; $i++) {
+                        $array[$i, 0] = $logLines[$i]
+                    }
+
+                    # 開始セルから終了セルの範囲を計算
+                    $startRow = [int]($excelPasteCell -replace '[A-Za-z]', '')
+                    $column = $excelPasteCell -replace '[0-9]', ''
+                    $endRow = $startRow + $rowCount - 1
+                    $endCell = "$column$endRow"
+
+                    # 範囲に配列を一括貼り付け
+                    $sheet.Range("$excelPasteCell`:$endCell").Value2 = $array
+
                     $workbook.Save()
                     [System.Runtime.Interopservices.Marshal]::ReleaseComObject($sheet) | Out-Null
                     [System.Runtime.Interopservices.Marshal]::ReleaseComObject($workbook) | Out-Null
