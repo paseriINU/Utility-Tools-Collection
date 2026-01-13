@@ -13,9 +13,7 @@ rem 使い方（単一ジョブ）:
 rem   JP1ジョブ実行情報取得.bat "ジョブパス"
 rem
 rem 使い方（複数ジョブ - 同一ジョブネット内）:
-rem   set "JP1_UNIT_PATH_1=ジョブパス1"
-rem   set "JP1_UNIT_PATH_2=ジョブパス2"
-rem   JP1ジョブ実行情報取得.bat
+rem   JP1ジョブ実行情報取得.bat "ジョブパス1" "ジョブパス2"
 rem
 rem 出力オプション（環境変数 JP1_OUTPUT_MODE で指定、必須）:
 rem   /NOTEPAD  - メモ帳で開く
@@ -23,23 +21,24 @@ rem   /EXCEL    - Excelに貼り付け
 rem   /WINMERGE - WinMergeで比較
 rem ============================================================================
 
-rem 引数チェック: 引数がある場合は単一ジョブモード
-if not "%~1"=="" (
+rem 引数がない場合はエラー
+if "%~1"=="" exit /b 1
+
+rem 出力オプションは環境変数 JP1_OUTPUT_MODE から取得（必須）
+if "%JP1_OUTPUT_MODE%"=="" exit /b 1
+
+rem 引数を環境変数に設定（PowerShellに渡すため）
+if not "%~2"=="" (
+    rem 複数ジョブモード（2つの引数）
+    set "JP1_UNIT_PATH="
+    set "JP1_UNIT_PATH_1=%~1"
+    set "JP1_UNIT_PATH_2=%~2"
+) else (
+    rem 単一ジョブモード（1つの引数）
     set "JP1_UNIT_PATH=%~1"
     set "JP1_UNIT_PATH_1="
     set "JP1_UNIT_PATH_2="
 )
-
-rem 複数ジョブモード: JP1_UNIT_PATH_1が設定されている場合
-if not "%JP1_UNIT_PATH_1%"=="" (
-    set "JP1_UNIT_PATH="
-)
-
-rem どちらも設定されていない場合はエラー
-if "%JP1_UNIT_PATH%"=="" if "%JP1_UNIT_PATH_1%"=="" exit /b 1
-
-rem 出力オプションは環境変数 JP1_OUTPUT_MODE から取得（必須）
-if "%JP1_OUTPUT_MODE%"=="" exit /b 1
 
 rem UNCパス対応（PushD/PopDで自動マッピング）
 pushd "%~dp0"
@@ -72,9 +71,7 @@ exit /b %EXITCODE%
 #     JP1ジョブ実行情報取得.bat "/JobGroup/Jobnet/Job1"
 #
 #   複数ジョブモード（同一ジョブネット内）:
-#     set "JP1_UNIT_PATH_1=/JobGroup/Jobnet/Job1"
-#     set "JP1_UNIT_PATH_2=/JobGroup/Jobnet/Job2"
-#     JP1ジョブ実行情報取得.bat
+#     JP1ジョブ実行情報取得.bat "/JobGroup/Jobnet/Job1" "/JobGroup/Jobnet/Job2"
 #
 # 処理フロー:
 #   STEP 1: DEFINITION で存在確認・ユニット種別確認（全ジョブ）
