@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>PDF.js CDNテスト</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <style>
+        body { font-family: sans-serif; padding: 20px; }
+        #dropZone {
+            border: 2px dashed #ccc;
+            padding: 50px;
+            text-align: center;
+            margin: 20px 0;
+        }
+        #dropZone.dragover { border-color: #4caf50; background: #e8f5e9; }
+        #result { margin-top: 20px; padding: 10px; background: #f5f5f5; }
+    </style>
+</head>
+<body>
+    <h1>PDF.js CDNテスト</h1>
+    <p>ライブラリ状態: <span id="status">確認中...</span></p>
+
+    <div id="dropZone">
+        PDFファイルをここにドロップ
+    </div>
+
+    <div id="result"></div>
+
+    <script>
+        // PDF.js初期化
+        if (typeof pdfjsLib !== 'undefined') {
+            pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+            document.getElementById('status').textContent = 'OK (CDN)';
+            document.getElementById('status').style.color = 'green';
+        } else {
+            document.getElementById('status').textContent = 'エラー';
+            document.getElementById('status').style.color = 'red';
+        }
+
+        // ドラッグ&ドロップ
+        const dropZone = document.getElementById('dropZone');
+        const result = document.getElementById('result');
+
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('dragover');
+        });
+
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('dragover');
+        });
+
+        dropZone.addEventListener('drop', async (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+
+            const file = e.dataTransfer.files[0];
+            if (!file || !file.name.endsWith('.pdf')) {
+                result.textContent = 'PDFファイルをドロップしてください';
+                return;
+            }
+
+            result.textContent = '読み込み中...';
+            console.log('[DEBUG] ファイル読み込み開始', { name: file.name, size: file.size });
+
+            try {
+                const arrayBuffer = await file.arrayBuffer();
+                console.log('[DEBUG] ArrayBuffer完了', { byteLength: arrayBuffer.byteLength });
+
+                console.log('[DEBUG] getDocument呼び出し');
+                const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+
+                loadingTask.onProgress = (progress) => {
+                    console.log('[DEBUG] 進捗:', progress.loaded, '/', progress.total);
+                };
+
+                console.log('[DEBUG] promise待機開始');
+                const pdf = await loadingTask.promise;
+                console.log('[DEBUG] PDF読み込み完了', { numPages: pdf.numPages });
+
+                result.textContent = '成功! ファイル: ' + file.name + ' / ページ数: ' + pdf.numPages;
+                result.style.background = '#e8f5e9';
+            } catch (err) {
+                console.error('[ERROR]', err);
+                result.textContent = 'エラー: ' + err.message;
+                result.style.background = '#ffebee';
+            }
+        });
+    </script>
+</body>
+</html>
