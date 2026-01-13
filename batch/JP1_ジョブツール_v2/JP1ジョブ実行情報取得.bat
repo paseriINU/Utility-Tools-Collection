@@ -163,22 +163,6 @@ $timeoutSeconds = 3600
 # ★ デフォルト: 5秒
 $pollIntervalSeconds = 5
 
-# ------------------------------------------------------------------------------
-# Excel貼り付け設定（/EXCEL オプション使用時）
-# ------------------------------------------------------------------------------
-# Excelファイルパスを指定します。
-# ・相対パス: スクリプトと同じフォルダからの相対パス
-# ・フルパス: 絶対パスで指定
-# ・空欄の場合: 環境変数 EXCEL_FILE_NAME から取得（呼び出し元で設定）
-# 例: "ログ貼り付け用.xlsx" または "C:\Users\Documents\ログ.xlsx"
-$excelFileNameSetting = ""
-
-# 貼り付け先シート名（空欄の場合は "Sheet1"）
-$excelSheetNameSetting = ""
-
-# 貼り付け先セル位置（空欄の場合は "A1"）
-$excelPasteCellSetting = ""
-
 # ==============================================================================
 # ■ メイン処理（以下は通常編集不要）
 # ==============================================================================
@@ -676,22 +660,22 @@ try {
         }
         "/EXCEL" {
             # Excelに貼り付け
-            # 設定セクションの値を優先、なければ環境変数から取得
-            $excelFileName = if ($excelFileNameSetting) { $excelFileNameSetting } else { $env:EXCEL_FILE_NAME }
-            $excelSheetName = if ($excelSheetNameSetting) { $excelSheetNameSetting } else { $env:EXCEL_SHEET_NAME }
-            $excelPasteCell = if ($excelPasteCellSetting) { $excelPasteCellSetting } else { $env:EXCEL_PASTE_CELL }
+            # 環境変数から設定を取得（呼び出し元で設定）
+            $excelFileName = $env:EXCEL_FILE_NAME
+            $excelSheetName = $env:EXCEL_SHEET_NAME
+            $excelPasteCell = $env:EXCEL_PASTE_CELL
 
             # Excel設定の検証（必須項目チェック）
             if (-not $excelFileName) {
-                Write-Console "[エラー] Excel設定が未設定です。設定セクションの excelFileNameSetting を設定してください。"
+                Write-Console "[エラー] Excel設定が未設定です。環境変数 EXCEL_FILE_NAME を設定してください。"
                 exit 10  # Excel設定エラー
             }
             if (-not $excelSheetName) {
-                Write-Console "[エラー] Excelシート名が未設定です。設定セクションの excelSheetNameSetting を設定してください。"
+                Write-Console "[エラー] Excelシート名が未設定です。環境変数 EXCEL_SHEET_NAME を設定してください。"
                 exit 10  # Excel設定エラー
             }
             if (-not $excelPasteCell) {
-                Write-Console "[エラー] Excel貼り付けセルが未設定です。設定セクションの excelPasteCellSetting を設定してください。"
+                Write-Console "[エラー] Excel貼り付けセルが未設定です。環境変数 EXCEL_PASTE_CELL を設定してください。"
                 exit 10  # Excel設定エラー
             }
 
