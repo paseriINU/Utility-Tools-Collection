@@ -762,14 +762,10 @@ $baseUrl = "${protocol}://${webConsoleHost}:${webConsolePort}/ajs/api/v1"
 # このスクリプトが別のスクリプトから呼ばれた場合、
 # 標準出力がファイルにリダイレクト（> output.txt）されることがあります。
 # その場合でも、進捗メッセージは画面に表示したいため、
-# 特殊なデバイス名「CON」に書き込んでリダイレクトを回避しています。
-#
-# 【CONデバイスとは？】
-# Windowsでは「CON」は「コンソール（画面）」を表す特殊なファイル名です。
-# ここに書き込むと、常に画面に表示されます。
+# [Console]::WriteLine() を使用してリダイレクトを回避しています。
 function Write-Console {
     param([string]$Message)
-    $Message | Out-File -FilePath "CON" -Encoding Default
+    [Console]::WriteLine($Message)
 }
 
 # ------------------------------------------------------------------------------
