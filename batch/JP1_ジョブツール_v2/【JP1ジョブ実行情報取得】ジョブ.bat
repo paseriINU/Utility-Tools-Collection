@@ -6,7 +6,7 @@ rem ============================================================================
 rem JP1 ジョブ実行
 rem
 rem 説明:
-rem   JP1ジョブ実行.bat を呼び出し、ジョブを即時実行してログを取得します。
+rem   JP1ジョブ実行情報取得.bat を呼び出し、ジョブを即時実行してログを取得します。
 rem
 rem 使い方:
 rem   1. 下記の UNIT_PATH を実行したいジョブのパスに変更
@@ -52,7 +52,7 @@ rem UNCパス対応
 pushd "%~dp0"
 
 rem メインツールを呼び出し
-call "JP1ジョブ実行.bat" "%UNIT_PATH%"
+call "JP1ジョブ実行情報取得.bat" "%UNIT_PATH%"
 
 set "EXITCODE=%ERRORLEVEL%"
 
