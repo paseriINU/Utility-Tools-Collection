@@ -927,9 +927,9 @@ if ($isCompareMode) {
         $waitTargetStatusDisplay = Get-StatusDisplayName -status $waitTargetStatus.Status
 
         if ($isRunning1 -and $isRunning2) {
-            Write-Console "COMPARE_INFO:両方のジョブが実行中です。$unitPath の終了を待機します"
+            Write-Console "[情報] 両方のジョブが実行中です。$unitPath の終了を待機します"
         } else {
-            Write-Console "COMPARE_INFO:実行中のジョブを検出しました - $waitTargetPath の終了を待機します"
+            Write-Console "[情報] 実行中のジョブがあります - $waitTargetPath の終了を待機します"
         }
 
         # 待機ループ
@@ -938,14 +938,18 @@ if ($isCompareMode) {
         while ($stillRunning) {
             # 最大待機秒数を超えた場合はエラー終了
             if ($waitedSeconds -ge $maxWaitSeconds) {
-                [Console]::WriteLine("RUNNING_ERROR:実行中のジョブが検出されました（待機タイムアウト）")
-                [Console]::WriteLine("RUNNING_JOB:$waitTargetPath（ステータス: ${waitTargetStatusDisplay}, 開始日時: $($waitTargetStatus.StartTime)）")
-                [Console]::WriteLine("WAIT_TIMEOUT:${maxWaitSeconds}秒待機しましたが、ジョブが終了しませんでした")
+                Write-Host ""
+                Write-Host "[タイムアウト] 待機時間を超過しました" -ForegroundColor Red
+                Write-Host "  ジョブ: $waitTargetPath"
+                Write-Host "  ステータス: ${waitTargetStatusDisplay}"
+                Write-Host "  開始日時: $($waitTargetStatus.StartTime)"
+                Write-Host "  待機時間: ${maxWaitSeconds}秒"
+                Write-Host ""
                 exit 11  # 実行中のジョブが検出された（タイムアウト）
             }
 
-            Write-Console "WAITING:実行中のジョブを検出しました。終了を待機しています...（${waitedSeconds}/${maxWaitSeconds}秒）"
-            Write-Console "WAITING_JOB:$waitTargetPath（ステータス: ${waitTargetStatusDisplay}, 開始日時: $($waitTargetStatus.StartTime), execID: ${waitingExecId}）"
+            Write-Console "[待機中] ジョブ終了を待っています...（${waitedSeconds}/${maxWaitSeconds}秒）"
+            Write-Console "         $waitTargetPath（${waitTargetStatusDisplay}）"
 
             Start-Sleep -Seconds $checkIntervalSeconds
             $waitedSeconds += $checkIntervalSeconds
@@ -954,7 +958,7 @@ if ($isCompareMode) {
             $recheckStatus = Get-JobRunningStatus -jobPath $waitTargetPath
             if (-not $recheckStatus -or -not $recheckStatus.IsRunning) {
                 $stillRunning = $false
-                Write-Console "WAIT_COMPLETE:ジョブの終了を確認しました（${waitedSeconds}秒待機、execID: ${waitingExecId}）"
+                Write-Console "[完了] ジョブが終了しました（${waitedSeconds}秒待機）"
             } else {
                 $waitTargetStatusDisplay = Get-StatusDisplayName -status $recheckStatus.Status
             }
@@ -970,9 +974,9 @@ if ($isCompareMode) {
         } else {
             $rejectedPath = $originalUnitPath
         }
-        $rejectedTime = "(実行中ジョブを優先)"
+        $rejectedTime = "(実行中のジョブを優先)"
 
-        Write-Console "INFO:待機していたジョブのexecID（${waitingExecId}）を使用してログを取得します"
+        Write-Console "[情報] 待機していたジョブのログを取得します"
     } else {
         # どちらも実行中でない場合はSTART_TIMEで比較
         function Get-JobStartTime {
@@ -1317,15 +1321,19 @@ while ($isRunning) {
 
             # 最大待機秒数を超えた場合はエラー終了
             if ($waitedSeconds -ge $maxWaitSeconds) {
-                [Console]::WriteLine("RUNNING_ERROR:実行中のジョブが検出されました（待機タイムアウト）")
-                [Console]::WriteLine("RUNNING_JOB:$unitPath（ステータス: ${runningStatusDisplay}, 開始日時: ${runningStartTime}）")
-                [Console]::WriteLine("WAIT_TIMEOUT:${maxWaitSeconds}秒待機しましたが、ジョブが終了しませんでした")
+                Write-Host ""
+                Write-Host "[タイムアウト] 待機時間を超過しました" -ForegroundColor Red
+                Write-Host "  ジョブ: $unitPath"
+                Write-Host "  ステータス: ${runningStatusDisplay}"
+                Write-Host "  開始日時: ${runningStartTime}"
+                Write-Host "  待機時間: ${maxWaitSeconds}秒"
+                Write-Host ""
                 exit 11  # 実行中のジョブが検出された（タイムアウト）
             }
 
             # 待機中メッセージを出力（コンソールへ直接表示）
-            Write-Console "WAITING:実行中のジョブを検出しました。終了を待機しています...（${waitedSeconds}/${maxWaitSeconds}秒）"
-            Write-Console "WAITING_JOB:$unitPath（ステータス: ${runningStatusDisplay}, 開始日時: ${runningStartTime}, execID: ${waitingExecId}）"
+            Write-Console "[待機中] ジョブ終了を待っています...（${waitedSeconds}/${maxWaitSeconds}秒）"
+            Write-Console "         $unitPath（${runningStatusDisplay}）"
 
             # 指定秒数待機
             Start-Sleep -Seconds $checkIntervalSeconds
@@ -1336,7 +1344,7 @@ while ($isRunning) {
 
             # 待機していた場合は完了メッセージを出力
             if ($waitedSeconds -gt 0) {
-                Write-Console "WAIT_COMPLETE:ジョブの終了を確認しました（${waitedSeconds}秒待機、execID: ${waitingExecId}）"
+                Write-Console "[完了] ジョブが終了しました（${waitedSeconds}秒待機）"
             }
         }
     } catch {
@@ -1568,19 +1576,6 @@ if ($execIdList.Count -gt 0) {
             # 実行結果詳細をファイルに出力
             $execResultContent | Out-File -FilePath $outputFilePath -Encoding Default
 
-            # メタデータを標準出力に出力（後方互換性のため）
-            if ($selectedPath) {
-                [Console]::WriteLine("SELECTED_PATH:$selectedPath")
-                [Console]::WriteLine("SELECTED_TIME:$selectedTime")
-                [Console]::WriteLine("REJECTED_PATH:$rejectedPath")
-                [Console]::WriteLine("REJECTED_TIME:$rejectedTime")
-            }
-            [Console]::WriteLine("START_TIME:$startTimeForFileName")
-            [Console]::WriteLine("END_STATUS:$endStatusDisplay")
-            [Console]::WriteLine("JOBNET_NAME:$jobnetName")
-            [Console]::WriteLine("JOBNET_COMMENT:$jobnetComment")
-            [Console]::WriteLine("OUTPUT_FILE:$outputFilePath")
-
         } catch {
             exit 6  # 詳細取得エラー
         }
@@ -1592,15 +1587,17 @@ if ($execIdList.Count -gt 0) {
 # ------------------------------------------------------------------------------
 if ($selectedPath) {
     Write-Host ""
-    Write-Host "================================================================" -ForegroundColor Yellow
-    Write-Host "  [比較結果] 新しい方のジョブを選択しました" -ForegroundColor Yellow
-    Write-Host "================================================================" -ForegroundColor Yellow
+    Write-Host "----------------------------------------------------------------" -ForegroundColor Cyan
+    Write-Host "  比較結果" -ForegroundColor Cyan
+    Write-Host "----------------------------------------------------------------" -ForegroundColor Cyan
     Write-Host ""
-    Write-Host "  [選択] $selectedPath"
-    Write-Host "         開始日時: $selectedTime"
+    Write-Host "  新しい方のジョブを選択しました"
     Write-Host ""
-    Write-Host "  [除外] $rejectedPath"
-    Write-Host "         開始日時: $rejectedTime"
+    Write-Host "    選択: $selectedPath" -ForegroundColor Green
+    Write-Host "          開始日時: $selectedTime"
+    Write-Host ""
+    Write-Host "    除外: $rejectedPath" -ForegroundColor DarkGray
+    Write-Host "          開始日時: $rejectedTime"
     Write-Host ""
     Write-Host "  続行する場合は任意のキーを押してください..."
     Write-Host ""
@@ -1608,7 +1605,7 @@ if ($selectedPath) {
 }
 
 # ------------------------------------------------------------------------------
-# 2日以上前の警告チェック
+# 2日以上前のお知らせ
 # ------------------------------------------------------------------------------
 if ($startTimeForFileName) {
     try {
@@ -1616,13 +1613,15 @@ if ($startTimeForFileName) {
         $daysDiff = ((Get-Date) - $dt).TotalDays
         if ($daysDiff -ge 2) {
             Write-Host ""
-            Write-Host "================================================================" -ForegroundColor Yellow
-            Write-Host "  [警告] ジョブ開始日時が2日以上前です" -ForegroundColor Yellow
-            Write-Host "================================================================" -ForegroundColor Yellow
+            Write-Host "----------------------------------------------------------------" -ForegroundColor Cyan
+            Write-Host "  ご確認ください" -ForegroundColor Cyan
+            Write-Host "----------------------------------------------------------------" -ForegroundColor Cyan
             Write-Host ""
-            Write-Host "  ジョブ開始日時: $startTimeForFileName"
+            Write-Host "  ジョブ開始日時が2日以上前です"
             Write-Host ""
-            Write-Host "  意図した世代のログか確認してください。"
+            Write-Host "    開始日時: $startTimeForFileName"
+            Write-Host ""
+            Write-Host "  意図した世代のログかご確認ください。"
             Write-Host "  続行する場合は任意のキーを押してください..."
             Write-Host ""
             $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
