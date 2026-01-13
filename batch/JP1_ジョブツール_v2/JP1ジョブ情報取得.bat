@@ -24,10 +24,10 @@ rem   このファイルは直接実行せず、呼び出し元のバッチフ�
 rem
 rem   呼び出し元での設定例:
 rem     set "JP1_OUTPUT_MODE=/NOTEPAD"
-rem     call JP1ジョブログ取得.bat "/JobGroup/Jobnet/Job1"
+rem     call JP1ジョブ情報取得.bat "/JobGroup/Jobnet/Job1"
 rem
 rem   2つのジョブを比較して新しい方を取得する場合:
-rem     call JP1ジョブログ取得.bat "/JobGroup/Jobnet/Job1" "/JobGroup/Jobnet/Job2"
+rem     call JP1ジョブ情報取得.bat "/JobGroup/Jobnet/Job1" "/JobGroup/Jobnet/Job2"
 rem
 rem 【出力オプション】（環境変数 JP1_OUTPUT_MODE で指定、必須）
 rem   /NOTEPAD  - 取得したログをメモ帳で開きます
@@ -134,10 +134,10 @@ exit /b %EXITCODE%
 #   このファイルは直接実行せず、呼び出し元のバッチファイルから使用します。
 #
 #   基本的な使い方（1つのジョブを取得）:
-#     JP1ジョブログ取得.bat "/JobGroup/Jobnet/Job1"
+#     JP1ジョブ情報取得.bat "/JobGroup/Jobnet/Job1"
 #
 #   比較モード（2つのジョブを比較して新しい方を取得）:
-#     JP1ジョブログ取得.bat "/JobGroup/Jobnet/Job1" "/JobGroup/Jobnet/Job2"
+#     JP1ジョブ情報取得.bat "/JobGroup/Jobnet/Job1" "/JobGroup/Jobnet/Job2"
 #     ※ 両方のジョブの開始時刻を比較し、新しい方のログを取得します
 #
 # 【処理フロー】
@@ -541,7 +541,7 @@ $unitPath2 = $env:JP1_UNIT_PATH_2
 #
 # 【使用例】
 # 同じ処理を行う2つのジョブがあり、どちらか新しい方のログが欲しい場合:
-#   JP1ジョブログ取得.bat "/日次バッチ/集計A" "/日次バッチ/集計B"
+#   JP1ジョブ情報取得.bat "/日次バッチ/集計A" "/日次バッチ/集計B"
 $isCompareMode = $false
 if ($unitPath2 -and $unitPath2.Trim() -ne "") {
     $isCompareMode = $true
@@ -834,7 +834,7 @@ function Get-StatusDisplayName {
 # 【使用例】
 # 例えば、同じ処理を行う2つのジョブがあり、
 # どちらか片方が実行されたときにそのログを見たい場合:
-#   JP1ジョブログ取得.bat "/日次バッチ/東京/売上集計" "/日次バッチ/大阪/売上集計"
+#   JP1ジョブ情報取得.bat "/日次バッチ/東京/売上集計" "/日次バッチ/大阪/売上集計"
 #   → 直近で実行された方のログを自動で取得
 # ==============================================================================
 

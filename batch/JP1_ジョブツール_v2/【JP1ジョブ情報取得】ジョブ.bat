@@ -6,7 +6,7 @@ rem ============================================================================
 rem JP1 標準ログ
 rem
 rem 説明:
-rem   JP1ジョブログ取得.bat を呼び出し、ジョブのログを取得します。
+rem   JP1ジョブ情報取得.bat を呼び出し、ジョブのログを取得します。
 rem
 rem 使い方:
 rem   1. 下記の UNIT_PATH を取得したいジョブのパスに変更
@@ -56,7 +56,7 @@ rem UNCパス対応
 pushd "%~dp0"
 
 rem メインツールを呼び出し
-call "JP1ジョブログ取得.bat" "%UNIT_PATH%" "%UNIT_PATH_2%"
+call "JP1ジョブ情報取得.bat" "%UNIT_PATH%" "%UNIT_PATH_2%"
 
 set "EXITCODE=%ERRORLEVEL%"
 
