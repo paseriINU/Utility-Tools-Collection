@@ -1841,11 +1841,12 @@ switch ($outputMode.ToUpper()) {
     }
     "/WINMERGE" {
         # ======================================================================
-        # WinMerge比較処理
+        # WinMerge比較処理（キーワード抽出機能付き）
         # ======================================================================
         # 【処理概要】
-        # WinMergeを使用してログファイルを比較表示します。
-        # WinMergeがインストールされている必要があります。
+        # ログファイルから指定したキーワード間のテキストを抽出し、
+        # WinMergeで比較表示します。
+        # キーワードが見つからない場合は元のログファイルを開きます。
         # ======================================================================
 
         # WinMergeの実行ファイルパス（デフォルトのインストール先）
@@ -1853,9 +1854,85 @@ switch ($outputMode.ToUpper()) {
 
         # WinMergeが存在するか確認
         if (Test-Path $winMergePath) {
-            # WinMergeを起動してログファイルを開く
-            Start-Process $winMergePath -ArgumentList "`"$outputFilePath`""
-            Write-Console "[完了] WinMergeでファイルを開きました"
+            # ----------------------------------------------------------
+            # キーワード抽出設定
+            # ----------------------------------------------------------
+            # StartKeyword: 抽出開始キーワード（この行から抽出開始）
+            # EndKeyword: 抽出終了キーワード（この行まで抽出）
+            # OutputSuffix: 出力ファイル名のサフィックス
+            $extractPairs = @(
+                @{
+                    StartKeyword = "#パッチ適用前チェック"
+                    EndKeyword = "#パッチ適用"
+                    OutputSuffix = "_データパッチ前.txt"
+                },
+                @{
+                    StartKeyword = "#パッチ適用後チェック"
+                    EndKeyword = "#トランザクション処理"
+                    OutputSuffix = "_データパッチ後.txt"
+                }
+            )
+
+            $extractedFiles = @()
+
+            # ログファイルを読み込み
+            $logLines = Get-Content -Path $outputFilePath -Encoding Default
+
+            foreach ($pair in $extractPairs) {
+                $startKeyword = $pair.StartKeyword
+                $endKeyword = $pair.EndKeyword
+                $outputSuffix = $pair.OutputSuffix
+
+                # 出力ファイルパスを作成（元ファイル名 + サフィックス）
+                $baseName = [System.IO.Path]::GetFileNameWithoutExtension($outputFilePath)
+                $extractedFile = Join-Path $outputFolder ($baseName + $outputSuffix)
+
+                # ----------------------------------------------------------
+                # キーワード間のテキスト抽出処理
+                # ----------------------------------------------------------
+                $inSection = $false
+                $extractedContent = @()
+
+                foreach ($line in $logLines) {
+                    # 開始キーワードを検出したら抽出開始
+                    if ($line -like "*$startKeyword*") {
+                        $inSection = $true
+                    }
+                    # 抽出中なら行を追加
+                    if ($inSection) {
+                        $extractedContent += $line
+                    }
+                    # 終了キーワードを検出したら抽出終了
+                    if ($line -like "*$endKeyword*" -and $inSection) {
+                        $inSection = $false
+                        break
+                    }
+                }
+
+                # 抽出結果をファイルに保存
+                if ($extractedContent.Count -gt 0) {
+                    $extractedContent | Out-File -FilePath $extractedFile -Encoding Default
+                    $extractedFiles += $extractedFile
+                    Write-Console "[完了] キーワード抽出: $extractedFile"
+                }
+            }
+
+            # ----------------------------------------------------------
+            # WinMergeで比較
+            # ----------------------------------------------------------
+            if ($extractedFiles.Count -eq 2) {
+                # 2つのファイルが作成された場合は比較モード
+                Start-Process $winMergePath -ArgumentList "`"$($extractedFiles[0])`" `"$($extractedFiles[1])`""
+                Write-Console "[完了] WinMergeで比較を開きました"
+            } elseif ($extractedFiles.Count -eq 1) {
+                # 1つのファイルのみ作成された場合
+                Start-Process $winMergePath -ArgumentList "`"$($extractedFiles[0])`""
+                Write-Console "[完了] WinMergeでファイルを開きました"
+            } else {
+                # キーワードが見つからない場合は元のログファイルを開く
+                Start-Process $winMergePath -ArgumentList "`"$outputFilePath`""
+                Write-Console "[情報] キーワードが見つからないため、元のログを開きました"
+            }
         } else {
             Write-Console "[エラー] WinMergeが見つかりません: $winMergePath"
             Write-Console "        WinMergeをインストールするか、パスを確認してください。"
