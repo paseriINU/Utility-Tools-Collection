@@ -1,5 +1,5 @@
 @echo off
-title JP1 ジャーナル実行情報取得
+title %~n0
 setlocal enabledelayedexpansion
 
 rem ============================================================================
