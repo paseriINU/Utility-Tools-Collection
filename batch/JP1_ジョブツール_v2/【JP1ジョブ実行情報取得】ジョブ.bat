@@ -11,7 +11,8 @@ rem
 rem 使い方:
 rem   1. 下記の UNIT_PATH を実行したいジョブのパスに変更
 rem   2. 下記の JP1_OUTPUT_MODE を設定
-rem   3. このバッチをダブルクリックで実行
+rem   3. /EXCEL使用時は JP1ジョブ実行情報取得.bat の $jobExcelMapping を設定
+rem   4. このバッチをダブルクリックで実行
 rem ============================================================================
 
 rem === ここを編集してください ===
@@ -22,29 +23,14 @@ set "UNIT_PATH=/JobGroup/Jobnet/Job1"
 
 rem 出力オプション
 rem   /NOTEPAD  - メモ帳で開く
-rem   /EXCEL    - Excelに貼り付け
+rem   /EXCEL    - Excelに貼り付け（JP1ジョブ実行情報取得.batの$jobExcelMappingで設定）
 rem   /WINMERGE - WinMergeで比較
 set "JP1_OUTPUT_MODE=/NOTEPAD"
 
 rem スクロール位置の設定（/NOTEPAD モード時のみ有効）
 rem メモ帳で開いた後、指定した文字列を含む行に自動でジャンプします
-rem 事前に行番号を特定し、Ctrl+Gで移動するため検索窓は開きません
 rem 空欄の場合はスクロールせずにファイル先頭を表示します
-rem 例: "エラー", "ERROR", "RC=", "異常終了" など
 set "JP1_SCROLL_TO_TEXT="
-
-rem Excel貼り付け設定（/EXCEL モード時のみ有効）
-rem Excelファイルパス（相対パスまたはフルパス）
-rem 例: "ログ貼り付け用.xlsx" または "C:\Users\Documents\ログ.xlsx"
-set "EXCEL_FILE_NAME="
-
-rem 貼り付け先シート名
-rem 例: "Sheet1", "ログ貼り付け" など
-set "EXCEL_SHEET_NAME="
-
-rem 貼り付け先セル位置
-rem 例: "A1", "B2" など
-set "EXCEL_PASTE_CELL="
 
 rem ===================================
 
