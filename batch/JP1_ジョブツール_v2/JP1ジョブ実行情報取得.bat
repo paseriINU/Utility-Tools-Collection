@@ -9,8 +9,13 @@ rem ============================================================================
 rem このファイルはバッチファイルとPowerShellスクリプトの両方として動作します。
 rem 引数にユニットパスを指定して実行してください。
 rem
-rem 使い方:
+rem 使い方（単一ジョブ）:
 rem   JP1ジョブ実行情報取得.bat "ジョブパス"
+rem
+rem 使い方（複数ジョブ - 同一ジョブネット内）:
+rem   set "JP1_UNIT_PATH_1=ジョブパス1"
+rem   set "JP1_UNIT_PATH_2=ジョブパス2"
+rem   JP1ジョブ実行情報取得.bat
 rem
 rem 出力オプション（環境変数 JP1_OUTPUT_MODE で指定、必須）:
 rem   /NOTEPAD  - メモ帳で開く
@@ -18,11 +23,20 @@ rem   /EXCEL    - Excelに貼り付け
 rem   /WINMERGE - WinMergeで比較
 rem ============================================================================
 
-rem 引数チェック: 引数が空の場合はエラーコード1で終了
-if "%~1"=="" exit /b 1
+rem 引数チェック: 引数がある場合は単一ジョブモード
+if not "%~1"=="" (
+    set "JP1_UNIT_PATH=%~1"
+    set "JP1_UNIT_PATH_1="
+    set "JP1_UNIT_PATH_2="
+)
 
-rem 第1引数（ジョブパス）を環境変数に設定（PowerShellに渡すため）
-set "JP1_UNIT_PATH=%~1"
+rem 複数ジョブモード: JP1_UNIT_PATH_1が設定されている場合
+if not "%JP1_UNIT_PATH_1%"=="" (
+    set "JP1_UNIT_PATH="
+)
+
+rem どちらも設定されていない場合はエラー
+if "%JP1_UNIT_PATH%"=="" if "%JP1_UNIT_PATH_1%"=="" exit /b 1
 
 rem 出力オプションは環境変数 JP1_OUTPUT_MODE から取得（必須）
 if "%JP1_OUTPUT_MODE%"=="" exit /b 1
@@ -45,26 +59,30 @@ exit /b %EXITCODE%
 : #>
 
 # ==============================================================================
-# JP1 REST API ジョブ実行ログ取得ツール
+# JP1 REST API ジョブ実行ログ取得ツール（複数ジョブ対応版）
 #
 # 説明:
 #   JP1/AJS3 Web Console REST APIを使用して、ジョブネットを即時実行し、
 #   完了後にジョブの実行結果詳細を取得します。
+#   同一ジョブネット内の複数ジョブを1回の実行で処理できます。
 #   ※ JP1/AJS3 - Web Consoleが必要です
 #
 # 使い方:
-#   ジョブのパスを指定して実行します:
+#   単一ジョブモード:
 #     JP1ジョブ実行情報取得.bat "/JobGroup/Jobnet/Job1"
 #
-#   ※ ルートジョブネットを自動特定して即時実行し、指定ジョブの完了を待ちます
+#   複数ジョブモード（同一ジョブネット内）:
+#     set "JP1_UNIT_PATH_1=/JobGroup/Jobnet/Job1"
+#     set "JP1_UNIT_PATH_2=/JobGroup/Jobnet/Job2"
+#     JP1ジョブ実行情報取得.bat
 #
 # 処理フロー:
-#   STEP 1: DEFINITION で存在確認・ユニット種別確認
-#   STEP 2: ルートジョブネットを特定
+#   STEP 1: DEFINITION で存在確認・ユニット種別確認（全ジョブ）
+#   STEP 2: ルートジョブネット特定・同一確認
 #   STEP 3: 親ジョブネットのコメント取得
-#   STEP 4: 即時実行登録API でルートジョブネットを実行
-#   STEP 5: 状態監視（指定ジョブの完了待ち）
-#   STEP 6: 実行結果詳細取得
+#   STEP 4: 即時実行登録API でルートジョブネットを実行（1回のみ）
+#   STEP 5: 状態監視（全ジョブの完了待ち）
+#   STEP 6: 実行結果詳細取得（各ジョブ）
 #
 # 終了コード（実行順）:
 #   0: 正常終了
@@ -77,6 +95,7 @@ exit /b %EXITCODE%
 #   7: 5MB超過エラー（STEP 6: 実行結果が切り捨てられました）
 #   8: 詳細取得エラー（STEP 6: 実行結果詳細の取得に失敗）
 #   9: API接続エラー（各STEPでの接続失敗）
+#   14: ルートジョブネット不一致（複数ジョブが同一ジョブネットではありません）
 #
 # 参考:
 #   https://itpfdoc.hitachi.co.jp/manuals/3021/30213b1920/AJSO0280.HTM
@@ -227,8 +246,23 @@ $jobTextFileMapping = @{
 # ------------------------------------------------------------------------------
 # 環境変数からユニットパスを取得
 # ------------------------------------------------------------------------------
-# バッチファイルから渡された引数（ユニットパス）を取得します
-$unitPath = $env:JP1_UNIT_PATH
+# 複数ジョブモードか単一ジョブモードかを判定
+$unitPaths = @()
+
+if ($env:JP1_UNIT_PATH_1) {
+    # 複数ジョブモード
+    $unitPaths += $env:JP1_UNIT_PATH_1
+    if ($env:JP1_UNIT_PATH_2) {
+        $unitPaths += $env:JP1_UNIT_PATH_2
+    }
+    Write-Console "[モード] 複数ジョブ: $($unitPaths.Count) 件"
+} elseif ($env:JP1_UNIT_PATH) {
+    # 単一ジョブモード
+    $unitPaths += $env:JP1_UNIT_PATH
+    Write-Console "[モード] 単一ジョブ"
+} else {
+    exit 1  # 引数エラー
+}
 
 # ------------------------------------------------------------------------------
 # プロトコル設定
@@ -341,104 +375,135 @@ if ($useHttps) {
 # ベースURLの構築
 $baseUrl = "${protocol}://${webConsoleHost}:${webConsolePort}/ajs/api/v1"
 
-# ------------------------------------------------------------------------------
-# ジョブパスの解析
-# ------------------------------------------------------------------------------
-# 指定されたジョブパスから親パス（ジョブネット）とジョブ名を分離
-# 例: "/JobGroup/Jobnet/Job1" → 親: "/JobGroup/Jobnet", ジョブ名: "Job1"
-$lastSlashIndex = $unitPath.LastIndexOf("/")
-if ($lastSlashIndex -le 0) {
-    exit 1  # パス形式エラー（スラッシュがない、またはルートのみ）
+# ==============================================================================
+# 各ジョブの情報を格納する配列を初期化
+# ==============================================================================
+$jobInfoList = @()
+
+foreach ($unitPath in $unitPaths) {
+    # ------------------------------------------------------------------------------
+    # ジョブパスの解析
+    # ------------------------------------------------------------------------------
+    # 指定されたジョブパスから親パス（ジョブネット）とジョブ名を分離
+    # 例: "/JobGroup/Jobnet/Job1" → 親: "/JobGroup/Jobnet", ジョブ名: "Job1"
+    $lastSlashIndex = $unitPath.LastIndexOf("/")
+    if ($lastSlashIndex -le 0) {
+        exit 1  # パス形式エラー（スラッシュがない、またはルートのみ）
+    }
+    $parentPath = $unitPath.Substring(0, $lastSlashIndex)
+    $jobName = $unitPath.Substring($lastSlashIndex + 1)
+
+    if (-not $jobName) {
+        exit 1  # ジョブ名が空
+    }
+
+    # 親ジョブネット名を取得（コメント取得用）
+    $grandParentSlashIndex = $parentPath.LastIndexOf("/")
+    $grandParentPath = if ($grandParentSlashIndex -gt 0) { $parentPath.Substring(0, $grandParentSlashIndex) } else { "/" }
+    $jobnetName = if ($grandParentSlashIndex -ge 0) { $parentPath.Substring($grandParentSlashIndex + 1) } else { $parentPath.TrimStart("/") }
+
+    $jobInfoList += @{
+        UnitPath = $unitPath
+        ParentPath = $parentPath
+        JobName = $jobName
+        GrandParentPath = $grandParentPath
+        JobnetName = $jobnetName
+        RootJobnetName = $null
+        JobnetComment = ""
+        JobStatus = $null
+        JobExecId = $null
+        JobStartTime = $null
+        OutputFilePath = $null
+    }
 }
-$parentPath = $unitPath.Substring(0, $lastSlashIndex)
-$jobName = $unitPath.Substring($lastSlashIndex + 1)
-
-if (-not $jobName) {
-    exit 1  # ジョブ名が空
-}
-
-# 親ジョブネット名を取得（コメント取得用）
-$grandParentSlashIndex = $parentPath.LastIndexOf("/")
-$grandParentPath = if ($grandParentSlashIndex -gt 0) { $parentPath.Substring(0, $grandParentSlashIndex) } else { "/" }
-$jobnetName = if ($grandParentSlashIndex -ge 0) { $parentPath.Substring($grandParentSlashIndex + 1) } else { $parentPath.TrimStart("/") }
-
-# パスとジョブ名をURLエンコード
-$encodedParentPath = [System.Uri]::EscapeDataString($parentPath)
-$encodedJobName = [System.Uri]::EscapeDataString($jobName)
 
 # ==============================================================================
-# STEP 1: ユニット存在確認・種別確認（DEFINITION）
+# STEP 1: ユニット存在確認・種別確認（DEFINITION）- 全ジョブ
 # ==============================================================================
-# 最初に DEFINITION のみで呼び出し、以下を確認します：
-#   - 指定したユニットが存在するか
-#   - 指定したユニットがジョブ（JOB系）かどうか
-
 Write-Console "[STEP 1] ユニット存在確認中..."
 
-$defUrl = "${baseUrl}/objects/statuses?mode=search"
-$defUrl += "&manager=${managerHost}"
-$defUrl += "&serviceName=${schedulerService}"
-$defUrl += "&location=${encodedParentPath}"
-$defUrl += "&searchLowerUnits=NO"
-$defUrl += "&searchTarget=DEFINITION"
-$defUrl += "&unitName=${encodedJobName}"
-$defUrl += "&unitNameMatchMethods=EQ"
+for ($i = 0; $i -lt $jobInfoList.Count; $i++) {
+    $jobInfo = $jobInfoList[$i]
+    $encodedParentPath = [System.Uri]::EscapeDataString($jobInfo.ParentPath)
+    $encodedJobName = [System.Uri]::EscapeDataString($jobInfo.JobName)
 
-$unitTypeValue = $null
-$unitFullName = $null
-$rootJobnetName = $null
-$jobnetComment = ""
+    $defUrl = "${baseUrl}/objects/statuses?mode=search"
+    $defUrl += "&manager=${managerHost}"
+    $defUrl += "&serviceName=${schedulerService}"
+    $defUrl += "&location=${encodedParentPath}"
+    $defUrl += "&searchLowerUnits=NO"
+    $defUrl += "&searchTarget=DEFINITION"
+    $defUrl += "&unitName=${encodedJobName}"
+    $defUrl += "&unitNameMatchMethods=EQ"
 
-try {
-    $defResponse = Invoke-WebRequest -Uri $defUrl -Method GET -Headers $headers -TimeoutSec 30 -UseBasicParsing
+    try {
+        $defResponse = Invoke-WebRequest -Uri $defUrl -Method GET -Headers $headers -TimeoutSec 30 -UseBasicParsing
 
-    # UTF-8文字化け対策
-    $defBytes = $defResponse.RawContentStream.ToArray()
-    $defText = [System.Text.Encoding]::UTF8.GetString($defBytes)
-    $defJson = $defText | ConvertFrom-Json
+        # UTF-8文字化け対策
+        $defBytes = $defResponse.RawContentStream.ToArray()
+        $defText = [System.Text.Encoding]::UTF8.GetString($defBytes)
+        $defJson = $defText | ConvertFrom-Json
 
-    # ユニット存在確認
-    if (-not $defJson.statuses -or $defJson.statuses.Count -eq 0) {
-        exit 2  # ユニット未検出
+        # ユニット存在確認
+        if (-not $defJson.statuses -or $defJson.statuses.Count -eq 0) {
+            Write-Console "[エラー] ユニットが見つかりません: $($jobInfo.UnitPath)"
+            exit 2  # ユニット未検出
+        }
+
+        # 最初のユニットの情報を取得
+        $defUnit = $defJson.statuses[0]
+        $unitTypeValue = $defUnit.definition.unitType
+        $jobInfoList[$i].RootJobnetName = $defUnit.definition.rootJobnetName
+
+        # ユニット種別確認（JOB系かどうか）
+        if ($unitTypeValue -notmatch "JOB") {
+            Write-Console "[エラー] ジョブではありません: $($jobInfo.UnitPath) (種別: $unitTypeValue)"
+            exit 3  # ユニット種別エラー（ジョブではない）
+        }
+
+        Write-Console "  [$($i + 1)/$($jobInfoList.Count)] $($jobInfo.JobName) - OK"
+
+    } catch {
+        Write-Console "[エラー] API接続エラー: $($_.Exception.Message)"
+        exit 9  # API接続エラー（存在確認）
     }
-
-    # 最初のユニットの情報を取得
-    $defUnit = $defJson.statuses[0]
-    $unitFullName = $defUnit.definition.unitName
-    $unitTypeValue = $defUnit.definition.unitType
-    $rootJobnetName = $defUnit.definition.rootJobnetName
-
-    # ユニット種別確認（JOB系かどうか）
-    # JOB系: JOB, PJOB, QJOB, EVWJB, FLWJB, MLWJB, MSWJB, LFWJB, TMWJB,
-    #        EVSJB, MLSJB, MSSJB, PWLJB, PWRJB, CJOB, HTPJOB, CPJOB, FXJOB, CUSTOM, JDJOB, ORJOB
-    if ($unitTypeValue -notmatch "JOB") {
-        exit 3  # ユニット種別エラー（ジョブではない）
-    }
-
-} catch {
-    exit 9  # API接続エラー（存在確認）
 }
 
 # ==============================================================================
-# STEP 2: ルートジョブネット特定
+# STEP 2: ルートジョブネット特定・同一確認
 # ==============================================================================
-# STEP 1で取得した rootJobnetName を使用してルートジョブネットを特定します。
+Write-Console "[STEP 2] ルートジョブネット確認中..."
 
-Write-Console "[STEP 2] ルートジョブネット特定中..."
+$rootJobnetName = $jobInfoList[0].RootJobnetName
 
 if (-not $rootJobnetName) {
     exit 4  # ルートジョブネット特定エラー
 }
 
+# 複数ジョブの場合、全て同じルートジョブネットか確認
+if ($jobInfoList.Count -gt 1) {
+    foreach ($jobInfo in $jobInfoList) {
+        if ($jobInfo.RootJobnetName -ne $rootJobnetName) {
+            Write-Console "[エラー] ルートジョブネットが異なります"
+            Write-Console "  ジョブ1: $rootJobnetName"
+            Write-Console "  ジョブ2: $($jobInfo.RootJobnetName)"
+            exit 14  # ルートジョブネット不一致
+        }
+    }
+    Write-Console "  全ジョブが同一ジョブネット内です: $rootJobnetName"
+} else {
+    Write-Console "  ルートジョブネット: $rootJobnetName"
+}
+
 # ==============================================================================
 # STEP 3: 親ジョブネットのコメント取得
 # ==============================================================================
-# 親ジョブネットの定義を取得し、コメント（cm属性）を取得します。
-
 Write-Console "[STEP 3] 親ジョブネットのコメント取得中..."
 
-$encodedGrandParentPath = [System.Uri]::EscapeDataString($grandParentPath)
-$encodedJobnetName = [System.Uri]::EscapeDataString($jobnetName)
+# 最初のジョブの親ジョブネットからコメントを取得（同一ジョブネット内なので共通）
+$jobInfo = $jobInfoList[0]
+$encodedGrandParentPath = [System.Uri]::EscapeDataString($jobInfo.GrandParentPath)
+$encodedJobnetName = [System.Uri]::EscapeDataString($jobInfo.JobnetName)
 
 $jobnetUrl = "${baseUrl}/objects/statuses?mode=search"
 $jobnetUrl += "&manager=${managerHost}"
@@ -448,6 +513,8 @@ $jobnetUrl += "&searchLowerUnits=NO"
 $jobnetUrl += "&searchTarget=DEFINITION"
 $jobnetUrl += "&unitName=${encodedJobnetName}"
 $jobnetUrl += "&unitNameMatchMethods=EQ"
+
+$jobnetComment = ""
 
 try {
     $jobnetResponse = Invoke-WebRequest -Uri $jobnetUrl -Method GET -Headers $headers -TimeoutSec 30 -UseBasicParsing
@@ -460,7 +527,6 @@ try {
     # ジョブネットのコメントを取得
     if ($jobnetJson.statuses -and $jobnetJson.statuses.Count -gt 0) {
         $jobnetDef = $jobnetJson.statuses[0].definition
-        # unitComment フィールドを確認（JP1 REST APIのフィールド名）
         if ($jobnetDef.unitComment) {
             $jobnetComment = $jobnetDef.unitComment
         }
@@ -470,12 +536,14 @@ try {
     $jobnetComment = ""
 }
 
-# ==============================================================================
-# STEP 4: 即時実行登録API
-# ==============================================================================
-# ルートジョブネットを即時実行します。
-# API: POST /ajs/api/v1/objects/definitions/{unitName}/actions/registerImmediateExec/invoke
+# 全ジョブにコメントを設定
+for ($i = 0; $i -lt $jobInfoList.Count; $i++) {
+    $jobInfoList[$i].JobnetComment = $jobnetComment
+}
 
+# ==============================================================================
+# STEP 4: 即時実行登録API（1回のみ）
+# ==============================================================================
 Write-Console "[STEP 4] 即時実行登録中..."
 
 $encodedRootJobnet = [System.Uri]::EscapeDataString($rootJobnetName)
@@ -509,33 +577,17 @@ try {
         exit 5  # 即時実行登録エラー（execIDが取得できない）
     }
 
+    Write-Console "  実行ID: $execIdFromRegister"
+
 } catch {
+    Write-Console "[エラー] 即時実行登録に失敗しました: $($_.Exception.Message)"
     exit 5  # 即時実行登録エラー
 }
 
 # ==============================================================================
-# STEP 5: 状態監視（指定ジョブの完了待ち）
+# STEP 5: 状態監視（全ジョブの完了待ち）
 # ==============================================================================
-# 指定したジョブの状態を監視し、終了を待ちます。
-
 Write-Console "[STEP 5] ジョブ完了待機中..."
-
-$statusUrl = "${baseUrl}/objects/statuses?mode=search"
-$statusUrl += "&manager=${managerHost}"
-$statusUrl += "&serviceName=${schedulerService}"
-$statusUrl += "&location=${encodedParentPath}"
-$statusUrl += "&searchLowerUnits=NO"
-$statusUrl += "&searchTarget=DEFINITION_AND_STATUS"
-$statusUrl += "&unitName=${encodedJobName}"
-$statusUrl += "&unitNameMatchMethods=EQ"
-$statusUrl += "&generation=EXECID"
-$statusUrl += "&execID=${execIdFromRegister}"
-
-$startTime = Get-Date
-$endTime = $startTime.AddSeconds($timeoutSeconds)
-$jobStatus = $null
-$jobExecId = $null
-$jobStartTime = $null
 
 # 終了状態の定義
 $finishedStatuses = @(
@@ -545,34 +597,79 @@ $finishedStatuses = @(
     "UNEXEC", "BYPASS", "EXECDEFFER", "INVALIDSEQ", "SHUTDOWN"
 )
 
+$startTime = Get-Date
+$endTime = $startTime.AddSeconds($timeoutSeconds)
+
+# 各ジョブの完了フラグ
+$completedJobs = @{}
+foreach ($jobInfo in $jobInfoList) {
+    $completedJobs[$jobInfo.UnitPath] = $false
+}
+
 while ((Get-Date) -lt $endTime) {
-    try {
-        $pollResponse = Invoke-WebRequest -Uri $statusUrl -Method GET -Headers $headers -TimeoutSec 30 -UseBasicParsing
+    $allCompleted = $true
 
-        # UTF-8文字化け対策
-        $pollBytes = $pollResponse.RawContentStream.ToArray()
-        $pollText = [System.Text.Encoding]::UTF8.GetString($pollBytes)
-        $pollJson = $pollText | ConvertFrom-Json
+    for ($i = 0; $i -lt $jobInfoList.Count; $i++) {
+        $jobInfo = $jobInfoList[$i]
 
-        # レスポンスからジョブ情報を抽出
-        if ($pollJson.statuses -and $pollJson.statuses.Count -gt 0) {
-            $unit = $pollJson.statuses[0]
-            $unitStatus = $unit.unitStatus
-
-            if ($unitStatus) {
-                $jobStatus = $unitStatus.status
-                $jobExecId = $unitStatus.execID
-                $jobStartTime = $unitStatus.startTime
-
-                # 終了状態かどうかをチェック
-                if ($finishedStatuses -contains $jobStatus) {
-                    break  # 終了状態になったのでループを抜ける
-                }
-            }
+        # 既に完了しているジョブはスキップ
+        if ($completedJobs[$jobInfo.UnitPath]) {
+            continue
         }
 
-    } catch {
-        # API呼び出しエラーは無視して再試行
+        $encodedParentPath = [System.Uri]::EscapeDataString($jobInfo.ParentPath)
+        $encodedJobName = [System.Uri]::EscapeDataString($jobInfo.JobName)
+
+        $statusUrl = "${baseUrl}/objects/statuses?mode=search"
+        $statusUrl += "&manager=${managerHost}"
+        $statusUrl += "&serviceName=${schedulerService}"
+        $statusUrl += "&location=${encodedParentPath}"
+        $statusUrl += "&searchLowerUnits=NO"
+        $statusUrl += "&searchTarget=DEFINITION_AND_STATUS"
+        $statusUrl += "&unitName=${encodedJobName}"
+        $statusUrl += "&unitNameMatchMethods=EQ"
+        $statusUrl += "&generation=EXECID"
+        $statusUrl += "&execID=${execIdFromRegister}"
+
+        try {
+            $pollResponse = Invoke-WebRequest -Uri $statusUrl -Method GET -Headers $headers -TimeoutSec 30 -UseBasicParsing
+
+            # UTF-8文字化け対策
+            $pollBytes = $pollResponse.RawContentStream.ToArray()
+            $pollText = [System.Text.Encoding]::UTF8.GetString($pollBytes)
+            $pollJson = $pollText | ConvertFrom-Json
+
+            # レスポンスからジョブ情報を抽出
+            if ($pollJson.statuses -and $pollJson.statuses.Count -gt 0) {
+                $unit = $pollJson.statuses[0]
+                $unitStatus = $unit.unitStatus
+
+                if ($unitStatus) {
+                    $jobInfoList[$i].JobStatus = $unitStatus.status
+                    $jobInfoList[$i].JobExecId = $unitStatus.execID
+                    $jobInfoList[$i].JobStartTime = $unitStatus.startTime
+
+                    # 終了状態かどうかをチェック
+                    if ($finishedStatuses -contains $unitStatus.status) {
+                        $completedJobs[$jobInfo.UnitPath] = $true
+                        Write-Console "  [$($i + 1)/$($jobInfoList.Count)] $($jobInfo.JobName) - 完了 ($($unitStatus.status))"
+                    }
+                }
+            }
+
+        } catch {
+            # API呼び出しエラーは無視して再試行
+        }
+
+        # 未完了のジョブがある
+        if (-not $completedJobs[$jobInfo.UnitPath]) {
+            $allCompleted = $false
+        }
+    }
+
+    # 全ジョブが完了したらループを抜ける
+    if ($allCompleted) {
+        break
     }
 
     Start-Sleep -Seconds $pollIntervalSeconds
@@ -580,27 +677,17 @@ while ((Get-Date) -lt $endTime) {
 
 # タイムアウトチェック
 if ((Get-Date) -ge $endTime) {
-    if (-not ($finishedStatuses -contains $jobStatus)) {
-        exit 6  # タイムアウト
+    foreach ($jobInfo in $jobInfoList) {
+        if (-not $completedJobs[$jobInfo.UnitPath]) {
+            Write-Console "[エラー] タイムアウト: $($jobInfo.JobName)"
+        }
     }
-}
-
-# 開始日時をファイル名用フォーマットに変換（yyyyMMdd_HHmmss）
-$startTimeForFileName = ""
-if ($jobStartTime) {
-    try {
-        $dt = [DateTime]::Parse($jobStartTime)
-        $startTimeForFileName = $dt.ToString("yyyyMMdd_HHmmss")
-    } catch {
-        $startTimeForFileName = ""
-    }
+    exit 6  # タイムアウト
 }
 
 # ==============================================================================
-# STEP 6: 実行結果詳細取得API
+# STEP 6: 実行結果詳細取得API（各ジョブ）
 # ==============================================================================
-# ジョブの実行結果詳細を取得します。
-
 Write-Console "[STEP 6] 実行結果詳細取得中..."
 
 # ステータス値を日本語に変換する関数
@@ -627,389 +714,288 @@ function Get-StatusDisplayName {
     }
 }
 
-$encodedPath = [System.Uri]::EscapeDataString($unitPath)
+# 出力オプションを環境変数から取得
+$outputMode = $env:JP1_OUTPUT_MODE
+if (-not $outputMode) { $outputMode = "/NOTEPAD" }
 
-# 実行結果詳細取得APIのURL構築
-$detailUrl = "${baseUrl}/objects/statuses/${encodedPath}:${jobExecId}/actions/execResultDetails/invoke"
-$detailUrl += "?manager=${managerHost}&serviceName=${schedulerService}"
-
-try {
-    # APIリクエストを送信
-    $resultResponse = Invoke-WebRequest -Uri $detailUrl -Method GET -Headers $headers -TimeoutSec 30 -UseBasicParsing
-
-    # UTF-8文字化け対策
-    $resultBytes = $resultResponse.RawContentStream.ToArray()
-    $resultText = [System.Text.Encoding]::UTF8.GetString($resultBytes)
-    $resultJson = $resultText | ConvertFrom-Json
-
-    # all フラグのチェック（falseの場合は5MB超過で切り捨て）
-    if ($resultJson.all -eq $false) { exit 7 }  # 5MB超過エラー
-
-    # 実行結果の内容を取得
-    $execResultContent = ""
-    if ($resultJson.execResultDetails) {
-        $execResultContent = $resultJson.execResultDetails
-    }
-
-    # 終了状態を取得（日本語変換済み）
-    $endStatusDisplay = Get-StatusDisplayName -status $jobStatus
-
-    # 出力オプションを環境変数から取得
-    $outputMode = $env:JP1_OUTPUT_MODE
-    if (-not $outputMode) { $outputMode = "/NOTEPAD" }
-
-    # 出力ディレクトリを作成
-    $outputDir = Join-Path $scriptDir "..\02.Output"
-    if (-not (Test-Path $outputDir)) {
-        New-Item -ItemType Directory -Path $outputDir -Force | Out-Null
-    }
-
-    # 出力ファイル名を生成
-    $outputFileName = "【ジョブ実行結果】【${startTimeForFileName}実行分】【${endStatusDisplay}】${jobnetName}_${jobnetComment}.txt"
-    $outputFilePath = Join-Path $outputDir $outputFileName
-
-    # 実行結果詳細をファイルに出力
-    $execResultContent | Out-File -FilePath $outputFilePath -Encoding Default
-
-    # メタデータを標準出力に出力（後方互換性のため）
-    [Console]::WriteLine("START_TIME:$startTimeForFileName")
-    [Console]::WriteLine("END_STATUS:$endStatusDisplay")
-    [Console]::WriteLine("JOBNET_NAME:$jobnetName")
-    [Console]::WriteLine("JOBNET_COMMENT:$jobnetComment")
-    [Console]::WriteLine("JOB_STATUS:$jobStatus")
-    [Console]::WriteLine("OUTPUT_FILE:$outputFilePath")
-
-    # 出力オプションに応じた後処理
-    switch ($outputMode.ToUpper()) {
-        "/NOTEPAD" {
-            # メモ帳で開く
-            Start-Process notepad $outputFilePath
-
-            # スクロール位置の設定（環境変数から取得）
-            $scrollToText = $env:JP1_SCROLL_TO_TEXT
-            if ($scrollToText) {
-                # ファイル内容を読み込んで検索
-                $lines = Get-Content $outputFilePath -Encoding Default
-                $scrollLineNum = 0
-                for ($i = 0; $i -lt $lines.Count; $i++) {
-                    if ($lines[$i] -match [regex]::Escape($scrollToText)) {
-                        $scrollLineNum = $i + 1  # 1始まりの行番号
-                        break
-                    }
-                }
-
-                if ($scrollLineNum -gt 0) {
-                    # メモ帳が起動するのを待つ
-                    Start-Sleep -Milliseconds 500
-
-                    # WScript.Shellを使用してキー入力を送信
-                    $wshell = New-Object -ComObject WScript.Shell
-                    # Ctrl+G（行ジャンプダイアログ）を送信
-                    $wshell.SendKeys("^g")
-                    Start-Sleep -Milliseconds 200
-                    # 行番号を入力
-                    $wshell.SendKeys($scrollLineNum.ToString())
-                    Start-Sleep -Milliseconds 100
-                    # Enterキーで確定
-                    $wshell.SendKeys("{ENTER}")
-                }
-            }
-        }
-        "/EXCEL" {
-            # Excelに貼り付け（雛形フォルダコピー + ジョブ別Excel選択）
-
-            # --------------------------------------------------------------
-            # STEP 1: ジョブパスからExcel設定を取得
-            # --------------------------------------------------------------
-            $excelFileName = $null
-            $excelSheetName = $null
-            $excelPasteCell = $null
-
-            # ジョブパスに一致するマッピングを検索（完全一致）
-            foreach ($key in $jobExcelMapping.Keys) {
-                if ($unitPath -eq $key) {
-                    $mappingValue = $jobExcelMapping[$key]
-                    $parts = $mappingValue -split ","
-                    if ($parts.Count -ge 3) {
-                        $excelFileName = $parts[0].Trim()
-                        $excelSheetName = $parts[1].Trim()
-                        $excelPasteCell = $parts[2].Trim()
-                    }
-                    break
-                }
-            }
-
-            # マッピングが見つからない場合はエラー
-            if (-not $excelFileName) {
-                Write-Console "[エラー] ジョブパス '$unitPath' に対応するExcel設定が見つかりません。"
-                Write-Console "[エラー] 設定セクションの `$jobExcelMapping を確認してください。"
-                exit 10  # Excel設定エラー
-            }
-
-            # ------------------------------------------------------------------
-            # Excel処理開始ヘッダー
-            # ------------------------------------------------------------------
-            Write-Host ""
-            Write-Host "================================================================" -ForegroundColor Yellow
-            Write-Host "  Excel貼り付け処理" -ForegroundColor Yellow
-            Write-Host "================================================================" -ForegroundColor Yellow
-            Write-Host ""
-            Write-Host "  [設定情報]" -ForegroundColor Cyan
-            Write-Host "    ジョブパス    : $unitPath"
-            Write-Host "    Excelファイル : $excelFileName"
-            Write-Host "    シート名      : $excelSheetName"
-            Write-Host "    貼り付けセル  : $excelPasteCell"
-            Write-Host ""
-
-            # --------------------------------------------------------------
-            # STEP 2: 02_output/yyyymmddフォルダを作成
-            # --------------------------------------------------------------
-            Write-Host "  [STEP 1] 出力フォルダ準備" -ForegroundColor Cyan
-            $dateFolder = Get-Date -Format "yyyyMMdd"
-            $outputBasePath = Join-Path $scriptDir $outputFolderName
-            $dateFolderPath = Join-Path $outputBasePath $dateFolder
-
-            # 02_outputフォルダが存在しない場合は作成
-            if (-not (Test-Path $outputBasePath)) {
-                New-Item -Path $outputBasePath -ItemType Directory -Force | Out-Null
-                Write-Host "    出力フォルダ作成: $outputBasePath"
-            }
-
-            # yyyymmddフォルダが存在しない場合は作成
-            if (-not (Test-Path $dateFolderPath)) {
-                New-Item -Path $dateFolderPath -ItemType Directory -Force | Out-Null
-                Write-Host "    日付フォルダ作成: $dateFolderPath"
-            } else {
-                Write-Host "    日付フォルダ    : $dateFolderPath (既存)"
-            }
-            Write-Host ""
-
-            # --------------------------------------------------------------
-            # STEP 3: 雛形フォルダの中身をコピー
-            # --------------------------------------------------------------
-            Write-Host "  [STEP 2] 雛形フォルダコピー" -ForegroundColor Cyan
-            $templatePath = Join-Path $scriptDir $templateFolderName
-
-            if (-not (Test-Path $templatePath)) {
-                Write-Console "[エラー] 雛形フォルダが見つかりません: $templatePath"
-                exit 13  # 雛形フォルダ未検出エラー
-            }
-
-            # 雛形フォルダの中身をyyyymmddフォルダに直接コピー
-            # （雛形フォルダ自体はコピーせず、中のファイルのみ）
-            $templateItems = Get-ChildItem -Path $templatePath
-            $copiedCount = 0
-            foreach ($item in $templateItems) {
-                $destPath = Join-Path $dateFolderPath $item.Name
-                if (-not (Test-Path $destPath)) {
-                    Copy-Item -Path $item.FullName -Destination $destPath -Recurse -Force
-                    $copiedCount++
-                }
-            }
-            if ($copiedCount -gt 0) {
-                Write-Host "    コピー完了: $copiedCount 件のファイル/フォルダ"
-            } else {
-                Write-Host "    スキップ: 既にコピー済み"
-            }
-            Write-Host ""
-
-            # --------------------------------------------------------------
-            # STEP 4: Excelファイルにログを貼り付け
-            # --------------------------------------------------------------
-            Write-Host "  [STEP 3] Excelに貼り付け" -ForegroundColor Cyan
-            $excelPath = Join-Path $dateFolderPath $excelFileName
-
-            if (-not (Test-Path $excelPath)) {
-                Write-Console "[エラー] Excelファイルが見つかりません: $excelPath"
-                exit 12  # Excelファイル未検出エラー
-            }
-
-            try {
-                # ログファイルの内容を読み込み（-Raw: 全体を1つの文字列として）
-                $logContent = Get-Content $outputFilePath -Encoding Default -Raw
-
-                # クリップボードにコピー
-                # Excelの通常の貼り付け動作を利用するため、クリップボード経由で貼り付けます
-                # これにより改行区切りのテキストが各行別々のセルに入ります
-                Set-Clipboard -Value $logContent
-
-                $excel = New-Object -ComObject Excel.Application
-                $excel.Visible = $true
-                $workbook = $excel.Workbooks.Open($excelPath)
-                $sheet = $workbook.Worksheets.Item($excelSheetName)
-
-                # 貼り付け先のセルを選択してクリップボードから貼り付け
-                # これにより改行で区切られた各行が A1, A2, A3... に配置されます
-                $sheet.Range($excelPasteCell).Select()
-                $sheet.Paste()
-
-                $workbook.Save()
-                [System.Runtime.Interopservices.Marshal]::ReleaseComObject($sheet) | Out-Null
-                [System.Runtime.Interopservices.Marshal]::ReleaseComObject($workbook) | Out-Null
-                [System.Runtime.Interopservices.Marshal]::ReleaseComObject($excel) | Out-Null
-                Write-Host "    貼り付け完了: $excelFileName"
-                Write-Host ""
-
-                # --------------------------------------------------------------
-                # STEP 5: クリップボード内容をファイルに保存し、変換バッチを実行
-                # --------------------------------------------------------------
-                Write-Host "  [STEP 4] テキストファイル保存" -ForegroundColor Cyan
-                # ジョブパスに対応するテキストファイル名を取得
-                $textFileName = "runh_default.txt"  # デフォルト値
-                foreach ($key in $jobTextFileMapping.Keys) {
-                    if ($unitPath -eq $key) {
-                        $textFileName = $jobTextFileMapping[$key]
-                        break
-                    }
-                }
-                # クリップボード内容は02_output/yyyymmddフォルダに保存
-                $clipboardOutputFile = Join-Path $dateFolderPath $textFileName
-                $convertBatchFile = Join-Path $scriptDir "【削除禁止】ConvertNS932Result.bat"
-
-                # クリップボードの内容をファイルに保存
-                Get-Clipboard | Out-File -FilePath $clipboardOutputFile -Encoding Default
-                Write-Host "    保存完了: $textFileName"
-
-                # 変換バッチファイルを実行（出力先フォルダを環境変数で渡す）
-                if (Test-Path $convertBatchFile) {
-                    Write-Host "    変換バッチ実行中..."
-                    $env:OUTPUT_FOLDER = $dateFolderPath
-                    & cmd /c "`"$convertBatchFile`""
-                    $env:OUTPUT_FOLDER = $null
-                }
-                Write-Host ""
-
-                # ------------------------------------------------------------------
-                # 完了サマリー
-                # ------------------------------------------------------------------
-                Write-Host "================================================================" -ForegroundColor Green
-                Write-Host "  Excel貼り付け完了" -ForegroundColor Green
-                Write-Host "================================================================" -ForegroundColor Green
-                Write-Host ""
-                Write-Host "  出力先フォルダ: $dateFolderPath"
-                Write-Host "  Excelファイル : $excelFileName"
-                Write-Host "  テキストファイル: $textFileName"
-                Write-Host ""
-            } catch {
-                Write-Console "[エラー] Excel貼り付けに失敗しました: $($_.Exception.Message)"
-                exit 11  # Excel貼り付けエラー
-            }
-        }
-        "/WINMERGE" {
-            # ======================================================================
-            # WinMerge比較処理（キーワード抽出機能付き）
-            # ======================================================================
-            # 【処理概要】
-            # ログファイルから指定したキーワード間のテキストを抽出し、
-            # WinMergeで比較表示します。
-            # キーワードが見つからない場合は元のログファイルを開きます。
-            # ======================================================================
-
-            # WinMergeの実行ファイルパス（デフォルトのインストール先）
-            $winMergePath = "C:\Program Files\WinMerge\WinMergeU.exe"
-
-            # WinMergeが存在するか確認
-            if (Test-Path $winMergePath) {
-                # ----------------------------------------------------------
-                # キーワード抽出設定
-                # ----------------------------------------------------------
-                # StartKeyword: 抽出開始キーワード（この行から抽出開始）
-                # EndKeyword: 抽出終了キーワード（この行まで抽出）
-                # OutputSuffix: 出力ファイル名のサフィックス
-                $extractPairs = @(
-                    @{
-                        StartKeyword = "#パッチ適用前チェック"
-                        EndKeyword = "#パッチ適用"
-                        OutputSuffix = "_データパッチ前.txt"
-                    },
-                    @{
-                        StartKeyword = "#パッチ適用後チェック"
-                        EndKeyword = "#トランザクション処理"
-                        OutputSuffix = "_データパッチ後.txt"
-                    }
-                )
-
-                $extractedFiles = @()
-
-                # ログファイルを読み込み
-                $logLines = Get-Content -Path $outputFilePath -Encoding Default
-
-                foreach ($pair in $extractPairs) {
-                    $startKeyword = $pair.StartKeyword
-                    $endKeyword = $pair.EndKeyword
-                    $outputSuffix = $pair.OutputSuffix
-
-                    # 出力ファイルパスを作成（元ファイル名 + サフィックス）
-                    $baseName = [System.IO.Path]::GetFileNameWithoutExtension($outputFilePath)
-                    $extractedFile = Join-Path $outputFolder ($baseName + $outputSuffix)
-
-                    # ----------------------------------------------------------
-                    # キーワード間のテキスト抽出処理
-                    # ----------------------------------------------------------
-                    # 注意: 開始キーワードが終了キーワードを含む場合があるため
-                    # （例: "#パッチ適用前チェック" は "#パッチ適用" を含む）
-                    # 開始行では終了チェックをスキップする
-                    $inSection = $false
-                    $extractedContent = @()
-
-                    foreach ($line in $logLines) {
-                        # 開始キーワードを検出したら抽出開始
-                        if ($line -like "*$startKeyword*") {
-                            $inSection = $true
-                            $extractedContent += $line
-                            continue  # 開始行では終了チェックをスキップ
-                        }
-                        # 抽出中の処理
-                        if ($inSection) {
-                            # 終了キーワードを検出したら抽出終了（この行は含めない）
-                            if ($line -like "*$endKeyword*") {
-                                break
-                            }
-                            $extractedContent += $line
-                        }
-                    }
-
-                    # 抽出結果をファイルに保存
-                    if ($extractedContent.Count -gt 0) {
-                        $extractedContent | Out-File -FilePath $extractedFile -Encoding Default
-                        $extractedFiles += $extractedFile
-                        Write-Console "[完了] キーワード抽出: $extractedFile"
-                    }
-                }
-
-                # ----------------------------------------------------------
-                # WinMergeで比較
-                # ----------------------------------------------------------
-                if ($extractedFiles.Count -eq 2) {
-                    # 2つのファイルが作成された場合は比較モード
-                    Start-Process $winMergePath -ArgumentList "`"$($extractedFiles[0])`" `"$($extractedFiles[1])`""
-                    Write-Console "[完了] WinMergeで比較を開きました"
-                    # 元のログファイルを削除
-                    Remove-Item -Path $outputFilePath -Force
-                    Write-Console "[完了] 元のログファイルを削除しました"
-                } elseif ($extractedFiles.Count -eq 1) {
-                    # 1つのファイルのみ作成された場合
-                    Start-Process $winMergePath -ArgumentList "`"$($extractedFiles[0])`""
-                    Write-Console "[完了] WinMergeでファイルを開きました"
-                } else {
-                    # キーワードが見つからない場合は元のログファイルを開く
-                    Start-Process $winMergePath -ArgumentList "`"$outputFilePath`""
-                    Write-Console "[情報] キーワードが見つからないため、元のログを開きました"
-                }
-            } else {
-                Write-Console "[エラー] WinMergeが見つかりません: $winMergePath"
-                Write-Console "        WinMergeをインストールするか、パスを確認してください。"
-            }
-        }
-        default {
-            # デフォルトはログファイル出力のみ
-        }
-    }
-
-    Write-Console "[完了] 出力ファイル: $outputFilePath"
-} catch {
-    exit 8  # 詳細取得エラー
+# 出力ディレクトリを作成
+$outputDir = Join-Path $scriptDir "..\02.Output"
+if (-not (Test-Path $outputDir)) {
+    New-Item -ItemType Directory -Path $outputDir -Force | Out-Null
 }
+
+# Excel処理用の共通変数（/EXCELモード時）
+$dateFolderPath = $null
+$templateCopied = $false
+
+if ($outputMode.ToUpper() -eq "/EXCEL") {
+    # --------------------------------------------------------------
+    # Excel共通処理: 出力フォルダ準備（1回だけ実行）
+    # --------------------------------------------------------------
+    Write-Host ""
+    Write-Host "================================================================" -ForegroundColor Yellow
+    Write-Host "  Excel貼り付け処理" -ForegroundColor Yellow
+    Write-Host "================================================================" -ForegroundColor Yellow
+    Write-Host ""
+
+    Write-Host "  [STEP 1] 出力フォルダ準備" -ForegroundColor Cyan
+    $dateFolder = Get-Date -Format "yyyyMMdd"
+    $outputBasePath = Join-Path $scriptDir $outputFolderName
+    $dateFolderPath = Join-Path $outputBasePath $dateFolder
+
+    # 02_outputフォルダが存在しない場合は作成
+    if (-not (Test-Path $outputBasePath)) {
+        New-Item -Path $outputBasePath -ItemType Directory -Force | Out-Null
+        Write-Host "    出力フォルダ作成: $outputBasePath"
+    }
+
+    # yyyymmddフォルダが存在しない場合は作成
+    if (-not (Test-Path $dateFolderPath)) {
+        New-Item -Path $dateFolderPath -ItemType Directory -Force | Out-Null
+        Write-Host "    日付フォルダ作成: $dateFolderPath"
+    } else {
+        Write-Host "    日付フォルダ    : $dateFolderPath (既存)"
+    }
+    Write-Host ""
+
+    # --------------------------------------------------------------
+    # Excel共通処理: 雛形フォルダコピー（1回だけ実行）
+    # --------------------------------------------------------------
+    Write-Host "  [STEP 2] 雛形フォルダコピー" -ForegroundColor Cyan
+    $templatePath = Join-Path $scriptDir $templateFolderName
+
+    if (-not (Test-Path $templatePath)) {
+        Write-Console "[エラー] 雛形フォルダが見つかりません: $templatePath"
+        exit 13  # 雛形フォルダ未検出エラー
+    }
+
+    # 雛形フォルダの中身をyyyymmddフォルダに直接コピー
+    $templateItems = Get-ChildItem -Path $templatePath
+    $copiedCount = 0
+    foreach ($item in $templateItems) {
+        $destPath = Join-Path $dateFolderPath $item.Name
+        if (-not (Test-Path $destPath)) {
+            Copy-Item -Path $item.FullName -Destination $destPath -Recurse -Force
+            $copiedCount++
+        }
+    }
+    if ($copiedCount -gt 0) {
+        Write-Host "    コピー完了: $copiedCount 件のファイル/フォルダ"
+    } else {
+        Write-Host "    スキップ: 既にコピー済み"
+    }
+    Write-Host ""
+    $templateCopied = $true
+}
+
+# 各ジョブの実行結果を取得
+for ($i = 0; $i -lt $jobInfoList.Count; $i++) {
+    $jobInfo = $jobInfoList[$i]
+
+    Write-Console "  [$($i + 1)/$($jobInfoList.Count)] $($jobInfo.JobName) の結果取得中..."
+
+    # 開始日時をファイル名用フォーマットに変換（yyyyMMdd_HHmmss）
+    $startTimeForFileName = ""
+    if ($jobInfo.JobStartTime) {
+        try {
+            $dt = [DateTime]::Parse($jobInfo.JobStartTime)
+            $startTimeForFileName = $dt.ToString("yyyyMMdd_HHmmss")
+        } catch {
+            $startTimeForFileName = ""
+        }
+    }
+
+    $encodedPath = [System.Uri]::EscapeDataString($jobInfo.UnitPath)
+
+    # 実行結果詳細取得APIのURL構築
+    $detailUrl = "${baseUrl}/objects/statuses/${encodedPath}:$($jobInfo.JobExecId)/actions/execResultDetails/invoke"
+    $detailUrl += "?manager=${managerHost}&serviceName=${schedulerService}"
+
+    try {
+        # APIリクエストを送信
+        $resultResponse = Invoke-WebRequest -Uri $detailUrl -Method GET -Headers $headers -TimeoutSec 30 -UseBasicParsing
+
+        # UTF-8文字化け対策
+        $resultBytes = $resultResponse.RawContentStream.ToArray()
+        $resultText = [System.Text.Encoding]::UTF8.GetString($resultBytes)
+        $resultJson = $resultText | ConvertFrom-Json
+
+        # all フラグのチェック（falseの場合は5MB超過で切り捨て）
+        if ($resultJson.all -eq $false) {
+            Write-Console "[警告] 5MB超過のため結果が切り捨てられました: $($jobInfo.JobName)"
+        }
+
+        # 実行結果の内容を取得
+        $execResultContent = ""
+        if ($resultJson.execResultDetails) {
+            $execResultContent = $resultJson.execResultDetails
+        }
+
+        # 終了状態を取得（日本語変換済み）
+        $endStatusDisplay = Get-StatusDisplayName -status $jobInfo.JobStatus
+
+        # 出力ファイル名を生成
+        $outputFileName = "【ジョブ実行結果】【${startTimeForFileName}実行分】【${endStatusDisplay}】$($jobInfo.JobnetName)_$($jobInfo.JobnetComment).txt"
+        $outputFilePath = Join-Path $outputDir $outputFileName
+
+        # 実行結果詳細をファイルに出力
+        $execResultContent | Out-File -FilePath $outputFilePath -Encoding Default
+        $jobInfoList[$i].OutputFilePath = $outputFilePath
+
+        # 出力オプションに応じた後処理
+        switch ($outputMode.ToUpper()) {
+            "/NOTEPAD" {
+                # メモ帳で開く
+                Start-Process notepad $outputFilePath
+
+                # スクロール位置の設定（環境変数から取得）
+                $scrollToText = $env:JP1_SCROLL_TO_TEXT
+                if ($scrollToText) {
+                    # ファイル内容を読み込んで検索
+                    $lines = Get-Content $outputFilePath -Encoding Default
+                    $scrollLineNum = 0
+                    for ($j = 0; $j -lt $lines.Count; $j++) {
+                        if ($lines[$j] -match [regex]::Escape($scrollToText)) {
+                            $scrollLineNum = $j + 1  # 1始まりの行番号
+                            break
+                        }
+                    }
+
+                    if ($scrollLineNum -gt 0) {
+                        # メモ帳が起動するのを待つ
+                        Start-Sleep -Milliseconds 500
+
+                        # WScript.Shellを使用してキー入力を送信
+                        $wshell = New-Object -ComObject WScript.Shell
+                        # Ctrl+G（行ジャンプダイアログ）を送信
+                        $wshell.SendKeys("^g")
+                        Start-Sleep -Milliseconds 200
+                        # 行番号を入力
+                        $wshell.SendKeys($scrollLineNum.ToString())
+                        Start-Sleep -Milliseconds 100
+                        # Enterキーで確定
+                        $wshell.SendKeys("{ENTER}")
+                    }
+                }
+            }
+            "/EXCEL" {
+                # Excelに貼り付け
+                Write-Host ""
+                Write-Host "  [STEP 3-$($i + 1)] $($jobInfo.JobName) をExcelに貼り付け" -ForegroundColor Cyan
+
+                # ジョブパスからExcel設定を取得
+                $excelFileName = $null
+                $excelSheetName = $null
+                $excelPasteCell = $null
+
+                # ジョブパスに一致するマッピングを検索（完全一致）
+                foreach ($key in $jobExcelMapping.Keys) {
+                    if ($jobInfo.UnitPath -eq $key) {
+                        $mappingValue = $jobExcelMapping[$key]
+                        $parts = $mappingValue -split ","
+                        if ($parts.Count -ge 3) {
+                            $excelFileName = $parts[0].Trim()
+                            $excelSheetName = $parts[1].Trim()
+                            $excelPasteCell = $parts[2].Trim()
+                        }
+                        break
+                    }
+                }
+
+                # マッピングが見つからない場合はエラー
+                if (-not $excelFileName) {
+                    Write-Console "[エラー] ジョブパス '$($jobInfo.UnitPath)' に対応するExcel設定が見つかりません。"
+                    continue
+                }
+
+                Write-Host "    ジョブパス    : $($jobInfo.UnitPath)"
+                Write-Host "    Excelファイル : $excelFileName"
+                Write-Host "    シート名      : $excelSheetName"
+                Write-Host "    貼り付けセル  : $excelPasteCell"
+
+                $excelPath = Join-Path $dateFolderPath $excelFileName
+
+                if (-not (Test-Path $excelPath)) {
+                    Write-Console "[エラー] Excelファイルが見つかりません: $excelPath"
+                    continue
+                }
+
+                try {
+                    # ログファイルの内容を読み込み
+                    $logContent = Get-Content $outputFilePath -Encoding Default -Raw
+
+                    # クリップボードにコピー
+                    Set-Clipboard -Value $logContent
+
+                    $excel = New-Object -ComObject Excel.Application
+                    $excel.Visible = $true
+                    $workbook = $excel.Workbooks.Open($excelPath)
+                    $sheet = $workbook.Worksheets.Item($excelSheetName)
+
+                    # 貼り付け先のセルを選択してクリップボードから貼り付け
+                    $sheet.Range($excelPasteCell).Select()
+                    $sheet.Paste()
+
+                    $workbook.Save()
+                    [System.Runtime.Interopservices.Marshal]::ReleaseComObject($sheet) | Out-Null
+                    [System.Runtime.Interopservices.Marshal]::ReleaseComObject($workbook) | Out-Null
+                    [System.Runtime.Interopservices.Marshal]::ReleaseComObject($excel) | Out-Null
+                    Write-Host "    貼り付け完了: $excelFileName"
+
+                    # テキストファイル保存
+                    $textFileName = "runh_default.txt"
+                    foreach ($key in $jobTextFileMapping.Keys) {
+                        if ($jobInfo.UnitPath -eq $key) {
+                            $textFileName = $jobTextFileMapping[$key]
+                            break
+                        }
+                    }
+                    $clipboardOutputFile = Join-Path $dateFolderPath $textFileName
+                    $convertBatchFile = Join-Path $scriptDir "【削除禁止】ConvertNS932Result.bat"
+
+                    Get-Clipboard | Out-File -FilePath $clipboardOutputFile -Encoding Default
+                    Write-Host "    テキスト保存: $textFileName"
+
+                    # 変換バッチファイルを実行
+                    if (Test-Path $convertBatchFile) {
+                        $env:OUTPUT_FOLDER = $dateFolderPath
+                        & cmd /c "`"$convertBatchFile`""
+                        $env:OUTPUT_FOLDER = $null
+                    }
+
+                } catch {
+                    Write-Console "[エラー] Excel貼り付けに失敗しました: $($_.Exception.Message)"
+                }
+            }
+            "/WINMERGE" {
+                # WinMerge処理（既存のロジック）
+                $winMergePath = "C:\Program Files\WinMerge\WinMergeU.exe"
+                if (Test-Path $winMergePath) {
+                    Start-Process $winMergePath -ArgumentList "`"$outputFilePath`""
+                }
+            }
+        }
+
+        Write-Console "    完了: $outputFilePath"
+
+    } catch {
+        Write-Console "[エラー] 詳細取得に失敗: $($jobInfo.JobName) - $($_.Exception.Message)"
+    }
+}
+
+# ==============================================================================
+# 完了サマリー
+# ==============================================================================
+Write-Host ""
+Write-Host "================================================================" -ForegroundColor Green
+Write-Host "  処理完了" -ForegroundColor Green
+Write-Host "================================================================" -ForegroundColor Green
+Write-Host ""
+Write-Host "  処理ジョブ数: $($jobInfoList.Count)"
+if ($dateFolderPath) {
+    Write-Host "  出力先: $dateFolderPath"
+}
+Write-Host ""
 
 # 正常終了
 exit 0

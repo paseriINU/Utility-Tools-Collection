@@ -10,6 +10,8 @@ rem   JP1ジョブ実行情報取得.bat を呼び出し、複数ジョブの実
 rem   取得します。取得したログは、JP1ジョブ実行情報取得.bat内の$jobExcelMappingに
 rem   基づいて対応するExcelファイルに貼り付けられます。
 rem
+rem   ★ 同一ジョブネット内の2ジョブは1回の実行で処理されます（ジョブネットは1回だけ実行）
+rem
 rem 使い方:
 rem   1. 下記の JOBNET_PATH_1〜3 をジョブネットのパスに設定
 rem   2. 各ジョブネット配下のジョブ名を JOB_x_1, JOB_x_2 に設定
@@ -17,9 +19,9 @@ rem   3. JP1ジョブ実行情報取得.bat の $jobExcelMapping でExcelファ�
 rem   4. このバッチをダブルクリックで実行
 rem
 rem 構成:
-rem   ジョブネット1: JOBNET_PATH_1 + JOB_1_1, JOB_1_2
-rem   ジョブネット2: JOBNET_PATH_2 + JOB_2_1, JOB_2_2
-rem   ジョブネット3: JOBNET_PATH_3 + JOB_3_1, JOB_3_2
+rem   ジョブネット1: JOBNET_PATH_1 + JOB_1_1, JOB_1_2 → 1回の実行で2ジョブ処理
+rem   ジョブネット2: JOBNET_PATH_2 + JOB_2_1, JOB_2_2 → 1回の実行で2ジョブ処理
+rem   ジョブネット3: JOBNET_PATH_3 + JOB_3_1, JOB_3_2 → 1回の実行で2ジョブ処理
 rem ============================================================================
 
 rem === ここを編集してください ===
@@ -68,108 +70,75 @@ if not "%JOBNET_PATH_2%"=="" set /a TOTAL_JOBNETS+=1
 if not "%JOBNET_PATH_3%"=="" set /a TOTAL_JOBNETS+=1
 
 set "CURRENT_JOBNET=0"
-set "EXITCODE_1_1=0"
-set "EXITCODE_1_2=0"
-set "EXITCODE_2_1=0"
-set "EXITCODE_2_2=0"
-set "EXITCODE_3_1=0"
-set "EXITCODE_3_2=0"
+set "EXITCODE_1=0"
+set "EXITCODE_2=0"
+set "EXITCODE_3=0"
 
-rem --- ジョブネット1の処理 ---
+rem --- ジョブネット1の処理（2ジョブを1回の実行で処理） ---
 if not "%JOBNET_PATH_1%"=="" (
     set /a CURRENT_JOBNET+=1
     echo [!CURRENT_JOBNET!/%TOTAL_JOBNETS%] ジョブネット1の実行情報を取得中...
     echo       ジョブネット: %JOBNET_PATH_1%
+    echo       ジョブ1: %JOB_1_1%
+    echo       ジョブ2: %JOB_1_2%
     echo.
 
-    rem ジョブ1-1
-    set "UNIT_PATH=%JOBNET_PATH_1%/%JOB_1_1%"
-    echo   [1/2] %JOB_1_1% を取得中...
-    set "JP1_UNIT_PATH=!UNIT_PATH!"
-    call "JP1ジョブ実行情報取得.bat" "!UNIT_PATH!"
-    set "EXITCODE_1_1=!ERRORLEVEL!"
-    if !EXITCODE_1_1! neq 0 (
-        echo         [エラー] 取得失敗（終了コード: !EXITCODE_1_1!）
-    ) else (
-        echo         [完了] 取得成功
-    )
+    rem 2つのジョブパスを環境変数で渡す（1回の実行で2ジョブ処理）
+    set "JP1_UNIT_PATH_1=%JOBNET_PATH_1%/%JOB_1_1%"
+    set "JP1_UNIT_PATH_2=%JOBNET_PATH_1%/%JOB_1_2%"
+    call "JP1ジョブ実行情報取得.bat"
+    set "EXITCODE_1=!ERRORLEVEL!"
 
-    rem ジョブ1-2
-    set "UNIT_PATH=%JOBNET_PATH_1%/%JOB_1_2%"
-    echo   [2/2] %JOB_1_2% を取得中...
-    set "JP1_UNIT_PATH=!UNIT_PATH!"
-    call "JP1ジョブ実行情報取得.bat" "!UNIT_PATH!"
-    set "EXITCODE_1_2=!ERRORLEVEL!"
-    if !EXITCODE_1_2! neq 0 (
-        echo         [エラー] 取得失敗（終了コード: !EXITCODE_1_2!）
+    if !EXITCODE_1! neq 0 (
+        echo [エラー] ジョブネット1の取得に失敗しました（終了コード: !EXITCODE_1!）
     ) else (
-        echo         [完了] 取得成功
+        echo [完了] ジョブネット1の取得が完了しました
     )
     echo.
 )
 
-rem --- ジョブネット2の処理 ---
+rem --- ジョブネット2の処理（2ジョブを1回の実行で処理） ---
 if not "%JOBNET_PATH_2%"=="" (
     set /a CURRENT_JOBNET+=1
     echo [!CURRENT_JOBNET!/%TOTAL_JOBNETS%] ジョブネット2の実行情報を取得中...
     echo       ジョブネット: %JOBNET_PATH_2%
+    echo       ジョブ1: %JOB_2_1%
+    echo       ジョブ2: %JOB_2_2%
     echo.
 
-    rem ジョブ2-1
-    set "UNIT_PATH=%JOBNET_PATH_2%/%JOB_2_1%"
-    echo   [1/2] %JOB_2_1% を取得中...
-    set "JP1_UNIT_PATH=!UNIT_PATH!"
-    call "JP1ジョブ実行情報取得.bat" "!UNIT_PATH!"
-    set "EXITCODE_2_1=!ERRORLEVEL!"
-    if !EXITCODE_2_1! neq 0 (
-        echo         [エラー] 取得失敗（終了コード: !EXITCODE_2_1!）
-    ) else (
-        echo         [完了] 取得成功
-    )
+    rem 2つのジョブパスを環境変数で渡す（1回の実行で2ジョブ処理）
+    set "JP1_UNIT_PATH_1=%JOBNET_PATH_2%/%JOB_2_1%"
+    set "JP1_UNIT_PATH_2=%JOBNET_PATH_2%/%JOB_2_2%"
+    call "JP1ジョブ実行情報取得.bat"
+    set "EXITCODE_2=!ERRORLEVEL!"
 
-    rem ジョブ2-2
-    set "UNIT_PATH=%JOBNET_PATH_2%/%JOB_2_2%"
-    echo   [2/2] %JOB_2_2% を取得中...
-    set "JP1_UNIT_PATH=!UNIT_PATH!"
-    call "JP1ジョブ実行情報取得.bat" "!UNIT_PATH!"
-    set "EXITCODE_2_2=!ERRORLEVEL!"
-    if !EXITCODE_2_2! neq 0 (
-        echo         [エラー] 取得失敗（終了コード: !EXITCODE_2_2!）
+    if !EXITCODE_2! neq 0 (
+        echo [エラー] ジョブネット2の取得に失敗しました（終了コード: !EXITCODE_2!）
     ) else (
-        echo         [完了] 取得成功
+        echo [完了] ジョブネット2の取得が完了しました
     )
     echo.
 )
 
-rem --- ジョブネット3の処理 ---
+rem --- ジョブネット3の処理（2ジョブを1回の実行で処理） ---
 if not "%JOBNET_PATH_3%"=="" (
     set /a CURRENT_JOBNET+=1
     echo [!CURRENT_JOBNET!/%TOTAL_JOBNETS%] ジョブネット3の実行情報を取得中...
     echo       ジョブネット: %JOBNET_PATH_3%
+    echo       ジョブ1: %JOB_3_1%
+    echo       ジョブ2: %JOB_3_2%
     echo.
 
-    rem ジョブ3-1
-    set "UNIT_PATH=%JOBNET_PATH_3%/%JOB_3_1%"
-    echo   [1/2] %JOB_3_1% を取得中...
-    set "JP1_UNIT_PATH=!UNIT_PATH!"
-    call "JP1ジョブ実行情報取得.bat" "!UNIT_PATH!"
-    set "EXITCODE_3_1=!ERRORLEVEL!"
-    if !EXITCODE_3_1! neq 0 (
-        echo         [エラー] 取得失敗（終了コード: !EXITCODE_3_1!）
-    ) else (
-        echo         [完了] 取得成功
-    )
+    rem 2つのジョブパスを環境変数で渡す（1回の実行で2ジョブ処理）
+    set "JP1_UNIT_PATH_1=%JOBNET_PATH_3%/%JOB_3_1%"
+    set "JP1_UNIT_PATH_2=%JOBNET_PATH_3%/%JOB_3_2%"
+    call "JP1ジョブ実行情報取得.bat"
+    set "EXITCODE_3=!ERRORLEVEL!"
 
-    rem ジョブ3-2
-    set "UNIT_PATH=%JOBNET_PATH_3%/%JOB_3_2%"
-    echo   [2/2] %JOB_3_2% を取得中...
-    set "JP1_UNIT_PATH=!UNIT_PATH!"
-    call "JP1ジョブ実行情報取得.bat" "!UNIT_PATH!"
-    set "EXITCODE_3_2=!ERRORLEVEL!"
-    if !EXITCODE_3_2! neq 0 (
-        echo         [エラー] 取得失敗（終了コード: !EXITCODE_3_2!）
+    if !EXITCODE_3! neq 0 (
+        echo [エラー] ジョブネット3の取得に失敗しました（終了コード: !EXITCODE_3!）
     ) else (
-        echo         [完了] 取得成功
+        echo [完了] ジョブネット3の取得が完了しました
     )
     echo.
 )
@@ -182,18 +151,18 @@ echo   処理結果
 echo ================================================================
 if not "%JOBNET_PATH_1%"=="" (
     echo   ジョブネット1: %JOBNET_PATH_1%
-    echo     - %JOB_1_1%: & if %EXITCODE_1_1% equ 0 (echo 成功) else (echo 失敗 [コード:%EXITCODE_1_1%])
-    echo     - %JOB_1_2%: & if %EXITCODE_1_2% equ 0 (echo 成功) else (echo 失敗 [コード:%EXITCODE_1_2%])
+    echo     - %JOB_1_1%, %JOB_1_2%
+    if %EXITCODE_1% equ 0 (echo     結果: 成功) else (echo     結果: 失敗 [コード:%EXITCODE_1%])
 )
 if not "%JOBNET_PATH_2%"=="" (
     echo   ジョブネット2: %JOBNET_PATH_2%
-    echo     - %JOB_2_1%: & if %EXITCODE_2_1% equ 0 (echo 成功) else (echo 失敗 [コード:%EXITCODE_2_1%])
-    echo     - %JOB_2_2%: & if %EXITCODE_2_2% equ 0 (echo 成功) else (echo 失敗 [コード:%EXITCODE_2_2%])
+    echo     - %JOB_2_1%, %JOB_2_2%
+    if %EXITCODE_2% equ 0 (echo     結果: 成功) else (echo     結果: 失敗 [コード:%EXITCODE_2%])
 )
 if not "%JOBNET_PATH_3%"=="" (
     echo   ジョブネット3: %JOBNET_PATH_3%
-    echo     - %JOB_3_1%: & if %EXITCODE_3_1% equ 0 (echo 成功) else (echo 失敗 [コード:%EXITCODE_3_1%])
-    echo     - %JOB_3_2%: & if %EXITCODE_3_2% equ 0 (echo 成功) else (echo 失敗 [コード:%EXITCODE_3_2%])
+    echo     - %JOB_3_1%, %JOB_3_2%
+    if %EXITCODE_3% equ 0 (echo     結果: 成功) else (echo     結果: 失敗 [コード:%EXITCODE_3%])
 )
 echo ================================================================
 echo.
