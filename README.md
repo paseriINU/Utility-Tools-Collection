@@ -98,6 +98,8 @@
   - Linux側の自動設定（mkdir/chmod/chown）
   - SCP/SSH対応（Windows OpenSSH Client）
   - ネットワークパス（UNCパス）からの実行対応
+  - **【ビルド実行版】** ファイル転送後にLinux側ビルドシェルを自動実行
+  - **【ビルド実行版】** 業務ID単位ビルド / フルコンパイル自動判定
   - ダブルクリックで実行可能
 
 - **[JP1 ジョブツール](batch/JP1_ジョブツール/)**: JP1/AJS3 Web Console REST APIでジョブ実行・ログ取得
