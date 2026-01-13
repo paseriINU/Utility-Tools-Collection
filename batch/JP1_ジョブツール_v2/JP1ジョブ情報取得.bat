@@ -4,583 +4,583 @@ setlocal
 chcp 932 >nul
 
 rem ============================================================================
-rem �� �o�b�`�t�@�C�������iPowerShell���N�����邽�߂̃��b�p�[�j
+rem ■ バッチファイル部分（PowerShellを起動するためのラッパー）
 rem ============================================================================
 rem
-rem �y���̃t�@�C���̎d�g�� - �|���O���b�g�p�^�[���z
-rem   ���̃t�@�C���́u�|���O���b�g�v�ƌĂ΂�����Ȍ`���ō쐬����Ă��܂��B
-rem   1�̃t�@�C�����o�b�`�t�@�C��(.bat)�Ƃ��Ă�PowerShell�X�N���v�g(.ps1)
-rem   �Ƃ��Ă����삵�܂��B
+rem 【このファイルの仕組み - ポリグロットパターン】
+rem   このファイルは「ポリグロット」と呼ばれる特殊な形式で作成されています。
+rem   1つのファイルがバッチファイル(.bat)としてもPowerShellスクリプト(.ps1)
+rem   としても動作します。
 rem
-rem   - �ŏ��̍s�u<# :�v�̓o�b�`�t�@�C���ł͖�������APowerShell�ł�
-rem     �R�����g�u���b�N�̊J�n�Ƃ��ĔF������܂�
-rem   - �Ō�́u: #>�v�̓o�b�`�t�@�C���ł̓��x���APowerShell�ł�
-rem     �R�����g�u���b�N�̏I���Ƃ��ĔF������܂�
-rem   - ����ɂ��A�_�u���N���b�N�Œ��ڎ��s�ł���.bat�t�@�C���ł���Ȃ���A
-rem     PowerShell�̍��x�ȋ@�\�iREST API�Ăяo�����j���g�p�ł��܂�
+rem   - 最初の行「<# :」はバッチファイルでは無視され、PowerShellでは
+rem     コメントブロックの開始として認識されます
+rem   - 最後の「: #>」はバッチファイルではラベル、PowerShellでは
+rem     コメントブロックの終了として認識されます
+rem   - これにより、ダブルクリックで直接実行できる.batファイルでありながら、
+rem     PowerShellの高度な機能（REST API呼び出し等）を使用できます
 rem
-rem �y�g�����z
-rem   ���̃t�@�C���͒��ڎ��s�����A�Ăяo�����̃o�b�`�t�@�C������g�p���܂��B
+rem 【使い方】
+rem   このファイルは直接実行せず、呼び出し元のバッチファイルから使用します。
 rem
-rem   �Ăяo�����ł̐ݒ��:
+rem   呼び出し元での設定例:
 rem     set "JP1_OUTPUT_MODE=/NOTEPAD"
-rem     call JP1�W���u���擾.bat "/JobGroup/Jobnet/Job1"
+rem     call JP1ジョブ情報取得.bat "/JobGroup/Jobnet/Job1"
 rem
-rem   2�̃W���u���r���ĐV���������擾����ꍇ:
-rem     call JP1�W���u���擾.bat "/JobGroup/Jobnet/Job1" "/JobGroup/Jobnet/Job2"
+rem   2つのジョブを比較して新しい方を取得する場合:
+rem     call JP1ジョブ情報取得.bat "/JobGroup/Jobnet/Job1" "/JobGroup/Jobnet/Job2"
 rem
-rem �y�o�̓I�v�V�����z�i���ϐ� JP1_OUTPUT_MODE �Ŏw��A�K�{�j
-rem   /NOTEPAD  - �擾�������O���������ŊJ���܂�
-rem   /EXCEL    - �擾�������O��Excel�̎w��Z���ɓ\��t���܂�
-rem   /WINMERGE - WinMerge�Ŕ�r���܂��i�������j
+rem 【出力オプション】（環境変数 JP1_OUTPUT_MODE で指定、必須）
+rem   /NOTEPAD  - 取得したログをメモ帳で開きます
+rem   /EXCEL    - 取得したログをExcelの指定セルに貼り付けます
+rem   /WINMERGE - WinMergeで比較します（未実装）
 rem
-rem �y�K�v�Ȋ��z
-rem   - JP1/AJS3 - Web Console ���C���X�g�[������Ă��邱��
-rem   - PowerShell 5.1 �ȍ~
-rem   - �l�b�g���[�N�o�R��Web Console�T�[�o�[�ɐڑ��ł��邱��
+rem 【必要な環境】
+rem   - JP1/AJS3 - Web Console がインストールされていること
+rem   - PowerShell 5.1 以降
+rem   - ネットワーク経由でWeb Consoleサーバーに接続できること
 rem
 rem ============================================================================
 
 rem ----------------------------------------------------------------------------
-rem �����`�F�b�N
+rem 引数チェック
 rem ----------------------------------------------------------------------------
-rem ��1�����i�W���u�p�X�j���w�肳��Ă��Ȃ��ꍇ�̓G���[�I�����܂��B
-rem "%~1" �͑�1�������擾���܂��B~1 �͈��p�������������l��Ԃ��܂��B
-rem �󕶎���Ɣ�r���āA�������Ȃ��ꍇ�̓G���[�R�[�h1�ŏI�����܂��B
+rem 第1引数（ジョブパス）が指定されていない場合はエラー終了します。
+rem "%~1" は第1引数を取得します。~1 は引用符を除去した値を返します。
+rem 空文字列と比較して、引数がない場合はエラーコード1で終了します。
 if "%~1"=="" exit /b 1
 
 rem ----------------------------------------------------------------------------
-rem ���ϐ��ւ̈����ݒ�
+rem 環境変数への引数設定
 rem ----------------------------------------------------------------------------
-rem �o�b�`�t�@�C������PowerShell�ɒl��n�����߁A���ϐ����g�p���܂��B
-rem PowerShell���� $env:JP1_UNIT_PATH �̂悤�ɃA�N�Z�X�ł��܂��B
+rem バッチファイルからPowerShellに値を渡すため、環境変数を使用します。
+rem PowerShell内で $env:JP1_UNIT_PATH のようにアクセスできます。
 
-rem ��1�����i�W���u�p�X�j�����ϐ��ɐݒ�
-rem ��: "/�Ɩ��V�X�e��/�����o�b�`/�f�[�^�W�v�W���u"
+rem 第1引数（ジョブパス）を環境変数に設定
+rem 例: "/業務システム/日次バッチ/データ集計ジョブ"
 set "JP1_UNIT_PATH=%~1"
 
-rem ��2�����i��r�p�W���u�p�X�A�I�v�V�����j�����ϐ��ɐݒ�
-rem 2�̃W���u���w�肵���ꍇ�A�J�n�������r���ĐV���������擾���܂�
+rem 第2引数（比較用ジョブパス、オプション）を環境変数に設定
+rem 2つのジョブを指定した場合、開始時刻を比較して新しい方を取得します
 set "JP1_UNIT_PATH_2=%~2"
 
 rem ----------------------------------------------------------------------------
-rem �o�̓I�v�V�����`�F�b�N
+rem 出力オプションチェック
 rem ----------------------------------------------------------------------------
-rem �o�̓I�v�V�����iJP1_OUTPUT_MODE�j�͌Ăяo�����Őݒ肷��K�{���ڂł��B
-rem �ݒ肳��Ă��Ȃ��ꍇ�̓G���[�R�[�h1�ŏI�����܂��B
+rem 出力オプション（JP1_OUTPUT_MODE）は呼び出し元で設定する必須項目です。
+rem 設定されていない場合はエラーコード1で終了します。
 if "%JP1_OUTPUT_MODE%"=="" exit /b 1
 
 rem ----------------------------------------------------------------------------
-rem UNC�p�X�Ή��i�l�b�g���[�N�h���C�u�Ή��j
+rem UNCパス対応（ネットワークドライブ対応）
 rem ----------------------------------------------------------------------------
-rem ���̃o�b�`�t�@�C�����l�b�g���[�N���L�t�H���_�i\\server\share\...�j��
-rem �u����Ă���ꍇ�ł�����ɓ��삷��悤�ɂ��܂��B
-rem pushd �͎����I�Ɉꎞ�I�ȃh���C�u���������蓖�Ă܂��B
-rem ��: \\server\share �� Z: �Ƀ}�b�s���O
+rem このバッチファイルがネットワーク共有フォルダ（\\server\share\...）に
+rem 置かれている場合でも正常に動作するようにします。
+rem pushd は自動的に一時的なドライブ文字を割り当てます。
+rem 例: \\server\share → Z: にマッピング
 pushd "%~dp0"
 
 rem ----------------------------------------------------------------------------
-rem PowerShell���s
+rem PowerShell実行
 rem ----------------------------------------------------------------------------
-rem ���̃o�b�`�t�@�C�����̂�PowerShell�X�N���v�g�Ƃ��Ď��s���܂��B
+rem このバッチファイル自体をPowerShellスクリプトとして実行します。
 rem
-rem �I�v�V�����̐���:
-rem   -NoProfile        : PowerShell�v���t�@�C����ǂݍ��܂Ȃ��i�N���������j
-rem   -ExecutionPolicy Bypass : �X�N���v�g���s�|���V�[���ꎞ�I�ɉ��
+rem オプションの説明:
+rem   -NoProfile        : PowerShellプロファイルを読み込まない（起動高速化）
+rem   -ExecutionPolicy Bypass : スクリプト実行ポリシーを一時的に回避
 rem
-rem �R�}���h�̐���:
-rem   $scriptDir=...    : �o�b�`�t�@�C���̃t�H���_�p�X��ϐ��ɕۑ�
-rem   gc '%~f0'         : ���̃t�@�C�����̂̓��e��ǂݍ��ށigc��Get-Content�̗��j
-rem   -Encoding Default : Shift-JIS�G���R�[�f�B���O�œǂݍ���
-rem   -join "`n"        : �e�s�����s�ŘA������1�̕�����ɂ���
-rem   iex               : �ǂݍ��񂾓��e��PowerShell�R�}���h�Ƃ��Ď��s�iiex��Invoke-Expression�̗��j
-rem   try-finally       : �G���[���������Ă��K��Set-Location�����s
+rem コマンドの説明:
+rem   $scriptDir=...    : バッチファイルのフォルダパスを変数に保存
+rem   gc '%~f0'         : このファイル自体の内容を読み込む（gcはGet-Contentの略）
+rem   -Encoding Default : Shift-JISエンコーディングで読み込む
+rem   -join "`n"        : 各行を改行で連結して1つの文字列にする
+rem   iex               : 読み込んだ内容をPowerShellコマンドとして実行（iexはInvoke-Expressionの略）
+rem   try-finally       : エラーが発生しても必ずSet-Locationを実行
 rem
 powershell -NoProfile -ExecutionPolicy Bypass -Command "$scriptDir=('%~dp0' -replace '\\$',''); try { iex ((gc '%~f0' -Encoding Default) -join \"`n\") } finally { Set-Location C:\ }"
 
-rem PowerShell�̏I���R�[�h��ۑ�
-rem %ERRORLEVEL% �͒��O�Ɏ��s�����R�}���h�̏I���R�[�h��ێ����Ă��܂�
+rem PowerShellの終了コードを保存
+rem %ERRORLEVEL% は直前に実行したコマンドの終了コードを保持しています
 set "EXITCODE=%ERRORLEVEL%"
 
-rem �ꎞ�h���C�u�}�b�s���O������
-rem pushd �ō쐬�����}�b�s���O�����ɖ߂��܂�
+rem 一時ドライブマッピングを解除
+rem pushd で作成したマッピングを元に戻します
 popd
 
-rem PowerShell�̏I���R�[�h�����̂܂ܕԂ�
-rem �Ăяo�����ŏI���R�[�h���m�F���ăG���[�������s���܂�
+rem PowerShellの終了コードをそのまま返す
+rem 呼び出し元で終了コードを確認してエラー処理を行えます
 exit /b %EXITCODE%
 : #>
 
 # ==============================================================================
-# �� JP1 REST API �W���u���擾�c�[��
+# ■ JP1 REST API ジョブ情報取得ツール
 # ==============================================================================
 #
-# �y���̃c�[���̖ړI�z
-#   JP1/AJS3�Ŏ��s���ꂽ�W���u�́u���s���ʏڍׁv�i���O�j���擾����c�[���ł��B
-#   JP1/AJS3 Web Console ���񋟂��� REST API ���g�p���āA�W���u�̕W���o�͂�
-#   �W���G���[�o�͂̓��e���擾���A�t�@�C���ɕۑ����܂��B
+# 【このツールの目的】
+#   JP1/AJS3で実行されたジョブの「実行結果詳細」（ログ）を取得するツールです。
+#   JP1/AJS3 Web Console が提供する REST API を使用して、ジョブの標準出力や
+#   標準エラー出力の内容を取得し、ファイルに保存します。
 #
-# �yREST API�Ƃ́H�z
-#   REST API �́AWeb�o�R�ŃV�X�e���̋@�\���Ăяo���d�g�݂ł��B
-#   ���̃c�[���ł́AHTTP���N�G�X�g���g����JP1�̃T�[�o�[�ƒʐM���A
-#   �W���u�̏����擾���Ă��܂��B
+# 【REST APIとは？】
+#   REST API は、Web経由でシステムの機能を呼び出す仕組みです。
+#   このツールでは、HTTPリクエストを使ってJP1のサーバーと通信し、
+#   ジョブの情報を取得しています。
 #
-# �y�K�v�Ȋ��z
-#   - JP1/AJS3 - Web Console ���C���X�g�[���E�N������Ă��邱��
-#   - ���̃c�[������Web Console�T�[�o�[�Ƀl�b�g���[�N�ڑ��ł��邱��
-#   - JP1���[�U�[�A�J�E���g�i�ΏۃW���u�ւ̎Q�ƌ������K�v�j
+# 【必要な環境】
+#   - JP1/AJS3 - Web Console がインストール・起動されていること
+#   - このツールからWeb Consoleサーバーにネットワーク接続できること
+#   - JP1ユーザーアカウント（対象ジョブへの参照権限が必要）
 #
-# �y�g�����z
-#   ���̃t�@�C���͒��ڎ��s�����A�Ăяo�����̃o�b�`�t�@�C������g�p���܂��B
+# 【使い方】
+#   このファイルは直接実行せず、呼び出し元のバッチファイルから使用します。
 #
-#   ��{�I�Ȏg�����i1�̃W���u���擾�j:
-#     JP1�W���u���擾.bat "/JobGroup/Jobnet/Job1"
+#   基本的な使い方（1つのジョブを取得）:
+#     JP1ジョブ情報取得.bat "/JobGroup/Jobnet/Job1"
 #
-#   ��r���[�h�i2�̃W���u���r���ĐV���������擾�j:
-#     JP1�W���u���擾.bat "/JobGroup/Jobnet/Job1" "/JobGroup/Jobnet/Job2"
-#     �� �����̃W���u�̊J�n�������r���A�V�������̃��O���擾���܂�
+#   比較モード（2つのジョブを比較して新しい方を取得）:
+#     JP1ジョブ情報取得.bat "/JobGroup/Jobnet/Job1" "/JobGroup/Jobnet/Job2"
+#     ※ 両方のジョブの開始時刻を比較し、新しい方のログを取得します
 #
-# �y�����t���[�z
-#   ���̃c�[���͈ȉ���6�̃X�e�b�v�ŏ������s���܂�:
+# 【処理フロー】
+#   このツールは以下の6つのステップで処理を行います:
 #
-#   STEP 1: ���j�b�g���݊m�F
-#           - �w�肳�ꂽ�W���u��JP1��ɑ��݂��邩�m�F���܂�
-#           - �W���u�iJOB�n���j�b�g�j���ǂ������m�F���܂�
+#   STEP 1: ユニット存在確認
+#           - 指定されたジョブがJP1上に存在するか確認します
+#           - ジョブ（JOB系ユニット）かどうかを確認します
 #
-#   STEP 2: �e�W���u�l�b�g�̃R�����g�擾
-#           - �W���u��������W���u�l�b�g�̐��������擾���܂�
-#           - �o�̓t�@�C�����Ɏg�p���܂�
+#   STEP 2: 親ジョブネットのコメント取得
+#           - ジョブが属するジョブネットの説明文を取得します
+#           - 出力ファイル名に使用します
 #
-#   STEP 3: ���s���W���u�`�F�b�N�i�ҋ@�@�\�t���j
-#           - �W���u�����ݎ��s�����ǂ������m�F���܂�
-#           - ���s���̏ꍇ�͏I������܂őҋ@���܂��i�ݒ�ōő�ҋ@���Ԃ��w��\�j
+#   STEP 3: 実行中ジョブチェック（待機機能付き）
+#           - ジョブが現在実行中かどうかを確認します
+#           - 実行中の場合は終了するまで待機します（設定で最大待機時間を指定可能）
 #
-#   STEP 4: execID�i���sID�j�擾
-#           - �W���u�̎��s��������A���O�擾�ɕK�v�Ȏ��sID���擾���܂�
-#           - ���sID�͊e���s����ӂɎ��ʂ���ԍ��ł�
+#   STEP 4: execID（実行ID）取得
+#           - ジョブの実行履歴から、ログ取得に必要な実行IDを取得します
+#           - 実行IDは各実行を一意に識別する番号です
 #
-#   STEP 5: ���s���ʏڍ׎擾
-#           - ���sID���g���āA�W���u�̎��s���ʏڍׁi���O�j���擾���܂�
-#           - �擾�������O���e�L�X�g�t�@�C���ɕۑ����܂�
+#   STEP 5: 実行結果詳細取得
+#           - 実行IDを使って、ジョブの実行結果詳細（ログ）を取得します
+#           - 取得したログをテキストファイルに保存します
 #
-#   STEP 6: �o�͏���
-#           - �ݒ�ɉ����āA�������ŊJ��/Excel�ɓ\��t���Ȃǂ��s���܂�
+#   STEP 6: 出力処理
+#           - 設定に応じて、メモ帳で開く/Excelに貼り付けなどを行います
 #
-# �y�I���R�[�h�ꗗ�z
-#   ���̃c�[���͏������ʂɉ����Ĉȉ��̏I���R�[�h��Ԃ��܂��B
-#   �Ăяo�����ł��̒l���m�F���ăG���[�������s���܂��B
+# 【終了コード一覧】
+#   このツールは処理結果に応じて以下の終了コードを返します。
+#   呼び出し元でこの値を確認してエラー処理を行えます。
 #
-#   �R�[�h | �Ӗ�                      | �����^�C�~���O
+#   コード | 意味                      | 発生タイミング
 #   -------|---------------------------|------------------
-#     0    | ����I��                  | ���ׂĂ̏���������
-#     1    | �����G���[                | �W���u�p�X���w�肳��Ă��Ȃ�
-#     2    | ���j�b�g�����o            | STEP 1: �w�肵���W���u�����݂��Ȃ�
-#     3    | ���j�b�g��ʃG���[        | STEP 1: �w�肵�����j�b�g���W���u�ł͂Ȃ�
-#     4    | ���s����Ȃ�              | STEP 4: ���s���������݂��Ȃ�
-#     5    | 5MB���߃G���[             | STEP 5: ���O���傫�����Đ؂�̂Ă�ꂽ
-#     6    | �ڍ׎擾�G���[            | STEP 5: ���O�擾�Ɏ��s
-#     8    | ��r���[�h���s            | �����̃W���u���̎擾�Ɏ��s
-#     9    | API�ڑ��G���[             | Web Console�ւ̐ڑ��Ɏ��s
-#    10    | Excel�ݒ�G���[           | Excel�\��t���̐ݒ肪�s��
-#    11    | �ҋ@�^�C���A�E�g          | STEP 3: �W���u���I�����Ȃ�����
-#    12    | Excel�t�@�C�������o       | �w�肵��Excel�t�@�C����������Ȃ�
+#     0    | 正常終了                  | すべての処理が成功
+#     1    | 引数エラー                | ジョブパスが指定されていない
+#     2    | ユニット未検出            | STEP 1: 指定したジョブが存在しない
+#     3    | ユニット種別エラー        | STEP 1: 指定したユニットがジョブではない
+#     4    | 実行世代なし              | STEP 4: 実行履歴が存在しない
+#     5    | 5MB超過エラー             | STEP 5: ログが大きすぎて切り捨てられた
+#     6    | 詳細取得エラー            | STEP 5: ログ取得に失敗
+#     8    | 比較モード失敗            | 両方のジョブ情報の取得に失敗
+#     9    | API接続エラー             | Web Consoleへの接続に失敗
+#    10    | Excel設定エラー           | Excel貼り付けの設定が不足
+#    11    | 待機タイムアウト          | STEP 3: ジョブが終了しなかった
+#    12    | Excelファイル未検出       | 指定したExcelファイルが見つからない
 #
-# �y�����h�L�������g�z
-#   JP1/AJS3 - Web Console REST API ���t�@�����X:
+# 【公式ドキュメント】
+#   JP1/AJS3 - Web Console REST API リファレンス:
 #   https://itpfdoc.hitachi.co.jp/manuals/3021/30213b1920/AJSO0280.HTM
 #
 # ==============================================================================
 
 # ------------------------------------------------------------------------------
-# �o�̓G���R�[�f�B���O�ݒ�
+# 出力エンコーディング設定
 # ------------------------------------------------------------------------------
-# �y���̐ݒ�̈Ӗ��z
-# PowerShell����ʂɏo�͂��镶���̃G���R�[�f�B���O�i�����R�[�h�j��ݒ肵�܂��B
-# Shift-JIS�i�R�[�h�y�[�W932�j�́A���{��Windows�̕W���I�ȕ����R�[�h�ł��B
-# ���̐ݒ�ɂ��A�R�}���h�v�����v�g�œ��{�ꂪ�������������ɕ\������܂��B
+# 【この設定の意味】
+# PowerShellが画面に出力する文字のエンコーディング（文字コード）を設定します。
+# Shift-JIS（コードページ932）は、日本語Windowsの標準的な文字コードです。
+# この設定により、コマンドプロンプトで日本語が文字化けせずに表示されます。
 #
-# �y�⑫�z
-# [Console]::OutputEncoding �� .NET Framework �̃N���X�ŁA
-# �R���\�[���o�͂̃G���R�[�f�B���O�𐧌䂵�܂��B
-# GetEncoding(932) �� Shift-JIS ���w�肵�Ă��܂��B
+# 【補足】
+# [Console]::OutputEncoding は .NET Framework のクラスで、
+# コンソール出力のエンコーディングを制御します。
+# GetEncoding(932) で Shift-JIS を指定しています。
 [Console]::OutputEncoding = [System.Text.Encoding]::GetEncoding(932)
 
 # ==============================================================================
-# �� �ڑ��ݒ�Z�N�V����
+# ■ 接続設定セクション
 # ==============================================================================
-# �y���̃Z�N�V�����ɂ��āz
-# JP1/AJS3 Web Console �ւ̐ڑ��ɕK�v�ȏ���ݒ肵�܂��B
-# ���ɍ��킹�Ă��̃Z�N�V�����̒l��ύX���Ă��������B
+# 【このセクションについて】
+# JP1/AJS3 Web Console への接続に必要な情報を設定します。
+# 環境に合わせてこのセクションの値を変更してください。
 #
-# �y�ݒ�ύX�̃|�C���g�z
-# 1. �܂� $webConsoleHost �� $webConsolePort �����ɍ��킹�Đݒ�
-# 2. �F�؏��� Windows ���i���}�l�[�W���[�ɓo�^����̂���������
-# 3. �e�X�g���ł� $useHttps = $false�iHTTP�ڑ��j��OK
+# 【設定変更のポイント】
+# 1. まず $webConsoleHost と $webConsolePort を環境に合わせて設定
+# 2. 認証情報は Windows 資格情報マネージャーに登録するのがおすすめ
+# 3. テスト環境では $useHttps = $false（HTTP接続）でOK
 # ==============================================================================
 
 # ------------------------------------------------------------------------------
-# Web Console�T�[�o�[�ݒ�
+# Web Consoleサーバー設定
 # ------------------------------------------------------------------------------
-# �yWeb Console�T�[�o�[�Ƃ́H�z
-# JP1/AJS3 - Web Console �́AJP1�̃W���u�Ǘ���Web�u���E�U�ő���ł���
-# �R���|�[�l���g�ł��B���̃c�[����Web Console��REST API���g�p���܂��B
+# 【Web Consoleサーバーとは？】
+# JP1/AJS3 - Web Console は、JP1のジョブ管理をWebブラウザで操作できる
+# コンポーネントです。このツールはWeb ConsoleのREST APIを使用します。
 #
-# �y�ݒ���@�z
-# Web Console�T�[�o�[�̃z�X�g���܂���IP�A�h���X���w�肵�܂��B
-# - ����PC�ɂ���ꍇ: "localhost"
-# - �ʂ̃T�[�o�[�̏ꍇ: �T�[�o�[���܂���IP�A�h���X
+# 【設定方法】
+# Web Consoleサーバーのホスト名またはIPアドレスを指定します。
+# - 同じPCにある場合: "localhost"
+# - 別のサーバーの場合: サーバー名またはIPアドレス
 #
-# �ݒ��:
-#   $webConsoleHost = "localhost"           # ����PC�̏ꍇ
-#   $webConsoleHost = "192.168.1.100"       # IP�A�h���X�w��
-#   $webConsoleHost = "jp1server.example.com"  # �z�X�g���w��
+# 設定例:
+#   $webConsoleHost = "localhost"           # 同じPCの場合
+#   $webConsoleHost = "192.168.1.100"       # IPアドレス指定
+#   $webConsoleHost = "jp1server.example.com"  # ホスト名指定
 $webConsoleHost = "localhost"
 
-# �y�|�[�g�ԍ��z
-# Web Console���҂��󂯂Ă���|�[�g�ԍ����w�肵�܂��B
-# �C���X�g�[�����̃f�t�H���g�l:
-#   - HTTP�ڑ��̏ꍇ:  22252
-#   - HTTPS�ڑ��̏ꍇ: 22253
-# �� �C���X�g�[�����ɕύX���Ă���ꍇ�́A���̒l��ݒ肵�Ă�������
+# 【ポート番号】
+# Web Consoleが待ち受けているポート番号を指定します。
+# インストール時のデフォルト値:
+#   - HTTP接続の場合:  22252
+#   - HTTPS接続の場合: 22253
+# ※ インストール時に変更している場合は、その値を設定してください
 $webConsolePort = "22252"
 
-# �yHTTPS�i�Í����ʐM�j�̎g�p�z
-# �ʐM���Í������邩�ǂ�����ݒ肵�܂��B
+# 【HTTPS（暗号化通信）の使用】
+# 通信を暗号化するかどうかを設定します。
 #
-# $false�iHTTP�ڑ��j:
-#   - �Í����Ȃ��B�ʐM���e���T�󂳂��\��������܂�
-#   - �Г��l�b�g���[�N�Ȃǈ��S�Ȋ�����
-#   - �ݒ肪�ȒP�i�ؖ����s�v�j
+# $false（HTTP接続）:
+#   - 暗号化なし。通信内容が傍受される可能性があります
+#   - 社内ネットワークなど安全な環境向け
+#   - 設定が簡単（証明書不要）
 #
-# $true�iHTTPS�ڑ��j:
-#   - �Í�������B�ʐM���e���ی삳��܂�
-#   - �C���^�[�l�b�g�o�R��Z�L�����e�B�d���̊�����
-#   - SSL�ؖ����̐ݒ肪�K�v
+# $true（HTTPS接続）:
+#   - 暗号化あり。通信内容が保護されます
+#   - インターネット経由やセキュリティ重視の環境向け
+#   - SSL証明書の設定が必要
 $useHttps = $false
 
 # ------------------------------------------------------------------------------
-# JP1/AJS3 Manager�ݒ�
+# JP1/AJS3 Manager設定
 # ------------------------------------------------------------------------------
-# �yJP1/AJS3 Manager�Ƃ́H�z
-# JP1/AJS3 Manager �́A�W���u�̒�`����s���Ǘ�����T�[�o�[�ł��B
-# Web Console�o�R��Manager�ɐڑ����A�W���u�����擾���܂��B
+# 【JP1/AJS3 Managerとは？】
+# JP1/AJS3 Manager は、ジョブの定義や実行を管理するサーバーです。
+# Web Console経由でManagerに接続し、ジョブ情報を取得します。
 #
-# �y�ݒ���@�z
-# JP1/AJS3 Manager�̃z�X�g���܂���IP�A�h���X���w�肵�܂��B
-# Web Console��Manager�������T�[�o�[�ɂ���ꍇ�� "localhost" ��OK�ł��B
+# 【設定方法】
+# JP1/AJS3 Managerのホスト名またはIPアドレスを指定します。
+# Web ConsoleとManagerが同じサーバーにある場合は "localhost" でOKです。
 $managerHost = "localhost"
 
-# �y�X�P�W���[���[�T�[�r�X���z
-# JP1/AJS3�ł͕����̃X�P�W���[���[�T�[�r�X���^�p�ł��܂��B
-# �f�t�H���g�̃T�[�r�X���� "AJSROOT1" �ł��B
+# 【スケジューラーサービス名】
+# JP1/AJS3では複数のスケジューラーサービスを運用できます。
+# デフォルトのサービス名は "AJSROOT1" です。
 #
-# �m�F���@:
-#   - JP1/AJS3 View �Ń��[�g�W���u�O���[�v�����m�F
-#   - �ʏ�� "AJSROOT1" ����n�܂閼�O
+# 確認方法:
+#   - JP1/AJS3 View でルートジョブグループ名を確認
+#   - 通常は "AJSROOT1" から始まる名前
 #
-# �ݒ��:
-#   $schedulerService = "AJSROOT1"        # �f�t�H���g
-#   $schedulerService = "AJSROOT2"        # 2�ڂ̃T�[�r�X
-#   $schedulerService = "PRODUCTION"      # �J�X�^����
+# 設定例:
+#   $schedulerService = "AJSROOT1"        # デフォルト
+#   $schedulerService = "AJSROOT2"        # 2つ目のサービス
+#   $schedulerService = "PRODUCTION"      # カスタム名
 $schedulerService = "AJSROOT1"
 
 # ------------------------------------------------------------------------------
-# �F�ؐݒ�
+# 認証設定
 # ------------------------------------------------------------------------------
-# �y�F�؂̎d�g�݁z
-# JP1/AJS3 Web Console REST API �́A���[�U�[���ƃp�X���[�h�ŔF�؂��܂��B
-# �F�؏��͈ȉ��̗D�揇�ʂŎ擾����܂�:
-#   1. ���̃t�@�C���ɒ��ڋL�ڂ��ꂽ�l
-#   2. Windows ���i���}�l�[�W���[�ɕۑ����ꂽ�l
-#   3. ���s���ɓ��̓v�����v�g�œ���
+# 【認証の仕組み】
+# JP1/AJS3 Web Console REST API は、ユーザー名とパスワードで認証します。
+# 認証情報は以下の優先順位で取得されます:
+#   1. このファイルに直接記載された値
+#   2. Windows 資格情報マネージャーに保存された値
+#   3. 実行時に入力プロンプトで入力
 #
-# �y�Z�L�����e�B��̒��Ӂz
-# �p�X���[�h�����̃t�@�C���ɒ��ڋL�ڂ���ƁA�t�@�C�������o�����ۂ�
-# �p�X���[�h���R�k���܂��BWindows ���i���}�l�[�W���[�̎g�p�𐄏����܂��B
+# 【セキュリティ上の注意】
+# パスワードをこのファイルに直接記載すると、ファイルが流出した際に
+# パスワードも漏洩します。Windows 資格情報マネージャーの使用を推奨します。
 #
-# �yJP1���[�U�[���z
-# JP1/AJS3�Ƀ��O�C�����邽�߂̃��[�U�[���ł��B
-# ���̃��[�U�[�ɂ́A�ΏۃW���u�ւ́u�Q�ƌ����v���K�v�ł��B
-# �� �󗓂ɂ���ƁA���i���}�l�[�W���[ �� ���̓v�����v�g�̏��Ŏ擾���܂�
+# 【JP1ユーザー名】
+# JP1/AJS3にログインするためのユーザー名です。
+# このユーザーには、対象ジョブへの「参照権限」が必要です。
+# ★ 空欄にすると、資格情報マネージャー → 入力プロンプトの順で取得します
 $jp1User = ""
 
-# �yJP1�p�X���[�h�z
-# JP1���[�U�[�̃p�X���[�h�ł��B
-# �� �Z�L�����e�B�̂��߁A�󗓂ɂ���Windows���i���}�l�[�W���[�̎g�p�𐄏�
+# 【JP1パスワード】
+# JP1ユーザーのパスワードです。
+# ★ セキュリティのため、空欄にしてWindows資格情報マネージャーの使用を推奨
 $jp1Password = ""
 
-# �yWindows���i���}�l�[�W���[�̃^�[�Q�b�g���z
-# ���i���}�l�[�W���[�ɓo�^����ۂ́u�^�[�Q�b�g���v���w�肵�܂��B
+# 【Windows資格情報マネージャーのターゲット名】
+# 資格情報マネージャーに登録する際の「ターゲット名」を指定します。
 #
-# �y���i���̓o�^���@�z
-# ���@1: �R�}���h�œo�^
+# 【資格情報の登録方法】
+# 方法1: コマンドで登録
 #   cmdkey /generic:JP1_WebConsole /user:jp1admin /pass:yourpassword
 #
-# ���@2: GUI�œo�^
-#   1. �R���g���[���p�l�� �� ���[�U�[�A�J�E���g �� ���i���}�l�[�W���[
-#   2. �uWindows���i���v���u�ėp���i���̒ǉ��v
-#   3. �C���^�[�l�b�g�܂��̓l�b�g���[�N�̃A�h���X: JP1_WebConsole
-#   4. ���[�U�[���ƃp�X���[�h�����
+# 方法2: GUIで登録
+#   1. コントロールパネル → ユーザーアカウント → 資格情報マネージャー
+#   2. 「Windows資格情報」→「汎用資格情報の追加」
+#   3. インターネットまたはネットワークのアドレス: JP1_WebConsole
+#   4. ユーザー名とパスワードを入力
 $credentialTarget = "JP1_WebConsole"
 
 # ------------------------------------------------------------------------------
-# ���s���W���u�ҋ@�ݒ�
+# 実行中ジョブ待機設定
 # ------------------------------------------------------------------------------
-# �y���̐ݒ�̖ړI�z
-# �W���u�����ݎ��s���̏ꍇ�A�I������܂őҋ@���Ă��烍�O���擾�ł��܂��B
-# ���s���̃W���u�ɂ͎��s���ʏڍׁi���O�j���܂����݂��Ȃ����߂ł��B
+# 【この設定の目的】
+# ジョブが現在実行中の場合、終了するまで待機してからログを取得できます。
+# 実行中のジョブには実行結果詳細（ログ）がまだ存在しないためです。
 #
-# �y�ő�ҋ@�b���z
-# �W���u�̏I����҂ő厞�Ԃ�b�P�ʂŎw�肵�܂��B
-# - 0���w�肷��ƁA���s���̏ꍇ�͑ҋ@�����ɃG���[�I�����܂�
-# - ���̎��Ԃ𒴂��Ă��I�����Ȃ��ꍇ�́A�G���[�R�[�h11�ŏI�����܂�
+# 【最大待機秒数】
+# ジョブの終了を待つ最大時間を秒単位で指定します。
+# - 0を指定すると、実行中の場合は待機せずにエラー終了します
+# - この時間を超えても終了しない場合は、エラーコード11で終了します
 #
-# �ݒ��:
-#   $maxWaitSeconds = 0     # �ҋ@���Ȃ�
-#   $maxWaitSeconds = 60    # �ő�1���ҋ@�i�f�t�H���g�j
-#   $maxWaitSeconds = 300   # �ő�5���ҋ@
+# 設定例:
+#   $maxWaitSeconds = 0     # 待機しない
+#   $maxWaitSeconds = 60    # 最大1分待機（デフォルト）
+#   $maxWaitSeconds = 300   # 最大5分待機
 $maxWaitSeconds = 60
 
-# �y�`�F�b�N�Ԋu�z
-# �W���u���I���������ǂ������m�F����Ԋu��b�P�ʂŎw�肵�܂��B
-# �Z������Ɖ����������Ȃ�܂����A�T�[�o�[�ւ̕��ׂ������܂��B
+# 【チェック間隔】
+# ジョブが終了したかどうかを確認する間隔を秒単位で指定します。
+# 短くすると応答が早くなりますが、サーバーへの負荷が増えます。
 #
-# �ݒ��:
-#   $checkIntervalSeconds = 5    # 5�b���ƂɃ`�F�b�N
-#   $checkIntervalSeconds = 10   # 10�b���ƂɃ`�F�b�N�i�f�t�H���g�j
-#   $checkIntervalSeconds = 30   # 30�b���ƂɃ`�F�b�N
+# 設定例:
+#   $checkIntervalSeconds = 5    # 5秒ごとにチェック
+#   $checkIntervalSeconds = 10   # 10秒ごとにチェック（デフォルト）
+#   $checkIntervalSeconds = 30   # 30秒ごとにチェック
 $checkIntervalSeconds = 10
 
 # ------------------------------------------------------------------------------
-# �o�͐ݒ�
+# 出力設定
 # ------------------------------------------------------------------------------
-# �y�o�͐�t�H���_�z
-# �擾�������O�t�@�C����ۑ�����t�H���_���w�肵�܂��B
+# 【出力先フォルダ】
+# 取得したログファイルを保存するフォルダを指定します。
 #
-# �w����@:
-#   - ���΃p�X: ���̃X�N���v�g������t�H���_����̑��Έʒu
-#   - �t���p�X: �h���C�u������n�܂��΃p�X
+# 指定方法:
+#   - 相対パス: このスクリプトがあるフォルダからの相対位置
+#   - フルパス: ドライブ名から始まる絶対パス
 #
-# �� �t�H���_�����݂��Ȃ��ꍇ�͎����I�ɍ쐬����܂�
+# ※ フォルダが存在しない場合は自動的に作成されます
 #
-# �ݒ��:
-#   $outputFolder = "..\02.Output"          # ���΃p�X�i1��̊K�w��02.Output�t�H���_�j
-#   $outputFolder = "C:\Logs\JP1"           # �t���p�X
-#   $outputFolder = ".\Output"              # �����t�H���_����Output�t�H���_
+# 設定例:
+#   $outputFolder = "..\02.Output"          # 相対パス（1つ上の階層の02.Outputフォルダ）
+#   $outputFolder = "C:\Logs\JP1"           # フルパス
+#   $outputFolder = ".\Output"              # 同じフォルダ内のOutputフォルダ
 $outputFolder = "..\02.Output"
 
-# �y�o�̓t�@�C�����̃v���t�B�b�N�X�z
-# �o�̓t�@�C�����̐擪�ɕt���镶������w�肵�܂��B
+# 【出力ファイル名のプレフィックス】
+# 出力ファイル名の先頭に付ける文字列を指定します。
 #
-# �ŏI�I�ȃt�@�C�����̌`��:
-#   {�v���t�B�b�N�X}�y{�J�n����}���s���z�y{�I�����}�z{�W���u�l�b�g��}_{�R�����g}.txt
+# 最終的なファイル名の形式:
+#   {プレフィックス}【{開始日時}実行分】【{終了状態}】{ジョブネット名}_{コメント}.txt
 #
-# �o�͗�:
-#   �y�W���u���s���ʁz�y20250111_093000���s���z�y����I���z�����o�b�`_����W�v����.txt
-$outputFilePrefix = "�y�W���u���s���ʁz"
+# 出力例:
+#   【ジョブ実行結果】【20250111_093000実行分】【正常終了】日次バッチ_売上集計処理.txt
+$outputFilePrefix = "【ジョブ実行結果】"
 
 # ==============================================================================
-# �� ���������ݒ�Z�N�V����
+# ■ 検索条件設定セクション
 # ==============================================================================
-# �y���̃Z�N�V�����ɂ��āz
-# �W���u�̎��s��������������ۂ̏�����ݒ肵�܂��B
-# �ʏ�̓f�t�H���g�l�̂܂܂Ŗ�肠��܂��񂪁A����̏����Ń��O��
-# �擾�������ꍇ�ɂ����̐ݒ��ύX���܂��B
+# 【このセクションについて】
+# ジョブの実行履歴を検索する際の条件を設定します。
+# 通常はデフォルト値のままで問題ありませんが、特定の条件でログを
+# 取得したい場合にこれらの設定を変更します。
 #
-# �y�悭�g���ݒ�p�^�[���z
-# - �ŐV�̎��s���ʂ��擾������ �� $generation = "RESULT"�i�f�t�H���g�j
-# - �G���[�ɂȂ����W���u���������� �� $statusFilter = "ABNORMAL"
-# - ������Ԃ̃��O���擾������ �� $generation = "PERIOD" + ���Ԏw��
+# 【よく使う設定パターン】
+# - 最新の実行結果を取得したい → $generation = "RESULT"（デフォルト）
+# - エラーになったジョブだけ見たい → $statusFilter = "ABNORMAL"
+# - 特定期間のログを取得したい → $generation = "PERIOD" + 期間指定
 # ==============================================================================
 
 # ------------------------------------------------------------------------------
-# (1) GenerationType - ����w��
+# (1) GenerationType - 世代指定
 # ------------------------------------------------------------------------------
-# �y����Ƃ́H�z
-# JP1/AJS3�ł́A�W���u�͓�����`�ŉ��x�����s����܂��B
-# �e���s���u����v�ƌĂсA���ꂼ��Ɏ��sID�iexecID�j�����蓖�Ă��܂��B
-# ���̐ݒ�ŁA�ǂ̐���̃��O���擾���邩���w�肵�܂��B
+# 【世代とは？】
+# JP1/AJS3では、ジョブは同じ定義で何度も実行されます。
+# 各実行を「世代」と呼び、それぞれに実行ID（execID）が割り当てられます。
+# この設定で、どの世代のログを取得するかを指定します。
 #
-# �y�w��\�Ȓl�z
+# 【指定可能な値】
 #
-# "NO" - ��������������ɂ��Ȃ�
-#        ���ׂĂ̐��オ�����ΏۂɂȂ�܂�
+# "NO" - 世代を検索条件にしない
+#        すべての世代が検索対象になります
 #
-# "STATUS" - �ŐV��Ԃ̐�����擾
-#            ���ݕ\������Ă����Ԃ̐�����擾���܂�
-#            �iJP1/AJS3 View �Ō������ԂƓ����j
+# "STATUS" - 最新状態の世代を取得
+#            現在表示されている状態の世代を取得します
+#            （JP1/AJS3 View で見える状態と同じ）
 #
-# "RESULT" - �ŐV���ʂ̐�����擾�i���������j
-#            ���߂ŏI�������W���u�̎��s���ʂ��擾���܂�
-#            �ʏ�͂��̐ݒ肪�������߂ł�
+# "RESULT" - 最新結果の世代を取得（★推奨★）
+#            直近で終了したジョブの実行結果を取得します
+#            通常はこの設定がおすすめです
 #
-# "PERIOD" - �w����Ԃ̐�����擾
-#            ���� $periodBegin �� $periodEnd �Ŏw�肵�����Ԃ�
-#            ���s���ꂽ�W���u���擾���܂�
+# "PERIOD" - 指定期間の世代を取得
+#            下の $periodBegin と $periodEnd で指定した期間に
+#            実行されたジョブを取得します
 #
-# "EXECID" - ����̎��sID���擾
-#            ���� $execID �Ŏw�肵������̎��s���擾���܂�
-#            �ߋ��̓���̎��s�𒲂ׂ����ꍇ�Ɏg�p
+# "EXECID" - 特定の実行IDを取得
+#            下の $execID で指定した特定の実行を取得します
+#            過去の特定の実行を調べたい場合に使用
 $generation = "RESULT"
 
-# ���Ԏw��igeneration="PERIOD" �̏ꍇ�Ɏg�p�j
-# �`��: YYYY-MM-DDThh:mm�iISO 8601�`���j
-# ��: "2025-01-01T00:00" �` "2025-01-31T23:59"
+# 期間指定（generation="PERIOD" の場合に使用）
+# 形式: YYYY-MM-DDThh:mm（ISO 8601形式）
+# 例: "2025-01-01T00:00" ～ "2025-01-31T23:59"
 $periodBegin = "2025-12-01T00:00"
 $periodEnd = "2025-12-25T23:59"
 
-# ���sID�w��igeneration="EXECID" �̏ꍇ�Ɏg�p�j
-# �`��: @[mmmm]{A�`Z}nnnn�i��: @A100, @10A200�j
+# 実行ID指定（generation="EXECID" の場合に使用）
+# 形式: @[mmmm]{A～Z}nnnn（例: @A100, @10A200）
 $execID = ""
 
 # ------------------------------------------------------------------------------
-# (2) UnitStatus - ���j�b�g��ԃt�B���^
+# (2) UnitStatus - ユニット状態フィルタ
 # ------------------------------------------------------------------------------
-# �擾���郆�j�b�g�̏�Ԃ��w�肵�܂��B
+# 取得するユニットの状態を指定します。
 #
-# �y�ʏ�ԁz
-#   "NO"             - ���j�b�g��Ԃ����������ɂ��܂���i���ׂĎ擾�j
-#   "UNREGISTERED"   - ���o�^
-#   "NOPLAN"         - ���v��
-#   "UNEXEC"         - �����s�I��
-#   "BYPASS"         - �v�斢���s
-#   "EXECDEFFER"     - �J�z�����s
-#   "SHUTDOWN"       - ��
-#   "TIMEWAIT"       - �J�n�����҂�
-#   "TERMWAIT"       - ��s�I���҂�
-#   "EXECWAIT"       - ���s�҂�
-#   "QUEUING"        - �L���[�C���O
-#   "CONDITIONWAIT"  - �N�������҂�
-#   "HOLDING"        - �ۗ���
-#   "RUNNING"        - ���s��
-#   "WACONT"         - �x�����o���s��
-#   "ABCONT"         - �ُ팟�o���s��
-#   "MONITORING"     - �Ď���
-#   "ABNORMAL"       - �ُ팟�o�I���i���G���[�������ɕ֗����j
-#   "INVALIDSEQ"     - �����s��
-#   "INTERRUPT"      - ���f
-#   "KILL"           - �����I��
-#   "FAIL"           - �N�����s
-#   "UNKNOWN"        - �I����ԕs��
-#   "MONITORCLOSE"   - �Ď��ł��؂�I��
-#   "WARNING"        - �x�����o�I��
-#   "NORMAL"         - ����I��
-#   "NORMALFALSE"    - ����I��-�U
-#   "UNEXECMONITOR"  - �Ď����N���I��
-#   "MONITORINTRPT"  - �Ď����f
-#   "MONITORNORMAL"  - �Ď�����I��
+# 【個別状態】
+#   "NO"             - ユニット状態を検索条件にしません（すべて取得）
+#   "UNREGISTERED"   - 未登録
+#   "NOPLAN"         - 未計画
+#   "UNEXEC"         - 未実行終了
+#   "BYPASS"         - 計画未実行
+#   "EXECDEFFER"     - 繰越未実行
+#   "SHUTDOWN"       - 閉塞
+#   "TIMEWAIT"       - 開始時刻待ち
+#   "TERMWAIT"       - 先行終了待ち
+#   "EXECWAIT"       - 実行待ち
+#   "QUEUING"        - キューイング
+#   "CONDITIONWAIT"  - 起動条件待ち
+#   "HOLDING"        - 保留中
+#   "RUNNING"        - 実行中
+#   "WACONT"         - 警告検出実行中
+#   "ABCONT"         - 異常検出実行中
+#   "MONITORING"     - 監視中
+#   "ABNORMAL"       - 異常検出終了（★エラー調査時に便利★）
+#   "INVALIDSEQ"     - 順序不正
+#   "INTERRUPT"      - 中断
+#   "KILL"           - 強制終了
+#   "FAIL"           - 起動失敗
+#   "UNKNOWN"        - 終了状態不正
+#   "MONITORCLOSE"   - 監視打ち切り終了
+#   "WARNING"        - 警告検出終了
+#   "NORMAL"         - 正常終了
+#   "NORMALFALSE"    - 正常終了-偽
+#   "UNEXECMONITOR"  - 監視未起動終了
+#   "MONITORINTRPT"  - 監視中断
+#   "MONITORNORMAL"  - 監視正常終了
 #
-# �y�O���[�v��ԁz�i�����̏�Ԃ��܂Ƃ߂Ďw��j
-#   "GRP_WAIT"     - �҂���ԁi�J�n�����҂��A��s�I���҂��A���s�҂��A�L���[�C���O�A�N�������҂��j
-#   "GRP_RUN"      - ���s����ԁi���s���A�x�����o���s���A�ُ팟�o���s���A�Ď����j
-#   "GRP_ABNORMAL" - �ُ�I����ԁi�ُ팟�o�I���A�����s���A���f�A�����I���A�N�����s�A�I����ԕs���A�Ď��ł��؂�I���j
-#   "GRP_NORMAL"   - ����I����ԁi����I���A����I��-�U�A�Ď����N���I���A�Ď����f�A�Ď�����I���j
+# 【グループ状態】（複数の状態をまとめて指定）
+#   "GRP_WAIT"     - 待ち状態（開始時刻待ち、先行終了待ち、実行待ち、キューイング、起動条件待ち）
+#   "GRP_RUN"      - 実行中状態（実行中、警告検出実行中、異常検出実行中、監視中）
+#   "GRP_ABNORMAL" - 異常終了状態（異常検出終了、順序不正、中断、強制終了、起動失敗、終了状態不明、監視打ち切り終了）
+#   "GRP_NORMAL"   - 正常終了状態（正常終了、正常終了-偽、監視未起動終了、監視中断、監視正常終了）
 #
-# �� �󗓂܂��� "NO" �őS���擾
-# �� �G���[�������� "ABNORMAL" �� "GRP_ABNORMAL" ���֗�
+# ★ 空欄または "NO" で全件取得
+# ★ エラー調査時は "ABNORMAL" や "GRP_ABNORMAL" が便利
 $statusFilter = "NO"
 
 # ------------------------------------------------------------------------------
-# (3) DelayType - �x����ԃt�B���^
+# (3) DelayType - 遅延状態フィルタ
 # ------------------------------------------------------------------------------
-# �J�n�x���܂��͏I���x���̗L���Ńt�B���^���܂��B
+# 開始遅延または終了遅延の有無でフィルタします。
 #
-# �w��\�Ȓl:
-#   "NO"    - �x����Ԃ����������ɂ��܂���i���ׂĎ擾�j
-#   "START" - �J�n�x���̂��郆�j�b�g�̂ݎ擾
-#   "END"   - �I���x���̂��郆�j�b�g�̂ݎ擾
-#   "YES"   - �J�n�x���܂��͏I���x���̂��郆�j�b�g���擾
+# 指定可能な値:
+#   "NO"    - 遅延状態を検索条件にしません（すべて取得）
+#   "START" - 開始遅延のあるユニットのみ取得
+#   "END"   - 終了遅延のあるユニットのみ取得
+#   "YES"   - 開始遅延または終了遅延のあるユニットを取得
 $delayStatus = "NO"
 
 # ------------------------------------------------------------------------------
-# (4) HoldPlan - �ۗ��\��t�B���^
+# (4) HoldPlan - 保留予定フィルタ
 # ------------------------------------------------------------------------------
-# �ۗ��\��̗L���Ńt�B���^���܂��B
+# 保留予定の有無でフィルタします。
 #
-# �w��\�Ȓl:
-#   "NO"        - �ۗ��\������������ɂ��܂���i���ׂĎ擾�j
-#   "PLAN_NONE" - �ۗ��\��̂Ȃ����j�b�g�̂ݎ擾
-#   "PLAN_YES"  - �ۗ��\��̂��郆�j�b�g�̂ݎ擾
+# 指定可能な値:
+#   "NO"        - 保留予定を検索条件にしません（すべて取得）
+#   "PLAN_NONE" - 保留予定のないユニットのみ取得
+#   "PLAN_YES"  - 保留予定のあるユニットのみ取得
 $holdPlan = "NO"
 
 # ==============================================================================
-# �� ���C�������i�ȉ��͒ʏ�ҏW�s�v�j
+# ■ メイン処理（以下は通常編集不要）
 # ==============================================================================
-# �y���̃Z�N�V�����ɂ��āz
-# ���������͎��ۂ̏������s�������ł��B�ʏ�͕ҏW����K�v�͂���܂���B
-# �㕔�̐ݒ�Z�N�V������ύX���邱�ƂŁA������J�X�^�}�C�Y�ł��܂��B
+# 【このセクションについて】
+# ここから先は実際の処理を行う部分です。通常は編集する必要はありません。
+# 上部の設定セクションを変更することで、動作をカスタマイズできます。
 #
-# �y�����̗���z
-# 1. ���ϐ���������i�W���u�p�X�j���擾
-# 2. �F�؏����擾�i�ݒ� �� ���i���}�l�[�W���[ �� ���̓v�����v�g�j
-# 3. REST API���N�G�X�g�̏����i�w�b�_�[�AURL���j
-# 4. STEP 1�`6 �̏��������ԂɎ��s
+# 【処理の流れ】
+# 1. 環境変数から引数（ジョブパス）を取得
+# 2. 認証情報を取得（設定 → 資格情報マネージャー → 入力プロンプト）
+# 3. REST APIリクエストの準備（ヘッダー、URL等）
+# 4. STEP 1〜6 の処理を順番に実行
 # ==============================================================================
 
 # ------------------------------------------------------------------------------
-# ���ϐ����烆�j�b�g�p�X���擾
+# 環境変数からユニットパスを取得
 # ------------------------------------------------------------------------------
-# �y���̏����̖ړI�z
-# �o�b�`�t�@�C������n���ꂽ�����i�W���u�̃p�X�j���擾���܂��B
-# �o�b�`�t�@�C�������Ŋ��ϐ��ɐݒ肵���l���A�����œǂݎ��܂��B
+# 【この処理の目的】
+# バッチファイルから渡された引数（ジョブのパス）を取得します。
+# バッチファイル部分で環境変数に設定した値を、ここで読み取ります。
 #
-# �y���ϐ��Ƃ́H�z
-# ���ϐ��́A�v���O�����ԂŃf�[�^���󂯓n�����߂̎d�g�݂ł��B
-# �o�b�`�t�@�C���iset �R�}���h�j�Őݒ肵���l���A
-# PowerShell�i$env:�ϐ����j�Ŏ擾�ł��܂��B
+# 【環境変数とは？】
+# 環境変数は、プログラム間でデータを受け渡すための仕組みです。
+# バッチファイル（set コマンド）で設定した値を、
+# PowerShell（$env:変数名）で取得できます。
 $unitPath = $env:JP1_UNIT_PATH
 $unitPath2 = $env:JP1_UNIT_PATH_2
 
 # ------------------------------------------------------------------------------
-# ��r���[�h�̔���
+# 比較モードの判定
 # ------------------------------------------------------------------------------
-# �y��r���[�h�Ƃ́H�z
-# 2�̃W���u�p�X���w�肳�ꂽ�ꍇ�A�u��r���[�h�v�Ƃ��ē��삵�܂��B
-# ��r���[�h�ł́A2�̃W���u�̊J�n�������r���A
-# ���V�����i�ŋߎ��s���ꂽ�j���̃��O���擾���܂��B
+# 【比較モードとは？】
+# 2つのジョブパスが指定された場合、「比較モード」として動作します。
+# 比較モードでは、2つのジョブの開始時刻を比較し、
+# より新しい（最近実行された）方のログを取得します。
 #
-# �y�g�p��z
-# �����������s��2�̃W���u������A�ǂ��炩�V�������̃��O���~�����ꍇ:
-#   JP1�W���u���擾.bat "/�����o�b�`/�W�vA" "/�����o�b�`/�W�vB"
+# 【使用例】
+# 同じ処理を行う2つのジョブがあり、どちらか新しい方のログが欲しい場合:
+#   JP1ジョブ情報取得.bat "/日次バッチ/集計A" "/日次バッチ/集計B"
 $isCompareMode = $false
 if ($unitPath2 -and $unitPath2.Trim() -ne "") {
     $isCompareMode = $true
 }
 
 # ------------------------------------------------------------------------------
-# �v���g�R���ݒ�
+# プロトコル設定
 # ------------------------------------------------------------------------------
-# �y���̏����̖ړI�z
-# HTTP�܂���HTTPS�̂ǂ���ŒʐM���邩�����肵�܂��B
-# �ݒ�Z�N�V������ $useHttps �̒l�Ɋ�Â��āAURL�̐擪������؂�ւ��܂��B
+# 【この処理の目的】
+# HTTPまたはHTTPSのどちらで通信するかを決定します。
+# 設定セクションの $useHttps の値に基づいて、URLの先頭部分を切り替えます。
 #
-# �yHTTP �� HTTPS �̈Ⴂ�z
-# - HTTP  : �Í����Ȃ��̒ʐM�B�ݒ肪�ȒP�B�Г��l�b�g���[�N�����B
-# - HTTPS : �Í�������iSSL/TLS�j�B�ʐM���T�󂳂�ɂ����B
+# 【HTTP と HTTPS の違い】
+# - HTTP  : 暗号化なしの通信。設定が簡単。社内ネットワーク向け。
+# - HTTPS : 暗号化あり（SSL/TLS）。通信が傍受されにくい。
 $protocol = if ($useHttps) { "https" } else { "http" }
 
 # ------------------------------------------------------------------------------
-# Windows���i���}�l�[�W���[����̔F�؏��擾
+# Windows資格情報マネージャーからの認証情報取得
 # ------------------------------------------------------------------------------
-# �y���̏����̖ړI�z
-# JP1���[�U�[�̃��O�C�����i���[�U�[���ƃp�X���[�h�j���擾���܂��B
+# 【この処理の目的】
+# JP1ユーザーのログイン情報（ユーザー名とパスワード）を取得します。
 #
-# �y�F�؏��̎擾�����z
-# 1. �ݒ�Z�N�V�����ɒ��ڏ����ꂽ�l���g�p
-# 2. �󗓂̏ꍇ �� Windows���i���}�l�[�W���[����擾
-# 3. ����ł��擾�ł��Ȃ��ꍇ �� ���[�U�[�ɓ��͂����߂�
+# 【認証情報の取得順序】
+# 1. 設定セクションに直接書かれた値を使用
+# 2. 空欄の場合 → Windows資格情報マネージャーから取得
+# 3. それでも取得できない場合 → ユーザーに入力を求める
 #
-# �yWindows���i���}�l�[�W���[�Ƃ́H�z
-# Windows�ɑg�ݍ��܂ꂽ�p�X���[�h�Ǘ��@�\�ł��B
-# �p�X���[�h���Í������ĕۑ��ł��邽�߁A�X�N���v�g�ɒ��ڏ��������S�ł��B
-# �R���g���[���p�l�� �� ���i���}�l�[�W���[ ����m�F�E�o�^�ł��܂��B
+# 【Windows資格情報マネージャーとは？】
+# Windowsに組み込まれたパスワード管理機能です。
+# パスワードを暗号化して保存できるため、スクリプトに直接書くより安全です。
+# コントロールパネル → 資格情報マネージャー から確認・登録できます。
 
 if (-not $jp1User -or -not $jp1Password) {
-    # Windows API (CredRead) ���g�p���Ď��i�����擾
-    # �y�Z�p�I�ȕ⑫�z
-    # PowerShell���璼��Windows API���Ăяo�����߁A
-    # C#�R�[�h�𓮓I�ɃR���p�C�����Ďg�p���Ă��܂��B
-    # advapi32.dll ��Windows�̃Z�L�����e�B�֘AAPI��񋟂���DLL�ł��B
+    # Windows API (CredRead) を使用して資格情報を取得
+    # 【技術的な補足】
+    # PowerShellから直接Windows APIを呼び出すため、
+    # C#コードを動的にコンパイルして使用しています。
+    # advapi32.dll はWindowsのセキュリティ関連APIを提供するDLLです。
     Add-Type -TypeDefinition @"
         using System;
         using System.Runtime.InteropServices;
@@ -625,84 +625,84 @@ if (-not $jp1User -or -not $jp1Password) {
 }
 
 # ------------------------------------------------------------------------------
-# ���̓v�����v�g�ł̔F�؏��擾�i�t�H�[���o�b�N�j
+# 入力プロンプトでの認証情報取得（フォールバック）
 # ------------------------------------------------------------------------------
-# �y���̏����̖ړI�z
-# �ݒ�t�@�C���ɂ����i���}�l�[�W���[�ɂ��F�؏�񂪂Ȃ��ꍇ�A
-# ���[�U�[�ɒ��ړ��͂����߂܂��B
+# 【この処理の目的】
+# 設定ファイルにも資格情報マネージャーにも認証情報がない場合、
+# ユーザーに直接入力を求めます。
 #
-# �y�Z�L�����e�B�z���z
-# �p�X���[�h���͎��� -AsSecureString �I�v�V�������g�p���āA
-# ���͓��e����ʂɕ\������Ȃ��悤�ɂ��Ă��܂��i**** �ƕ\�������j�B
+# 【セキュリティ配慮】
+# パスワード入力時は -AsSecureString オプションを使用して、
+# 入力内容が画面に表示されないようにしています（**** と表示される）。
 if (-not $jp1User) {
-    $jp1User = Read-Host "JP1���[�U�[������͂��Ă�������"
+    $jp1User = Read-Host "JP1ユーザー名を入力してください"
 }
 if (-not $jp1Password) {
-    $securePass = Read-Host "JP1�p�X���[�h����͂��Ă�������" -AsSecureString
-    # SecureString ��ʏ�̕�����ɕϊ��iAPI�Ăяo���ɕK�v�j
+    $securePass = Read-Host "JP1パスワードを入力してください" -AsSecureString
+    # SecureString を通常の文字列に変換（API呼び出しに必要）
     $jp1Password = [Runtime.InteropServices.Marshal]::PtrToStringAuto(
         [Runtime.InteropServices.Marshal]::SecureStringToBSTR($securePass))
 }
 
 # ------------------------------------------------------------------------------
-# �F�؏��̍쐬�iBase64�G���R�[�h�j
+# 認証情報の作成（Base64エンコード）
 # ------------------------------------------------------------------------------
-# �y���̏����̖ړI�z
-# REST API�F�ؗp�̃w�b�_�[�l���쐬���܂��B
+# 【この処理の目的】
+# REST API認証用のヘッダー値を作成します。
 #
-# �yBase64�G���R�[�h�Ƃ́H�z
-# ��������A���t�@�x�b�g�E�����E�ꕔ�L�������ŕ\������ϊ������ł��B
-# HTTP�ʐM�œ��ꕶ�����܂ރf�[�^�����S�ɑ��邽�߂Ɏg���܂��B
-# �� �Í����ł͂Ȃ��̂ŁA�T�󂳂��Ɖ�ǂ����\��������܂��B
-#    ���̂��߁AHTTPS�̎g�p����������܂��B
+# 【Base64エンコードとは？】
+# 文字列をアルファベット・数字・一部記号だけで表現する変換方式です。
+# HTTP通信で特殊文字を含むデータを安全に送るために使われます。
+# ※ 暗号化ではないので、傍受されると解読される可能性があります。
+#    そのため、HTTPSの使用が推奨されます。
 #
-# �y�����̗���z
-# 1. "���[�U�[��:�p�X���[�h" �̌`���ŕ�������쐬
-# 2. UTF-8�Ńo�C�g�z��ɕϊ�
-# 3. Base64�ŃG���R�[�h
+# 【処理の流れ】
+# 1. "ユーザー名:パスワード" の形式で文字列を作成
+# 2. UTF-8でバイト配列に変換
+# 3. Base64でエンコード
 $authString = "${jp1User}:${jp1Password}"
 $authBytes = [System.Text.Encoding]::UTF8.GetBytes($authString)
 $authBase64 = [System.Convert]::ToBase64String($authBytes)
 
 # ------------------------------------------------------------------------------
-# HTTP���N�G�X�g�w�b�_�[�̐ݒ�
+# HTTPリクエストヘッダーの設定
 # ------------------------------------------------------------------------------
-# �y���̏����̖ړI�z
-# REST API���N�G�X�g�ɕt������w�b�_�[����ݒ肵�܂��B
+# 【この処理の目的】
+# REST APIリクエストに付加するヘッダー情報を設定します。
 #
-# �y�e�w�b�_�[�̈Ӗ��z
+# 【各ヘッダーの意味】
 # Accept-Language: "ja"
-#   �� API����̉�������{��Ŏ󂯎��w��
+#   → APIからの応答を日本語で受け取る指定
 #
-# X-AJS-Authorization: (Base64�G���R�[�h���ꂽ�F�؏��)
-#   �� JP1 Web Console�Ǝ��̔F�؃w�b�_�[
-#   �� ���ꂪ�Ȃ��Ɓu�F�؃G���[�v�ŋ��ۂ���܂�
+# X-AJS-Authorization: (Base64エンコードされた認証情報)
+#   → JP1 Web Console独自の認証ヘッダー
+#   → これがないと「認証エラー」で拒否されます
 $headers = @{
     "Accept-Language" = "ja"
     "X-AJS-Authorization" = $authBase64
 }
 
 # ------------------------------------------------------------------------------
-# SSL�ؖ������؂̐ݒ�iHTTPS�g�p���j
+# SSL証明書検証の設定（HTTPS使用時）
 # ------------------------------------------------------------------------------
-# �y���̏����̖ړI�z
-# HTTPS�ʐM����SSL�ؖ������؃|���V�[��ݒ肵�܂��B
+# 【この処理の目的】
+# HTTPS通信時のSSL証明書検証ポリシーを設定します。
 #
-# �ySSL�ؖ����Ƃ́H�z
-# �T�[�o�[�̐g�����ؖ����邽�߂̓d�q�ؖ����ł��B
-# ���K�̔F�؋ǁiCA�j���甭�s���ꂽ�ؖ������g���ƁA
-# �u���̃T�[�o�[�͖{���ł��v�Ƃ������Ƃ��ۏ؂���܂��B
+# 【SSL証明書とは？】
+# サーバーの身元を証明するための電子証明書です。
+# 正規の認証局（CA）から発行された証明書を使うと、
+# 「このサーバーは本物です」ということが保証されます。
 #
-# �y���ȏ����ؖ����ɂ��āz
-# �J���E�e�X�g���ł́A���K�̏ؖ������擾������
-# �u���ȏ����ؖ����v���g�����Ƃ�����܂��B
-# ���ȏ����ؖ����͌��؂Ɏ��s���邽�߁A���̃R�[�h�Ō��؂��X�L�b�v���܂��B
+# 【自己署名証明書について】
+# 開発・テスト環境では、正規の証明書を取得せずに
+# 「自己署名証明書」を使うことがあります。
+# 自己署名証明書は検証に失敗するため、このコードで検証をスキップします。
 #
-# �y���Ӂz
-# �{�Ԋ��ł͐��K�̏ؖ������g�p���A���̃X�L�b�v�����͖����ɂ��邱�Ƃ𐄏��B
-# �ؖ������؂��X�L�b�v����ƁA���ԎҍU���̃��X�N������܂��B
+# 【注意】
+# 本番環境では正規の証明書を使用し、このスキップ処理は無効にすることを推奨。
+# 証明書検証をスキップすると、中間者攻撃のリスクがあります。
 if ($useHttps) {
-    # C#�R�[�h�𓮓I�ɃR���p�C�����ďؖ������؃|���V�[���`
+    # C#コードを動的にコンパイルして証明書検証ポリシーを定義
     Add-Type @"
         using System.Net;
         using System.Security.Cryptography.X509Certificates;
@@ -710,142 +710,142 @@ if ($useHttps) {
             public bool CheckValidationResult(
                 ServicePoint srvPoint, X509Certificate certificate,
                 WebRequest request, int certificateProblem) {
-                return true;  // ���ׂĂ̏ؖ�����M���i���؃X�L�b�v�j
+                return true;  // すべての証明書を信頼（検証スキップ）
             }
         }
 "@
-    # �ؖ������؃|���V�[��K�p
+    # 証明書検証ポリシーを適用
     [System.Net.ServicePointManager]::CertificatePolicy = New-Object TrustAllCertsPolicy
-    # TLS 1.2���g�p�i�Â�SSL/TLS�o�[�W�����̓Z�L�����e�B���肪����j
+    # TLS 1.2を使用（古いSSL/TLSバージョンはセキュリティ上問題がある）
     [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12
 }
 
 # ------------------------------------------------------------------------------
-# �x�[�XURL�̍\�z
+# ベースURLの構築
 # ------------------------------------------------------------------------------
-# �y���̏����̖ړI�z
-# REST API�Ăяo���Ŏg�p�����{URL���쐬���܂��B
+# 【この処理の目的】
+# REST API呼び出しで使用する基本URLを作成します。
 #
-# �yURL�̍\���z
-# {�v���g�R��}://{�z�X�g}:{�|�[�g}/ajs/api/v1
+# 【URLの構成】
+# {プロトコル}://{ホスト}:{ポート}/ajs/api/v1
 #
-# ��:
+# 例:
 #   http://localhost:22252/ajs/api/v1
 #   https://jp1server.example.com:22253/ajs/api/v1
 #
-# �y/ajs/api/v1 �ɂ��āz
-# �����JP1/AJS3 Web Console��REST API�̃x�[�X�p�X�ł��B
-# "v1" ��API�̃o�[�W�����������Ă��܂��B
+# 【/ajs/api/v1 について】
+# これはJP1/AJS3 Web ConsoleのREST APIのベースパスです。
+# "v1" はAPIのバージョンを示しています。
 $baseUrl = "${protocol}://${webConsoleHost}:${webConsolePort}/ajs/api/v1"
 
 # ==============================================================================
-# �� ���[�e�B���e�B�֐��i���C�������̑O�ɒ�`���K�v�j
+# ■ ユーティリティ関数（メイン処理の前に定義が必要）
 # ==============================================================================
-# �y���̃Z�N�V�����ɂ��āz
-# ���C�������Ŏg�p����⏕�I�Ȋ֐����`���Ă��܂��B
-# PowerShell�ł́A�֐��͌Ăяo�����O�ɒ�`����Ă���K�v�����邽�߁A
-# �����Ő�ɒ�`���Ă��܂��B
+# 【このセクションについて】
+# メイン処理で使用する補助的な関数を定義しています。
+# PowerShellでは、関数は呼び出される前に定義されている必要があるため、
+# ここで先に定義しています。
 #
-# �y�֐��Ƃ́H�i���S�Ҍ����j�z
-# �֐��́u�悭�g���������܂Ƃ߂����́v�ł��B
-# �������������x����������ɁA�֐����ŌĂяo�����Ƃ��ł��܂��B
-# ��: Get-StatusDisplayName "NORMAL"  ��  "����I��" ��Ԃ�
+# 【関数とは？（初心者向け）】
+# 関数は「よく使う処理をまとめたもの」です。
+# 同じ処理を何度も書く代わりに、関数名で呼び出すことができます。
+# 例: Get-StatusDisplayName "NORMAL"  →  "正常終了" を返す
 # ==============================================================================
 
 # ------------------------------------------------------------------------------
-# Write-Console�֐� - �R���\�[���ւ̒��ڏo��
+# Write-Console関数 - コンソールへの直接出力
 # ------------------------------------------------------------------------------
-# �y���̊֐��̖ړI�z
-# ��ʁi�R���\�[���j�Ƀ��b�Z�[�W��\�����܂��B
+# 【この関数の目的】
+# 画面（コンソール）にメッセージを表示します。
 #
-# �y�Ȃ� Write-Host �ł͂Ȃ���p�֐����g���̂��H�z
-# ���̃X�N���v�g���ʂ̃X�N���v�g����Ă΂ꂽ�ꍇ�A
-# �W���o�͂��t�@�C���Ƀ��_�C���N�g�i> output.txt�j����邱�Ƃ�����܂��B
-# ���̏ꍇ�ł��A�i�����b�Z�[�W�͉�ʂɕ\�����������߁A
-# ����ȃf�o�C�X���uCON�v�ɏ�������Ń��_�C���N�g��������Ă��܂��B
+# 【なぜ Write-Host ではなく専用関数を使うのか？】
+# このスクリプトが別のスクリプトから呼ばれた場合、
+# 標準出力がファイルにリダイレクト（> output.txt）されることがあります。
+# その場合でも、進捗メッセージは画面に表示したいため、
+# 特殊なデバイス名「CON」に書き込んでリダイレクトを回避しています。
 #
-# �yCON�f�o�C�X�Ƃ́H�z
-# Windows�ł́uCON�v�́u�R���\�[���i��ʁj�v��\������ȃt�@�C�����ł��B
-# �����ɏ������ނƁA��ɉ�ʂɕ\������܂��B
+# 【CONデバイスとは？】
+# Windowsでは「CON」は「コンソール（画面）」を表す特殊なファイル名です。
+# ここに書き込むと、常に画面に表示されます。
 function Write-Console {
     param([string]$Message)
     $Message | Out-File -FilePath "CON" -Encoding Default
 }
 
 # ------------------------------------------------------------------------------
-# Get-StatusDisplayName�֐� - �X�e�[�^�X�l�̓��{��ϊ�
+# Get-StatusDisplayName関数 - ステータス値の日本語変換
 # ------------------------------------------------------------------------------
-# �y���̊֐��̖ړI�z
-# JP1�̃X�e�[�^�X�R�[�h�i�p��j����{��̕\�����ɕϊ����܂��B
+# 【この関数の目的】
+# JP1のステータスコード（英語）を日本語の表示名に変換します。
 #
-# �y�g�p��z
-# Get-StatusDisplayName "NORMAL"    ��  "����I��"
-# Get-StatusDisplayName "ABNORMAL"  ��  "�ُ팟�o�I��"
+# 【使用例】
+# Get-StatusDisplayName "NORMAL"    →  "正常終了"
+# Get-StatusDisplayName "ABNORMAL"  →  "異常検出終了"
 #
-# �y�X�e�[�^�X�R�[�h�ꗗ�z
-# JP1/AJS3�ł́A�W���u�̏I����Ԃ��p��̃R�[�h�ŊǗ����Ă��܂��B
-# ���[�U�[�ɕ�����₷���\�����邽�߁A���{��ɕϊ����Ă��܂��B
+# 【ステータスコード一覧】
+# JP1/AJS3では、ジョブの終了状態を英語のコードで管理しています。
+# ユーザーに分かりやすく表示するため、日本語に変換しています。
 function Get-StatusDisplayName {
     param([string]$status)
     switch ($status) {
-        # --- ����n�̏I����� ---
-        "NORMAL"        { return "����I��" }           # ����ɏI��
-        "NORMALFALSE"   { return "����I��-�U" }        # ����W���u�ŏ����s����
+        # --- 正常系の終了状態 ---
+        "NORMAL"        { return "正常終了" }           # 正常に終了
+        "NORMALFALSE"   { return "正常終了-偽" }        # 判定ジョブで条件不成立
 
-        # --- �x���n�̏I����� ---
-        "WARNING"       { return "�x�����o�I��" }       # �x�������������I��
+        # --- 警告系の終了状態 ---
+        "WARNING"       { return "警告検出終了" }       # 警告があったが終了
 
-        # --- �ُ�n�̏I����� ---
-        "ABNORMAL"      { return "�ُ팟�o�I��" }       # �G���[�ŏI��
-        "KILL"          { return "�����I��" }           # �����I�ɒ�~���ꂽ
-        "INTERRUPT"     { return "���f" }               # ���[�U�[�����f����
-        "FAIL"          { return "�N�����s" }           # �N�����̂Ɏ��s
-        "UNKNOWN"       { return "�I����ԕs��" }       # ��Ԃ��s��
-        "INVALIDSEQ"    { return "�����s��" }           # ���s�����ɖ��
+        # --- 異常系の終了状態 ---
+        "ABNORMAL"      { return "異常検出終了" }       # エラーで終了
+        "KILL"          { return "強制終了" }           # 強制的に停止された
+        "INTERRUPT"     { return "中断" }               # ユーザーが中断した
+        "FAIL"          { return "起動失敗" }           # 起動自体に失敗
+        "UNKNOWN"       { return "終了状態不正" }       # 状態が不明
+        "INVALIDSEQ"    { return "順序不正" }           # 実行順序に問題
 
-        # --- �Ď��n�̏I����� ---
-        "MONITORCLOSE"  { return "�Ď��ł��؂�I��" }   # �Ď��^�C���A�E�g
-        "UNEXECMONITOR" { return "�Ď����N���I��" }     # �Ď��Ώۂ��N�����Ȃ�����
-        "MONITORINTRPT" { return "�Ď����f" }           # �Ď������f���ꂽ
-        "MONITORNORMAL" { return "�Ď�����I��" }       # �Ď�������ɏI��
+        # --- 監視系の終了状態 ---
+        "MONITORCLOSE"  { return "監視打ち切り終了" }   # 監視タイムアウト
+        "UNEXECMONITOR" { return "監視未起動終了" }     # 監視対象が起動しなかった
+        "MONITORINTRPT" { return "監視中断" }           # 監視が中断された
+        "MONITORNORMAL" { return "監視正常終了" }       # 監視が正常に終了
 
-        # --- ���s���̏�� ---
-        "RUNNING"       { return "���s��" }             # ���ݎ��s��
-        "WACONT"        { return "�x�����o���s��" }     # �x�������邪���s�p����
-        "ABCONT"        { return "�ُ팟�o���s��" }     # �ُ킪���邪���s�p����
+        # --- 実行中の状態 ---
+        "RUNNING"       { return "実行中" }             # 現在実行中
+        "WACONT"        { return "警告検出実行中" }     # 警告があるが実行継続中
+        "ABCONT"        { return "異常検出実行中" }     # 異常があるが実行継続中
 
-        # --- ���̑� ---
-        default         { return $status }               # ����`�̃R�[�h�͂��̂܂ܕԂ�
+        # --- その他 ---
+        default         { return $status }               # 未定義のコードはそのまま返す
     }
 }
 
 # ==============================================================================
-# 2�������[�h: ���s���`�F�b�N��START_TIME��r����
+# 2引数モード: 実行中チェック＆START_TIME比較処理
 # ==============================================================================
-# �y���̃Z�N�V�����ɂ��āz
-# 2�̃W���u�p�X���w�肳�ꂽ�ꍇ�i��r���[�h�j�̏������s���܂��B
+# 【このセクションについて】
+# 2つのジョブパスが指定された場合（比較モード）の処理を行います。
 #
-# �y��r���[�h�̏����t���[�z
-# 1. �܂������̃W���u�����s�����ǂ������`�F�b�N
-# 2. ���s���̃W���u������΁A�I����ҋ@���Ă��̃W���u���ŐV�Ƃ��đI��
-# 3. �ǂ�������s���łȂ���΁A�J�n�����iSTART_TIME�j���r
-# 4. ���V�������̃W���u��I�����ă��O���擾
+# 【比較モードの処理フロー】
+# 1. まず両方のジョブが実行中かどうかをチェック
+# 2. 実行中のジョブがあれば、終了を待機してそのジョブを最新として選択
+# 3. どちらも実行中でなければ、開始時刻（START_TIME）を比較
+# 4. より新しい方のジョブを選択してログを取得
 #
-# �y�g�p��z
-# �Ⴆ�΁A�����������s��2�̃W���u������A
-# �ǂ��炩�Е������s���ꂽ�Ƃ��ɂ��̃��O���������ꍇ:
-#   JP1�W���u���擾.bat "/�����o�b�`/����/����W�v" "/�����o�b�`/���/����W�v"
-#   �� ���߂Ŏ��s���ꂽ���̃��O�������Ŏ擾
+# 【使用例】
+# 例えば、同じ処理を行う2つのジョブがあり、
+# どちらか片方が実行されたときにそのログを見たい場合:
+#   JP1ジョブ情報取得.bat "/日次バッチ/東京/売上集計" "/日次バッチ/大阪/売上集計"
+#   → 直近で実行された方のログを自動で取得
 # ==============================================================================
 
-# --- ��r���[�h�p�̕ϐ��������� ---
-$selectedPath = ""  # ��r���[�h�őI�����ꂽ�W���u�̃p�X
-$selectedTime = ""  # ��r���[�h�őI�����ꂽ�W���u�̊J�n����
-$rejectedPath = ""  # ��r���[�h�őI������Ȃ������W���u�̃p�X
-$rejectedTime = ""  # ��r���[�h�őI������Ȃ������W���u�̊J�n����
+# --- 比較モード用の変数を初期化 ---
+$selectedPath = ""  # 比較モードで選択されたジョブのパス
+$selectedTime = ""  # 比較モードで選択されたジョブの開始時刻
+$rejectedPath = ""  # 比較モードで選択されなかったジョブのパス
+$rejectedTime = ""  # 比較モードで選択されなかったジョブの開始時刻
 
 if ($isCompareMode) {
-    # �W���u�����s�����ǂ������`�F�b�N����֐��iexecID���擾�j
+    # ジョブが実行中かどうかをチェックする関数（execIDも取得）
     function Get-JobRunningStatus {
         param([string]$jobPath)
 
@@ -893,56 +893,56 @@ if ($isCompareMode) {
         return @{ IsRunning = $false }
     }
 
-    # �����̃W���u�̎��s����Ԃ��`�F�b�N
+    # 両方のジョブの実行中状態をチェック
     $runStatus1 = Get-JobRunningStatus -jobPath $unitPath
     $runStatus2 = Get-JobRunningStatus -jobPath $unitPath2
 
     $isRunning1 = $runStatus1 -and $runStatus1.IsRunning
     $isRunning2 = $runStatus2 -and $runStatus2.IsRunning
 
-    # ���s���̃W���u������ꍇ�͑ҋ@
+    # 実行中のジョブがある場合は待機
     if ($isRunning1 -or $isRunning2) {
-        # �ҋ@�Ώۂ̃W���u������i�������s���̏ꍇ�̓W���u1��D��j
+        # 待機対象のジョブを決定（両方実行中の場合はジョブ1を優先）
         $waitTargetPath = if ($isRunning1) { $unitPath } else { $unitPath2 }
         $waitTargetStatus = if ($isRunning1) { $runStatus1 } else { $runStatus2 }
         $waitingExecId = $waitTargetStatus.ExecID
         $waitTargetStatusDisplay = Get-StatusDisplayName -status $waitTargetStatus.Status
 
         if ($isRunning1 -and $isRunning2) {
-            Write-Console "COMPARE_INFO:�����̃W���u�����s���ł��B$unitPath �̏I����ҋ@���܂�"
+            Write-Console "COMPARE_INFO:両方のジョブが実行中です。$unitPath の終了を待機します"
         } else {
-            Write-Console "COMPARE_INFO:���s���̃W���u�����o���܂��� - $waitTargetPath �̏I����ҋ@���܂�"
+            Write-Console "COMPARE_INFO:実行中のジョブを検出しました - $waitTargetPath の終了を待機します"
         }
 
-        # �ҋ@���[�v
+        # 待機ループ
         $waitedSeconds = 0
         $stillRunning = $true
         while ($stillRunning) {
-            # �ő�ҋ@�b���𒴂����ꍇ�̓G���[�I��
+            # 最大待機秒数を超えた場合はエラー終了
             if ($waitedSeconds -ge $maxWaitSeconds) {
-                [Console]::WriteLine("RUNNING_ERROR:���s���̃W���u�����o����܂����i�ҋ@�^�C���A�E�g�j")
-                [Console]::WriteLine("RUNNING_JOB:$waitTargetPath�i�X�e�[�^�X: ${waitTargetStatusDisplay}, �J�n����: $($waitTargetStatus.StartTime)�j")
-                [Console]::WriteLine("WAIT_TIMEOUT:${maxWaitSeconds}�b�ҋ@���܂������A�W���u���I�����܂���ł���")
-                exit 11  # ���s���̃W���u�����o���ꂽ�i�^�C���A�E�g�j
+                [Console]::WriteLine("RUNNING_ERROR:実行中のジョブが検出されました（待機タイムアウト）")
+                [Console]::WriteLine("RUNNING_JOB:$waitTargetPath（ステータス: ${waitTargetStatusDisplay}, 開始日時: $($waitTargetStatus.StartTime)）")
+                [Console]::WriteLine("WAIT_TIMEOUT:${maxWaitSeconds}秒待機しましたが、ジョブが終了しませんでした")
+                exit 11  # 実行中のジョブが検出された（タイムアウト）
             }
 
-            Write-Console "WAITING:���s���̃W���u�����o���܂����B�I����ҋ@���Ă��܂�...�i${waitedSeconds}/${maxWaitSeconds}�b�j"
-            Write-Console "WAITING_JOB:$waitTargetPath�i�X�e�[�^�X: ${waitTargetStatusDisplay}, �J�n����: $($waitTargetStatus.StartTime), execID: ${waitingExecId}�j"
+            Write-Console "WAITING:実行中のジョブを検出しました。終了を待機しています...（${waitedSeconds}/${maxWaitSeconds}秒）"
+            Write-Console "WAITING_JOB:$waitTargetPath（ステータス: ${waitTargetStatusDisplay}, 開始日時: $($waitTargetStatus.StartTime), execID: ${waitingExecId}）"
 
             Start-Sleep -Seconds $checkIntervalSeconds
             $waitedSeconds += $checkIntervalSeconds
 
-            # �ēx�`�F�b�N
+            # 再度チェック
             $recheckStatus = Get-JobRunningStatus -jobPath $waitTargetPath
             if (-not $recheckStatus -or -not $recheckStatus.IsRunning) {
                 $stillRunning = $false
-                Write-Console "WAIT_COMPLETE:�W���u�̏I�����m�F���܂����i${waitedSeconds}�b�ҋ@�AexecID: ${waitingExecId}�j"
+                Write-Console "WAIT_COMPLETE:ジョブの終了を確認しました（${waitedSeconds}秒待機、execID: ${waitingExecId}）"
             } else {
                 $waitTargetStatusDisplay = Get-StatusDisplayName -status $recheckStatus.Status
             }
         }
 
-        # �ҋ@������A���s���������W���u��I��
+        # 待機完了後、実行中だったジョブを選択
         $originalUnitPath = $unitPath
         $unitPath = $waitTargetPath
         $selectedPath = $waitTargetPath
@@ -952,11 +952,11 @@ if ($isCompareMode) {
         } else {
             $rejectedPath = $originalUnitPath
         }
-        $rejectedTime = "(���s���W���u��D��)"
+        $rejectedTime = "(実行中ジョブを優先)"
 
-        Write-Console "INFO:�ҋ@���Ă����W���u��execID�i${waitingExecId}�j���g�p���ă��O���擾���܂�"
+        Write-Console "INFO:待機していたジョブのexecID（${waitingExecId}）を使用してログを取得します"
     } else {
-        # �ǂ�������s���łȂ��ꍇ��START_TIME�Ŕ�r
+        # どちらも実行中でない場合はSTART_TIMEで比較
         function Get-JobStartTime {
             param([string]$jobPath)
 
@@ -998,33 +998,33 @@ if ($isCompareMode) {
             return $null
         }
 
-        # �����̃W���u��START_TIME���擾
+        # 両方のジョブのSTART_TIMEを取得
         $startTime1 = Get-JobStartTime -jobPath $unitPath
         $startTime2 = Get-JobStartTime -jobPath $unitPath2
 
-        # �������s�����ꍇ
+        # 両方失敗した場合
         if (-not $startTime1 -and -not $startTime2) {
-            exit 8  # ��r���[�h�ŗ����̃W���u�擾�Ɏ��s
+            exit 8  # 比較モードで両方のジョブ取得に失敗
         }
 
-        # ����unitPath��ۑ��i��r���ʕ\���p�j
+        # 元のunitPathを保存（比較結果表示用）
         $originalUnitPath = $unitPath
 
-        # �Е��������s�����ꍇ
+        # 片方だけ失敗した場合
         if (-not $startTime1) {
             $unitPath = $unitPath2
             $selectedPath = $unitPath2
             $selectedTime = $startTime2
             $rejectedPath = $originalUnitPath
-            $rejectedTime = "(�擾���s)"
+            $rejectedTime = "(取得失敗)"
         } elseif (-not $startTime2) {
-            # $unitPath �͂��̂܂�
+            # $unitPath はそのまま
             $selectedPath = $unitPath
             $selectedTime = $startTime1
             $rejectedPath = $unitPath2
-            $rejectedTime = "(�擾���s)"
+            $rejectedTime = "(取得失敗)"
         } else {
-            # �������������ꍇ�A�������r
+            # 両方成功した場合、日時を比較
             try {
                 $dt1 = [DateTime]::Parse($startTime1)
                 $dt2 = [DateTime]::Parse($startTime2)
@@ -1042,7 +1042,7 @@ if ($isCompareMode) {
                     $rejectedTime = $startTime2
                 }
             } catch {
-                # �p�[�X�G���[�̏ꍇ�͕������r
+                # パースエラーの場合は文字列比較
                 if ($startTime2 -gt $startTime1) {
                     $unitPath = $unitPath2
                     $selectedPath = $unitPath2
@@ -1061,80 +1061,80 @@ if ($isCompareMode) {
 }
 
 # ------------------------------------------------------------------------------
-# �W���u�p�X�̉��
+# ジョブパスの解析
 # ------------------------------------------------------------------------------
-# �y���̏����̖ړI�z
-# ���[�U�[���w�肵���W���u�p�X�𕪉����āAAPI�Ăяo���ɕK�v�ȏ��𒊏o���܂��B
+# 【この処理の目的】
+# ユーザーが指定したジョブパスを分解して、API呼び出しに必要な情報を抽出します。
 #
-# �yJP1�̃p�X�\���z
-# JP1/AJS3�ł́A�W���u�͊K�w�\���ŊǗ�����Ă��܂��B
+# 【JP1のパス構造】
+# JP1/AJS3では、ジョブは階層構造で管理されています。
 #
-# ��: /�Ɩ��V�X�e��/�����o�b�`/�f�[�^�W�v/����W�v�W���u
-#      ��           ��         ��          ��
-#      ���[�g       �W���u     �W���u      �W���u
-#      �W���u       �O���[�v   �l�b�g      �i���ۂ̃W���u�j
-#      �O���[�v
+# 例: /業務システム/日次バッチ/データ集計/売上集計ジョブ
+#      ↑           ↑         ↑          ↑
+#      ルート       ジョブ     ジョブ      ジョブ
+#      ジョブ       グループ   ネット      （実際のジョブ）
+#      グループ
 #
-# �y������̃f�[�^�z
-# - parentPath: "/�Ɩ��V�X�e��/�����o�b�`/�f�[�^�W�v" �i�W���u�̐e�j
-# - jobName: "����W�v�W���u" �i�W���u���j
-# - grandParentPath: "/�Ɩ��V�X�e��/�����o�b�`" �i�W���u�l�b�g�̐e�j
-# - jobnetName: "�f�[�^�W�v" �i�W���u�l�b�g���j
+# 【分解後のデータ】
+# - parentPath: "/業務システム/日次バッチ/データ集計" （ジョブの親）
+# - jobName: "売上集計ジョブ" （ジョブ名）
+# - grandParentPath: "/業務システム/日次バッチ" （ジョブネットの親）
+# - jobnetName: "データ集計" （ジョブネット名）
 
-# �Ō�̃X���b�V���̈ʒu�������āA�e�p�X�ƃW���u���ɕ���
+# 最後のスラッシュの位置を見つけて、親パスとジョブ名に分割
 $lastSlashIndex = $unitPath.LastIndexOf("/")
 if ($lastSlashIndex -le 0) {
-    exit 1  # �p�X�`���G���[�i�X���b�V�����Ȃ��A�܂��̓��[�g�̂݁j
+    exit 1  # パス形式エラー（スラッシュがない、またはルートのみ）
 }
-$parentPath = $unitPath.Substring(0, $lastSlashIndex)   # �W���u�̐e�p�X
-$jobName = $unitPath.Substring($lastSlashIndex + 1)     # �W���u��
+$parentPath = $unitPath.Substring(0, $lastSlashIndex)   # ジョブの親パス
+$jobName = $unitPath.Substring($lastSlashIndex + 1)     # ジョブ名
 
 if (-not $jobName) {
-    exit 1  # �W���u������
+    exit 1  # ジョブ名が空
 }
 
-# �e�W���u�l�b�g�����擾�i�o�̓t�@�C�����Ɏg�p�j
+# 親ジョブネット名を取得（出力ファイル名に使用）
 $grandParentSlashIndex = $parentPath.LastIndexOf("/")
 $grandParentPath = if ($grandParentSlashIndex -gt 0) { $parentPath.Substring(0, $grandParentSlashIndex) } else { "/" }
 $jobnetName = if ($grandParentSlashIndex -ge 0) { $parentPath.Substring($grandParentSlashIndex + 1) } else { $parentPath.TrimStart("/") }
 
 # ------------------------------------------------------------------------------
-# URL�G���R�[�h
+# URLエンコード
 # ------------------------------------------------------------------------------
-# �y���̏����̖ړI�z
-# �p�X����URL�Ŏg�p�ł���`���ɕϊ����܂��B
+# 【この処理の目的】
+# パス名をURLで使用できる形式に変換します。
 #
-# �yURL�G���R�[�h�Ƃ́H�z
-# URL�ł́A���{���X�y�[�X�Ȃǂ̓��ꕶ�������̂܂܎g���܂���B
-# �Ⴆ�� "/" �� "%2F" �ɁA���{��� "%E6%97%A5..." �̂悤�ɕϊ�����܂��B
-# ����ɂ��A�ǂ�ȕ������܂ރp�X�ł����S��API�Ăяo�����ł��܂��B
+# 【URLエンコードとは？】
+# URLでは、日本語やスペースなどの特殊文字をそのまま使えません。
+# 例えば "/" は "%2F" に、日本語は "%E6%97%A5..." のように変換されます。
+# これにより、どんな文字を含むパスでも安全にAPI呼び出しができます。
 $encodedParentPath = [System.Uri]::EscapeDataString($parentPath)
 $encodedJobName = [System.Uri]::EscapeDataString($jobName)
 
 # ==============================================================================
-# STEP 1: ���j�b�g���݊m�F�E��ʊm�F�iDEFINITION�j
+# STEP 1: ユニット存在確認・種別確認（DEFINITION）
 # ==============================================================================
-# �y���̃X�e�b�v�̖ړI�z
-# ���O�擾���s���O�ɁA�w�肳�ꂽ�W���u���L�����ǂ������m�F���܂��B
-# ���݂��Ȃ��W���u��A�W���u�ȊO�̃��j�b�g�i�W���u�l�b�g���j���w�肵���ꍇ�A
-# �����ɃG���[�Ƃ��ď����𒆒f���܂��B
+# 【このステップの目的】
+# ログ取得を行う前に、指定されたジョブが有効かどうかを確認します。
+# 存在しないジョブや、ジョブ以外のユニット（ジョブネット等）を指定した場合、
+# 早期にエラーとして処理を中断します。
 #
-# �y�m�F���e�z
-# 1. �w�肵���p�X�Ƀ��j�b�g�����݂��邩
-# 2. �w�肵�����j�b�g���W���u�iJOB�n�j���ǂ���
-#    - �W���u�l�b�g��W���u�O���[�v�͑ΏۊO
-#    - JOB, PJOB(PC�W���u), QJOB(�L���[�W���u)�Ȃ�
+# 【確認内容】
+# 1. 指定したパスにユニットが存在するか
+# 2. 指定したユニットがジョブ（JOB系）かどうか
+#    - ジョブネットやジョブグループは対象外
+#    - JOB, PJOB(PCジョブ), QJOB(キュージョブ)など
 #
-# �ysearchTarget=DEFINITION �ɂ��āz
-# DEFINITION�́u��`���̂݁v���������郂�[�h�ł��B
-# ���s��ԂɊ֌W�Ȃ��A�W���u����`����Ă��邩�ǂ������m�F�ł��܂��B
-# �i���s�������Ȃ��Ă�������j
+# 【searchTarget=DEFINITION について】
+# DEFINITIONは「定義情報のみ」を検索するモードです。
+# 実行状態に関係なく、ジョブが定義されているかどうかを確認できます。
+# （実行履歴がなくても見つかる）
 #
-# �y�G���[���̏I���R�[�h�z
-# - �I���R�[�h 2: ���j�b�g��������Ȃ�
-# - �I���R�[�h 3: �w�肳�ꂽ���j�b�g���W���u�ł͂Ȃ�
+# 【エラー時の終了コード】
+# - 終了コード 2: ユニットが見つからない
+# - 終了コード 3: 指定されたユニットがジョブではない
 
-Write-Console "[STEP 1] ���j�b�g���݊m�F��..."
+Write-Console "[STEP 1] ユニット存在確認中..."
 
 $defUrl = "${baseUrl}/objects/statuses?mode=search"
 $defUrl += "&manager=${managerHost}"
@@ -1152,55 +1152,55 @@ $jobnetComment = ""
 try {
     $defResponse = Invoke-WebRequest -Uri $defUrl -Method GET -Headers $headers -TimeoutSec 30 -UseBasicParsing
 
-    # UTF-8���������΍�
+    # UTF-8文字化け対策
     $defBytes = $defResponse.RawContentStream.ToArray()
     $defText = [System.Text.Encoding]::UTF8.GetString($defBytes)
     $defJson = $defText | ConvertFrom-Json
 
-    # ���j�b�g���݊m�F
+    # ユニット存在確認
     if (-not $defJson.statuses -or $defJson.statuses.Count -eq 0) {
-        exit 2  # ���j�b�g�����o
+        exit 2  # ユニット未検出
     }
 
-    # �ŏ��̃��j�b�g�̏����擾
+    # 最初のユニットの情報を取得
     $defUnit = $defJson.statuses[0]
     $unitFullName = $defUnit.definition.unitName
     $unitTypeValue = $defUnit.definition.unitType
 
-    # ���j�b�g��ʊm�F�iJOB�n���ǂ����j
-    # JOB�n: JOB, PJOB, QJOB, EVWJB, FLWJB, MLWJB, MSWJB, LFWJB, TMWJB,
+    # ユニット種別確認（JOB系かどうか）
+    # JOB系: JOB, PJOB, QJOB, EVWJB, FLWJB, MLWJB, MSWJB, LFWJB, TMWJB,
     #        EVSJB, MLSJB, MSSJB, PWLJB, PWRJB, CJOB, HTPJOB, CPJOB, FXJOB, CUSTOM, JDJOB, ORJOB
     if ($unitTypeValue -notmatch "JOB") {
-        exit 3  # ���j�b�g��ʃG���[�i�W���u�ł͂Ȃ��j
+        exit 3  # ユニット種別エラー（ジョブではない）
     }
 
 } catch {
-    exit 9  # API�ڑ��G���[�i���݊m�F�j
+    exit 9  # API接続エラー（存在確認）
 }
 
 # ==============================================================================
-# STEP 2: �e�W���u�l�b�g�̃R�����g�擾
+# STEP 2: 親ジョブネットのコメント取得
 # ==============================================================================
-# �y���̃X�e�b�v�̖ړI�z
-# �W���u��������e�W���u�l�b�g�́u�R�����g�v���擾���܂��B
-# �擾�����R�����g�́A�o�̓t�@�C�����̈ꕔ�Ƃ��Ďg�p����܂��B
+# 【このステップの目的】
+# ジョブが属する親ジョブネットの「コメント」を取得します。
+# 取得したコメントは、出力ファイル名の一部として使用されます。
 #
-# �y�R�����g�Ƃ́H�z
-# JP1/AJS3�ł́A�W���u�l�b�g�Ɂu�R�����g�v�i�������j��ݒ�ł��܂��B
-# ��: �W���u�l�b�g���uDAILY_SALES�v�A�R�����g�u��������W�v�����v
-# ���̃R�����g���擾���ăt�@�C�����Ɋ܂߂邱�ƂŁA
-# �t�@�C���������łǂ̏����̃��O��������悤�ɂȂ�܂��B
+# 【コメントとは？】
+# JP1/AJS3では、ジョブネットに「コメント」（説明文）を設定できます。
+# 例: ジョブネット名「DAILY_SALES」、コメント「日次売上集計処理」
+# このコメントを取得してファイル名に含めることで、
+# ファイル名だけでどの処理のログか分かるようになります。
 #
-# �y�o�̓t�@�C�����̗�z
-# �y�W���u���s���ʁz�y20250111_093000���s���z�y����I���zDAILY_SALES_��������W�v����.txt
-#                                            ��           ��
-#                                            �W���u�l�b�g��  �R�����g
+# 【出力ファイル名の例】
+# 【ジョブ実行結果】【20250111_093000実行分】【正常終了】DAILY_SALES_日次売上集計処理.txt
+#                                            ↑           ↑
+#                                            ジョブネット名  コメント
 #
-# �y�G���[���̓���z
-# �R�����g�擾�Ɏ��s���Ă������͑��s���܂��i�K�{���ł͂Ȃ����߁j�B
-# ���̏ꍇ�A�R�����g�����͋�ɂȂ�܂��B
+# 【エラー時の動作】
+# コメント取得に失敗しても処理は続行します（必須情報ではないため）。
+# その場合、コメント部分は空になります。
 
-Write-Console "[STEP 2] �e�W���u�l�b�g�̃R�����g�擾��..."
+Write-Console "[STEP 2] 親ジョブネットのコメント取得中..."
 
 $encodedGrandParentPath = [System.Uri]::EscapeDataString($grandParentPath)
 $encodedJobnetName = [System.Uri]::EscapeDataString($jobnetName)
@@ -1217,49 +1217,49 @@ $jobnetUrl += "&unitNameMatchMethods=EQ"
 try {
     $jobnetResponse = Invoke-WebRequest -Uri $jobnetUrl -Method GET -Headers $headers -TimeoutSec 30 -UseBasicParsing
 
-    # UTF-8���������΍�
+    # UTF-8文字化け対策
     $jobnetBytes = $jobnetResponse.RawContentStream.ToArray()
     $jobnetText = [System.Text.Encoding]::UTF8.GetString($jobnetBytes)
     $jobnetJson = $jobnetText | ConvertFrom-Json
 
-    # �W���u�l�b�g�̃R�����g���擾
+    # ジョブネットのコメントを取得
     if ($jobnetJson.statuses -and $jobnetJson.statuses.Count -gt 0) {
         $jobnetDef = $jobnetJson.statuses[0].definition
-        # unitComment �t�B�[���h���m�F�iJP1 REST API�̃t�B�[���h���j
+        # unitComment フィールドを確認（JP1 REST APIのフィールド名）
         if ($jobnetDef.unitComment) {
             $jobnetComment = $jobnetDef.unitComment
         }
     }
 } catch {
-    # �R�����g�擾���s�͖������đ��s�i�K�{�ł͂Ȃ��j
+    # コメント取得失敗は無視して続行（必須ではない）
     $jobnetComment = ""
 }
 
 # ==============================================================================
-# STEP 3: ���s���W���u�`�F�b�N�i�ҋ@�@�\�t���j
+# STEP 3: 実行中ジョブチェック（待機機能付き）
 # ==============================================================================
-# �y���̃X�e�b�v�̖ړI�z
-# �Ώۂ̃W���u�����ݎ��s�����ǂ������m�F���A
-# ���s���ł���ΏI������܂őҋ@���܂��B
+# 【このステップの目的】
+# 対象のジョブが現在実行中かどうかを確認し、
+# 実行中であれば終了するまで待機します。
 #
-# �y�Ȃ��ҋ@���K�v���H�z
-# ���s���̃W���u�ɂ́u���s���ʏڍׁv�i���O�j���܂����݂��܂���B
-# ���O�̓W���u���I�����Ă���m�肷�邽�߂ł��B
-# ���̂��߁A���s���̃W���u�����o�����ꍇ�͏I����҂K�v������܂��B
+# 【なぜ待機が必要か？】
+# 実行中のジョブには「実行結果詳細」（ログ）がまだ存在しません。
+# ログはジョブが終了してから確定するためです。
+# そのため、実行中のジョブを検出した場合は終了を待つ必要があります。
 #
-# �y�ҋ@�̎d�g�݁z
-# 1. �܂��W���u�����s���iGRP_RUN��ԁj���ǂ������`�F�b�N
-# 2. ���s���Ȃ�A�ݒ肵���Ԋu�i$checkIntervalSeconds�j�ōă`�F�b�N
-# 3. ���s���łȂ��Ȃ邩�A�ő�ҋ@���ԁi$maxWaitSeconds�j�𒴂���܂ŌJ��Ԃ�
+# 【待機の仕組み】
+# 1. まずジョブが実行中（GRP_RUN状態）かどうかをチェック
+# 2. 実行中なら、設定した間隔（$checkIntervalSeconds）で再チェック
+# 3. 実行中でなくなるか、最大待機時間（$maxWaitSeconds）を超えるまで繰り返す
 #
-# �y�ҋ@���̕\����z
-# WAITING:���s���̃W���u�����o���܂����B�I����ҋ@���Ă��܂�...�i10/60�b�j
-# WAITING_JOB:/�����o�b�`/����W�v�i�X�e�[�^�X: ���s��, �J�n����: 2025-01-11T09:30:00�j
+# 【待機中の表示例】
+# WAITING:実行中のジョブを検出しました。終了を待機しています...（10/60秒）
+# WAITING_JOB:/日次バッチ/売上集計（ステータス: 実行中, 開始日時: 2025-01-11T09:30:00）
 #
-# �y�G���[���̏I���R�[�h�z
-# - �I���R�[�h 11: �ҋ@�^�C���A�E�g�i�ő�ҋ@���Ԃ𒴂��Ă��I�����Ȃ������j
+# 【エラー時の終了コード】
+# - 終了コード 11: 待機タイムアウト（最大待機時間を超えても終了しなかった）
 
-Write-Console "[STEP 3] ���s���W���u�`�F�b�N��..."
+Write-Console "[STEP 3] 実行中ジョブチェック中..."
 
 $runningUrl = "${baseUrl}/objects/statuses?mode=search"
 $runningUrl += "&manager=${managerHost}"
@@ -1274,85 +1274,85 @@ $runningUrl += "&status=GRP_RUN"
 
 $waitedSeconds = 0
 $isRunning = $true
-$waitingExecId = $null  # �ҋ@���̃W���u��execID��ۑ�
+$waitingExecId = $null  # 待機中のジョブのexecIDを保存
 
 while ($isRunning) {
     try {
         $runningResponse = Invoke-WebRequest -Uri $runningUrl -Method GET -Headers $headers -TimeoutSec 30 -UseBasicParsing
 
-        # UTF-8���������΍�
+        # UTF-8文字化け対策
         $runningBytes = $runningResponse.RawContentStream.ToArray()
         $runningText = [System.Text.Encoding]::UTF8.GetString($runningBytes)
         $runningJson = $runningText | ConvertFrom-Json
 
-        # ���s���̃W���u�����݂��邩�m�F
+        # 実行中のジョブが存在するか確認
         if ($runningJson.statuses -and $runningJson.statuses.Count -gt 0) {
             $runningUnit = $runningJson.statuses[0]
             $runningStatus = $runningUnit.unitStatus.status
             $runningStartTime = $runningUnit.unitStatus.startTime
             $runningStatusDisplay = Get-StatusDisplayName -status $runningStatus
 
-            # �ŏ��̌��o����execID��ۑ��i�ҋ@������ɂ���execID�Ń��O���擾�j
+            # 最初の検出時にexecIDを保存（待機完了後にこのexecIDでログを取得）
             if (-not $waitingExecId) {
                 $waitingExecId = $runningUnit.unitStatus.execID
             }
 
-            # �ő�ҋ@�b���𒴂����ꍇ�̓G���[�I��
+            # 最大待機秒数を超えた場合はエラー終了
             if ($waitedSeconds -ge $maxWaitSeconds) {
-                [Console]::WriteLine("RUNNING_ERROR:���s���̃W���u�����o����܂����i�ҋ@�^�C���A�E�g�j")
-                [Console]::WriteLine("RUNNING_JOB:$unitPath�i�X�e�[�^�X: ${runningStatusDisplay}, �J�n����: ${runningStartTime}�j")
-                [Console]::WriteLine("WAIT_TIMEOUT:${maxWaitSeconds}�b�ҋ@���܂������A�W���u���I�����܂���ł���")
-                exit 11  # ���s���̃W���u�����o���ꂽ�i�^�C���A�E�g�j
+                [Console]::WriteLine("RUNNING_ERROR:実行中のジョブが検出されました（待機タイムアウト）")
+                [Console]::WriteLine("RUNNING_JOB:$unitPath（ステータス: ${runningStatusDisplay}, 開始日時: ${runningStartTime}）")
+                [Console]::WriteLine("WAIT_TIMEOUT:${maxWaitSeconds}秒待機しましたが、ジョブが終了しませんでした")
+                exit 11  # 実行中のジョブが検出された（タイムアウト）
             }
 
-            # �ҋ@�����b�Z�[�W���o�́i�R���\�[���֒��ڕ\���j
-            Write-Console "WAITING:���s���̃W���u�����o���܂����B�I����ҋ@���Ă��܂�...�i${waitedSeconds}/${maxWaitSeconds}�b�j"
-            Write-Console "WAITING_JOB:$unitPath�i�X�e�[�^�X: ${runningStatusDisplay}, �J�n����: ${runningStartTime}, execID: ${waitingExecId}�j"
+            # 待機中メッセージを出力（コンソールへ直接表示）
+            Write-Console "WAITING:実行中のジョブを検出しました。終了を待機しています...（${waitedSeconds}/${maxWaitSeconds}秒）"
+            Write-Console "WAITING_JOB:$unitPath（ステータス: ${runningStatusDisplay}, 開始日時: ${runningStartTime}, execID: ${waitingExecId}）"
 
-            # �w��b���ҋ@
+            # 指定秒数待機
             Start-Sleep -Seconds $checkIntervalSeconds
             $waitedSeconds += $checkIntervalSeconds
         } else {
-            # ���s���ł͂Ȃ� �� ���[�v�𔲂���
+            # 実行中ではない → ループを抜ける
             $isRunning = $false
 
-            # �ҋ@���Ă����ꍇ�͊������b�Z�[�W���o��
+            # 待機していた場合は完了メッセージを出力
             if ($waitedSeconds -gt 0) {
-                Write-Console "WAIT_COMPLETE:�W���u�̏I�����m�F���܂����i${waitedSeconds}�b�ҋ@�AexecID: ${waitingExecId}�j"
+                Write-Console "WAIT_COMPLETE:ジョブの終了を確認しました（${waitedSeconds}秒待機、execID: ${waitingExecId}）"
             }
         }
     } catch {
-        # ���s���`�F�b�N���s�͖������đ��s�i�K�{�ł͂Ȃ��j
+        # 実行中チェック失敗は無視して続行（必須ではない）
         $isRunning = $false
     }
 }
 
 # ==============================================================================
-# STEP 4: ���s��ԁEexecID�擾�iDEFINITION_AND_STATUS�j
+# STEP 4: 実行状態・execID取得（DEFINITION_AND_STATUS）
 # ==============================================================================
-# �y���̃X�e�b�v�̖ړI�z
-# �W���u�̎��s��������A���O�擾�ɕK�v�ȁu���sID�iexecID�j�v���擾���܂��B
+# 【このステップの目的】
+# ジョブの実行履歴から、ログ取得に必要な「実行ID（execID）」を取得します。
 #
-# �yexecID�i���sID�j�Ƃ́H�z
-# JP1/AJS3�ł́A�W���u�����s���邽�тɈ�ӂ̎��sID�����蓖�Ă��܂��B
-# ��: @A100, @B200, @10A300 �Ȃ�
-# ���̎��sID���g���āA����̎��s�̃��O���擾���܂��B
+# 【execID（実行ID）とは？】
+# JP1/AJS3では、ジョブを実行するたびに一意の実行IDが割り当てられます。
+# 例: @A100, @B200, @10A300 など
+# この実行IDを使って、特定の実行のログを取得します。
 #
-# �ysearchTarget=DEFINITION_AND_STATUS �ɂ��āz
-# DEFINITION_AND_STATUS �́u��`���Ǝ��s��ԁv�̗������������郂�[�h�ł��B
-# ���s����������ꍇ�̂݃q�b�g���܂��B
-# �i��x�����s����Ă��Ȃ��W���u�͌�����܂���j
+# 【searchTarget=DEFINITION_AND_STATUS について】
+# DEFINITION_AND_STATUS は「定義情報と実行状態」の両方を検索するモードです。
+# 実行履歴がある場合のみヒットします。
+# （一度も実行されていないジョブは見つかりません）
 #
-# �y�ҋ@���Ă����ꍇ�̓���z
-# STEP 3�ŃW���u�I����ҋ@���Ă����ꍇ�A���̃W���u��execID�����łɎ擾���Ă��܂��B
-# ���̏ꍇ�́A�ݒ�t�@�C���̐���w��i$generation�j�𖳎����āA
-# �ҋ@���Ă���execID�𒼐ڎg�p���܂��B
-# ����ɂ��A�ҋ@��������Ɋm���ɂ��̃W���u�̃��O���擾�ł��܂��B
+# 【待機していた場合の動作】
+# STEP 3でジョブ終了を待機していた場合、そのジョブのexecIDをすでに取得しています。
+# その場合は、設定ファイルの世代指定（$generation）を無視して、
+# 待機していたexecIDを直接使用します。
+# これにより、待機完了直後に確実にそのジョブのログを取得できます。
 #
-# �y�G���[���̏I���R�[�h�z
-# - �I���R�[�h 4: ���s����Ȃ��i��x�����s����Ă��Ȃ��A�܂��͏����ɍ������s���Ȃ��j
+# 【エラー時の終了コード】
+# - 終了コード 4: 実行世代なし（一度も実行されていない、または条件に合う実行がない）
 
-Write-Console "[STEP 4] execID�擾��..."
+Write-Console "[STEP 4] execID取得中..."
 
 $statusUrl = "${baseUrl}/objects/statuses?mode=search"
 $statusUrl += "&manager=${managerHost}"
@@ -1363,38 +1363,38 @@ $statusUrl += "&searchTarget=DEFINITION_AND_STATUS"
 $statusUrl += "&unitName=${encodedJobName}"
 $statusUrl += "&unitNameMatchMethods=EQ"
 
-# �ҋ@���Ă����ꍇ�́A����execID���g�p�i�ݒ�t�@�C���̐���w����㏑���j
+# 待機していた場合は、そのexecIDを使用（設定ファイルの世代指定を上書き）
 if ($waitingExecId) {
     $statusUrl += "&generation=EXECID"
     $statusUrl += "&execID=${waitingExecId}"
-    Write-Console "INFO:�ҋ@���Ă����W���u��execID�i${waitingExecId}�j���g�p���ă��O���擾���܂�"
+    Write-Console "INFO:待機していたジョブのexecID（${waitingExecId}）を使用してログを取得します"
 } else {
-    # ����w��
+    # 世代指定
     $statusUrl += "&generation=${generation}"
 
-    # ���Ԏw��igeneration=PERIOD �̏ꍇ�j
+    # 期間指定（generation=PERIOD の場合）
     if ($generation -eq "PERIOD") {
         $statusUrl += "&periodBegin=${periodBegin}"
         $statusUrl += "&periodEnd=${periodEnd}"
     }
 
-    # ���sID�w��igeneration=EXECID �̏ꍇ�j
+    # 実行ID指定（generation=EXECID の場合）
     if ($generation -eq "EXECID" -and $execID) {
         $statusUrl += "&execID=${execID}"
     }
 }
 
-# �X�e�[�^�X�t�B���^
+# ステータスフィルタ
 if ($statusFilter -and $statusFilter -ne "NO") {
     $statusUrl += "&status=${statusFilter}"
 }
 
-# �x����ԃt�B���^
+# 遅延状態フィルタ
 if ($delayStatus -and $delayStatus -ne "NO") {
     $statusUrl += "&delayStatus=${delayStatus}"
 }
 
-# �ۗ��\��t�B���^
+# 保留予定フィルタ
 if ($holdPlan -and $holdPlan -ne "NO") {
     $statusUrl += "&holdPlan=${holdPlan}"
 }
@@ -1404,25 +1404,25 @@ $execIdList = @()
 try {
     $response = Invoke-WebRequest -Uri $statusUrl -Method GET -Headers $headers -TimeoutSec 30 -UseBasicParsing
 
-    # UTF-8���������΍�
+    # UTF-8文字化け対策
     $responseBytes = $response.RawContentStream.ToArray()
     $responseText = [System.Text.Encoding]::UTF8.GetString($responseBytes)
     $jsonData = $responseText | ConvertFrom-Json
 
-    # ���X�|���X���烆�j�b�g���𒊏o
+    # レスポンスからユニット情報を抽出
     if ($jsonData.statuses -and $jsonData.statuses.Count -gt 0) {
         foreach ($unit in $jsonData.statuses) {
-            # ���j�b�g��`���
+            # ユニット定義情報
             $unitFullName = $unit.definition.unitName
             $unitTypeValue = $unit.definition.unitType
 
-            # ���j�b�g��ԏ��
+            # ユニット状態情報
             $unitStatus = $unit.unitStatus
             $execIdValue = if ($unitStatus) { $unitStatus.execID } else { $null }
             $statusValue = if ($unitStatus) { $unitStatus.status } else { "N/A" }
             $startTimeValue = if ($unitStatus) { $unitStatus.startTime } else { $null }
 
-            # execID������ꍇ�̂݃��X�g�ɒǉ�
+            # execIDがある場合のみリストに追加
             if ($execIdValue) {
                 $execIdList += @{
                     Path = $unitFullName
@@ -1430,57 +1430,57 @@ try {
                     Status = $statusValue
                     UnitType = $unitTypeValue
                     StartTime = $startTimeValue
-                    EndStatus = $statusValue  # �I����Ԃ�ێ�
+                    EndStatus = $statusValue  # 終了状態を保持
                 }
             }
         }
     }
 
-    # ���s���オ���݂��Ȃ��ꍇ
+    # 実行世代が存在しない場合
     if ($execIdList.Count -eq 0) {
-        exit 4  # ���s����Ȃ�
+        exit 4  # 実行世代なし
     }
 
 } catch {
-    exit 9  # API�ڑ��G���[�i��Ԏ擾�j
+    exit 9  # API接続エラー（状態取得）
 }
 
 # ==============================================================================
-# STEP 5: ���s���ʏڍ׎擾API
+# STEP 5: 実行結果詳細取得API
 # ==============================================================================
-# �y���̃X�e�b�v�̖ړI�z
-# STEP 4�Ŏ擾�������sID�iexecID�j���g���āA
-# �W���u�́u���s���ʏڍׁv�i���O�j���擾���܂��B
+# 【このステップの目的】
+# STEP 4で取得した実行ID（execID）を使って、
+# ジョブの「実行結果詳細」（ログ）を取得します。
 #
-# �y���s���ʏڍׂƂ́H�z
-# �W���u���s���ɏo�͂��ꂽ���e�ŁA�ȉ����܂܂�܂��F
-# - �W���o�́i�R�}���h�̎��s���ʂȂǁj
-# - �W���G���[�o�́i�G���[���b�Z�[�W�Ȃǁj
-# - JP1/AJS3���t��������s���
+# 【実行結果詳細とは？】
+# ジョブ実行時に出力された内容で、以下が含まれます：
+# - 標準出力（コマンドの実行結果など）
+# - 標準エラー出力（エラーメッセージなど）
+# - JP1/AJS3が付加する実行情報
 #
-# �yAPI�Ăяo���̌`���z
-# /objects/statuses/{���j�b�g�p�X}:{execID}/actions/execResultDetails/invoke
+# 【API呼び出しの形式】
+# /objects/statuses/{ユニットパス}:{execID}/actions/execResultDetails/invoke
 #
-# ��:
-# /objects/statuses/%2F�����o�b�`%2F����W�v:@A100/actions/execResultDetails/invoke
-# (%2F �� "/" ��URL�G���R�[�h)
+# 例:
+# /objects/statuses/%2F日次バッチ%2F売上集計:@A100/actions/execResultDetails/invoke
+# (%2F は "/" のURLエンコード)
 #
-# �y�t�@�C���o�́z
-# �擾�������O�́A�ݒ�Z�N�V�����Ŏw�肵���t�H���_�Ƀe�L�X�g�t�@�C���Ƃ��ĕۑ�����܂��B
-# �t�@�C�����`��: {�v���t�B�b�N�X}�y{�J�n����}���s���z�y{�I�����}�z{�W���u�l�b�g��}_{�R�����g}.txt
+# 【ファイル出力】
+# 取得したログは、設定セクションで指定したフォルダにテキストファイルとして保存されます。
+# ファイル名形式: {プレフィックス}【{開始日時}実行分】【{終了状態}】{ジョブネット名}_{コメント}.txt
 #
-# �y5MB�����ɂ��āz
-# REST API�ł́A���s���ʏڍׂ̎擾�T�C�Y��5MB�̏��������܂��B
-# 5MB�𒴂��郍�O�͐؂�̂Ă��A"all"�t���O��false�ɂȂ�܂��B
-# ���̏ꍇ�͏I���R�[�h5�ŃG���[�I�����܂��B
+# 【5MB制限について】
+# REST APIでは、実行結果詳細の取得サイズに5MBの上限があります。
+# 5MBを超えるログは切り捨てられ、"all"フラグがfalseになります。
+# その場合は終了コード5でエラー終了します。
 #
-# �y�G���[���̏I���R�[�h�z
-# - �I���R�[�h 5: 5MB���߃G���[�i���O���傫�����Đ؂�̂Ă�ꂽ�j
-# - �I���R�[�h 6: �ڍ׎擾�G���[�iAPI�Ăяo���Ɏ��s�j
+# 【エラー時の終了コード】
+# - 終了コード 5: 5MB超過エラー（ログが大きすぎて切り捨てられた）
+# - 終了コード 6: 詳細取得エラー（API呼び出しに失敗）
 
-Write-Console "[STEP 5] ���s���ʏڍ׎擾��..."
+Write-Console "[STEP 5] 実行結果詳細取得中..."
 
-# �o�͗p�̕ϐ���������
+# 出力用の変数を初期化
 $outputFilePath = ""
 $startTimeForFileName = ""
 $endStatusDisplay = ""
@@ -1492,8 +1492,8 @@ if ($execIdList.Count -gt 0) {
         $targetStartTime = $item.StartTime
         $targetEndStatus = $item.EndStatus
 
-        # �J�n�������t�@�C�����p�t�H�[�}�b�g�ɕϊ��iyyyyMMdd_HHmmss�j
-        # ��: "2015-09-02T22:50:28+09:00" �� "20150902_225028"
+        # 開始日時をファイル名用フォーマットに変換（yyyyMMdd_HHmmss）
+        # 例: "2015-09-02T22:50:28+09:00" → "20150902_225028"
         $startTimeForFileName = ""
         if ($targetStartTime) {
             try {
@@ -1504,36 +1504,36 @@ if ($execIdList.Count -gt 0) {
             }
         }
 
-        # ���j�b�g�p�X��URL�G���R�[�h
+        # ユニットパスをURLエンコード
         $encodedPath = [System.Uri]::EscapeDataString($targetPath)
 
-        # ���s���ʏڍ׎擾API��URL�\�z
-        # �`��: /objects/statuses/{unitName}:{execID}/actions/execResultDetails/invoke
+        # 実行結果詳細取得APIのURL構築
+        # 形式: /objects/statuses/{unitName}:{execID}/actions/execResultDetails/invoke
         $detailUrl = "${baseUrl}/objects/statuses/${encodedPath}:${targetExecId}/actions/execResultDetails/invoke"
         $detailUrl += "?manager=${managerHost}&serviceName=${schedulerService}"
 
         try {
-            # API���N�G�X�g�𑗐M
+            # APIリクエストを送信
             $resultResponse = Invoke-WebRequest -Uri $detailUrl -Method GET -Headers $headers -TimeoutSec 30 -UseBasicParsing
 
-            # UTF-8���������΍�
+            # UTF-8文字化け対策
             $resultBytes = $resultResponse.RawContentStream.ToArray()
             $resultText = [System.Text.Encoding]::UTF8.GetString($resultBytes)
             $resultJson = $resultText | ConvertFrom-Json
 
-            # all �t���O�̃`�F�b�N�ifalse�̏ꍇ��5MB���߂Ő؂�̂āj
-            if ($resultJson.all -eq $false) { exit 5 }  # 5MB���߃G���[
+            # all フラグのチェック（falseの場合は5MB超過で切り捨て）
+            if ($resultJson.all -eq $false) { exit 5 }  # 5MB超過エラー
 
-            # ���s���ʂ̓��e���擾
+            # 実行結果の内容を取得
             $execResultContent = ""
             if ($resultJson.execResultDetails) {
                 $execResultContent = $resultJson.execResultDetails
             }
 
-            # �I����Ԃ��擾�i���{��ϊ��ς݁j
+            # 終了状態を取得（日本語変換済み）
             $endStatusDisplay = Get-StatusDisplayName -status $targetEndStatus
 
-            # �o�̓f�B���N�g�����쐬�i�ݒ�Z�N�V������$outputFolder���g�p�j
+            # 出力ディレクトリを作成（設定セクションの$outputFolderを使用）
             if ([System.IO.Path]::IsPathRooted($outputFolder)) {
                 $outputDir = $outputFolder
             } else {
@@ -1543,14 +1543,14 @@ if ($execIdList.Count -gt 0) {
                 New-Item -ItemType Directory -Path $outputDir -Force | Out-Null
             }
 
-            # �o�̓t�@�C�����𐶐��i�ݒ�Z�N�V������$outputFilePrefix���g�p�j
-            $outputFileName = "${outputFilePrefix}�y${startTimeForFileName}���s���z�y${endStatusDisplay}�z${jobnetName}_${jobnetComment}.txt"
+            # 出力ファイル名を生成（設定セクションの$outputFilePrefixを使用）
+            $outputFileName = "${outputFilePrefix}【${startTimeForFileName}実行分】【${endStatusDisplay}】${jobnetName}_${jobnetComment}.txt"
             $outputFilePath = Join-Path $outputDir $outputFileName
 
-            # ���s���ʏڍׂ��t�@�C���ɏo��
+            # 実行結果詳細をファイルに出力
             $execResultContent | Out-File -FilePath $outputFilePath -Encoding Default
 
-            # ���^�f�[�^��W���o�͂ɏo�́i����݊����̂��߁j
+            # メタデータを標準出力に出力（後方互換性のため）
             if ($selectedPath) {
                 [Console]::WriteLine("SELECTED_PATH:$selectedPath")
                 [Console]::WriteLine("SELECTED_TIME:$selectedTime")
@@ -1564,58 +1564,58 @@ if ($execIdList.Count -gt 0) {
             [Console]::WriteLine("OUTPUT_FILE:$outputFilePath")
 
         } catch {
-            exit 6  # �ڍ׎擾�G���[
+            exit 6  # 詳細取得エラー
         }
     }
 }
 
 # ==============================================================================
-# STEP 6: �o�͏���
+# STEP 6: 出力処理
 # ==============================================================================
-# �y���̃X�e�b�v�̖ړI�z
-# STEP 5�ŕۑ��������O�t�@�C�����A���[�U�[���w�肵�����@�ŕ\���E�o�͂��܂��B
+# 【このステップの目的】
+# STEP 5で保存したログファイルを、ユーザーが指定した方法で表示・出力します。
 #
-# �y�o�̓I�v�V�����z
-# �Ăяo�����̃o�b�`�t�@�C���Ŋ��ϐ� JP1_OUTPUT_MODE ��ݒ肷�邱�ƂŁA
-# �ȉ��̏o�͕��@��I���ł��܂��F
+# 【出力オプション】
+# 呼び出し元のバッチファイルで環境変数 JP1_OUTPUT_MODE を設定することで、
+# 以下の出力方法を選択できます：
 #
-# /NOTEPAD - �������ŊJ���i�f�t�H���g�j
-#   - ���O�t�@�C�����������Ŏ����I�ɊJ���܂�
-#   - JP1_SCROLL_TO_TEXT ��ݒ肷��ƁA���̕����񂪂���s�ɃW�����v���܂�
+# /NOTEPAD - メモ帳で開く（デフォルト）
+#   - ログファイルをメモ帳で自動的に開きます
+#   - JP1_SCROLL_TO_TEXT を設定すると、その文字列がある行にジャンプします
 #
-# /EXCEL - Excel�ɓ\��t��
-#   - �w�肵��Excel�t�@�C���̎w��Z���Ƀ��O���e��\��t���܂�
-#   - �K�v�Ȋ��ϐ��F
-#     - EXCEL_FILE_NAME: Excel�t�@�C���̃p�X
-#     - EXCEL_SHEET_NAME: �V�[�g��
-#     - EXCEL_PASTE_CELL: �\��t����Z���i��: "B5"�j
+# /EXCEL - Excelに貼り付け
+#   - 指定したExcelファイルの指定セルにログ内容を貼り付けます
+#   - 必要な環境変数：
+#     - EXCEL_FILE_NAME: Excelファイルのパス
+#     - EXCEL_SHEET_NAME: シート名
+#     - EXCEL_PASTE_CELL: 貼り付け先セル（例: "B5"）
 #
-# /WINMERGE - WinMerge�Ŕ�r
-#   - 2�̃��O�t�@�C�����r�\�����܂�
+# /WINMERGE - WinMergeで比較
+#   - 2つのログファイルを比較表示します
 #
-# �y�G���[���̏I���R�[�h�z
-# - �I���R�[�h 10: Excel�ݒ�G���[�i�K�v�Ȋ��ϐ������ݒ�j
-# - �I���R�[�h 11: Excel�\��t���G���[�iCOM����Ɏ��s�j
-# - �I���R�[�h 12: Excel�t�@�C�������o
+# 【エラー時の終了コード】
+# - 終了コード 10: Excel設定エラー（必要な環境変数が未設定）
+# - 終了コード 11: Excel貼り付けエラー（COM操作に失敗）
+# - 終了コード 12: Excelファイル未検出
 
-Write-Console "[STEP 6] �o�͏�����..."
+Write-Console "[STEP 6] 出力処理中..."
 
-# �o�̓I�v�V���������ϐ�����擾
+# 出力オプションを環境変数から取得
 $outputMode = $env:JP1_OUTPUT_MODE
 if (-not $outputMode) { $outputMode = "/NOTEPAD" }
 
-# �o�̓I�v�V�����ɉ������㏈��
+# 出力オプションに応じた後処理
 switch ($outputMode.ToUpper()) {
     "/NOTEPAD" {
-        # �������ŊJ��
+        # メモ帳で開く
         Start-Process notepad $outputFilePath
 
-        # �X�N���[���ʒu�̐ݒ�����ϐ�����擾
+        # スクロール位置の設定を環境変数から取得
         $scrollToText = $env:JP1_SCROLL_TO_TEXT
         if ($scrollToText) {
-            Write-Console "�X�N���[���ʒu: $scrollToText"
+            Write-Console "スクロール位置: $scrollToText"
 
-            # ������������܂ލŏ��̍s�ԍ������
+            # 検索文字列を含む最初の行番号を特定
             $scrollLineNum = $null
             $lineIndex = 0
             $fileContent = Get-Content -Path $outputFilePath -Encoding Default
@@ -1628,182 +1628,182 @@ switch ($outputMode.ToUpper()) {
             }
 
             if ($scrollLineNum) {
-                Write-Console "�W�����v��s�ԍ�: $scrollLineNum"
+                Write-Console "ジャンプ先行番号: $scrollLineNum"
 
-                # ���������A�N�e�B�u�ɂȂ�܂őҋ@���ACtrl+G�ōs�ֈړ�
+                # メモ帳がアクティブになるまで待機し、Ctrl+Gで行へ移動
                 Start-Sleep -Milliseconds 600
                 $wshell = New-Object -ComObject WScript.Shell
-                $activated = $wshell.AppActivate("������")
+                $activated = $wshell.AppActivate("メモ帳")
                 if (-not $activated) { $activated = $wshell.AppActivate("Notepad") }
                 if ($activated) {
                     Start-Sleep -Milliseconds 100
-                    $wshell.SendKeys("^g")  # Ctrl+G �Łu�s�ֈړ��v�_�C�A���O���J��
+                    $wshell.SendKeys("^g")  # Ctrl+G で「行へ移動」ダイアログを開く
                     Start-Sleep -Milliseconds 200
                     $wshell.SendKeys($scrollLineNum.ToString())
                     Start-Sleep -Milliseconds 100
                     $wshell.SendKeys("{ENTER}")
                 }
             } else {
-                Write-Console "[���] �w�肵�������񂪃t�@�C�����Ɍ�����܂���ł���"
+                Write-Console "[情報] 指定した文字列がファイル内に見つかりませんでした"
             }
         }
     }
     "/EXCEL" {
         # ======================================================================
-        # Excel�\��t������
+        # Excel貼り付け処理
         # ======================================================================
-        # �y�����T�v�z
-        # �擾�������O���e���A�w�肵��Excel�t�@�C���̎w��Z���ɓ\��t���܂��B
-        # COM�iComponent Object Model�j���g�p����Excel�𑀍삵�܂��B
+        # 【処理概要】
+        # 取得したログ内容を、指定したExcelファイルの指定セルに貼り付けます。
+        # COM（Component Object Model）を使用してExcelを操作します。
         # ======================================================================
 
         # ------------------------------------------------------------------
-        # ���ϐ�����ݒ�l���擾
+        # 環境変数から設定値を取得
         # ------------------------------------------------------------------
-        # �Ăяo�����̃o�b�`�t�@�C���Őݒ肳�ꂽ���ϐ���ǂݎ��܂�
-        $excelFileName = $env:EXCEL_FILE_NAME    # Excel�t�@�C���̃p�X
-        $excelSheetName = $env:EXCEL_SHEET_NAME  # �\��t����̃V�[�g��
-        $excelPasteCell = $env:EXCEL_PASTE_CELL  # �\��t����̃Z���Ԓn�i��: "B5"�j
+        # 呼び出し元のバッチファイルで設定された環境変数を読み取ります
+        $excelFileName = $env:EXCEL_FILE_NAME    # Excelファイルのパス
+        $excelSheetName = $env:EXCEL_SHEET_NAME  # 貼り付け先のシート名
+        $excelPasteCell = $env:EXCEL_PASTE_CELL  # 貼り付け先のセル番地（例: "B5"）
 
         # ------------------------------------------------------------------
-        # �K�{�p�����[�^�̃o���f�[�V�����i���؁j
+        # 必須パラメータのバリデーション（検証）
         # ------------------------------------------------------------------
-        # �K�v�Ȋ��ϐ������ׂĐݒ肳��Ă��邩���m�F���܂�
-        # ���ݒ�̏ꍇ�̓G���[���b�Z�[�W��\�����ďI�����܂�
+        # 必要な環境変数がすべて設定されているかを確認します
+        # 未設定の場合はエラーメッセージを表示して終了します
         if (-not $excelFileName) {
-            Write-Console "[�G���[] Excel�t�@�C���p�X�����ݒ�ł��B"
-            Write-Console "        �Ăяo�����o�b�`�t�@�C���� EXCEL_FILE_NAME ��ݒ肵�Ă��������B"
-            exit 10  # Excel�ݒ�G���[
+            Write-Console "[エラー] Excelファイルパスが未設定です。"
+            Write-Console "        呼び出し元バッチファイルの EXCEL_FILE_NAME を設定してください。"
+            exit 10  # Excel設定エラー
         }
         if (-not $excelSheetName) {
-            Write-Console "[�G���[] Excel�V�[�g�������ݒ�ł��B"
-            Write-Console "        �Ăяo�����o�b�`�t�@�C���� EXCEL_SHEET_NAME ��ݒ肵�Ă��������B"
-            exit 10  # Excel�ݒ�G���[
+            Write-Console "[エラー] Excelシート名が未設定です。"
+            Write-Console "        呼び出し元バッチファイルの EXCEL_SHEET_NAME を設定してください。"
+            exit 10  # Excel設定エラー
         }
         if (-not $excelPasteCell) {
-            Write-Console "[�G���[] Excel�\��t���Z�������ݒ�ł��B"
-            Write-Console "        �Ăяo�����o�b�`�t�@�C���� EXCEL_PASTE_CELL ��ݒ肵�Ă��������B"
-            exit 10  # Excel�ݒ�G���[
+            Write-Console "[エラー] Excel貼り付けセルが未設定です。"
+            Write-Console "        呼び出し元バッチファイルの EXCEL_PASTE_CELL を設定してください。"
+            exit 10  # Excel設定エラー
         }
 
         # ------------------------------------------------------------------
-        # Excel�t�@�C���p�X�̉����i���΃p�X����΃p�X�ϊ��j
+        # Excelファイルパスの解決（相対パス→絶対パス変換）
         # ------------------------------------------------------------------
-        # IsPathRooted: �p�X����΃p�X�iC:\...�j���ǂ����𔻒�
-        # ���΃p�X�̏ꍇ�́A�X�N���v�g�̃f�B���N�g������ɐ�΃p�X�ɕϊ�
+        # IsPathRooted: パスが絶対パス（C:\...）かどうかを判定
+        # 相対パスの場合は、スクリプトのディレクトリを基準に絶対パスに変換
         if ([System.IO.Path]::IsPathRooted($excelFileName)) {
-            # ��΃p�X�̏ꍇ: ���̂܂܎g�p
+            # 絶対パスの場合: そのまま使用
             $excelPath = $excelFileName
         } else {
-            # ���΃p�X�̏ꍇ: �X�N���v�g�f�B���N�g���ƌ���
+            # 相対パスの場合: スクリプトディレクトリと結合
             $excelPath = Join-Path $scriptDir $excelFileName
         }
 
         # ------------------------------------------------------------------
-        # Excel�t�@�C�����݊m�F
+        # Excelファイル存在確認
         # ------------------------------------------------------------------
         if (Test-Path $excelPath) {
             try {
                 # ----------------------------------------------------------
-                # ���O�t�@�C���̓��e��ǂݍ���
+                # ログファイルの内容を読み込み
                 # ----------------------------------------------------------
-                # -Encoding Default: Shift-JIS�œǂݍ���
-                # -Raw: �t�@�C���S�̂�1�̕�����Ƃ��ēǂݍ��݁i���s��ێ��j
+                # -Encoding Default: Shift-JISで読み込み
+                # -Raw: ファイル全体を1つの文字列として読み込み（改行を保持）
                 $logContent = Get-Content $outputFilePath -Encoding Default -Raw
 
                 # ----------------------------------------------------------
-                # Excel COM�I�u�W�F�N�g�̍쐬
+                # Excel COMオブジェクトの作成
                 # ----------------------------------------------------------
-                # New-Object -ComObject: Excel�A�v���P�[�V������COM�I�u�W�F�N�g���쐬
-                # ����ɂ��APowerShell����Excel�𑀍�ł���悤�ɂȂ�܂�
+                # New-Object -ComObject: ExcelアプリケーションのCOMオブジェクトを作成
+                # これにより、PowerShellからExcelを操作できるようになります
                 $excel = New-Object -ComObject Excel.Application
 
                 # ----------------------------------------------------------
-                # Excel�E�B���h�E��\��
+                # Excelウィンドウを表示
                 # ----------------------------------------------------------
-                # $true: Excel����ʂɕ\������i���[�U�[�����ʂ��m�F�ł���j
-                # $false: �o�b�N�O���E���h�ŏ����i��\���j
+                # $true: Excelを画面に表示する（ユーザーが結果を確認できる）
+                # $false: バックグラウンドで処理（非表示）
                 $excel.Visible = $true
 
                 # ----------------------------------------------------------
-                # Excel�t�@�C�����J��
+                # Excelファイルを開く
                 # ----------------------------------------------------------
-                # Workbooks.Open: �w�肵���p�X��Excel�t�@�C�����J��
-                # �߂�l: Workbook�i�u�b�N�j�I�u�W�F�N�g
+                # Workbooks.Open: 指定したパスのExcelファイルを開く
+                # 戻り値: Workbook（ブック）オブジェクト
                 $workbook = $excel.Workbooks.Open($excelPath)
 
                 # ----------------------------------------------------------
-                # �V�[�g���擾
+                # シートを取得
                 # ----------------------------------------------------------
-                # Worksheets.Item: �V�[�g���܂��̓C���f�b�N�X�ŃV�[�g���擾
-                # �V�[�g����������Ȃ��ꍇ�̓G���[�ɂȂ�܂�
+                # Worksheets.Item: シート名またはインデックスでシートを取得
+                # シート名が見つからない場合はエラーになります
                 $sheet = $workbook.Worksheets.Item($excelSheetName)
 
                 # ----------------------------------------------------------
-                # �Z���Ƀ��O���e��\��t��
+                # セルにログ内容を貼り付け
                 # ----------------------------------------------------------
-                # Range: �Z���͈͂��w��i��: "B5", "A1:C10"�j
-                # Value2: �Z���̒l�i�����Ȃ��̏����Ȓl�j
-                # �� Value �ł͂Ȃ� Value2 ���g���ƃp�t�H�[�}���X������
+                # Range: セル範囲を指定（例: "B5", "A1:C10"）
+                # Value2: セルの値（書式なしの純粋な値）
+                # ※ Value ではなく Value2 を使うとパフォーマンスが向上
                 $sheet.Range($excelPasteCell).Value2 = $logContent
 
                 # ----------------------------------------------------------
-                # �u�b�N��ۑ�
+                # ブックを保存
                 # ----------------------------------------------------------
-                # Save: �㏑���ۑ��i���̃t�@�C���ɕۑ��j
-                # SaveAs: �ʖ��ۑ�����ꍇ�Ɏg�p
+                # Save: 上書き保存（元のファイルに保存）
+                # SaveAs: 別名保存する場合に使用
                 $workbook.Save()
 
                 # ----------------------------------------------------------
-                # COM�I�u�W�F�N�g�̉���i���������[�N�h�~�j
+                # COMオブジェクトの解放（メモリリーク防止）
                 # ----------------------------------------------------------
-                # COM�I�u�W�F�N�g�͖����I�ɉ�����Ȃ��ƃ������Ɏc�葱���܂�
-                # �������: �����iSheet�j�� �O���iWorkbook �� Excel�j�̏��ɉ��
-                # Out-Null: �߂�l��j���i��ʂɕ\�����Ȃ��j
+                # COMオブジェクトは明示的に解放しないとメモリに残り続けます
+                # 解放順序: 内側（Sheet）→ 外側（Workbook → Excel）の順に解放
+                # Out-Null: 戻り値を破棄（画面に表示しない）
                 [System.Runtime.Interopservices.Marshal]::ReleaseComObject($sheet) | Out-Null
                 [System.Runtime.Interopservices.Marshal]::ReleaseComObject($workbook) | Out-Null
                 [System.Runtime.Interopservices.Marshal]::ReleaseComObject($excel) | Out-Null
 
-                Write-Console "[����] Excel�Ƀ��O��\��t���܂���: $excelSheetName $excelPasteCell"
+                Write-Console "[完了] Excelにログを貼り付けました: $excelSheetName $excelPasteCell"
             } catch {
-                # Excel���쒆�ɃG���[�����������ꍇ
-                Write-Console "[�G���[] Excel�\��t���Ɏ��s���܂���: $($_.Exception.Message)"
-                exit 11  # Excel�\��t���G���[
+                # Excel操作中にエラーが発生した場合
+                Write-Console "[エラー] Excel貼り付けに失敗しました: $($_.Exception.Message)"
+                exit 11  # Excel貼り付けエラー
             }
         } else {
-            # Excel�t�@�C����������Ȃ��ꍇ
-            Write-Console "[�G���[] Excel�t�@�C����������܂���: $excelPath"
-            exit 12  # Excel�t�@�C�������o�G���[
+            # Excelファイルが見つからない場合
+            Write-Console "[エラー] Excelファイルが見つかりません: $excelPath"
+            exit 12  # Excelファイル未検出エラー
         }
     }
     "/WINMERGE" {
         # ======================================================================
-        # WinMerge��r����
+        # WinMerge比較処理
         # ======================================================================
-        # �y�����T�v�z
-        # WinMerge���g�p���ă��O�t�@�C�����r�\�����܂��B
-        # WinMerge���C���X�g�[������Ă���K�v������܂��B
+        # 【処理概要】
+        # WinMergeを使用してログファイルを比較表示します。
+        # WinMergeがインストールされている必要があります。
         # ======================================================================
 
-        # WinMerge�̎��s�t�@�C���p�X�i�f�t�H���g�̃C���X�g�[����j
+        # WinMergeの実行ファイルパス（デフォルトのインストール先）
         $winMergePath = "C:\Program Files\WinMerge\WinMergeU.exe"
 
-        # WinMerge�����݂��邩�m�F
+        # WinMergeが存在するか確認
         if (Test-Path $winMergePath) {
-            # WinMerge���N�����ă��O�t�@�C�����J��
+            # WinMergeを起動してログファイルを開く
             Start-Process $winMergePath -ArgumentList "`"$outputFilePath`""
-            Write-Console "[����] WinMerge�Ńt�@�C�����J���܂���"
+            Write-Console "[完了] WinMergeでファイルを開きました"
         } else {
-            Write-Console "[�G���[] WinMerge��������܂���: $winMergePath"
-            Write-Console "        WinMerge���C���X�g�[�����邩�A�p�X���m�F���Ă��������B"
+            Write-Console "[エラー] WinMergeが見つかりません: $winMergePath"
+            Write-Console "        WinMergeをインストールするか、パスを確認してください。"
         }
     }
     default {
-        # �f�t�H���g�̓��O�t�@�C���o�͂̂�
+        # デフォルトはログファイル出力のみ
     }
 }
 
-Write-Console "[����] �o�̓t�@�C��: $outputFilePath"
+Write-Console "[完了] 出力ファイル: $outputFilePath"
 
-# ����I��
+# 正常終了
 exit 0
