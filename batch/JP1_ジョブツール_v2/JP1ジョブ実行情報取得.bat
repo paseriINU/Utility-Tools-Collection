@@ -703,28 +703,23 @@ try {
             }
             if (Test-Path $excelPath) {
                 try {
-                    # ログを行ごとに読み込み（各行を別々のセルに貼り付け）
-                    $logLines = Get-Content $outputFilePath -Encoding Default
+                    # ログファイルの内容を読み込み（-Raw: 全体を1つの文字列として）
+                    $logContent = Get-Content $outputFilePath -Encoding Default -Raw
+
+                    # クリップボードにコピー
+                    # Excelの通常の貼り付け動作を利用するため、クリップボード経由で貼り付けます
+                    # これにより改行区切りのテキストが各行別々のセルに入ります
+                    Set-Clipboard -Value $logContent
+
                     $excel = New-Object -ComObject Excel.Application
                     $excel.Visible = $true
                     $workbook = $excel.Workbooks.Open($excelPath)
                     $sheet = $workbook.Worksheets.Item($excelSheetName)
 
-                    # 行数を取得して2次元配列を作成
-                    $rowCount = $logLines.Count
-                    $array = New-Object 'object[,]' $rowCount, 1
-                    for ($i = 0; $i -lt $rowCount; $i++) {
-                        $array[$i, 0] = $logLines[$i]
-                    }
-
-                    # 開始セルから終了セルの範囲を計算
-                    $startRow = [int]($excelPasteCell -replace '[A-Za-z]', '')
-                    $column = $excelPasteCell -replace '[0-9]', ''
-                    $endRow = $startRow + $rowCount - 1
-                    $endCell = "$column$endRow"
-
-                    # 範囲に配列を一括貼り付け
-                    $sheet.Range("$excelPasteCell`:$endCell").Value2 = $array
+                    # 貼り付け先のセルを選択してクリップボードから貼り付け
+                    # これにより改行で区切られた各行が A1, A2, A3... に配置されます
+                    $sheet.Range($excelPasteCell).Select()
+                    $sheet.Paste()
 
                     $workbook.Save()
                     [System.Runtime.Interopservices.Marshal]::ReleaseComObject($sheet) | Out-Null
