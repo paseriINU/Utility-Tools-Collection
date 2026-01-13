@@ -811,7 +811,9 @@
                 // --------------------------------------------------------------------
                 // ファイルをArrayBuffer（バイナリデータ）として読み込む
                 // ※ArrayBuffer: 生のバイナリデータを扱うためのオブジェクト
+                console.log('[DEBUG] ファイル読み込み開始', { name: file.name, size: file.size });
                 const arrayBuffer = await file.arrayBuffer();
+                console.log('[DEBUG] ファイル読み込み完了', { byteLength: arrayBuffer.byteLength });
 
                 // 読み込み結果の検証
                 if (!arrayBuffer || arrayBuffer.byteLength === 0) {
@@ -826,16 +828,25 @@
                 // useWorkerFetch: Worker内でのfetchを無効化
                 // isEvalSupported: evalを使用しない（セキュリティ対策）
                 // ※Web Worker無効化の理由: ローカルHTMLファイルでの動作を保証するため
+                console.log('[DEBUG] getDocument呼び出し開始', { byteLength: arrayBuffer.byteLength });
                 const loadingTask = pdfjsLib.getDocument({
                     data: arrayBuffer,
                     disableWorker: true,
                     useWorkerFetch: false,
                     isEvalSupported: false
                 });
-                
+
+                // 進捗状況をコンソールに出力
+                loadingTask.onProgress = function(progress) {
+                    console.log('[DEBUG] 読み込み進捗:', progress.loaded, '/', progress.total);
+                };
+
+                console.log('[DEBUG] loadingTask作成完了、promise待機開始');
+
                 // PDFの読み込みが完了するまで待機
                 // ※promise: 非同期処理の結果を表すオブジェクト
                 const pdf = await loadingTask.promise;
+                console.log('[DEBUG] PDF読み込み完了', { numPages: pdf.numPages });
 
                 // --------------------------------------------------------------------
                 // 読み込み結果の保存とUI更新
