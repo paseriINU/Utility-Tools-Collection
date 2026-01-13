@@ -554,6 +554,17 @@ if ($unitPath2 -and $unitPath2.Trim() -ne "") {
     $isCompareMode = $true
 }
 
+# 対象ジョブの表示
+if ($isCompareMode) {
+    Write-Host "  対象1: $unitPath"
+    Write-Host "  対象2: $unitPath2"
+    Write-Host ""
+    Write-Host "  [比較モード] 新しい方のログを取得します" -ForegroundColor Yellow
+} else {
+    Write-Host "  対象: $unitPath"
+}
+Write-Host ""
+
 # ------------------------------------------------------------------------------
 # プロトコル設定
 # ------------------------------------------------------------------------------
@@ -1576,6 +1587,51 @@ if ($execIdList.Count -gt 0) {
     }
 }
 
+# ------------------------------------------------------------------------------
+# 比較結果の表示
+# ------------------------------------------------------------------------------
+if ($selectedPath) {
+    Write-Host ""
+    Write-Host "================================================================" -ForegroundColor Yellow
+    Write-Host "  [比較結果] 新しい方のジョブを選択しました" -ForegroundColor Yellow
+    Write-Host "================================================================" -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "  [選択] $selectedPath"
+    Write-Host "         開始日時: $selectedTime"
+    Write-Host ""
+    Write-Host "  [除外] $rejectedPath"
+    Write-Host "         開始日時: $rejectedTime"
+    Write-Host ""
+    Write-Host "  続行する場合は任意のキーを押してください..."
+    Write-Host ""
+    $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+}
+
+# ------------------------------------------------------------------------------
+# 2日以上前の警告チェック
+# ------------------------------------------------------------------------------
+if ($startTimeForFileName) {
+    try {
+        $dt = [DateTime]::ParseExact($startTimeForFileName, "yyyyMMdd_HHmmss", $null)
+        $daysDiff = ((Get-Date) - $dt).TotalDays
+        if ($daysDiff -ge 2) {
+            Write-Host ""
+            Write-Host "================================================================" -ForegroundColor Yellow
+            Write-Host "  [警告] ジョブ開始日時が2日以上前です" -ForegroundColor Yellow
+            Write-Host "================================================================" -ForegroundColor Yellow
+            Write-Host ""
+            Write-Host "  ジョブ開始日時: $startTimeForFileName"
+            Write-Host ""
+            Write-Host "  意図した世代のログか確認してください。"
+            Write-Host "  続行する場合は任意のキーを押してください..."
+            Write-Host ""
+            $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+        }
+    } catch {
+        # 日付パースエラーは無視
+    }
+}
+
 # ==============================================================================
 # STEP 6: 出力処理
 # ==============================================================================
@@ -1810,7 +1866,18 @@ switch ($outputMode.ToUpper()) {
     }
 }
 
-Write-Console "[完了] 出力ファイル: $outputFilePath"
+# 完了表示
+Write-Host ""
+Write-Host "================================================================" -ForegroundColor Green
+Write-Host "  取得完了" -ForegroundColor Green
+Write-Host "================================================================" -ForegroundColor Green
+Write-Host ""
+Write-Host "ジョブネット名: $jobnetName"
+Write-Host "コメント:       $jobnetComment"
+Write-Host "ジョブ開始日時: $startTimeForFileName"
+Write-Host "終了状態:       $endStatusDisplay"
+Write-Host "出力ファイル:   $outputFilePath"
+Write-Host ""
 
 # 正常終了
 exit 0
