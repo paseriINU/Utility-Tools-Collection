@@ -1928,6 +1928,9 @@ switch ($outputMode.ToUpper()) {
                 # 2つのファイルが作成された場合は比較モード
                 Start-Process $winMergePath -ArgumentList "`"$($extractedFiles[0])`" `"$($extractedFiles[1])`""
                 Write-Console "[完了] WinMergeで比較を開きました"
+                # 元のログファイルを削除
+                Remove-Item -Path $outputFilePath -Force
+                Write-Console "[完了] 元のログファイルを削除しました"
             } elseif ($extractedFiles.Count -eq 1) {
                 # 1つのファイルのみ作成された場合
                 Start-Process $winMergePath -ArgumentList "`"$($extractedFiles[0])`""
