@@ -769,7 +769,7 @@ $baseUrl = "${protocol}://${webConsoleHost}:${webConsolePort}/ajs/api/v1"
 # ここに書き込むと、常に画面に表示されます。
 function Write-Console {
     param([string]$Message)
-    $Message | Out-File -FilePath "CON" -Encoding Default
+    [Console]::WriteLine($Message)
 }
 
 # ------------------------------------------------------------------------------
