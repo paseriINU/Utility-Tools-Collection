@@ -542,6 +542,23 @@ $jobExcelMapping = @{
     # "/ジョブパス6" = "Excelファイル6.xls,Sheet1,A1"
 }
 
+# ジョブパスとテキストファイル名の紐づけ設定（クリップボード保存用）
+# ★ キー: ジョブパス（部分一致で検索）
+# ★ 値: 保存するテキストファイル名
+# 例: "/JobGroup/Job1" = "runh_week.txt"
+$jobTextFileMapping = @{
+    # === ジョブパスとテキストファイルのマッピング ===
+    # Excelに貼り付けた後、クリップボード内容を保存するファイル名を指定します
+    #
+    # ★ 以下を編集してください ★
+    "/サンプル/週単位ジョブ" = "runh_week.txt"
+    "/サンプル/年単位ジョブ" = "runh_year.txt"
+    # "/ジョブパス3" = "runh_file3.txt"
+    # "/ジョブパス4" = "runh_file4.txt"
+    # "/ジョブパス5" = "runh_file5.txt"
+    # "/ジョブパス6" = "runh_file6.txt"
+}
+
 # ==============================================================================
 # ■ メイン処理（以下は通常編集不要）
 # ==============================================================================
@@ -1861,17 +1878,28 @@ switch ($outputMode.ToUpper()) {
             # ------------------------------------------------------------------
             # STEP 5: クリップボード内容をファイルに保存し、変換バッチを実行
             # ------------------------------------------------------------------
-            $clipboardOutputFile = Join-Path $scriptDir "runh_week.txt"
+            # ジョブパスに対応するテキストファイル名を取得
+            $textFileName = "runh_default.txt"  # デフォルト値
+            foreach ($key in $jobTextFileMapping.Keys) {
+                if ($unitPath -like "*$key*") {
+                    $textFileName = $jobTextFileMapping[$key]
+                    break
+                }
+            }
+            # クリップボード内容は02_output/yyyymmddフォルダに保存
+            $clipboardOutputFile = Join-Path $dateFolderPath $textFileName
             $convertBatchFile = Join-Path $scriptDir "【削除禁止】ConvertNS932Result.bat"
 
             # クリップボードの内容をファイルに保存
             Get-Clipboard | Out-File -FilePath $clipboardOutputFile -Encoding Default
             Write-Console "[情報] クリップボード内容を保存しました: $clipboardOutputFile"
 
-            # 変換バッチファイルを実行
+            # 変換バッチファイルを実行（出力先フォルダを環境変数で渡す）
             if (Test-Path $convertBatchFile) {
                 Write-Console "[情報] 変換バッチを実行します: $convertBatchFile"
+                $env:OUTPUT_FOLDER = $dateFolderPath
                 & cmd /c "`"$convertBatchFile`""
+                $env:OUTPUT_FOLDER = $null
             } else {
                 Write-Console "[警告] 変換バッチファイルが見つかりません: $convertBatchFile"
             }

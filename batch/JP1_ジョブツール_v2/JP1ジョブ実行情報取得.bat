@@ -202,6 +202,23 @@ $jobExcelMapping = @{
     # "/ジョブパス6" = "Excelファイル6.xls,Sheet1,A1"
 }
 
+# ジョブパスとテキストファイル名の紐づけ設定（クリップボード保存用）
+# ★ キー: ジョブパス（部分一致で検索）
+# ★ 値: 保存するテキストファイル名
+# 例: "/JobGroup/Job1" = "runh_week.txt"
+$jobTextFileMapping = @{
+    # === ジョブパスとテキストファイルのマッピング ===
+    # Excelに貼り付けた後、クリップボード内容を保存するファイル名を指定します
+    #
+    # ★ 以下を編集してください ★
+    "/サンプル/週単位ジョブ" = "runh_week.txt"
+    "/サンプル/年単位ジョブ" = "runh_year.txt"
+    # "/ジョブパス3" = "runh_file3.txt"
+    # "/ジョブパス4" = "runh_file4.txt"
+    # "/ジョブパス5" = "runh_file5.txt"
+    # "/ジョブパス6" = "runh_file6.txt"
+}
+
 # ==============================================================================
 # ■ メイン処理（以下は通常編集不要）
 # ==============================================================================
@@ -810,17 +827,28 @@ try {
                 # --------------------------------------------------------------
                 # STEP 5: クリップボード内容をファイルに保存し、変換バッチを実行
                 # --------------------------------------------------------------
-                $clipboardOutputFile = Join-Path $scriptDir "runh_week.txt"
+                # ジョブパスに対応するテキストファイル名を取得
+                $textFileName = "runh_default.txt"  # デフォルト値
+                foreach ($key in $jobTextFileMapping.Keys) {
+                    if ($unitPath -like "*$key*") {
+                        $textFileName = $jobTextFileMapping[$key]
+                        break
+                    }
+                }
+                # クリップボード内容は02_output/yyyymmddフォルダに保存
+                $clipboardOutputFile = Join-Path $dateFolderPath $textFileName
                 $convertBatchFile = Join-Path $scriptDir "【削除禁止】ConvertNS932Result.bat"
 
                 # クリップボードの内容をファイルに保存
                 Get-Clipboard | Out-File -FilePath $clipboardOutputFile -Encoding Default
                 Write-Console "[情報] クリップボード内容を保存しました: $clipboardOutputFile"
 
-                # 変換バッチファイルを実行
+                # 変換バッチファイルを実行（出力先フォルダを環境変数で渡す）
                 if (Test-Path $convertBatchFile) {
                     Write-Console "[情報] 変換バッチを実行します: $convertBatchFile"
+                    $env:OUTPUT_FOLDER = $dateFolderPath
                     & cmd /c "`"$convertBatchFile`""
+                    $env:OUTPUT_FOLDER = $null
                 } else {
                     Write-Console "[警告] 変換バッチファイルが見つかりません: $convertBatchFile"
                 }
@@ -830,8 +858,110 @@ try {
             }
         }
         "/WINMERGE" {
-            # WinMergeで同じファイルを比較（TODO: ユーザーが実装）
-            [Console]::WriteLine("WinMerge比較は未実装です")
+            # ======================================================================
+            # WinMerge比較処理（キーワード抽出機能付き）
+            # ======================================================================
+            # 【処理概要】
+            # ログファイルから指定したキーワード間のテキストを抽出し、
+            # WinMergeで比較表示します。
+            # キーワードが見つからない場合は元のログファイルを開きます。
+            # ======================================================================
+
+            # WinMergeの実行ファイルパス（デフォルトのインストール先）
+            $winMergePath = "C:\Program Files\WinMerge\WinMergeU.exe"
+
+            # WinMergeが存在するか確認
+            if (Test-Path $winMergePath) {
+                # ----------------------------------------------------------
+                # キーワード抽出設定
+                # ----------------------------------------------------------
+                # StartKeyword: 抽出開始キーワード（この行から抽出開始）
+                # EndKeyword: 抽出終了キーワード（この行まで抽出）
+                # OutputSuffix: 出力ファイル名のサフィックス
+                $extractPairs = @(
+                    @{
+                        StartKeyword = "#パッチ適用前チェック"
+                        EndKeyword = "#パッチ適用"
+                        OutputSuffix = "_データパッチ前.txt"
+                    },
+                    @{
+                        StartKeyword = "#パッチ適用後チェック"
+                        EndKeyword = "#トランザクション処理"
+                        OutputSuffix = "_データパッチ後.txt"
+                    }
+                )
+
+                $extractedFiles = @()
+
+                # ログファイルを読み込み
+                $logLines = Get-Content -Path $outputFilePath -Encoding Default
+
+                foreach ($pair in $extractPairs) {
+                    $startKeyword = $pair.StartKeyword
+                    $endKeyword = $pair.EndKeyword
+                    $outputSuffix = $pair.OutputSuffix
+
+                    # 出力ファイルパスを作成（元ファイル名 + サフィックス）
+                    $baseName = [System.IO.Path]::GetFileNameWithoutExtension($outputFilePath)
+                    $extractedFile = Join-Path $outputFolder ($baseName + $outputSuffix)
+
+                    # ----------------------------------------------------------
+                    # キーワード間のテキスト抽出処理
+                    # ----------------------------------------------------------
+                    # 注意: 開始キーワードが終了キーワードを含む場合があるため
+                    # （例: "#パッチ適用前チェック" は "#パッチ適用" を含む）
+                    # 開始行では終了チェックをスキップする
+                    $inSection = $false
+                    $extractedContent = @()
+
+                    foreach ($line in $logLines) {
+                        # 開始キーワードを検出したら抽出開始
+                        if ($line -like "*$startKeyword*") {
+                            $inSection = $true
+                            $extractedContent += $line
+                            continue  # 開始行では終了チェックをスキップ
+                        }
+                        # 抽出中の処理
+                        if ($inSection) {
+                            # 終了キーワードを検出したら抽出終了（この行は含めない）
+                            if ($line -like "*$endKeyword*") {
+                                break
+                            }
+                            $extractedContent += $line
+                        }
+                    }
+
+                    # 抽出結果をファイルに保存
+                    if ($extractedContent.Count -gt 0) {
+                        $extractedContent | Out-File -FilePath $extractedFile -Encoding Default
+                        $extractedFiles += $extractedFile
+                        Write-Console "[完了] キーワード抽出: $extractedFile"
+                    }
+                }
+
+                # ----------------------------------------------------------
+                # WinMergeで比較
+                # ----------------------------------------------------------
+                if ($extractedFiles.Count -eq 2) {
+                    # 2つのファイルが作成された場合は比較モード
+                    Start-Process $winMergePath -ArgumentList "`"$($extractedFiles[0])`" `"$($extractedFiles[1])`""
+                    Write-Console "[完了] WinMergeで比較を開きました"
+                    # 元のログファイルを削除
+                    Remove-Item -Path $outputFilePath -Force
+                    Write-Console "[完了] 元のログファイルを削除しました"
+                } elseif ($extractedFiles.Count -eq 1) {
+                    # 1つのファイルのみ作成された場合
+                    Start-Process $winMergePath -ArgumentList "`"$($extractedFiles[0])`""
+                    Write-Console "[完了] WinMergeでファイルを開きました"
+                } else {
+                    # キーワードが見つからない場合は元のログファイルを開く
+                    Start-Process $winMergePath -ArgumentList "`"$outputFilePath`""
+                    Write-Console "[情報] キーワードが見つからないため、元のログを開きました"
+                }
+            } else {
+                Write-Console "[エラー] WinMergeが見つかりません: $winMergePath"
+                Write-Console "        WinMergeをインストールするか、パスを確認してください。"
+            }
         }
         default {
             # デフォルトはログファイル出力のみ
