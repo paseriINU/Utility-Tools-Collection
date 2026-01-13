@@ -1863,7 +1863,7 @@ switch ($outputMode.ToUpper()) {
             $extractPairs = @(
                 @{
                     StartKeyword = "#パッチ適用前チェック"
-                    EndKeyword = "#パッチ適用"
+                    EndKeyword = "#バッチ運用"
                     OutputSuffix = "_データパッチ前.txt"
                 },
                 @{
