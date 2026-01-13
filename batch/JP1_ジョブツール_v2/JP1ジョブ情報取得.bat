@@ -91,12 +91,12 @@ rem
 rem コマンドの説明:
 rem   $scriptDir=...    : バッチファイルのフォルダパスを変数に保存
 rem   gc '%~f0'         : このファイル自体の内容を読み込む（gcはGet-Contentの略）
-rem   -Encoding Default : Shift-JISエンコーディングで読み込む
+rem   -Encoding UTF8    : UTF-8エンコーディングで読み込む
 rem   -join "`n"        : 各行を改行で連結して1つの文字列にする
 rem   iex               : 読み込んだ内容をPowerShellコマンドとして実行（iexはInvoke-Expressionの略）
 rem   try-finally       : エラーが発生しても必ずSet-Locationを実行
 rem
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$scriptDir=('%~dp0' -replace '\\$',''); try { iex ((gc '%~f0' -Encoding Default) -join \"`n\") } finally { Set-Location C:\ }"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$scriptDir=('%~dp0' -replace '\\$',''); try { iex ((gc '%~f0' -Encoding UTF8) -join \"`n\") } finally { Set-Location C:\ }"
 
 rem PowerShellの終了コードを保存
 rem %ERRORLEVEL% は直前に実行したコマンドの終了コードを保持しています
