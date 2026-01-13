@@ -518,7 +518,7 @@ $holdPlan = "NO"
 $templateFolderName = "【雛形】【コピーして使うこと！】ツール・手順書フォルダ"
 
 # 出力先フォルダ名（スクリプトと同じフォルダに作成）
-$outputFolderName = "output"
+$outputFolderName = "02_output"
 
 # ジョブパスとExcelファイルの紐づけ設定
 # ★ キー: ジョブパス（部分一致で検索）
