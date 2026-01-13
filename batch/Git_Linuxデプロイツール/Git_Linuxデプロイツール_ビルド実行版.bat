@@ -100,6 +100,17 @@ $BULK_TRANSFER_THRESHOLD = 10
 # ビルドシェルスクリプトのパス
 $BUILD_SCRIPT = "/opt/build/build.sh"
 
+# ラッパースクリプト設定
+# ローカルのラッパースクリプト（batファイルと同じフォルダに配置）
+$BUILD_WRAPPER_LOCAL = "build_wrapper.sh"
+# Linux側の一時配置先（終了後に自動削除）
+$BUILD_WRAPPER_REMOTE = "/tmp/build_wrapper.sh"
+
+# プロンプト文字列（ビルドシェルが表示するプロンプトに合わせて設定）
+$BUILD_PROMPT_ENV = "環境を選択"       # 環境選択プロンプト
+$BUILD_PROMPT_OPTION = "オプション"     # ビルドオプション選択プロンプト
+$BUILD_PROMPT_GYOMU = "業務ID"          # 業務ID選択プロンプト
+
 # ビルドオプション選択番号（共通）
 $BUILD_OPTION_NORMAL = "1"      # 業務ID単位ビルド時の追加選択番号
 $BUILD_OPTION_FULL = "2"        # フルコンパイル時の追加選択番号
@@ -869,10 +880,71 @@ if ($failCount -gt 0) {
 }
 #endregion
 
+#region ラッパースクリプト転送
+Write-Header "ラッパースクリプト転送"
+
+# ローカルのラッパースクリプトパス
+$wrapperLocalPath = Join-Path $scriptDir $BUILD_WRAPPER_LOCAL
+
+if (-not (Test-Path $wrapperLocalPath)) {
+    Write-Color "[エラー] ラッパースクリプトが見つかりません: $wrapperLocalPath" "Red"
+    Write-Color "        build_wrapper.sh をバッチファイルと同じフォルダに配置してください" "Yellow"
+    exit 1
+}
+
+Write-Color "[転送] ラッパースクリプトを転送中..." "Yellow"
+Write-Host "  ローカル: $wrapperLocalPath"
+Write-Host "  リモート: ${SSH_USER}@${SSH_HOST}:${BUILD_WRAPPER_REMOTE}"
+
+$scpArgs = @()
+if ($SSH_KEY -ne "" -and (Test-Path $SSH_KEY)) {
+    $scpArgs += "-i"
+    $scpArgs += $SSH_KEY
+}
+if ($SSH_PORT -ne 22) {
+    $scpArgs += "-P"
+    $scpArgs += $SSH_PORT
+}
+$scpArgs += $wrapperLocalPath
+$scpArgs += "${SSH_USER}@${SSH_HOST}:${BUILD_WRAPPER_REMOTE}"
+
+try {
+    & $scpCommand $scpArgs 2>&1 | Out-Null
+
+    if ($LASTEXITCODE -eq 0) {
+        # 実行権限を付与
+        $sshArgs = @()
+        if ($SSH_KEY -ne "" -and (Test-Path $SSH_KEY)) {
+            $sshArgs += "-i"
+            $sshArgs += $SSH_KEY
+        }
+        if ($SSH_PORT -ne 22) {
+            $sshArgs += "-p"
+            $sshArgs += $SSH_PORT
+        }
+        $sshArgs += "${SSH_USER}@${SSH_HOST}"
+        $sshArgs += "chmod +x '$BUILD_WRAPPER_REMOTE'"
+
+        & $sshCommand $sshArgs 2>&1 | Out-Null
+
+        Write-Color "[OK] ラッパースクリプトの転送完了" "Green"
+    } else {
+        Write-Color "[エラー] ラッパースクリプトの転送に失敗しました" "Red"
+        exit 1
+    }
+} catch {
+    Write-Color "[エラー] ラッパースクリプトの転送に失敗しました: $($_.Exception.Message)" "Red"
+    exit 1
+}
+
+Write-Host ""
+#endregion
+
 #region ビルド実行
 Write-Header "ビルド実行"
 
 Write-Color "[情報] ビルドシェル: $BUILD_SCRIPT" "Cyan"
+Write-Color "[情報] ラッパー: $BUILD_WRAPPER_REMOTE" "Cyan"
 Write-Color "[情報] ビルドモード: $(if ($buildMode -eq 'full') { 'フルコンパイル' } else { '業務ID単位ビルド' })" "Cyan"
 Write-Host ""
 
@@ -894,16 +966,18 @@ if ($buildMode -eq "full") {
 
     # 入力値を構築: 環境選択番号 + フルコンパイル選択番号
     $buildEnvNumber = $selectedEnv.BuildEnvNumber
-    $buildInputSequence = "${buildEnvNumber}`n${BUILD_OPTION_FULL}"
 
     Write-Host "  環境選択番号: $buildEnvNumber"
     Write-Host "  追加選択番号: $BUILD_OPTION_FULL (フルコンパイル)"
     Write-Host ""
 
-    $sshArgs = $sshBaseArgs + @("${SSH_USER}@${SSH_HOST}")
-    $sshArgs += "echo -e '$buildInputSequence' | $BUILD_SCRIPT"
+    # ラッパースクリプト経由でビルド実行（プロンプト待機モード: -w）
+    $wrapperArgs = "-w '$BUILD_SCRIPT' '${BUILD_PROMPT_ENV}:${buildEnvNumber}' '${BUILD_PROMPT_OPTION}:${BUILD_OPTION_FULL}'"
 
-    Write-Color "[コマンド] echo -e '$buildInputSequence' | $BUILD_SCRIPT" "Gray"
+    $sshArgs = $sshBaseArgs + @("${SSH_USER}@${SSH_HOST}")
+    $sshArgs += "$BUILD_WRAPPER_REMOTE $wrapperArgs"
+
+    Write-Color "[コマンド] $BUILD_WRAPPER_REMOTE $wrapperArgs" "Gray"
     Write-Host ""
 
     try {
@@ -930,18 +1004,18 @@ if ($buildMode -eq "full") {
 
         $gyomuBuildNumber = $GYOMU_BUILD_MAP[$gyomuId]
 
-        # 入力値を構築: 環境選択番号 + 通常ビルド選択番号 + 業務ID選択番号
-        $buildInputSequence = "${buildEnvNumber}`n${BUILD_OPTION_NORMAL}`n${gyomuBuildNumber}"
-
         Write-Host "  環境選択番号: $buildEnvNumber"
         Write-Host "  追加選択番号: $BUILD_OPTION_NORMAL (業務ID単位)"
         Write-Host "  業務ID選択番号: $gyomuBuildNumber ($gyomuId)"
         Write-Host ""
 
-        $sshArgs = $sshBaseArgs + @("${SSH_USER}@${SSH_HOST}")
-        $sshArgs += "echo -e '$buildInputSequence' | $BUILD_SCRIPT"
+        # ラッパースクリプト経由でビルド実行（プロンプト待機モード: -w）
+        $wrapperArgs = "-w '$BUILD_SCRIPT' '${BUILD_PROMPT_ENV}:${buildEnvNumber}' '${BUILD_PROMPT_OPTION}:${BUILD_OPTION_NORMAL}' '${BUILD_PROMPT_GYOMU}:${gyomuBuildNumber}'"
 
-        Write-Color "[コマンド] echo -e '$buildInputSequence' | $BUILD_SCRIPT" "Gray"
+        $sshArgs = $sshBaseArgs + @("${SSH_USER}@${SSH_HOST}")
+        $sshArgs += "$BUILD_WRAPPER_REMOTE $wrapperArgs"
+
+        Write-Color "[コマンド] $BUILD_WRAPPER_REMOTE $wrapperArgs" "Gray"
         Write-Host ""
 
         try {
@@ -961,6 +1035,33 @@ if ($buildMode -eq "full") {
         Write-Host ""
     }
 }
+#endregion
+
+#region ラッパースクリプト削除
+Write-Header "クリーンアップ"
+
+Write-Color "[削除] ラッパースクリプトを削除中..." "Yellow"
+
+$sshArgs = @()
+if ($SSH_KEY -ne "" -and (Test-Path $SSH_KEY)) {
+    $sshArgs += "-i"
+    $sshArgs += $SSH_KEY
+}
+if ($SSH_PORT -ne 22) {
+    $sshArgs += "-p"
+    $sshArgs += $SSH_PORT
+}
+$sshArgs += "${SSH_USER}@${SSH_HOST}"
+$sshArgs += "rm -f '$BUILD_WRAPPER_REMOTE'"
+
+try {
+    & $sshCommand $sshArgs 2>&1 | Out-Null
+    Write-Color "[OK] ラッパースクリプトを削除しました" "Green"
+} catch {
+    Write-Color "[警告] ラッパースクリプトの削除に失敗しました: $($_.Exception.Message)" "Yellow"
+}
+
+Write-Host ""
 #endregion
 
 #region 最終結果
