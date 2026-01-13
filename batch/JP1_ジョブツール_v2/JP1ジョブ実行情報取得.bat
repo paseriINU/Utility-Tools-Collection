@@ -177,8 +177,8 @@ $pollIntervalSeconds = 5
 # このフォルダがyyyymmddフォルダにコピーされます
 $templateFolderName = "【雛形】【コピーして使うこと！】ツール・手順書"
 
-# 出力先フォルダ名（スクリプトと同じフォルダに作成）
-$outputFolderName = "02_output"
+# 出力先フォルダ名（親フォルダの02_outputに出力）
+$outputFolderName = "..\02_output"
 
 # ジョブパスとExcelファイルの紐づけ設定
 # ★ キー: ジョブパス（部分一致で検索）
@@ -190,12 +190,12 @@ $jobExcelMapping = @{
     # 部分一致で検索されるため、ジョブパスの特徴的な部分を指定してください
     #
     # 例:
-    # "/TIA/週単位" = "TIA解析（自習当初）_週単位.xls,Sheet1,A1"
-    # "/TIA/年単位" = "TIA解析（自習当初）_年単位.xls,Sheet1,A1"
+    # "/TIA/週単位" = "TIA解析(自習当初)_週単位.xls,Sheet1,A1"
+    # "/TIA/年単位" = "TIA解析(自習当初)_年単位.xls,Sheet1,A1"
     #
     # ★ 以下を編集してください ★
-    "/サンプル/週単位ジョブ" = "TIA解析（自習当初）_週単位.xls,Sheet1,A1"
-    "/サンプル/年単位ジョブ" = "TIA解析（自習当初）_年単位.xls,Sheet1,A1"
+    "/サンプル/週単位ジョブ" = "TIA解析(自習当初)_週単位.xls,Sheet1,A1"
+    "/サンプル/年単位ジョブ" = "TIA解析(自習当初)_年単位.xls,Sheet1,A1"
     # "/ジョブパス3" = "Excelファイル3.xls,Sheet1,A1"
     # "/ジョブパス4" = "Excelファイル4.xls,Sheet1,A1"
     # "/ジョブパス5" = "Excelファイル5.xls,Sheet1,A1"
