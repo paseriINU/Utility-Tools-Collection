@@ -734,7 +734,6 @@ try {
                         $excelSheetName = $parts[1].Trim()
                         $excelPasteCell = $parts[2].Trim()
                     }
-                    Write-Console "[情報] ジョブパス '$unitPath' にマッチ: $key"
                     break
                 }
             }
@@ -746,11 +745,25 @@ try {
                 exit 10  # Excel設定エラー
             }
 
-            Write-Console "[情報] Excel: $excelFileName / シート: $excelSheetName / セル: $excelPasteCell"
+            # ------------------------------------------------------------------
+            # Excel処理開始ヘッダー
+            # ------------------------------------------------------------------
+            Write-Host ""
+            Write-Host "================================================================" -ForegroundColor Yellow
+            Write-Host "  Excel貼り付け処理" -ForegroundColor Yellow
+            Write-Host "================================================================" -ForegroundColor Yellow
+            Write-Host ""
+            Write-Host "  [設定情報]" -ForegroundColor Cyan
+            Write-Host "    ジョブパス    : $unitPath"
+            Write-Host "    Excelファイル : $excelFileName"
+            Write-Host "    シート名      : $excelSheetName"
+            Write-Host "    貼り付けセル  : $excelPasteCell"
+            Write-Host ""
 
             # --------------------------------------------------------------
             # STEP 2: 02_output/yyyymmddフォルダを作成
             # --------------------------------------------------------------
+            Write-Host "  [STEP 1] 出力フォルダ準備" -ForegroundColor Cyan
             $dateFolder = Get-Date -Format "yyyyMMdd"
             $outputBasePath = Join-Path $scriptDir $outputFolderName
             $dateFolderPath = Join-Path $outputBasePath $dateFolder
@@ -758,18 +771,22 @@ try {
             # 02_outputフォルダが存在しない場合は作成
             if (-not (Test-Path $outputBasePath)) {
                 New-Item -Path $outputBasePath -ItemType Directory -Force | Out-Null
-                Write-Console "[情報] 出力フォルダを作成しました: $outputBasePath"
+                Write-Host "    出力フォルダ作成: $outputBasePath"
             }
 
             # yyyymmddフォルダが存在しない場合は作成
             if (-not (Test-Path $dateFolderPath)) {
                 New-Item -Path $dateFolderPath -ItemType Directory -Force | Out-Null
-                Write-Console "[情報] 日付フォルダを作成しました: $dateFolderPath"
+                Write-Host "    日付フォルダ作成: $dateFolderPath"
+            } else {
+                Write-Host "    日付フォルダ    : $dateFolderPath (既存)"
             }
+            Write-Host ""
 
             # --------------------------------------------------------------
             # STEP 3: 雛形フォルダの中身をコピー
             # --------------------------------------------------------------
+            Write-Host "  [STEP 2] 雛形フォルダコピー" -ForegroundColor Cyan
             $templatePath = Join-Path $scriptDir $templateFolderName
 
             if (-not (Test-Path $templatePath)) {
@@ -780,17 +797,25 @@ try {
             # 雛形フォルダの中身をyyyymmddフォルダに直接コピー
             # （雛形フォルダ自体はコピーせず、中のファイルのみ）
             $templateItems = Get-ChildItem -Path $templatePath
+            $copiedCount = 0
             foreach ($item in $templateItems) {
                 $destPath = Join-Path $dateFolderPath $item.Name
                 if (-not (Test-Path $destPath)) {
                     Copy-Item -Path $item.FullName -Destination $destPath -Recurse -Force
+                    $copiedCount++
                 }
             }
-            Write-Console "[情報] 雛形フォルダの中身をコピーしました: $dateFolderPath"
+            if ($copiedCount -gt 0) {
+                Write-Host "    コピー完了: $copiedCount 件のファイル/フォルダ"
+            } else {
+                Write-Host "    スキップ: 既にコピー済み"
+            }
+            Write-Host ""
 
             # --------------------------------------------------------------
             # STEP 4: Excelファイルにログを貼り付け
             # --------------------------------------------------------------
+            Write-Host "  [STEP 3] Excelに貼り付け" -ForegroundColor Cyan
             $excelPath = Join-Path $dateFolderPath $excelFileName
 
             if (-not (Test-Path $excelPath)) {
@@ -821,12 +846,13 @@ try {
                 [System.Runtime.Interopservices.Marshal]::ReleaseComObject($sheet) | Out-Null
                 [System.Runtime.Interopservices.Marshal]::ReleaseComObject($workbook) | Out-Null
                 [System.Runtime.Interopservices.Marshal]::ReleaseComObject($excel) | Out-Null
-                Write-Console "[完了] Excelにログを貼り付けました: $excelPath"
-                Write-Console "[完了] シート: $excelSheetName / セル: $excelPasteCell"
+                Write-Host "    貼り付け完了: $excelFileName"
+                Write-Host ""
 
                 # --------------------------------------------------------------
                 # STEP 5: クリップボード内容をファイルに保存し、変換バッチを実行
                 # --------------------------------------------------------------
+                Write-Host "  [STEP 4] テキストファイル保存" -ForegroundColor Cyan
                 # ジョブパスに対応するテキストファイル名を取得
                 $textFileName = "runh_default.txt"  # デフォルト値
                 foreach ($key in $jobTextFileMapping.Keys) {
@@ -841,17 +867,28 @@ try {
 
                 # クリップボードの内容をファイルに保存
                 Get-Clipboard | Out-File -FilePath $clipboardOutputFile -Encoding Default
-                Write-Console "[情報] クリップボード内容を保存しました: $clipboardOutputFile"
+                Write-Host "    保存完了: $textFileName"
 
                 # 変換バッチファイルを実行（出力先フォルダを環境変数で渡す）
                 if (Test-Path $convertBatchFile) {
-                    Write-Console "[情報] 変換バッチを実行します: $convertBatchFile"
+                    Write-Host "    変換バッチ実行中..."
                     $env:OUTPUT_FOLDER = $dateFolderPath
                     & cmd /c "`"$convertBatchFile`""
                     $env:OUTPUT_FOLDER = $null
-                } else {
-                    Write-Console "[警告] 変換バッチファイルが見つかりません: $convertBatchFile"
                 }
+                Write-Host ""
+
+                # ------------------------------------------------------------------
+                # 完了サマリー
+                # ------------------------------------------------------------------
+                Write-Host "================================================================" -ForegroundColor Green
+                Write-Host "  Excel貼り付け完了" -ForegroundColor Green
+                Write-Host "================================================================" -ForegroundColor Green
+                Write-Host ""
+                Write-Host "  出力先フォルダ: $dateFolderPath"
+                Write-Host "  Excelファイル : $excelFileName"
+                Write-Host "  テキストファイル: $textFileName"
+                Write-Host ""
             } catch {
                 Write-Console "[エラー] Excel貼り付けに失敗しました: $($_.Exception.Message)"
                 exit 11  # Excel貼り付けエラー
