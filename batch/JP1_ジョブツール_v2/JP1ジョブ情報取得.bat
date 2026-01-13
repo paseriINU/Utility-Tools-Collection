@@ -1768,11 +1768,11 @@ switch ($outputMode.ToUpper()) {
         if (Test-Path $excelPath) {
             try {
                 # ----------------------------------------------------------
-                # ログファイルの内容を読み込み
+                # ログファイルの内容を読み込み（行ごとに分割）
                 # ----------------------------------------------------------
                 # -Encoding Default: Shift-JISで読み込み
-                # -Raw: ファイル全体を1つの文字列として読み込み（改行を保持）
-                $logContent = Get-Content $outputFilePath -Encoding Default -Raw
+                # 各行を配列として読み込み、別々のセルに貼り付けます
+                $logLines = Get-Content $outputFilePath -Encoding Default
 
                 # ----------------------------------------------------------
                 # Excel COMオブジェクトの作成
@@ -1803,12 +1803,29 @@ switch ($outputMode.ToUpper()) {
                 $sheet = $workbook.Worksheets.Item($excelSheetName)
 
                 # ----------------------------------------------------------
-                # セルにログ内容を貼り付け
+                # セルにログ内容を貼り付け（各行を別々のセルに）
                 # ----------------------------------------------------------
-                # Range: セル範囲を指定（例: "B5", "A1:C10"）
-                # Value2: セルの値（書式なしの純粋な値）
-                # ※ Value ではなく Value2 を使うとパフォーマンスが向上
-                $sheet.Range($excelPasteCell).Value2 = $logContent
+                # 開始セルから行数分の範囲に一括で貼り付けます
+                # 例: A1を指定した場合、A1, A2, A3... に各行が入ります
+
+                # 行数を取得
+                $rowCount = $logLines.Count
+
+                # 2次元配列を作成（Excel用）
+                $array = New-Object 'object[,]' $rowCount, 1
+                for ($i = 0; $i -lt $rowCount; $i++) {
+                    $array[$i, 0] = $logLines[$i]
+                }
+
+                # 開始セルから終了セルの範囲を計算
+                # 例: "A1" → 列="A", 行=1 → 終了セル="A100"（100行の場合）
+                $startRow = [int]($excelPasteCell -replace '[A-Za-z]', '')
+                $column = $excelPasteCell -replace '[0-9]', ''
+                $endRow = $startRow + $rowCount - 1
+                $endCell = "$column$endRow"
+
+                # 範囲に配列を一括貼り付け
+                $sheet.Range("$excelPasteCell`:$endCell").Value2 = $array
 
                 # ----------------------------------------------------------
                 # ブックを保存
