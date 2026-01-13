@@ -181,43 +181,43 @@ $templateFolderName = "【雛形】【コピーして使うこと！】ツール
 $outputFolderName = "..\02_output"
 
 # ジョブパスとExcelファイルの紐づけ設定
-# ★ キー: ジョブのフルパス（完全一致で検索）
+# ★ キー: ジョブパス（完全一致で検索）
 # ★ 値: Excelファイル名、シート名、貼り付けセルをカンマ区切りで指定
-# 例: "/JobGroup/Jobnet/Job1" = "ファイル名.xlsx,Sheet1,A1"
+# 例: "/グループ/ネット/ジョブ" = "ファイル名.xlsx,Sheet1,A1"
 $jobExcelMapping = @{
     # === ジョブパスとExcelファイルのマッピング ===
-    # 以下に「ジョブのフルパス」=「Excelファイル名,シート名,セル」の形式で記載してください
-    # 完全一致で検索されるため、ジョブの正確なフルパスを指定してください
+    # 以下に「ジョブパス」=「Excelファイル名,シート名,セル」の形式で記載してください
+    # 完全一致で検索されるため、呼び出し元で指定するパスと同じ形式で記載してください
     #
     # 例:
-    # "/AJSROOT1/TIA/Jobnet/週単位ジョブ" = "TIA解析(自習当初)_週単位.xls,Sheet1,A1"
-    # "/AJSROOT1/TIA/Jobnet/年単位ジョブ" = "TIA解析(自習当初)_年単位.xls,Sheet1,A1"
+    # "/TIA/Jobnet/週単位ジョブ" = "TIA解析(自習当初)_週単位.xls,Sheet1,A1"
+    # "/TIA/Jobnet/年単位ジョブ" = "TIA解析(自習当初)_年単位.xls,Sheet1,A1"
     #
     # ★ 以下を編集してください ★
-    "/AJSROOT1/サンプル/Jobnet/週単位ジョブ" = "TIA解析(自習当初)_週単位.xls,Sheet1,A1"
-    "/AJSROOT1/サンプル/Jobnet/年単位ジョブ" = "TIA解析(自習当初)_年単位.xls,Sheet1,A1"
-    # "/AJSROOT1/グループ/ネット/ジョブ3" = "Excelファイル3.xls,Sheet1,A1"
-    # "/AJSROOT1/グループ/ネット/ジョブ4" = "Excelファイル4.xls,Sheet1,A1"
-    # "/AJSROOT1/グループ/ネット/ジョブ5" = "Excelファイル5.xls,Sheet1,A1"
-    # "/AJSROOT1/グループ/ネット/ジョブ6" = "Excelファイル6.xls,Sheet1,A1"
+    "/サンプル/Jobnet/週単位ジョブ" = "TIA解析(自習当初)_週単位.xls,Sheet1,A1"
+    "/サンプル/Jobnet/年単位ジョブ" = "TIA解析(自習当初)_年単位.xls,Sheet1,A1"
+    # "/グループ/ネット/ジョブ3" = "Excelファイル3.xls,Sheet1,A1"
+    # "/グループ/ネット/ジョブ4" = "Excelファイル4.xls,Sheet1,A1"
+    # "/グループ/ネット/ジョブ5" = "Excelファイル5.xls,Sheet1,A1"
+    # "/グループ/ネット/ジョブ6" = "Excelファイル6.xls,Sheet1,A1"
 }
 
 # ジョブパスとテキストファイル名の紐づけ設定（クリップボード保存用）
-# ★ キー: ジョブのフルパス（完全一致で検索）
+# ★ キー: ジョブパス（完全一致で検索）
 # ★ 値: 保存するテキストファイル名
-# 例: "/AJSROOT1/JobGroup/Jobnet/Job1" = "runh_week.txt"
+# 例: "/グループ/ネット/ジョブ" = "runh_week.txt"
 $jobTextFileMapping = @{
     # === ジョブパスとテキストファイルのマッピング ===
     # Excelに貼り付けた後、クリップボード内容を保存するファイル名を指定します
-    # 完全一致で検索されるため、ジョブの正確なフルパスを指定してください
+    # 完全一致で検索されるため、呼び出し元で指定するパスと同じ形式で記載してください
     #
     # ★ 以下を編集してください ★
-    "/AJSROOT1/サンプル/Jobnet/週単位ジョブ" = "runh_week.txt"
-    "/AJSROOT1/サンプル/Jobnet/年単位ジョブ" = "runh_year.txt"
-    # "/AJSROOT1/グループ/ネット/ジョブ3" = "runh_file3.txt"
-    # "/AJSROOT1/グループ/ネット/ジョブ4" = "runh_file4.txt"
-    # "/AJSROOT1/グループ/ネット/ジョブ5" = "runh_file5.txt"
-    # "/AJSROOT1/グループ/ネット/ジョブ6" = "runh_file6.txt"
+    "/サンプル/Jobnet/週単位ジョブ" = "runh_week.txt"
+    "/サンプル/Jobnet/年単位ジョブ" = "runh_year.txt"
+    # "/グループ/ネット/ジョブ3" = "runh_file3.txt"
+    # "/グループ/ネット/ジョブ4" = "runh_file4.txt"
+    # "/グループ/ネット/ジョブ5" = "runh_file5.txt"
+    # "/グループ/ネット/ジョブ6" = "runh_file6.txt"
 }
 
 # ==============================================================================
