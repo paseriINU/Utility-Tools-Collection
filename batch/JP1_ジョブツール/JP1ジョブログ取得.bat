@@ -388,7 +388,7 @@ $baseUrl = "${protocol}://${webConsoleHost}:${webConsolePort}/ajs/api/v1"
 # CONデバイスに書き込むことで、バッチファイルのリダイレクト（> file）を回避
 function Write-Console {
     param([string]$Message)
-    $Message | Out-File -FilePath "CON" -Encoding Default
+    [Console]::WriteLine($Message)
 }
 
 # ステータス値を日本語に変換する関数
