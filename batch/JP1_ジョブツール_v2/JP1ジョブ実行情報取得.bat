@@ -163,6 +163,38 @@ $timeoutSeconds = 3600
 # ★ デフォルト: 5秒
 $pollIntervalSeconds = 5
 
+# ------------------------------------------------------------------------------
+# Excel貼り付け設定（/EXCEL オプション使用時）
+# ------------------------------------------------------------------------------
+# 雛形フォルダ名（スクリプトと同じフォルダに配置）
+# このフォルダがyyyymmddフォルダにコピーされます
+$templateFolderName = "【雛形】【コピーして使うこと！】ツール・手順書フォルダ"
+
+# 出力先フォルダ名（スクリプトと同じフォルダに作成）
+$outputFolderName = "output"
+
+# ジョブパスとExcelファイルの紐づけ設定
+# ★ キー: ジョブパス（部分一致で検索）
+# ★ 値: Excelファイル名、シート名、貼り付けセルをカンマ区切りで指定
+# 例: "/JobGroup/Job1" = "ファイル名.xlsx,Sheet1,A1"
+$jobExcelMapping = @{
+    # === ジョブパスとExcelファイルのマッピング ===
+    # 以下に「ジョブパスの一部」=「Excelファイル名,シート名,セル」の形式で記載してください
+    # 部分一致で検索されるため、ジョブパスの特徴的な部分を指定してください
+    #
+    # 例:
+    # "/TIA/週単位" = "TIA解析（自習当初）_週単位.xls,Sheet1,A1"
+    # "/TIA/年単位" = "TIA解析（自習当初）_年単位.xls,Sheet1,A1"
+    #
+    # ★ 以下を編集してください ★
+    "/サンプル/週単位ジョブ" = "TIA解析（自習当初）_週単位.xls,Sheet1,A1"
+    "/サンプル/年単位ジョブ" = "TIA解析（自習当初）_年単位.xls,Sheet1,A1"
+    # "/ジョブパス3" = "Excelファイル3.xls,Sheet1,A1"
+    # "/ジョブパス4" = "Excelファイル4.xls,Sheet1,A1"
+    # "/ジョブパス5" = "Excelファイル5.xls,Sheet1,A1"
+    # "/ジョブパス6" = "Excelファイル6.xls,Sheet1,A1"
+}
+
 # ==============================================================================
 # ■ メイン処理（以下は通常編集不要）
 # ==============================================================================
@@ -659,64 +691,115 @@ try {
             }
         }
         "/EXCEL" {
-            # Excelに貼り付け
-            # 環境変数から設定を取得（呼び出し元で設定）
-            $excelFileName = $env:EXCEL_FILE_NAME
-            $excelSheetName = $env:EXCEL_SHEET_NAME
-            $excelPasteCell = $env:EXCEL_PASTE_CELL
+            # Excelに貼り付け（雛形フォルダコピー + ジョブ別Excel選択）
 
-            # Excel設定の検証（必須項目チェック）
-            if (-not $excelFileName) {
-                Write-Console "[エラー] Excel設定が未設定です。環境変数 EXCEL_FILE_NAME を設定してください。"
-                exit 10  # Excel設定エラー
-            }
-            if (-not $excelSheetName) {
-                Write-Console "[エラー] Excelシート名が未設定です。環境変数 EXCEL_SHEET_NAME を設定してください。"
-                exit 10  # Excel設定エラー
-            }
-            if (-not $excelPasteCell) {
-                Write-Console "[エラー] Excel貼り付けセルが未設定です。環境変数 EXCEL_PASTE_CELL を設定してください。"
-                exit 10  # Excel設定エラー
-            }
+            # --------------------------------------------------------------
+            # STEP 1: ジョブパスからExcel設定を取得
+            # --------------------------------------------------------------
+            $excelFileName = $null
+            $excelSheetName = $null
+            $excelPasteCell = $null
 
-            # フルパスと相対パスの両方に対応
-            if ([System.IO.Path]::IsPathRooted($excelFileName)) {
-                $excelPath = $excelFileName
-            } else {
-                $excelPath = Join-Path $scriptDir $excelFileName
-            }
-            if (Test-Path $excelPath) {
-                try {
-                    # ログファイルの内容を読み込み（-Raw: 全体を1つの文字列として）
-                    $logContent = Get-Content $outputFilePath -Encoding Default -Raw
-
-                    # クリップボードにコピー
-                    # Excelの通常の貼り付け動作を利用するため、クリップボード経由で貼り付けます
-                    # これにより改行区切りのテキストが各行別々のセルに入ります
-                    Set-Clipboard -Value $logContent
-
-                    $excel = New-Object -ComObject Excel.Application
-                    $excel.Visible = $true
-                    $workbook = $excel.Workbooks.Open($excelPath)
-                    $sheet = $workbook.Worksheets.Item($excelSheetName)
-
-                    # 貼り付け先のセルを選択してクリップボードから貼り付け
-                    # これにより改行で区切られた各行が A1, A2, A3... に配置されます
-                    $sheet.Range($excelPasteCell).Select()
-                    $sheet.Paste()
-
-                    $workbook.Save()
-                    [System.Runtime.Interopservices.Marshal]::ReleaseComObject($sheet) | Out-Null
-                    [System.Runtime.Interopservices.Marshal]::ReleaseComObject($workbook) | Out-Null
-                    [System.Runtime.Interopservices.Marshal]::ReleaseComObject($excel) | Out-Null
-                    Write-Console "[完了] Excelにログを貼り付けました: $excelSheetName $excelPasteCell"
-                } catch {
-                    Write-Console "[エラー] Excel貼り付けに失敗しました: $($_.Exception.Message)"
-                    exit 11  # Excel貼り付けエラー
+            # ジョブパスに一致するマッピングを検索（部分一致）
+            foreach ($key in $jobExcelMapping.Keys) {
+                if ($unitPath -like "*$key*") {
+                    $mappingValue = $jobExcelMapping[$key]
+                    $parts = $mappingValue -split ","
+                    if ($parts.Count -ge 3) {
+                        $excelFileName = $parts[0].Trim()
+                        $excelSheetName = $parts[1].Trim()
+                        $excelPasteCell = $parts[2].Trim()
+                    }
+                    Write-Console "[情報] ジョブパス '$unitPath' にマッチ: $key"
+                    break
                 }
+            }
+
+            # マッピングが見つからない場合はエラー
+            if (-not $excelFileName) {
+                Write-Console "[エラー] ジョブパス '$unitPath' に対応するExcel設定が見つかりません。"
+                Write-Console "[エラー] 設定セクションの `$jobExcelMapping を確認してください。"
+                exit 10  # Excel設定エラー
+            }
+
+            Write-Console "[情報] Excel: $excelFileName / シート: $excelSheetName / セル: $excelPasteCell"
+
+            # --------------------------------------------------------------
+            # STEP 2: yyyymmddフォルダを作成
+            # --------------------------------------------------------------
+            $dateFolder = Get-Date -Format "yyyyMMdd"
+            $outputBasePath = Join-Path $scriptDir $outputFolderName
+            $dateFolderPath = Join-Path $outputBasePath $dateFolder
+
+            # outputフォルダが存在しない場合は作成
+            if (-not (Test-Path $outputBasePath)) {
+                New-Item -Path $outputBasePath -ItemType Directory -Force | Out-Null
+                Write-Console "[情報] outputフォルダを作成しました: $outputBasePath"
+            }
+
+            # yyyymmddフォルダが存在しない場合は作成
+            if (-not (Test-Path $dateFolderPath)) {
+                New-Item -Path $dateFolderPath -ItemType Directory -Force | Out-Null
+                Write-Console "[情報] 日付フォルダを作成しました: $dateFolderPath"
+            }
+
+            # --------------------------------------------------------------
+            # STEP 3: 雛形フォルダをコピー
+            # --------------------------------------------------------------
+            $templatePath = Join-Path $scriptDir $templateFolderName
+            $destTemplatePath = Join-Path $dateFolderPath $templateFolderName
+
+            if (-not (Test-Path $templatePath)) {
+                Write-Console "[エラー] 雛形フォルダが見つかりません: $templatePath"
+                exit 13  # 雛形フォルダ未検出エラー
+            }
+
+            # コピー先に雛形フォルダが存在しない場合のみコピー
+            if (-not (Test-Path $destTemplatePath)) {
+                Copy-Item -Path $templatePath -Destination $destTemplatePath -Recurse -Force
+                Write-Console "[情報] 雛形フォルダをコピーしました: $destTemplatePath"
             } else {
+                Write-Console "[情報] 雛形フォルダは既に存在します: $destTemplatePath"
+            }
+
+            # --------------------------------------------------------------
+            # STEP 4: Excelファイルにログを貼り付け
+            # --------------------------------------------------------------
+            $excelPath = Join-Path $destTemplatePath $excelFileName
+
+            if (-not (Test-Path $excelPath)) {
                 Write-Console "[エラー] Excelファイルが見つかりません: $excelPath"
                 exit 12  # Excelファイル未検出エラー
+            }
+
+            try {
+                # ログファイルの内容を読み込み（-Raw: 全体を1つの文字列として）
+                $logContent = Get-Content $outputFilePath -Encoding Default -Raw
+
+                # クリップボードにコピー
+                # Excelの通常の貼り付け動作を利用するため、クリップボード経由で貼り付けます
+                # これにより改行区切りのテキストが各行別々のセルに入ります
+                Set-Clipboard -Value $logContent
+
+                $excel = New-Object -ComObject Excel.Application
+                $excel.Visible = $true
+                $workbook = $excel.Workbooks.Open($excelPath)
+                $sheet = $workbook.Worksheets.Item($excelSheetName)
+
+                # 貼り付け先のセルを選択してクリップボードから貼り付け
+                # これにより改行で区切られた各行が A1, A2, A3... に配置されます
+                $sheet.Range($excelPasteCell).Select()
+                $sheet.Paste()
+
+                $workbook.Save()
+                [System.Runtime.Interopservices.Marshal]::ReleaseComObject($sheet) | Out-Null
+                [System.Runtime.Interopservices.Marshal]::ReleaseComObject($workbook) | Out-Null
+                [System.Runtime.Interopservices.Marshal]::ReleaseComObject($excel) | Out-Null
+                Write-Console "[完了] Excelにログを貼り付けました: $excelPath"
+                Write-Console "[完了] シート: $excelSheetName / セル: $excelPasteCell"
+            } catch {
+                Write-Console "[エラー] Excel貼り付けに失敗しました: $($_.Exception.Message)"
+                exit 11  # Excel貼り付けエラー
             }
         }
         "/WINMERGE" {
