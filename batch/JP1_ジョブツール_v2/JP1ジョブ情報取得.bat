@@ -205,6 +205,13 @@ exit /b %EXITCODE%
 # GetEncoding(932) で Shift-JIS を指定しています。
 [Console]::OutputEncoding = [System.Text.Encoding]::GetEncoding(932)
 
+# タイトル表示
+Write-Host ""
+Write-Host "================================================================" -ForegroundColor Cyan
+Write-Host "  JP1ジョブ情報取得ツール" -ForegroundColor Cyan
+Write-Host "================================================================" -ForegroundColor Cyan
+Write-Host ""
+
 # ==============================================================================
 # ■ 接続設定セクション
 # ==============================================================================
@@ -364,10 +371,10 @@ $checkIntervalSeconds = 10
 # ※ フォルダが存在しない場合は自動的に作成されます
 #
 # 設定例:
-#   $outputFolder = "..\02.Output"          # 相対パス（1つ上の階層の02.Outputフォルダ）
+#   $outputFolder = "..\02_output"          # 相対パス（1つ上の階層の02_outputフォルダ）
 #   $outputFolder = "C:\Logs\JP1"           # フルパス
 #   $outputFolder = ".\Output"              # 同じフォルダ内のOutputフォルダ
-$outputFolder = "..\02.Output"
+$outputFolder = "..\02_output"
 
 # 【出力ファイル名のプレフィックス】
 # 出力ファイル名の先頭に付ける文字列を指定します。
