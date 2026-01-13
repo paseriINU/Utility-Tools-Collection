@@ -83,10 +83,8 @@ if not "%JOBNET_PATH_1%"=="" (
     echo       ジョブ2: %JOB_1_2%
     echo.
 
-    rem 2つのジョブパスを環境変数で渡す（1回の実行で2ジョブ処理）
-    set "JP1_UNIT_PATH_1=%JOBNET_PATH_1%/%JOB_1_1%"
-    set "JP1_UNIT_PATH_2=%JOBNET_PATH_1%/%JOB_1_2%"
-    call "JP1ジョブ実行情報取得.bat"
+    rem 2つのジョブパスを引数で渡す（1回の実行で2ジョブ処理）
+    call "JP1ジョブ実行情報取得.bat" "%JOBNET_PATH_1%/%JOB_1_1%" "%JOBNET_PATH_1%/%JOB_1_2%"
     set "EXITCODE_1=!ERRORLEVEL!"
 
     if !EXITCODE_1! neq 0 (
@@ -106,10 +104,8 @@ if not "%JOBNET_PATH_2%"=="" (
     echo       ジョブ2: %JOB_2_2%
     echo.
 
-    rem 2つのジョブパスを環境変数で渡す（1回の実行で2ジョブ処理）
-    set "JP1_UNIT_PATH_1=%JOBNET_PATH_2%/%JOB_2_1%"
-    set "JP1_UNIT_PATH_2=%JOBNET_PATH_2%/%JOB_2_2%"
-    call "JP1ジョブ実行情報取得.bat"
+    rem 2つのジョブパスを引数で渡す（1回の実行で2ジョブ処理）
+    call "JP1ジョブ実行情報取得.bat" "%JOBNET_PATH_2%/%JOB_2_1%" "%JOBNET_PATH_2%/%JOB_2_2%"
     set "EXITCODE_2=!ERRORLEVEL!"
 
     if !EXITCODE_2! neq 0 (
@@ -129,10 +125,8 @@ if not "%JOBNET_PATH_3%"=="" (
     echo       ジョブ2: %JOB_3_2%
     echo.
 
-    rem 2つのジョブパスを環境変数で渡す（1回の実行で2ジョブ処理）
-    set "JP1_UNIT_PATH_1=%JOBNET_PATH_3%/%JOB_3_1%"
-    set "JP1_UNIT_PATH_2=%JOBNET_PATH_3%/%JOB_3_2%"
-    call "JP1ジョブ実行情報取得.bat"
+    rem 2つのジョブパスを引数で渡す（1回の実行で2ジョブ処理）
+    call "JP1ジョブ実行情報取得.bat" "%JOBNET_PATH_3%/%JOB_3_1%" "%JOBNET_PATH_3%/%JOB_3_2%"
     set "EXITCODE_3=!ERRORLEVEL!"
 
     if !EXITCODE_3! neq 0 (
