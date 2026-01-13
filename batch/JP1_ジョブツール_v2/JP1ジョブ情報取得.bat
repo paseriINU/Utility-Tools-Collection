@@ -1863,7 +1863,7 @@ switch ($outputMode.ToUpper()) {
             $extractPairs = @(
                 @{
                     StartKeyword = "#パッチ適用前チェック"
-                    EndKeyword = "#バッチ運用"
+                    EndKeyword = "#パッチ適用"
                     OutputSuffix = "_データパッチ前.txt"
                 },
                 @{
@@ -1890,6 +1890,9 @@ switch ($outputMode.ToUpper()) {
                 # ----------------------------------------------------------
                 # キーワード間のテキスト抽出処理
                 # ----------------------------------------------------------
+                # 注意: 開始キーワードが終了キーワードを含む場合があるため
+                # （例: "#パッチ適用前チェック" は "#パッチ適用" を含む）
+                # 開始行では終了チェックをスキップする
                 $inSection = $false
                 $extractedContent = @()
 
@@ -1897,15 +1900,16 @@ switch ($outputMode.ToUpper()) {
                     # 開始キーワードを検出したら抽出開始
                     if ($line -like "*$startKeyword*") {
                         $inSection = $true
+                        $extractedContent += $line
+                        continue  # 開始行では終了チェックをスキップ
                     }
-                    # 抽出中なら行を追加
+                    # 抽出中の処理
                     if ($inSection) {
                         $extractedContent += $line
-                    }
-                    # 終了キーワードを検出したら抽出終了
-                    if ($line -like "*$endKeyword*" -and $inSection) {
-                        $inSection = $false
-                        break
+                        # 終了キーワードを検出したら抽出終了
+                        if ($line -like "*$endKeyword*") {
+                            break
+                        }
                     }
                 }
 
