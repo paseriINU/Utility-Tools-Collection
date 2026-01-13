@@ -1905,11 +1905,11 @@ switch ($outputMode.ToUpper()) {
                     }
                     # 抽出中の処理
                     if ($inSection) {
-                        $extractedContent += $line
-                        # 終了キーワードを検出したら抽出終了
+                        # 終了キーワードを検出したら抽出終了（この行は含めない）
                         if ($line -like "*$endKeyword*") {
                             break
                         }
+                        $extractedContent += $line
                     }
                 }
 
