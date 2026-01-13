@@ -105,12 +105,13 @@ $BUILD_OPTION_NORMAL = "1"      # 業務ID単位ビルド時の追加選択番�
 $BUILD_OPTION_FULL = "2"        # フルコンパイル時の追加選択番号
 
 # 業務ID → ビルドシェルの選択番号 マッピング
-# 転送ファイルの頭4文字（業務ID）に対応するビルドシェルの番号を定義
+# 転送ファイルの親フォルダ名（業務ID）に対応するビルドシェルの番号を定義
+# 例: gyomu/AAA1001/AAA1001.c → 業務ID: AAA1001
 $GYOMU_BUILD_MAP = @{
-    "AAA1" = "1"
-    "BBB2" = "2"
-    "CCC3" = "3"
-    "DDD4" = "4"
+    "AAA1001" = "1"
+    "BBB2002" = "2"
+    "CCC3003" = "3"
+    "DDD4004" = "4"
     # 必要に応じて追加
 }
 
@@ -445,14 +446,13 @@ if ($transferMode -eq "all") {
                 # gyomu/業務ID/xxx.c または remote/業務ID/xxx.c の形式
                 $pathParts = $filePath.Substring($prefix.Length).Split("/")
                 if ($pathParts.Count -ge 2) {
+                    # 業務IDは親フォルダ名（.c/.hファイルの直上フォルダ）
                     $gyomuId = $pathParts[0]
-                    # 業務IDは頭4文字
-                    if ($gyomuId.Length -ge 4) {
-                        $gyomuIdKey = $gyomuId.Substring(0, 4).ToUpper()
-                        if (-not $gyomuIds.ContainsKey($gyomuIdKey)) {
-                            $gyomuIds[$gyomuIdKey] = @()
+                    if ($gyomuId.Length -gt 0) {
+                        if (-not $gyomuIds.ContainsKey($gyomuId)) {
+                            $gyomuIds[$gyomuId] = @()
                         }
-                        $gyomuIds[$gyomuIdKey] += $filePath
+                        $gyomuIds[$gyomuId] += $filePath
                         $isGyomuFile = $true
                     }
                 }
