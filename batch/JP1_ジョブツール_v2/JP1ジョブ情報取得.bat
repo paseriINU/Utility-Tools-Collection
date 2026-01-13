@@ -521,42 +521,43 @@ $templateFolderName = "【雛形】【コピーして使うこと！】ツール
 $outputFolderName = "..\02_output"
 
 # ジョブパスとExcelファイルの紐づけ設定
-# ★ キー: ジョブパス（部分一致で検索）
+# ★ キー: ジョブのフルパス（完全一致で検索）
 # ★ 値: Excelファイル名、シート名、貼り付けセルをカンマ区切りで指定
-# 例: "/JobGroup/Job1" = "ファイル名.xlsx,Sheet1,A1"
+# 例: "/JobGroup/Jobnet/Job1" = "ファイル名.xlsx,Sheet1,A1"
 $jobExcelMapping = @{
     # === ジョブパスとExcelファイルのマッピング ===
-    # 以下に「ジョブパスの一部」=「Excelファイル名,シート名,セル」の形式で記載してください
-    # 部分一致で検索されるため、ジョブパスの特徴的な部分を指定してください
+    # 以下に「ジョブのフルパス」=「Excelファイル名,シート名,セル」の形式で記載してください
+    # 完全一致で検索されるため、ジョブの正確なフルパスを指定してください
     #
     # 例:
-    # "/TIA/週単位" = "TIA解析(自習当初)_週単位.xls,Sheet1,A1"
-    # "/TIA/年単位" = "TIA解析(自習当初)_年単位.xls,Sheet1,A1"
+    # "/AJSROOT1/TIA/Jobnet/週単位ジョブ" = "TIA解析(自習当初)_週単位.xls,Sheet1,A1"
+    # "/AJSROOT1/TIA/Jobnet/年単位ジョブ" = "TIA解析(自習当初)_年単位.xls,Sheet1,A1"
     #
     # ★ 以下を編集してください ★
-    "/サンプル/週単位ジョブ" = "TIA解析(自習当初)_週単位.xls,Sheet1,A1"
-    "/サンプル/年単位ジョブ" = "TIA解析(自習当初)_年単位.xls,Sheet1,A1"
-    # "/ジョブパス3" = "Excelファイル3.xls,Sheet1,A1"
-    # "/ジョブパス4" = "Excelファイル4.xls,Sheet1,A1"
-    # "/ジョブパス5" = "Excelファイル5.xls,Sheet1,A1"
-    # "/ジョブパス6" = "Excelファイル6.xls,Sheet1,A1"
+    "/AJSROOT1/サンプル/Jobnet/週単位ジョブ" = "TIA解析(自習当初)_週単位.xls,Sheet1,A1"
+    "/AJSROOT1/サンプル/Jobnet/年単位ジョブ" = "TIA解析(自習当初)_年単位.xls,Sheet1,A1"
+    # "/AJSROOT1/グループ/ネット/ジョブ3" = "Excelファイル3.xls,Sheet1,A1"
+    # "/AJSROOT1/グループ/ネット/ジョブ4" = "Excelファイル4.xls,Sheet1,A1"
+    # "/AJSROOT1/グループ/ネット/ジョブ5" = "Excelファイル5.xls,Sheet1,A1"
+    # "/AJSROOT1/グループ/ネット/ジョブ6" = "Excelファイル6.xls,Sheet1,A1"
 }
 
 # ジョブパスとテキストファイル名の紐づけ設定（クリップボード保存用）
-# ★ キー: ジョブパス（部分一致で検索）
+# ★ キー: ジョブのフルパス（完全一致で検索）
 # ★ 値: 保存するテキストファイル名
-# 例: "/JobGroup/Job1" = "runh_week.txt"
+# 例: "/AJSROOT1/JobGroup/Jobnet/Job1" = "runh_week.txt"
 $jobTextFileMapping = @{
     # === ジョブパスとテキストファイルのマッピング ===
     # Excelに貼り付けた後、クリップボード内容を保存するファイル名を指定します
+    # 完全一致で検索されるため、ジョブの正確なフルパスを指定してください
     #
     # ★ 以下を編集してください ★
-    "/サンプル/週単位ジョブ" = "runh_week.txt"
-    "/サンプル/年単位ジョブ" = "runh_year.txt"
-    # "/ジョブパス3" = "runh_file3.txt"
-    # "/ジョブパス4" = "runh_file4.txt"
-    # "/ジョブパス5" = "runh_file5.txt"
-    # "/ジョブパス6" = "runh_file6.txt"
+    "/AJSROOT1/サンプル/Jobnet/週単位ジョブ" = "runh_week.txt"
+    "/AJSROOT1/サンプル/Jobnet/年単位ジョブ" = "runh_year.txt"
+    # "/AJSROOT1/グループ/ネット/ジョブ3" = "runh_file3.txt"
+    # "/AJSROOT1/グループ/ネット/ジョブ4" = "runh_file4.txt"
+    # "/AJSROOT1/グループ/ネット/ジョブ5" = "runh_file5.txt"
+    # "/AJSROOT1/グループ/ネット/ジョブ6" = "runh_file6.txt"
 }
 
 # ==============================================================================
@@ -1778,9 +1779,9 @@ switch ($outputMode.ToUpper()) {
         $excelSheetName = $null
         $excelPasteCell = $null
 
-        # ジョブパスに一致するマッピングを検索（部分一致）
+        # ジョブパスに一致するマッピングを検索（完全一致）
         foreach ($key in $jobExcelMapping.Keys) {
-            if ($targetUnitPath -like "*$key*") {
+            if ($targetUnitPath -eq $key) {
                 $mappingValue = $jobExcelMapping[$key]
                 $parts = $mappingValue -split ","
                 if ($parts.Count -ge 3) {
@@ -1907,7 +1908,7 @@ switch ($outputMode.ToUpper()) {
             # ジョブパスに対応するテキストファイル名を取得
             $textFileName = "runh_default.txt"  # デフォルト値
             foreach ($key in $jobTextFileMapping.Keys) {
-                if ($unitPath -like "*$key*") {
+                if ($unitPath -eq $key) {
                     $textFileName = $jobTextFileMapping[$key]
                     break
                 }
