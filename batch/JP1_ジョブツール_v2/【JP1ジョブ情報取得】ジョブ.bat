@@ -39,15 +39,10 @@ set "JP1_SCROLL_TO_TEXT="
 
 rem Excel貼り付け設定（/EXCEL モード時のみ有効）
 rem Excelファイルパス（相対パスまたはフルパス）
-rem 例: "ログ貼り付け用.xlsx" または "C:\Users\Documents\ログ.xlsx"
 set "EXCEL_FILE_NAME="
-
 rem 貼り付け先シート名
-rem 例: "Sheet1", "ログ貼り付け" など
 set "EXCEL_SHEET_NAME="
-
 rem 貼り付け先セル位置
-rem 例: "A1", "B2" など
 set "EXCEL_PASTE_CELL="
 
 rem ===================================
@@ -62,7 +57,7 @@ set "EXITCODE=%ERRORLEVEL%"
 
 popd
 
-rem 終了コードを表示
+rem エラー時のみ終了コードを表示してpause
 if %EXITCODE% neq 0 (
     echo.
     echo 終了コード: %EXITCODE%
