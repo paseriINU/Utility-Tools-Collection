@@ -804,6 +804,24 @@ try {
                 [System.Runtime.Interopservices.Marshal]::ReleaseComObject($excel) | Out-Null
                 Write-Console "[完了] Excelにログを貼り付けました: $excelPath"
                 Write-Console "[完了] シート: $excelSheetName / セル: $excelPasteCell"
+
+                # --------------------------------------------------------------
+                # STEP 5: クリップボード内容をファイルに保存し、変換バッチを実行
+                # --------------------------------------------------------------
+                $clipboardOutputFile = Join-Path $scriptDir "runh_week.txt"
+                $convertBatchFile = Join-Path $scriptDir "【削除禁止】ConvertNS932Result.bat"
+
+                # クリップボードの内容をファイルに保存
+                Get-Clipboard | Out-File -FilePath $clipboardOutputFile -Encoding Default
+                Write-Console "[情報] クリップボード内容を保存しました: $clipboardOutputFile"
+
+                # 変換バッチファイルを実行
+                if (Test-Path $convertBatchFile) {
+                    Write-Console "[情報] 変換バッチを実行します: $convertBatchFile"
+                    & cmd /c "`"$convertBatchFile`""
+                } else {
+                    Write-Console "[警告] 変換バッチファイルが見つかりません: $convertBatchFile"
+                }
             } catch {
                 Write-Console "[エラー] Excel貼り付けに失敗しました: $($_.Exception.Message)"
                 exit 11  # Excel貼り付けエラー
