@@ -1026,12 +1026,15 @@ for ($i = 0; $i -lt $jobInfoList.Count; $i++) {
             }
             "/WINMERGE" {
                 # WinMerge処理
-                # 出力ディレクトリが未設定の場合は設定
+                # 出力ディレクトリのパスを解決（未設定または相対パスの場合は絶対パスに変換）
                 if (-not $outputDir) {
-                    $outputDir = Join-Path $scriptDir $outputFolderName
-                    if (-not (Test-Path $outputDir)) {
-                        New-Item -ItemType Directory -Path $outputDir -Force | Out-Null
-                    }
+                    $outputDir = $outputFolderName
+                }
+                if (-not [System.IO.Path]::IsPathRooted($outputDir)) {
+                    $outputDir = Join-Path $scriptDir $outputDir
+                }
+                if (-not (Test-Path $outputDir)) {
+                    New-Item -ItemType Directory -Path $outputDir -Force | Out-Null
                 }
 
                 # ファイルを作成
