@@ -1980,6 +1980,14 @@ switch ($outputMode.ToUpper()) {
         # キーワードが見つからない場合は元のログファイルを開きます。
         # ======================================================================
 
+        # 出力ディレクトリのパスを解決（相対パスの場合は絶対パスに変換）
+        if (-not [System.IO.Path]::IsPathRooted($outputFolder)) {
+            $outputFolder = Join-Path $scriptDir $outputFolder
+        }
+        if (-not (Test-Path $outputFolder)) {
+            New-Item -ItemType Directory -Path $outputFolder -Force | Out-Null
+        }
+
         # WinMergeの実行ファイルパス（デフォルトのインストール先）
         $winMergePath = "C:\Program Files\WinMerge\WinMergeU.exe"
 
