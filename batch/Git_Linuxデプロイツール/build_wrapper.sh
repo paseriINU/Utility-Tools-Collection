@@ -8,6 +8,7 @@
 #   - scriptコマンドを使用してTTY環境をエミュレート
 #   - プロンプト待機（オプション）: 指定したプロンプトが出力されるまで待機
 #   - マルチビルドモード: 複数の業務IDを連続でビルド
+#   - フルコンパイルモード: フルコンパイル実行
 #
 # 使用方法:
 #   ./build_wrapper.sh <build_script> <input1> [input2] [input3] ...
@@ -15,6 +16,8 @@
 #   ./build_wrapper.sh -m <build_script> <env_prompt>:<env> <option_prompt>:<opt> \
 #                      <gyomu_prompt>:<id1,id2,...> <confirm_prompt>:<y> \
 #                      <option_prompt>:<exit> [error_pattern]
+#   ./build_wrapper.sh -f <build_script> <env_prompt>:<env> <option_prompt>:<opt> \
+#                      <confirm_prompt>:<y> <option_prompt>:<exit> [error_pattern] [timeout]
 #
 # 引数:
 #   build_script : 実行するビルドシェルのパス
@@ -23,6 +26,7 @@
 # オプション:
 #   -w           : プロンプト待機モード（プロンプト:入力値 の形式で指定）
 #   -m           : マルチビルドモード（複数業務IDを連続ビルド）
+#   -f           : フルコンパイルモード
 #   -d <秒>      : 入力間の待機秒数（デフォルト: 1秒）
 #   -t <秒>      : プロンプト待機のタイムアウト秒数（デフォルト: 30秒）
 #
@@ -37,6 +41,10 @@
 #   ./build_wrapper.sh -m /opt/build/build.sh "環境を選択:1" "オプション:1" \
 #                      "業務ID:1,2,3" "(y/n):y" "オプション:99" "エラー"
 #
+#   # フルコンパイルモード
+#   ./build_wrapper.sh -f /opt/build/build.sh "環境を選択:1" "オプション:2" \
+#                      "(y/n):y" "オプション:99" "エラー" 400
+#
 #==============================================================================
 
 set -e
@@ -44,16 +52,18 @@ set -e
 # デフォルト値
 WAIT_MODE=false
 MULTI_MODE=false
+FULL_MODE=false
 DELAY=1
 TIMEOUT=30
 
 # 使用方法を表示
 usage() {
-    echo "使用方法: $0 [-w|-m] [-d 秒] [-t 秒] <build_script> <args...>"
+    echo "使用方法: $0 [-w|-m|-f] [-d 秒] [-t 秒] <build_script> <args...>"
     echo ""
     echo "オプション:"
     echo "  -w         プロンプト待機モード"
     echo "  -m         マルチビルドモード（複数業務IDを連続ビルド）"
+    echo "  -f         フルコンパイルモード"
     echo "  -d <秒>    入力間の待機秒数（デフォルト: 1秒）"
     echo "  -t <秒>    プロンプト待機のタイムアウト秒数（デフォルト: 30秒）"
     echo ""
@@ -61,17 +71,21 @@ usage() {
     echo "  $0 /opt/build/build.sh 1 2 3"
     echo "  $0 -w /opt/build/build.sh '環境を選択:1' 'オプション:2'"
     echo "  $0 -m /opt/build/build.sh '環境を選択:1' 'オプション:1' '業務ID:1,2' '(y/n):y' 'オプション:99' 'エラー'"
+    echo "  $0 -f /opt/build/build.sh '環境を選択:1' 'オプション:2' '(y/n):y' 'オプション:99' 'エラー' 400"
     exit 1
 }
 
 # 引数解析
-while getopts "wmd:t:h" opt; do
+while getopts "wmfd:t:h" opt; do
     case $opt in
         w)
             WAIT_MODE=true
             ;;
         m)
             MULTI_MODE=true
+            ;;
+        f)
+            FULL_MODE=true
             ;;
         d)
             DELAY=$OPTARG
@@ -110,7 +124,9 @@ if [ ! -x "$BUILD_SCRIPT" ]; then
 fi
 
 echo "[情報] ビルドシェル: $BUILD_SCRIPT"
-if $MULTI_MODE; then
+if $FULL_MODE; then
+    echo "[情報] 待機モード: フルコンパイル"
+elif $MULTI_MODE; then
     echo "[情報] 待機モード: マルチビルド"
 elif $WAIT_MODE; then
     echo "[情報] 待機モード: プロンプト待機"
@@ -160,9 +176,157 @@ wait_for_prompt() {
 }
 
 #==============================================================================
+# フルコンパイルモード
+#==============================================================================
+if $FULL_MODE; then
+    # 引数: env_prompt:env option_prompt:opt confirm_prompt:y option_prompt:exit [error_pattern] [timeout]
+    if [ $# -lt 4 ]; then
+        echo "[エラー] フルコンパイルモードには少なくとも4つの引数が必要です"
+        usage
+    fi
+
+    # 引数を解析
+    ENV_PAIR="$1"
+    OPTION_PAIR="$2"
+    CONFIRM_PAIR="$3"
+    EXIT_PAIR="$4"
+    ERROR_PATTERN="${5:-}"
+    BUILD_TIMEOUT="${6:-400}"  # デフォルト400秒（約7分）
+
+    # 各ペアを分割
+    ENV_PROMPT="${ENV_PAIR%:*}"
+    ENV_INPUT="${ENV_PAIR##*:}"
+
+    OPTION_PROMPT="${OPTION_PAIR%:*}"
+    OPTION_INPUT="${OPTION_PAIR##*:}"
+
+    CONFIRM_PROMPT="${CONFIRM_PAIR%:*}"
+    CONFIRM_INPUT="${CONFIRM_PAIR##*:}"
+
+    EXIT_PROMPT="${EXIT_PAIR%:*}"
+    EXIT_INPUT="${EXIT_PAIR##*:}"
+
+    echo "[設定] 環境選択: '$ENV_PROMPT' → '$ENV_INPUT'"
+    echo "[設定] オプション: '$OPTION_PROMPT' → '$OPTION_INPUT'"
+    echo "[設定] 確認: '$CONFIRM_PROMPT' → '$CONFIRM_INPUT'"
+    echo "[設定] 終了: '$EXIT_PROMPT' → '$EXIT_INPUT'"
+    if [ -n "$ERROR_PATTERN" ]; then
+        echo "[設定] エラー検出: '$ERROR_PATTERN'"
+    fi
+    echo "[設定] ビルドタイムアウト: ${BUILD_TIMEOUT}秒"
+    echo ""
+
+    # 一時ファイル作成
+    OUTPUT_FILE=$(mktemp)
+    INPUT_FIFO=$(mktemp -u)
+    mkfifo "$INPUT_FIFO"
+
+    # クリーンアップ関数
+    cleanup() {
+        rm -f "$OUTPUT_FILE" "$INPUT_FIFO" 2>/dev/null
+    }
+    trap cleanup EXIT
+
+    # scriptコマンドでビルドシェルを実行（バックグラウンド）
+    script -qf -c "$BUILD_SCRIPT" "$OUTPUT_FILE" < "$INPUT_FIFO" &
+    SCRIPT_PID=$!
+
+    # 入力FIFOを開いておく
+    exec 3>"$INPUT_FIFO"
+
+    BUILD_ERROR=false
+
+    # 1. 環境選択プロンプト
+    echo "[待機] 環境選択プロンプト: '$ENV_PROMPT'"
+    if ! wait_for_prompt "$ENV_PROMPT" "$OUTPUT_FILE" "$TIMEOUT"; then
+        echo "[エラー] 環境選択プロンプトがタイムアウトしました"
+        kill $SCRIPT_PID 2>/dev/null
+        exit 1
+    fi
+    echo "[送信] '$ENV_INPUT'"
+    sleep "$DELAY"
+    echo "$ENV_INPUT" >&3
+
+    # 2. ビルドオプションプロンプト
+    echo "[待機] オプションプロンプト: '$OPTION_PROMPT'"
+    if ! wait_for_prompt "$OPTION_PROMPT" "$OUTPUT_FILE" "$TIMEOUT"; then
+        echo "[エラー] オプションプロンプトがタイムアウトしました"
+        kill $SCRIPT_PID 2>/dev/null
+        exit 1
+    fi
+    echo "[送信] '$OPTION_INPUT'"
+    sleep "$DELAY"
+    echo "$OPTION_INPUT" >&3
+
+    # 3. 確認プロンプト
+    echo "[待機] 確認プロンプト: '$CONFIRM_PROMPT'"
+    if ! wait_for_prompt "$CONFIRM_PROMPT" "$OUTPUT_FILE" "$TIMEOUT"; then
+        echo "[エラー] 確認プロンプトがタイムアウトしました"
+        kill $SCRIPT_PID 2>/dev/null
+        exit 1
+    fi
+    echo "[送信] '$CONFIRM_INPUT'"
+    sleep "$DELAY"
+    echo "$CONFIRM_INPUT" >&3
+
+    # 4. ビルド完了を待機（オプションプロンプトが再度出るまで）
+    echo "[待機] フルコンパイル実行中（タイムアウト: ${BUILD_TIMEOUT}秒）..."
+
+    # 現在の出力を保存してエラーチェック用に使用
+    BEFORE_BUILD_LINES=$(wc -l < "$OUTPUT_FILE" 2>/dev/null || echo "0")
+
+    if ! wait_for_prompt "$EXIT_PROMPT" "$OUTPUT_FILE" "$BUILD_TIMEOUT"; then
+        echo "[エラー] フルコンパイルがタイムアウトしました（${BUILD_TIMEOUT}秒）"
+        kill $SCRIPT_PID 2>/dev/null
+        exit 1
+    fi
+
+    # エラーチェック
+    if [ -n "$ERROR_PATTERN" ]; then
+        # ビルド後の出力からエラーパターンを検索
+        if tail -n +$((BEFORE_BUILD_LINES + 1)) "$OUTPUT_FILE" 2>/dev/null | grep -qF "$ERROR_PATTERN"; then
+            echo "[エラー] フルコンパイルでエラーを検出しました"
+            BUILD_ERROR=true
+        else
+            echo "[OK] フルコンパイル完了"
+        fi
+    else
+        echo "[OK] フルコンパイル完了"
+    fi
+
+    # 5. 終了処理（99を送信）
+    echo ""
+    echo "[終了] ビルドシェルを終了します"
+    echo "[送信] '$EXIT_INPUT'"
+    sleep "$DELAY"
+    echo "$EXIT_INPUT" >&3
+
+    # 入力FIFOを閉じる
+    exec 3>&-
+
+    # プロセスの終了を待機
+    wait $SCRIPT_PID 2>/dev/null || true
+    EXIT_CODE=$?
+
+    # 出力を表示
+    echo ""
+    echo "======== ビルド出力 ========"
+    cat "$OUTPUT_FILE"
+    echo "============================"
+
+    echo ""
+    if $BUILD_ERROR; then
+        echo "[結果] フルコンパイルでエラーが発生しました"
+        exit 1
+    else
+        echo "[結果] フルコンパイルが正常に完了しました"
+        exit 0
+    fi
+
+#==============================================================================
 # マルチビルドモード
 #==============================================================================
-if $MULTI_MODE; then
+elif $MULTI_MODE; then
     # 引数: env_prompt:env option_prompt:opt gyomu_prompt:id1,id2 confirm_prompt:y option_prompt:exit [error_pattern]
     if [ $# -lt 5 ]; then
         echo "[エラー] マルチビルドモードには少なくとも5つの引数が必要です"

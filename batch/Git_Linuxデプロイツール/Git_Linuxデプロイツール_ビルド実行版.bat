@@ -998,7 +998,7 @@ if ($SSH_PORT -ne 22) {
 }
 
 if ($buildMode -eq "full") {
-    # フルコンパイルモード
+    # フルコンパイルモード（-f）
     Write-Color "[実行] フルコンパイルを実行します..." "Yellow"
     Write-Host ""
 
@@ -1007,10 +1007,13 @@ if ($buildMode -eq "full") {
 
     Write-Host "  環境選択番号: $buildEnvNumber"
     Write-Host "  追加選択番号: $BUILD_OPTION_FULL (フルコンパイル)"
+    Write-Host "  終了番号: $BUILD_OPTION_EXIT"
+    Write-Host "  ビルドタイムアウト: 400秒（約7分）"
     Write-Host ""
 
-    # ラッパースクリプト経由でビルド実行（プロンプト待機モード: -w）
-    $wrapperArgs = "-w '$BUILD_SCRIPT' '${BUILD_PROMPT_ENV}:${buildEnvNumber}' '${BUILD_PROMPT_OPTION}:${BUILD_OPTION_FULL}'"
+    # ラッパースクリプト経由でビルド実行（フルコンパイルモード: -f）
+    # 引数: env_prompt:env option_prompt:opt confirm_prompt:y option_prompt:exit [error_pattern] [timeout]
+    $wrapperArgs = "-f '$BUILD_SCRIPT' '${BUILD_PROMPT_ENV}:${buildEnvNumber}' '${BUILD_PROMPT_OPTION}:${BUILD_OPTION_FULL}' '${BUILD_PROMPT_CONFIRM}:${BUILD_CONFIRM_YES}' '${BUILD_PROMPT_OPTION}:${BUILD_OPTION_EXIT}' '${BUILD_ERROR_PATTERN}' 400"
 
     $sshArgs = $sshBaseArgs + @("${SSH_USER}@${SSH_HOST}")
     $sshArgs += "$BUILD_WRAPPER_REMOTE $wrapperArgs"
@@ -1026,7 +1029,7 @@ if ($buildMode -eq "full") {
             Write-Color "[OK] フルコンパイルが完了しました" "Green"
         } else {
             Write-Host ""
-            Write-Color "[警告] ビルドが終了しました (終了コード: $LASTEXITCODE)" "Yellow"
+            Write-Color "[警告] フルコンパイルでエラーが発生しました (終了コード: $LASTEXITCODE)" "Yellow"
         }
     } catch {
         Write-Color "[エラー] ビルド実行に失敗しました: $($_.Exception.Message)" "Red"
