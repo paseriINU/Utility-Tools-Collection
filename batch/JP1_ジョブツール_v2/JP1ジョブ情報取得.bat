@@ -1907,7 +1907,8 @@ switch ($outputMode.ToUpper()) {
             $workbook = $excel.Workbooks.Open($excelPath)
             $sheet = $workbook.Worksheets.Item($excelSheetName)
 
-            # 貼り付け先のセルを選択してクリップボードから貼り付け
+            # シートをアクティブにしてから貼り付け先のセルを選択
+            $sheet.Activate()
             $sheet.Range($excelPasteCell).Select()
             $sheet.Paste()
 
