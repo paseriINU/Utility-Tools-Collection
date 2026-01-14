@@ -1041,12 +1041,15 @@ if ($buildMode -eq "full") {
 
     # 業務IDをビルド番号に変換してカンマ区切りで結合
     $gyomuBuildNumbers = @()
+    $gyomuBuildMappings = @()
     foreach ($gyomuId in $gyomuIds.Keys | Sort-Object) {
         $buildNumber = $GYOMU_BUILD_MAP[$gyomuId]
         $gyomuBuildNumbers += $buildNumber
+        $gyomuBuildMappings += "${buildNumber}=${gyomuId}"
         Write-Host "  業務ID: $gyomuId → ビルド番号: $buildNumber"
     }
     $gyomuBuildNumbersStr = $gyomuBuildNumbers -join ","
+    $gyomuBuildMappingStr = $gyomuBuildMappings -join ","
 
     Write-Host ""
     Write-Host "  環境選択番号: $buildEnvNumber"
@@ -1056,8 +1059,8 @@ if ($buildMode -eq "full") {
     Write-Host ""
 
     # ラッパースクリプト経由でビルド実行（マルチビルドモード: -m）
-    # 引数: env_prompt:env option_prompt:opt gyomu_prompt:id1,id2 confirm_prompt:y option_prompt:exit [error_pattern]
-    $wrapperArgs = "-m '$BUILD_SCRIPT' '${BUILD_PROMPT_ENV}:${buildEnvNumber}' '${BUILD_PROMPT_OPTION}:${BUILD_OPTION_NORMAL}' '${BUILD_PROMPT_GYOMU}:${gyomuBuildNumbersStr}' '${BUILD_PROMPT_CONFIRM}:${BUILD_CONFIRM_YES}' '${BUILD_PROMPT_OPTION}:${BUILD_OPTION_EXIT}' '${BUILD_ERROR_PATTERN}'"
+    # 引数: env_prompt:env option_prompt:opt gyomu_prompt:id1,id2 confirm_prompt:y option_prompt:exit [error_pattern] [gyomu_mapping]
+    $wrapperArgs = "-m '$BUILD_SCRIPT' '${BUILD_PROMPT_ENV}:${buildEnvNumber}' '${BUILD_PROMPT_OPTION}:${BUILD_OPTION_NORMAL}' '${BUILD_PROMPT_GYOMU}:${gyomuBuildNumbersStr}' '${BUILD_PROMPT_CONFIRM}:${BUILD_CONFIRM_YES}' '${BUILD_PROMPT_OPTION}:${BUILD_OPTION_EXIT}' '${BUILD_ERROR_PATTERN}' '${gyomuBuildMappingStr}'"
 
     $sshArgs = $sshBaseArgs + @("${SSH_USER}@${SSH_HOST}")
     $sshArgs += "$BUILD_WRAPPER_REMOTE $wrapperArgs"

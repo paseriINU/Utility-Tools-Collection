@@ -354,7 +354,7 @@ if $FULL_MODE; then
 # マルチビルドモード
 #==============================================================================
 elif $MULTI_MODE; then
-    # 引数: env_prompt:env option_prompt:opt gyomu_prompt:id1,id2 confirm_prompt:y option_prompt:exit [error_pattern]
+    # 引数: env_prompt:env option_prompt:opt gyomu_prompt:id1,id2 confirm_prompt:y option_prompt:exit [error_pattern] [gyomu_mapping]
     if [ $# -lt 5 ]; then
         echo "[エラー] マルチビルドモードには少なくとも5つの引数が必要です"
         usage
@@ -367,6 +367,7 @@ elif $MULTI_MODE; then
     CONFIRM_PAIR="$4"
     EXIT_PAIR="$5"
     ERROR_PATTERN="${6:-}"
+    GYOMU_MAPPING="${7:-}"
 
     # 各ペアを分割
     ENV_PROMPT="${ENV_PAIR%:*}"
@@ -386,6 +387,17 @@ elif $MULTI_MODE; then
 
     # 業務IDをカンマで分割
     IFS=',' read -ra GYOMU_ARRAY <<< "$GYOMU_IDS"
+
+    # 業務IDマッピングを連想配列に格納（ビルド番号→業務ID）
+    declare -A GYOMU_ID_MAP
+    if [ -n "$GYOMU_MAPPING" ]; then
+        IFS=',' read -ra MAPPING_ARRAY <<< "$GYOMU_MAPPING"
+        for mapping in "${MAPPING_ARRAY[@]}"; do
+            build_num="${mapping%%=*}"
+            gyomu_name="${mapping#*=}"
+            GYOMU_ID_MAP[$build_num]="$gyomu_name"
+        done
+    fi
 
     echo "[設定] 環境選択: '$ENV_PROMPT' → '$ENV_INPUT'"
     echo "[設定] オプション: '$OPTION_PROMPT' → '$OPTION_INPUT'"
@@ -488,23 +500,26 @@ elif $MULTI_MODE; then
         SEARCH_POS=$LAST_FOUND_POS
 
         # エラーチェック（ビルド後の新しい出力からエラーパターンを検索）
+        # ビルド番号から業務IDを逆引き（マッピングがない場合はビルド番号をそのまま使用）
+        actual_gyomu_id="${GYOMU_ID_MAP[$gyomu_id]:-$gyomu_id}"
+
         if [ -n "$ERROR_PATTERN" ]; then
             # ビルド後の新しい出力を取得してエラーパターンを検索
             CURRENT_SIZE=$(get_file_size "$OUTPUT_FILE")
             if [ "$CURRENT_SIZE" -gt "$BEFORE_BUILD_SIZE" ]; then
                 # tail -c +N は N バイト目から出力（1-indexed）
                 if tail -c "+$((BEFORE_BUILD_SIZE + 1))" "$OUTPUT_FILE" 2>/dev/null | grep -qF "$ERROR_PATTERN"; then
-                    echo "[エラー] ビルドエラーを検出しました: 業務ID $gyomu_id"
+                    echo "[エラー] ビルドエラーを検出しました: 業務ID $actual_gyomu_id"
                     BUILD_ERRORS=$((BUILD_ERRORS + 1))
-                    BUILD_ERROR_IDS+=("$gyomu_id")
+                    BUILD_ERROR_IDS+=("$actual_gyomu_id")
                 else
-                    echo "[OK] 業務ID $gyomu_id のビルド完了"
+                    echo "[OK] 業務ID $actual_gyomu_id のビルド完了"
                 fi
             else
-                echo "[OK] 業務ID $gyomu_id のビルド完了"
+                echo "[OK] 業務ID $actual_gyomu_id のビルド完了"
             fi
         else
-            echo "[OK] 業務ID $gyomu_id のビルド完了"
+            echo "[OK] 業務ID $actual_gyomu_id のビルド完了"
         fi
     done
 
