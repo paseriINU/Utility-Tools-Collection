@@ -525,7 +525,7 @@ $holdPlan = "NO"
 # ------------------------------------------------------------------------------
 # ジャーナル統計のひな形フォルダ（親フォルダの03_templateに配置）
 # このフォルダの中身がyyyymmddフォルダにコピーされます
-$templateFolderName = "..\03_template"
+$templateFolderName = "..\03_template\ジャーナル統計のひな形フォルダ"
 
 # 出力先フォルダ名（親フォルダの02_outputに出力）
 $outputFolderName = "..\02_output"
