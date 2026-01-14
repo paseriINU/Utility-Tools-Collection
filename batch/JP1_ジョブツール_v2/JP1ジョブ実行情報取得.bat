@@ -717,7 +717,7 @@ $outputMode = $env:JP1_OUTPUT_MODE
 if (-not $outputMode) { $outputMode = "/NOTEPAD" }
 
 # 出力ディレクトリを作成
-$outputDir = Join-Path $scriptDir "..\02.Output"
+$outputDir = Join-Path $scriptDir "..\02_output"
 if (-not (Test-Path $outputDir)) {
     New-Item -ItemType Directory -Path $outputDir -Force | Out-Null
 }
