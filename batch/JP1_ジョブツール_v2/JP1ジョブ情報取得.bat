@@ -1894,8 +1894,9 @@ switch ($outputMode.ToUpper()) {
             $sheet.Range($excelPasteCell).Select()
             $sheet.Paste()
 
-            # 貼り付け後、A1セルに移動（カーソル位置をリセット）
-            $sheet.Range("A1").Select()
+            # 貼り付け後、最初のシートに移動してA1セルを選択
+            $workbook.Worksheets.Item(1).Activate()
+            $workbook.Worksheets.Item(1).Range("A1").Select()
 
             $workbook.Save()
             [System.Runtime.Interopservices.Marshal]::ReleaseComObject($sheet) | Out-Null
