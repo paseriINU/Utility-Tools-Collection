@@ -954,10 +954,24 @@ for ($i = 0; $i -lt $jobInfoList.Count; $i++) {
                     Write-Host "    貼り付け完了: $excelFileName"
                     Write-Host ""
 
+                    # テキストファイル保存
+                    Write-Host "  [STEP 4] テキストファイル保存" -ForegroundColor Cyan
+                    $textFileName = "runh_default.txt"
+                    foreach ($key in $jobTextFileMapping.Keys) {
+                        if ($jobInfo.UnitPath -eq $key) {
+                            $textFileName = $jobTextFileMapping[$key]
+                            break
+                        }
+                    }
+                    $clipboardOutputFile = Join-Path $dateFolderPath $textFileName
+                    Get-Clipboard | Out-File -FilePath $clipboardOutputFile -Encoding Default
+                    Write-Host "    保存完了: $textFileName"
+                    Write-Host ""
+
                     # 変換バッチ実行
                     $convertBatchFile = Join-Path $scriptDir "【削除禁止】ConvertNS932Result.bat"
                     if (Test-Path $convertBatchFile) {
-                        Write-Host "  [STEP 4] 変換バッチ実行" -ForegroundColor Cyan
+                        Write-Host "  [STEP 5] 変換バッチ実行" -ForegroundColor Cyan
                         $env:OUTPUT_FOLDER = $dateFolderPath
                         & cmd /c "`"$convertBatchFile`""
                         $env:OUTPUT_FOLDER = $null
@@ -972,6 +986,7 @@ for ($i = 0; $i -lt $jobInfoList.Count; $i++) {
                     Write-Host ""
                     Write-Host "  出力先フォルダ: $dateFolderPath"
                     Write-Host "  Excelファイル : $excelFileName"
+                    Write-Host "  テキストファイル: $textFileName"
                     Write-Host ""
 
                 } catch {
