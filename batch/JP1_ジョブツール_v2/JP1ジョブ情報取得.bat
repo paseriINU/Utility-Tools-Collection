@@ -522,24 +522,25 @@ $outputFolderName = "..\02_output"
 
 # ジョブパスとExcelファイルの紐づけ設定
 # ★ キー: ジョブパス（完全一致で検索）
-# ★ 値: Excelファイル名、シート名、貼り付けセルをカンマ区切りで指定
-# 例: "/グループ/ネット/ジョブ" = "ファイル名.xlsx,Sheet1,A1"
+# ★ 値: Excelファイル名、貼り付けシート名、貼り付けセル、移動先シート名をカンマ区切りで指定
+# 例: "/グループ/ネット/ジョブ" = "ファイル名.xlsx,Sheet2,A1,Sheet1"
+#     → Sheet2のA1に貼り付け後、Sheet1のA1に移動して保存
 $jobExcelMapping = @{
     # === ジョブパスとExcelファイルのマッピング ===
-    # 以下に「ジョブパス」=「Excelファイル名,シート名,セル」の形式で記載してください
+    # 以下に「ジョブパス」=「Excelファイル名,貼り付けシート名,貼り付けセル,移動先シート名」の形式で記載
     # 完全一致で検索されるため、呼び出し元で指定するパスと同じ形式で記載してください
     #
     # 例:
-    # "/TIA/Jobnet/週単位ジョブ" = "TIA解析(自習当初)_週単位.xls,Sheet1,A1"
-    # "/TIA/Jobnet/年単位ジョブ" = "TIA解析(自習当初)_年単位.xls,Sheet1,A1"
+    # "/TIA/Jobnet/週単位ジョブ" = "TIA解析(自習当初)_週単位.xls,Sheet2,A1,Sheet1"
+    # "/TIA/Jobnet/年単位ジョブ" = "TIA解析(自習当初)_年単位.xls,Sheet2,A1,Sheet1"
     #
     # ★ 以下を編集してください ★
-    "/サンプル/Jobnet/週単位ジョブ" = "TIA解析(自習当初)_週単位.xls,Sheet1,A1"
-    "/サンプル/Jobnet/年単位ジョブ" = "TIA解析(自習当初)_年単位.xls,Sheet1,A1"
-    # "/グループ/ネット/ジョブ3" = "Excelファイル3.xls,Sheet1,A1"
-    # "/グループ/ネット/ジョブ4" = "Excelファイル4.xls,Sheet1,A1"
-    # "/グループ/ネット/ジョブ5" = "Excelファイル5.xls,Sheet1,A1"
-    # "/グループ/ネット/ジョブ6" = "Excelファイル6.xls,Sheet1,A1"
+    "/サンプル/Jobnet/週単位ジョブ" = "TIA解析(自習当初)_週単位.xls,Sheet2,A1,Sheet1"
+    "/サンプル/Jobnet/年単位ジョブ" = "TIA解析(自習当初)_年単位.xls,Sheet2,A1,Sheet1"
+    # "/グループ/ネット/ジョブ3" = "Excelファイル3.xls,Sheet2,A1,Sheet1"
+    # "/グループ/ネット/ジョブ4" = "Excelファイル4.xls,Sheet2,A1,Sheet1"
+    # "/グループ/ネット/ジョブ5" = "Excelファイル5.xls,Sheet2,A1,Sheet1"
+    # "/グループ/ネット/ジョブ6" = "Excelファイル6.xls,Sheet2,A1,Sheet1"
 }
 
 # ジョブパスとテキストファイル名の紐づけ設定（クリップボード保存用）
@@ -1778,6 +1779,7 @@ switch ($outputMode.ToUpper()) {
         $excelFileName = $null
         $excelSheetName = $null
         $excelPasteCell = $null
+        $excelMoveToSheet = $null
 
         # ジョブパスに一致するマッピングを検索（完全一致）
         foreach ($key in $jobExcelMapping.Keys) {
@@ -1788,6 +1790,9 @@ switch ($outputMode.ToUpper()) {
                     $excelFileName = $parts[0].Trim()
                     $excelSheetName = $parts[1].Trim()
                     $excelPasteCell = $parts[2].Trim()
+                    if ($parts.Count -ge 4) {
+                        $excelMoveToSheet = $parts[3].Trim()
+                    }
                 }
                 break
             }
@@ -1811,8 +1816,11 @@ switch ($outputMode.ToUpper()) {
         Write-Host "  [設定情報]" -ForegroundColor Cyan
         Write-Host "    ジョブパス    : $targetUnitPath"
         Write-Host "    Excelファイル : $excelFileName"
-        Write-Host "    シート名      : $excelSheetName"
+        Write-Host "    貼り付けシート: $excelSheetName"
         Write-Host "    貼り付けセル  : $excelPasteCell"
+        if ($excelMoveToSheet) {
+            Write-Host "    移動先シート  : $excelMoveToSheet"
+        }
         Write-Host ""
 
         # ------------------------------------------------------------------
@@ -1893,6 +1901,12 @@ switch ($outputMode.ToUpper()) {
             # 貼り付け先のセルを選択してクリップボードから貼り付け
             $sheet.Range($excelPasteCell).Select()
             $sheet.Paste()
+
+            # 貼り付け後、指定シートに移動してA1セルを選択
+            if ($excelMoveToSheet) {
+                $workbook.Worksheets.Item($excelMoveToSheet).Activate()
+                $workbook.Worksheets.Item($excelMoveToSheet).Range("A1").Select()
+            }
 
             $workbook.Save()
             [System.Runtime.Interopservices.Marshal]::ReleaseComObject($sheet) | Out-Null
