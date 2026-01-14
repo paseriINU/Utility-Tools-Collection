@@ -1890,11 +1890,8 @@ switch ($outputMode.ToUpper()) {
         }
 
         try {
-            # ログファイルの内容を読み込み（-Raw: 全体を1つの文字列として）
-            $logContent = Get-Content $outputFilePath -Encoding Default -Raw
-
-            # クリップボードにコピー
-            Set-Clipboard -Value $logContent
+            # クリップボードにコピー（$execResultContentを直接使用）
+            Set-Clipboard -Value $execResultContent
 
             $excel = New-Object -ComObject Excel.Application
             $excel.Visible = $true
