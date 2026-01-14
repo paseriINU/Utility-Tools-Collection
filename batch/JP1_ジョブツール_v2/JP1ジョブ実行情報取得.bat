@@ -887,8 +887,9 @@ for ($i = 0; $i -lt $jobInfoList.Count; $i++) {
                 # 保存完了メッセージ
                 Write-Console "  保存先: $outputFilePath"
 
-                # メモ帳で開く
-                Start-Process notepad $outputFilePath
+                # メモ帳で開く（UNCパス対応のため-ArgumentListを使用）
+                $resolvedPath = [System.IO.Path]::GetFullPath($outputFilePath)
+                Start-Process -FilePath "notepad.exe" -ArgumentList "`"$resolvedPath`""
 
                 # スクロール位置の設定（環境変数から取得）
                 $scrollToText = $env:JP1_SCROLL_TO_TEXT
@@ -1079,24 +1080,77 @@ for ($i = 0; $i -lt $jobInfoList.Count; $i++) {
 # 完了サマリー
 # ==============================================================================
 Write-Host ""
-if ($hasError) {
-    Write-Host "================================================================" -ForegroundColor Red
-    Write-Host "  処理完了（エラーあり）" -ForegroundColor Red
-    Write-Host "================================================================" -ForegroundColor Red
-} else {
-    Write-Host "================================================================" -ForegroundColor Green
-    Write-Host "  処理完了" -ForegroundColor Green
-    Write-Host "================================================================" -ForegroundColor Green
+
+# 各ジョブの終了状態を判定
+$hasAbnormal = $false
+$hasWarning = $false
+$allNormal = $true
+
+foreach ($jobInfo in $jobInfoList) {
+    $status = $jobInfo.JobStatus
+    if ($status -match "ABNORMAL|KILL|INTERRUPT|FAIL|UNKNOWN") {
+        $hasAbnormal = $true
+        $allNormal = $false
+    } elseif ($status -match "WARNING") {
+        $hasWarning = $true
+        $allNormal = $false
+    } elseif ($status -notmatch "NORMAL") {
+        $allNormal = $false
+    }
 }
+
+# 結果表示の色とタイトルを決定
+if ($hasError -or $hasAbnormal) {
+    $resultColor = "Red"
+    $resultTitle = "異常終了"
+    $resultMessage = "ジョブが異常終了しました"
+} elseif ($hasWarning) {
+    $resultColor = "Yellow"
+    $resultTitle = "警告終了"
+    $resultMessage = "ジョブが警告付きで終了しました"
+} elseif ($allNormal) {
+    $resultColor = "Green"
+    $resultTitle = "正常終了"
+    $resultMessage = "すべてのジョブが正常に終了しました"
+} else {
+    $resultColor = "Yellow"
+    $resultTitle = "終了"
+    $resultMessage = "ジョブが終了しました"
+}
+
+Write-Host "================================================================" -ForegroundColor $resultColor
+Write-Host "  ★★★ $resultTitle ★★★" -ForegroundColor $resultColor
+Write-Host "================================================================" -ForegroundColor $resultColor
 Write-Host ""
+Write-Host "  $resultMessage" -ForegroundColor $resultColor
+Write-Host ""
+Write-Host "----------------------------------------------------------------"
 Write-Host "  処理ジョブ数: $($jobInfoList.Count)"
+
+# 各ジョブの状態を表示
+foreach ($jobInfo in $jobInfoList) {
+    $status = $jobInfo.JobStatus
+    $statusDisplay = Get-StatusDisplayName -status $status
+    $jobColor = "White"
+    if ($status -match "ABNORMAL|KILL|INTERRUPT|FAIL|UNKNOWN") {
+        $jobColor = "Red"
+    } elseif ($status -match "WARNING") {
+        $jobColor = "Yellow"
+    } elseif ($status -match "NORMAL") {
+        $jobColor = "Green"
+    }
+    Write-Host "    - $($jobInfo.JobName): " -NoNewline
+    Write-Host "$statusDisplay" -ForegroundColor $jobColor
+}
+
 if ($dateFolderPath) {
+    Write-Host ""
     Write-Host "  出力先: $dateFolderPath"
 }
 Write-Host ""
 
 # 終了コード（エラーがあれば1、なければ0）
-if ($hasError) {
+if ($hasError -or $hasAbnormal) {
     exit 1
 } else {
     exit 0

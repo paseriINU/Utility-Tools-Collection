@@ -1754,8 +1754,9 @@ if (-not $outputMode) { $outputMode = "/NOTEPAD" }
 # 出力オプションに応じた後処理
 switch ($outputMode.ToUpper()) {
     "/NOTEPAD" {
-        # メモ帳で開く
-        Start-Process notepad $outputFilePath
+        # メモ帳で開く（UNCパス対応のため-ArgumentListを使用）
+        $resolvedPath = [System.IO.Path]::GetFullPath($outputFilePath)
+        Start-Process -FilePath "notepad.exe" -ArgumentList "`"$resolvedPath`""
 
         # スクロール位置の設定を環境変数から取得
         $scrollToText = $env:JP1_SCROLL_TO_TEXT
@@ -2118,12 +2119,65 @@ switch ($outputMode.ToUpper()) {
     }
 }
 
-# 完了表示
+# 完了表示（ステータスに応じて色を変更）
 Write-Host ""
-Write-Host "================================================================" -ForegroundColor Green
-Write-Host "  取得完了" -ForegroundColor Green
-Write-Host "================================================================" -ForegroundColor Green
+
+# ステータスに応じた色とメッセージを決定
+$resultColor = "Green"
+$resultTitle = "正常終了"
+$resultMessage = "ジョブは正常に終了しました"
+
+switch ($targetEndStatus) {
+    "NORMAL" {
+        $resultColor = "Green"
+        $resultTitle = "正常終了"
+        $resultMessage = "ジョブは正常に終了しました"
+    }
+    "WARNING" {
+        $resultColor = "Yellow"
+        $resultTitle = "警告終了"
+        $resultMessage = "ジョブは警告付きで終了しました"
+    }
+    "ABNORMAL" {
+        $resultColor = "Red"
+        $resultTitle = "異常終了"
+        $resultMessage = "ジョブは異常終了しました"
+    }
+    "KILL" {
+        $resultColor = "Red"
+        $resultTitle = "強制終了"
+        $resultMessage = "ジョブは強制終了されました"
+    }
+    "INTERRUPT" {
+        $resultColor = "Red"
+        $resultTitle = "中断"
+        $resultMessage = "ジョブは中断されました"
+    }
+    "FAIL" {
+        $resultColor = "Red"
+        $resultTitle = "起動失敗"
+        $resultMessage = "ジョブの起動に失敗しました"
+    }
+    default {
+        if ($targetEndStatus -match "NORMAL") {
+            $resultColor = "Green"
+            $resultTitle = "正常終了"
+            $resultMessage = "ジョブは正常に終了しました"
+        } else {
+            $resultColor = "Yellow"
+            $resultTitle = "終了"
+            $resultMessage = "ジョブは終了しました（$endStatusDisplay）"
+        }
+    }
+}
+
+Write-Host "================================================================" -ForegroundColor $resultColor
+Write-Host "  ★★★ $resultTitle ★★★" -ForegroundColor $resultColor
+Write-Host "================================================================" -ForegroundColor $resultColor
 Write-Host ""
+Write-Host "  $resultMessage" -ForegroundColor $resultColor
+Write-Host ""
+Write-Host "----------------------------------------------------------------"
 Write-Host "ジョブネット名: $jobnetName"
 Write-Host "コメント:       $jobnetComment"
 Write-Host "ジョブ開始日時: $startTimeForFileName"
