@@ -1651,7 +1651,12 @@ if ($selectedPath) {
     Write-Host "          開始日時: $selectedTime"
     Write-Host ""
     Write-Host "    除外: $rejectedPath" -ForegroundColor DarkGray
-    Write-Host "          開始日時: $rejectedTime"
+    # 取得失敗の場合は赤色で表示
+    if ($rejectedTime -eq "(取得失敗)") {
+        Write-Host "          開始日時: $rejectedTime" -ForegroundColor Red
+    } else {
+        Write-Host "          開始日時: $rejectedTime"
+    }
     Write-Host ""
     Write-Host "  続行する場合は任意のキーを押してください..."
     Write-Host ""
@@ -1856,7 +1861,7 @@ switch ($outputMode.ToUpper()) {
         $templatePath = Join-Path $scriptDir $templateFolderName
 
         if (-not (Test-Path $templatePath)) {
-            Write-Console "[エラー] 雛形フォルダが見つかりません: $templatePath"
+            Write-Host "[エラー] 雛形フォルダが見つかりません: $templatePath" -ForegroundColor Red
             exit 13  # 雛形フォルダ未検出エラー
         }
 
@@ -2062,8 +2067,8 @@ switch ($outputMode.ToUpper()) {
                 Write-Console "[情報] キーワードが見つからないため、元のログを開きました"
             }
         } else {
-            Write-Console "[エラー] WinMergeが見つかりません: $winMergePath"
-            Write-Console "        WinMergeをインストールするか、パスを確認してください。"
+            Write-Host "[エラー] WinMergeが見つかりません: $winMergePath" -ForegroundColor Red
+            Write-Host "        WinMergeをインストールするか、パスを確認してください。" -ForegroundColor Red
         }
     }
     default {

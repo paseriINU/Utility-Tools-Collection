@@ -444,7 +444,7 @@ for ($i = 0; $i -lt $jobInfoList.Count; $i++) {
 
         # ユニット存在確認
         if (-not $defJson.statuses -or $defJson.statuses.Count -eq 0) {
-            Write-Console "[エラー] ユニットが見つかりません: $($jobInfo.UnitPath)"
+            Write-Host "[エラー] ユニットが見つかりません: $($jobInfo.UnitPath)" -ForegroundColor Red
             exit 2  # ユニット未検出
         }
 
@@ -455,14 +455,14 @@ for ($i = 0; $i -lt $jobInfoList.Count; $i++) {
 
         # ユニット種別確認（JOB系かどうか）
         if ($unitTypeValue -notmatch "JOB") {
-            Write-Console "[エラー] ジョブではありません: $($jobInfo.UnitPath) (種別: $unitTypeValue)"
+            Write-Host "[エラー] ジョブではありません: $($jobInfo.UnitPath) (種別: $unitTypeValue)" -ForegroundColor Red
             exit 3  # ユニット種別エラー（ジョブではない）
         }
 
         Write-Console "  [$($i + 1)/$($jobInfoList.Count)] $($jobInfo.JobName) - OK"
 
     } catch {
-        Write-Console "[エラー] API接続エラー: $($_.Exception.Message)"
+        Write-Host "[エラー] API接続エラー: $($_.Exception.Message)" -ForegroundColor Red
         exit 9  # API接続エラー（存在確認）
     }
 }
@@ -482,9 +482,9 @@ if (-not $rootJobnetName) {
 if ($jobInfoList.Count -gt 1) {
     foreach ($jobInfo in $jobInfoList) {
         if ($jobInfo.RootJobnetName -ne $rootJobnetName) {
-            Write-Console "[エラー] ルートジョブネットが異なります"
-            Write-Console "  ジョブ1: $rootJobnetName"
-            Write-Console "  ジョブ2: $($jobInfo.RootJobnetName)"
+            Write-Host "[エラー] ルートジョブネットが異なります" -ForegroundColor Red
+            Write-Host "  ジョブ1: $rootJobnetName" -ForegroundColor Red
+            Write-Host "  ジョブ2: $($jobInfo.RootJobnetName)" -ForegroundColor Red
             exit 14  # ルートジョブネット不一致
         }
     }
@@ -578,7 +578,7 @@ try {
     Write-Console "  実行ID: $execIdFromRegister"
 
 } catch {
-    Write-Console "[エラー] 即時実行登録に失敗しました: $($_.Exception.Message)"
+    Write-Host "[エラー] 即時実行登録に失敗しました: $($_.Exception.Message)" -ForegroundColor Red
     exit 5  # 即時実行登録エラー
 }
 
@@ -587,6 +587,9 @@ try {
 # ==============================================================================
 Write-Console "[STEP 5] ジョブ完了待機中..."
 
+# エラー発生フラグ（STEP 5以降で使用）
+$hasError = $false
+
 # 終了状態の定義
 $finishedStatuses = @(
     "NORMAL", "NORMALFALSE", "WARNING", "ABNORMAL",
@@ -594,6 +597,15 @@ $finishedStatuses = @(
     "MONITORCLOSE", "UNEXECMONITOR", "MONITORINTRPT", "MONITORNORMAL",
     "UNEXEC", "BYPASS", "EXECDEFFER", "INVALIDSEQ", "SHUTDOWN"
 )
+
+# エラー状態の定義（赤色表示対象）
+$errorStatuses = @(
+    "ABNORMAL", "KILL", "INTERRUPT", "FAIL", "UNKNOWN",
+    "MONITORCLOSE", "MONITORINTRPT", "INVALIDSEQ", "SHUTDOWN"
+)
+
+# 警告状態の定義（黄色表示対象）
+$warningStatuses = @("WARNING")
 
 $startTime = Get-Date
 $endTime = $startTime.AddSeconds($timeoutSeconds)
@@ -650,7 +662,17 @@ while ((Get-Date) -lt $endTime) {
                     # 終了状態かどうかをチェック
                     if ($finishedStatuses -contains $unitStatus.status) {
                         $completedJobs[$jobInfo.UnitPath] = $true
-                        Write-Console "  [$($i + 1)/$($jobInfoList.Count)] $($jobInfo.JobName) - 完了 ($($unitStatus.status))"
+                        $statusMessage = "  [$($i + 1)/$($jobInfoList.Count)] $($jobInfo.JobName) - 完了 ($($unitStatus.status))"
+
+                        # 状態に応じて色分け表示
+                        if ($errorStatuses -contains $unitStatus.status) {
+                            Write-Host $statusMessage -ForegroundColor Red
+                            $hasError = $true
+                        } elseif ($warningStatuses -contains $unitStatus.status) {
+                            Write-Host $statusMessage -ForegroundColor Yellow
+                        } else {
+                            Write-Host $statusMessage -ForegroundColor Green
+                        }
                     }
                 }
             }
@@ -677,7 +699,7 @@ while ((Get-Date) -lt $endTime) {
 if ((Get-Date) -ge $endTime) {
     foreach ($jobInfo in $jobInfoList) {
         if (-not $completedJobs[$jobInfo.UnitPath]) {
-            Write-Console "[エラー] タイムアウト: $($jobInfo.JobName)"
+            Write-Host "[エラー] タイムアウト: $($jobInfo.JobName)" -ForegroundColor Red
         }
     }
     exit 6  # タイムアウト
@@ -720,10 +742,10 @@ if (-not $outputMode) { $outputMode = "/NOTEPAD" }
 $outputDir = $null
 $dateFolderPath = $null
 $templateCopied = $false
-$hasError = $false  # エラー発生フラグ
+# $hasError は STEP 5 で初期化済み
 
-# NOTEPADモード時の出力ディレクトリ設定
-if ($outputMode.ToUpper() -eq "/NOTEPAD") {
+# NOTEPAD/WINMERGEモード時の出力ディレクトリ設定
+if ($outputMode.ToUpper() -eq "/NOTEPAD" -or $outputMode.ToUpper() -eq "/WINMERGE") {
     $outputDir = Join-Path $scriptDir $outputFolderName
     if (-not (Test-Path $outputDir)) {
         New-Item -ItemType Directory -Path $outputDir -Force | Out-Null
@@ -767,7 +789,7 @@ if ($outputMode.ToUpper() -eq "/EXCEL") {
     $templatePath = Join-Path $scriptDir $templateFolderName
 
     if (-not (Test-Path $templatePath)) {
-        Write-Console "[エラー] 雛形フォルダが見つかりません: $templatePath"
+        Write-Host "[エラー] 雛形フォルダが見つかりません: $templatePath" -ForegroundColor Red
         exit 13  # 雛形フォルダ未検出エラー
     }
 
@@ -998,7 +1020,16 @@ for ($i = 0; $i -lt $jobInfoList.Count; $i++) {
                 }
             }
             "/WINMERGE" {
-                # WinMerge処理（既存のロジック）
+                # WinMerge処理
+                # まずファイルを作成
+                $outputFileName = "【ジョブ実行結果】【${startTimeForFileName}実行分】【${endStatusDisplay}】$($jobInfo.JobnetName)_$($jobInfo.JobnetComment).txt"
+                $outputFilePath = Join-Path $outputDir $outputFileName
+
+                # 実行結果詳細をファイルに出力
+                $execResultContent | Out-File -FilePath $outputFilePath -Encoding Default
+                $jobInfoList[$i].OutputFilePath = $outputFilePath
+
+                # WinMergeで開く
                 $winMergePath = "C:\Program Files\WinMerge\WinMergeU.exe"
                 if (Test-Path $winMergePath) {
                     Start-Process $winMergePath -ArgumentList "`"$outputFilePath`""
