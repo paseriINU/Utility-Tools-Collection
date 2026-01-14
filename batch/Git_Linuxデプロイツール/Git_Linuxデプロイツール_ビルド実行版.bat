@@ -110,10 +110,16 @@ $BUILD_WRAPPER_REMOTE = "/tmp/build_wrapper.sh"
 $BUILD_PROMPT_ENV = "環境を選択"       # 環境選択プロンプト
 $BUILD_PROMPT_OPTION = "オプション"     # ビルドオプション選択プロンプト
 $BUILD_PROMPT_GYOMU = "業務ID"          # 業務ID選択プロンプト
+$BUILD_PROMPT_CONFIRM = "(y/n)"         # 確認プロンプト
+$BUILD_CONFIRM_YES = "y"                # 確認プロンプトへの応答
 
 # ビルドオプション選択番号（共通）
 $BUILD_OPTION_NORMAL = "1"      # 業務ID単位ビルド時の追加選択番号
 $BUILD_OPTION_FULL = "2"        # フルコンパイル時の追加選択番号
+$BUILD_OPTION_EXIT = "99"       # ビルドシェル終了番号
+
+# エラー検出文字列（ビルド出力にこの文字列が含まれていたらエラー）
+$BUILD_ERROR_PATTERN = "エラー"
 
 # 業務ID → ビルドシェルの選択番号 マッピング
 # 転送ファイルの親フォルダ名（業務ID）に対応するビルドシェルの番号を定義
@@ -1027,44 +1033,47 @@ if ($buildMode -eq "full") {
     }
 
 } else {
-    # 業務ID単位ビルドモード
+    # 業務ID単位ビルドモード（マルチビルドモード: -m）
     $buildEnvNumber = $selectedEnv.BuildEnvNumber
 
+    # 業務IDをビルド番号に変換してカンマ区切りで結合
+    $gyomuBuildNumbers = @()
     foreach ($gyomuId in $gyomuIds.Keys | Sort-Object) {
-        Write-Color "[実行] 業務ID: $gyomuId のビルドを実行します..." "Yellow"
-        Write-Host ""
+        $buildNumber = $GYOMU_BUILD_MAP[$gyomuId]
+        $gyomuBuildNumbers += $buildNumber
+        Write-Host "  業務ID: $gyomuId → ビルド番号: $buildNumber"
+    }
+    $gyomuBuildNumbersStr = $gyomuBuildNumbers -join ","
 
-        $gyomuBuildNumber = $GYOMU_BUILD_MAP[$gyomuId]
+    Write-Host ""
+    Write-Host "  環境選択番号: $buildEnvNumber"
+    Write-Host "  追加選択番号: $BUILD_OPTION_NORMAL (業務ID単位)"
+    Write-Host "  業務ID選択番号: $gyomuBuildNumbersStr"
+    Write-Host "  終了番号: $BUILD_OPTION_EXIT"
+    Write-Host ""
 
-        Write-Host "  環境選択番号: $buildEnvNumber"
-        Write-Host "  追加選択番号: $BUILD_OPTION_NORMAL (業務ID単位)"
-        Write-Host "  業務ID選択番号: $gyomuBuildNumber ($gyomuId)"
-        Write-Host ""
+    # ラッパースクリプト経由でビルド実行（マルチビルドモード: -m）
+    # 引数: env_prompt:env option_prompt:opt gyomu_prompt:id1,id2 confirm_prompt:y option_prompt:exit [error_pattern]
+    $wrapperArgs = "-m '$BUILD_SCRIPT' '${BUILD_PROMPT_ENV}:${buildEnvNumber}' '${BUILD_PROMPT_OPTION}:${BUILD_OPTION_NORMAL}' '${BUILD_PROMPT_GYOMU}:${gyomuBuildNumbersStr}' '${BUILD_PROMPT_CONFIRM}:${BUILD_CONFIRM_YES}' '${BUILD_PROMPT_OPTION}:${BUILD_OPTION_EXIT}' '${BUILD_ERROR_PATTERN}'"
 
-        # ラッパースクリプト経由でビルド実行（プロンプト待機モード: -w）
-        $wrapperArgs = "-w '$BUILD_SCRIPT' '${BUILD_PROMPT_ENV}:${buildEnvNumber}' '${BUILD_PROMPT_OPTION}:${BUILD_OPTION_NORMAL}' '${BUILD_PROMPT_GYOMU}:${gyomuBuildNumber}'"
+    $sshArgs = $sshBaseArgs + @("${SSH_USER}@${SSH_HOST}")
+    $sshArgs += "$BUILD_WRAPPER_REMOTE $wrapperArgs"
 
-        $sshArgs = $sshBaseArgs + @("${SSH_USER}@${SSH_HOST}")
-        $sshArgs += "$BUILD_WRAPPER_REMOTE $wrapperArgs"
+    Write-Color "[コマンド] $BUILD_WRAPPER_REMOTE $wrapperArgs" "Gray"
+    Write-Host ""
 
-        Write-Color "[コマンド] $BUILD_WRAPPER_REMOTE $wrapperArgs" "Gray"
-        Write-Host ""
+    try {
+        & $sshCommand $sshArgs 2>&1 | ForEach-Object { Write-Host $_ }
 
-        try {
-            & $sshCommand $sshArgs 2>&1 | ForEach-Object { Write-Host $_ }
-
-            if ($LASTEXITCODE -eq 0) {
-                Write-Host ""
-                Write-Color "[OK] 業務ID: $gyomuId のビルドが完了しました" "Green"
-            } else {
-                Write-Host ""
-                Write-Color "[警告] 業務ID: $gyomuId のビルドが終了しました (終了コード: $LASTEXITCODE)" "Yellow"
-            }
-        } catch {
-            Write-Color "[エラー] 業務ID: $gyomuId のビルド実行に失敗しました: $($_.Exception.Message)" "Red"
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host ""
+            Write-Color "[OK] すべての業務IDのビルドが完了しました" "Green"
+        } else {
+            Write-Host ""
+            Write-Color "[警告] ビルドが終了しました (終了コード: $LASTEXITCODE)" "Yellow"
         }
-
-        Write-Host ""
+    } catch {
+        Write-Color "[エラー] ビルド実行に失敗しました: $($_.Exception.Message)" "Red"
     }
 }
 #endregion
