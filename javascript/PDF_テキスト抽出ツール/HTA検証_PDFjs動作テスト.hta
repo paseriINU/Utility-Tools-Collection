@@ -1,0 +1,243 @@
+<html>
+<head>
+    <title>HTA PDF.js動作検証</title>
+    <HTA:APPLICATION
+        ID="PDFjsTest"
+        APPLICATIONNAME="PDF.js HTA Test"
+        BORDER="dialog"
+        BORDERSTYLE="normal"
+        CAPTION="yes"
+        CONTEXTMENU="yes"
+        INNERBORDER="yes"
+        MAXIMIZEBUTTON="yes"
+        MINIMIZEBUTTON="yes"
+        NAVIGABLE="yes"
+        SCROLL="yes"
+        SCROLLFLAT="no"
+        SELECTION="yes"
+        SHOWINTASKBAR="yes"
+        SINGLEINSTANCE="no"
+        SYSMENU="yes"
+        VERSION="1.0"
+        WINDOWSTATE="normal"
+    />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <style>
+        body {
+            font-family: "Meiryo UI", "Yu Gothic UI", sans-serif;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        h1 { color: #333; font-size: 18px; }
+        .result {
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+            font-family: monospace;
+        }
+        .ok { background: #c6efce; color: #006100; }
+        .ng { background: #ffc7ce; color: #9c0006; }
+        .info { background: #e0e0e0; color: #333; }
+        button {
+            padding: 10px 20px;
+            font-size: 14px;
+            cursor: pointer;
+        }
+        #dropZone {
+            border: 3px dashed #999;
+            padding: 40px;
+            text-align: center;
+            margin: 20px 0;
+            background: #fff;
+        }
+        #dropZone.dragover {
+            border-color: #0066cc;
+            background: #e6f3ff;
+        }
+        #log {
+            background: #000;
+            color: #0f0;
+            padding: 15px;
+            font-family: monospace;
+            font-size: 12px;
+            height: 200px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+    <h1>HTA PDF.js 動作検証ツール</h1>
+
+    <div class="result info" id="envInfo">環境情報を取得中...</div>
+
+    <h2>JavaScript機能チェック</h2>
+    <div id="jsChecks"></div>
+
+    <button onclick="runAllChecks()">全チェック実行</button>
+    <button onclick="testPDFjs()">PDF.js読み込みテスト</button>
+
+    <h2>PDFドロップテスト</h2>
+    <div id="dropZone">
+        PDFファイルをここにドラッグ&ドロップ
+    </div>
+
+    <h2>ログ</h2>
+    <div id="log"></div>
+
+    <script>
+    // ログ出力
+    function log(msg) {
+        var logDiv = document.getElementById('log');
+        var now = new Date();
+        var time = now.getHours() + ':' + ('0' + now.getMinutes()).slice(-2) + ':' + ('0' + now.getSeconds()).slice(-2);
+        logDiv.innerHTML += '[' + time + '] ' + msg + '\n';
+        logDiv.scrollTop = logDiv.scrollHeight;
+    }
+
+    // 環境情報
+    function showEnvInfo() {
+        var info = [];
+        info.push('UserAgent: ' + navigator.userAgent);
+        info.push('Platform: ' + navigator.platform);
+        info.push('IE Version: ' + (document.documentMode || 'N/A'));
+        document.getElementById('envInfo').innerHTML = info.join('<br>');
+        log('環境情報取得完了');
+    }
+
+    // JavaScript機能チェック
+    function runAllChecks() {
+        var checks = document.getElementById('jsChecks');
+        checks.innerHTML = '';
+
+        var features = [
+            { name: 'let/const', test: function() { eval('let x = 1; const y = 2;'); return true; } },
+            { name: 'Arrow Function', test: function() { eval('var f = () => 1;'); return true; } },
+            { name: 'Template Literal', test: function() { eval('var s = `test`;'); return true; } },
+            { name: 'Promise', test: function() { return typeof Promise !== 'undefined'; } },
+            { name: 'Uint8Array', test: function() { return typeof Uint8Array !== 'undefined'; } },
+            { name: 'ArrayBuffer', test: function() { return typeof ArrayBuffer !== 'undefined'; } },
+            { name: 'TextDecoder', test: function() { return typeof TextDecoder !== 'undefined'; } },
+            { name: 'Blob', test: function() { return typeof Blob !== 'undefined'; } },
+            { name: 'FileReader', test: function() { return typeof FileReader !== 'undefined'; } },
+            { name: 'DataTransfer', test: function() { return typeof DataTransfer !== 'undefined'; } },
+            { name: 'async/await', test: function() { eval('async function f() { await 1; }'); return true; } },
+            { name: 'Object.assign', test: function() { return typeof Object.assign === 'function'; } },
+            { name: 'Array.from', test: function() { return typeof Array.from === 'function'; } },
+            { name: 'Symbol', test: function() { return typeof Symbol !== 'undefined'; } },
+            { name: 'Map/Set', test: function() { return typeof Map !== 'undefined' && typeof Set !== 'undefined'; } },
+            { name: 'for...of', test: function() { eval('for(var x of [1,2,3]){}'); return true; } },
+            { name: 'class', test: function() { eval('class A {}'); return true; } },
+            { name: 'Proxy', test: function() { return typeof Proxy !== 'undefined'; } }
+        ];
+
+        var okCount = 0;
+        var ngCount = 0;
+
+        for (var i = 0; i < features.length; i++) {
+            var f = features[i];
+            var result;
+            try {
+                result = f.test();
+            } catch(e) {
+                result = false;
+            }
+
+            var div = document.createElement('div');
+            div.className = 'result ' + (result ? 'ok' : 'ng');
+            div.innerHTML = (result ? '[OK]' : '[NG]') + ' ' + f.name;
+            checks.appendChild(div);
+
+            if (result) okCount++; else ngCount++;
+            log(f.name + ': ' + (result ? 'OK' : 'NG'));
+        }
+
+        log('チェック完了: OK=' + okCount + ', NG=' + ngCount);
+
+        if (ngCount > 5) {
+            log('警告: PDF.jsの動作は難しい可能性があります');
+        }
+    }
+
+    // PDF.js読み込みテスト
+    function testPDFjs() {
+        log('PDF.js読み込みテスト開始...');
+
+        // PDF.jsのCDNから読み込み
+        var script = document.createElement('script');
+        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js';
+        script.onload = function() {
+            log('PDF.jsスクリプト読み込み成功');
+            if (typeof pdfjsLib !== 'undefined') {
+                log('pdfjsLib オブジェクト: 存在します');
+                log('PDF.jsバージョン: ' + (pdfjsLib.version || '不明'));
+                alert('PDF.js読み込み成功！');
+            } else {
+                log('pdfjsLib オブジェクト: 存在しません');
+                alert('PDF.js読み込み失敗');
+            }
+        };
+        script.onerror = function() {
+            log('PDF.jsスクリプト読み込み失敗');
+            alert('PDF.js読み込みエラー（ネットワークまたは互換性の問題）');
+        };
+        document.head.appendChild(script);
+    }
+
+    // ドラッグ&ドロップ
+    var dropZone = document.getElementById('dropZone');
+
+    dropZone.ondragover = function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        this.className = 'dragover';
+        log('dragover イベント発生');
+        return false;
+    };
+
+    dropZone.ondragleave = function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        this.className = '';
+        return false;
+    };
+
+    dropZone.ondrop = function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        this.className = '';
+        log('drop イベント発生');
+
+        try {
+            var dt = e.dataTransfer;
+            log('dataTransfer: ' + (dt ? '存在' : 'null'));
+
+            if (dt && dt.files) {
+                log('files.length: ' + dt.files.length);
+                for (var i = 0; i < dt.files.length; i++) {
+                    var file = dt.files[i];
+                    log('ファイル[' + i + ']: ' + file.name + ' (' + file.size + ' bytes, ' + file.type + ')');
+                }
+
+                if (dt.files.length > 0) {
+                    alert('ファイルドロップ成功: ' + dt.files[0].name);
+                }
+            } else {
+                log('files: 取得できません');
+            }
+        } catch(ex) {
+            log('エラー: ' + ex.message);
+        }
+
+        return false;
+    };
+
+    // 初期化
+    window.onload = function() {
+        log('HTA起動');
+        showEnvInfo();
+        log('ドラッグ&ドロップテスト準備完了');
+    };
+    </script>
+</body>
+</html>
