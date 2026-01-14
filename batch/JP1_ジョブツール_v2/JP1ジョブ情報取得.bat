@@ -1980,7 +1980,10 @@ switch ($outputMode.ToUpper()) {
         # キーワードが見つからない場合は元のログファイルを開きます。
         # ======================================================================
 
-        # 出力ディレクトリのパスを解決（相対パスの場合は絶対パスに変換）
+        # 出力ディレクトリのパスを解決（未設定または相対パスの場合は絶対パスに変換）
+        if (-not $outputFolder) {
+            $outputFolder = "..\02_output"
+        }
         if (-not [System.IO.Path]::IsPathRooted($outputFolder)) {
             $outputFolder = Join-Path $scriptDir $outputFolder
         }
