@@ -954,6 +954,17 @@ for ($i = 0; $i -lt $jobInfoList.Count; $i++) {
                     Write-Host "    貼り付け完了: $excelFileName"
                     Write-Host ""
 
+                    # 変換バッチ実行
+                    $convertBatchFile = Join-Path $scriptDir "【削除禁止】ConvertNS932Result.bat"
+                    if (Test-Path $convertBatchFile) {
+                        Write-Host "  [STEP 4] 変換バッチ実行" -ForegroundColor Cyan
+                        $env:OUTPUT_FOLDER = $dateFolderPath
+                        & cmd /c "`"$convertBatchFile`""
+                        $env:OUTPUT_FOLDER = $null
+                        Write-Host "    実行完了"
+                        Write-Host ""
+                    }
+
                     # 完了サマリー
                     Write-Host "================================================================" -ForegroundColor Green
                     Write-Host "  Excel貼り付け完了" -ForegroundColor Green

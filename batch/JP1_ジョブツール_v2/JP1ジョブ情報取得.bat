@@ -1916,6 +1916,19 @@ switch ($outputMode.ToUpper()) {
             Write-Host ""
 
             # ------------------------------------------------------------------
+            # 変換バッチ実行
+            # ------------------------------------------------------------------
+            $convertBatchFile = Join-Path $scriptDir "【削除禁止】ConvertNS932Result.bat"
+            if (Test-Path $convertBatchFile) {
+                Write-Host "  [STEP 4] 変換バッチ実行" -ForegroundColor Cyan
+                $env:OUTPUT_FOLDER = $dateFolderPath
+                & cmd /c "`"$convertBatchFile`""
+                $env:OUTPUT_FOLDER = $null
+                Write-Host "    実行完了"
+                Write-Host ""
+            }
+
+            # ------------------------------------------------------------------
             # 完了サマリー
             # ------------------------------------------------------------------
             Write-Host "================================================================" -ForegroundColor Green
