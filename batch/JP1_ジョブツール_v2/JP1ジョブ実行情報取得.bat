@@ -43,12 +43,15 @@ if not "%~2"=="" (
 rem UNCパス対応（PushD/PopDで自動マッピング）
 pushd "%~dp0"
 
+rem pushd後のカレントディレクトリを保存（UNCパスでも正しく動作するように）
+set "SCRIPT_DIR=%CD%"
+
 rem PowerShellを起動し、このファイル自体をスクリプトとして実行
 rem -NoProfile: プロファイルを読み込まない（高速化）
 rem -ExecutionPolicy Bypass: 実行ポリシーを回避
 rem gc '%~f0': このファイル自体を読み込む
 rem iex: 読み込んだ内容をPowerShellスクリプトとして実行
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$scriptDir=('%~dp0' -replace '\\$',''); try { iex ((gc '%~f0' -Encoding Default) -join \"`n\") } finally { Set-Location C:\ }"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$scriptDir='%SCRIPT_DIR%'; try { iex ((gc '%~f0' -Encoding Default) -join \"`n\") } finally { Set-Location C:\ }"
 set "EXITCODE=%ERRORLEVEL%"
 
 popd
@@ -534,6 +537,14 @@ try {
     $jobnetComment = ""
 }
 
+# コメント取得結果をコンソールに表示
+Write-Console "  親ジョブネット: $($jobInfo.JobnetName)"
+if ($jobnetComment) {
+    Write-Console "  コメント: $jobnetComment"
+} else {
+    Write-Console "  コメント: (未設定)"
+}
+
 # 全ジョブにコメントを設定
 for ($i = 0; $i -lt $jobInfoList.Count; $i++) {
     $jobInfoList[$i].JobnetComment = $jobnetComment
@@ -872,6 +883,9 @@ for ($i = 0; $i -lt $jobInfoList.Count; $i++) {
                 # 実行結果詳細をファイルに出力
                 $execResultContent | Out-File -FilePath $outputFilePath -Encoding Default
                 $jobInfoList[$i].OutputFilePath = $outputFilePath
+
+                # 保存完了メッセージ
+                Write-Console "  保存先: $outputFilePath"
 
                 # メモ帳で開く
                 Start-Process notepad $outputFilePath
