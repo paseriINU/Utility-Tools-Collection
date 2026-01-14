@@ -1803,8 +1803,8 @@ switch ($outputMode.ToUpper()) {
 
         # マッピングが見つからない場合はエラー
         if (-not $excelFileName) {
-            Write-Console "[エラー] ジョブパス '$targetUnitPath' に対応するExcel設定が見つかりません。"
-            Write-Console "[エラー] 設定セクションの `$jobExcelMapping を確認してください。"
+            Write-Host "[エラー] ジョブパス '$targetUnitPath' に対応するExcel設定が見つかりません。" -ForegroundColor Red
+            Write-Host "[エラー] 設定セクションの `$jobExcelMapping を確認してください。" -ForegroundColor Red
             exit 10  # Excel設定エラー
         }
 
@@ -1885,7 +1885,7 @@ switch ($outputMode.ToUpper()) {
         $excelPath = Join-Path $dateFolderPath $excelFileName
 
         if (-not (Test-Path $excelPath)) {
-            Write-Console "[エラー] Excelファイルが見つかりません: $excelPath"
+            Write-Host "[エラー] Excelファイルが見つかりません: $excelPath" -ForegroundColor Red
             exit 12  # Excelファイル未検出エラー
         }
 
@@ -1956,7 +1956,7 @@ switch ($outputMode.ToUpper()) {
             Write-Host "  テキストファイル: $textFileName"
             Write-Host ""
         } catch {
-            Write-Console "[エラー] Excel貼り付けに失敗しました: $($_.Exception.Message)"
+            Write-Host "[エラー] Excel貼り付けに失敗しました: $($_.Exception.Message)" -ForegroundColor Red
             exit 11  # Excel貼り付けエラー
         }
     }

@@ -720,6 +720,7 @@ if (-not $outputMode) { $outputMode = "/NOTEPAD" }
 $outputDir = $null
 $dateFolderPath = $null
 $templateCopied = $false
+$hasError = $false  # エラー発生フラグ
 
 # NOTEPADモード時の出力ディレクトリ設定
 if ($outputMode.ToUpper() -eq "/NOTEPAD") {
@@ -909,7 +910,8 @@ for ($i = 0; $i -lt $jobInfoList.Count; $i++) {
 
                 # マッピングが見つからない場合はエラー
                 if (-not $excelFileName) {
-                    Write-Console "[エラー] ジョブパス '$($jobInfo.UnitPath)' に対応するExcel設定が見つかりません。"
+                    Write-Host "[エラー] ジョブパス '$($jobInfo.UnitPath)' に対応するExcel設定が見つかりません。" -ForegroundColor Red
+                    $hasError = $true
                     continue
                 }
 
@@ -924,7 +926,8 @@ for ($i = 0; $i -lt $jobInfoList.Count; $i++) {
                 $excelPath = Join-Path $dateFolderPath $excelFileName
 
                 if (-not (Test-Path $excelPath)) {
-                    Write-Console "[エラー] Excelファイルが見つかりません: $excelPath"
+                    Write-Host "[エラー] Excelファイルが見つかりません: $excelPath" -ForegroundColor Red
+                    $hasError = $true
                     continue
                 }
 
@@ -990,7 +993,8 @@ for ($i = 0; $i -lt $jobInfoList.Count; $i++) {
                     Write-Host ""
 
                 } catch {
-                    Write-Console "[エラー] Excel貼り付けに失敗しました: $($_.Exception.Message)"
+                    Write-Host "[エラー] Excel貼り付けに失敗しました: $($_.Exception.Message)" -ForegroundColor Red
+                    $hasError = $true
                 }
             }
             "/WINMERGE" {
@@ -1005,7 +1009,8 @@ for ($i = 0; $i -lt $jobInfoList.Count; $i++) {
         Write-Console "    完了: $outputFilePath"
 
     } catch {
-        Write-Console "[エラー] 詳細取得に失敗: $($jobInfo.JobName) - $($_.Exception.Message)"
+        Write-Host "[エラー] 詳細取得に失敗: $($jobInfo.JobName) - $($_.Exception.Message)" -ForegroundColor Red
+        $hasError = $true
     }
 }
 
@@ -1013,9 +1018,15 @@ for ($i = 0; $i -lt $jobInfoList.Count; $i++) {
 # 完了サマリー
 # ==============================================================================
 Write-Host ""
-Write-Host "================================================================" -ForegroundColor Green
-Write-Host "  処理完了" -ForegroundColor Green
-Write-Host "================================================================" -ForegroundColor Green
+if ($hasError) {
+    Write-Host "================================================================" -ForegroundColor Red
+    Write-Host "  処理完了（エラーあり）" -ForegroundColor Red
+    Write-Host "================================================================" -ForegroundColor Red
+} else {
+    Write-Host "================================================================" -ForegroundColor Green
+    Write-Host "  処理完了" -ForegroundColor Green
+    Write-Host "================================================================" -ForegroundColor Green
+}
 Write-Host ""
 Write-Host "  処理ジョブ数: $($jobInfoList.Count)"
 if ($dateFolderPath) {
@@ -1023,5 +1034,9 @@ if ($dateFolderPath) {
 }
 Write-Host ""
 
-# 正常終了
-exit 0
+# 終了コード（エラーがあれば1、なければ0）
+if ($hasError) {
+    exit 1
+} else {
+    exit 0
+}
