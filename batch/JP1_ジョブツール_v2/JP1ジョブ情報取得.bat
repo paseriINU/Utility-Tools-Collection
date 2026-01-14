@@ -1754,9 +1754,9 @@ if (-not $outputMode) { $outputMode = "/NOTEPAD" }
 # 出力オプションに応じた後処理
 switch ($outputMode.ToUpper()) {
     "/NOTEPAD" {
-        # メモ帳で開く（UNCパス対応のため-ArgumentListを使用）
+        # メモ帳で開く（日本語ファイル名対応のためcmd /c経由）
         $resolvedPath = [System.IO.Path]::GetFullPath($outputFilePath)
-        Start-Process -FilePath "notepad.exe" -ArgumentList "`"$resolvedPath`""
+        cmd /c start "" notepad "$resolvedPath"
 
         # スクロール位置の設定を環境変数から取得
         $scrollToText = $env:JP1_SCROLL_TO_TEXT

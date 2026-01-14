@@ -887,9 +887,9 @@ for ($i = 0; $i -lt $jobInfoList.Count; $i++) {
                 # 保存完了メッセージ
                 Write-Console "  保存先: $outputFilePath"
 
-                # メモ帳で開く（UNCパス対応のため-ArgumentListを使用）
+                # メモ帳で開く（日本語ファイル名対応のためcmd /c経由）
                 $resolvedPath = [System.IO.Path]::GetFullPath($outputFilePath)
-                Start-Process -FilePath "notepad.exe" -ArgumentList "`"$resolvedPath`""
+                cmd /c start "" notepad "$resolvedPath"
 
                 # スクロール位置の設定（環境変数から取得）
                 $scrollToText = $env:JP1_SCROLL_TO_TEXT
