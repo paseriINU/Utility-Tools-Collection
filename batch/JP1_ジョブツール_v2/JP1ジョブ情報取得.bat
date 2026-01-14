@@ -1865,27 +1865,25 @@ switch ($outputMode.ToUpper()) {
             exit 13  # 雛形フォルダ未検出エラー
         }
 
-        # 雛形フォルダの中身をyyyymmddフォルダに直接コピー（既存ファイルは上書き）
+        # 雛形フォルダの中身をyyyymmddフォルダに直接コピー（存在しない場合のみ）
         # （雛形フォルダ自体はコピーせず、中のファイルのみ）
         $templateItems = Get-ChildItem -Path $templatePath
         $copiedCount = 0
-        $skippedCount = 0
         foreach ($item in $templateItems) {
             $destPath = Join-Path $dateFolderPath $item.Name
-            try {
-                Copy-Item -Path $item.FullName -Destination $destPath -Recurse -Force
-                $copiedCount++
-            } catch {
-                # ファイルがロックされている場合などはスキップ
-                $skippedCount++
-                Write-Host "    [警告] コピーをスキップ: $($item.Name) - $($_.Exception.Message)" -ForegroundColor Yellow
+            if (-not (Test-Path $destPath)) {
+                try {
+                    Copy-Item -Path $item.FullName -Destination $destPath -Recurse -Force
+                    $copiedCount++
+                } catch {
+                    Write-Host "    [警告] コピーに失敗: $($item.Name) - $($_.Exception.Message)" -ForegroundColor Yellow
+                }
             }
         }
         if ($copiedCount -gt 0) {
             Write-Host "    コピー完了: $copiedCount 件のファイル/フォルダ"
-        }
-        if ($skippedCount -gt 0) {
-            Write-Host "    スキップ: $skippedCount 件（ロック中等）" -ForegroundColor Yellow
+        } else {
+            Write-Host "    スキップ: 既にコピー済み"
         }
         Write-Host ""
 
