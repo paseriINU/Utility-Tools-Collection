@@ -716,15 +716,18 @@ function Get-StatusDisplayName {
 $outputMode = $env:JP1_OUTPUT_MODE
 if (-not $outputMode) { $outputMode = "/NOTEPAD" }
 
-# 出力ディレクトリを作成
-$outputDir = Join-Path $scriptDir "..\02_output"
-if (-not (Test-Path $outputDir)) {
-    New-Item -ItemType Directory -Path $outputDir -Force | Out-Null
-}
-
-# Excel処理用の共通変数（/EXCELモード時）
+# 共通変数
+$outputDir = $null
 $dateFolderPath = $null
 $templateCopied = $false
+
+# NOTEPADモード時の出力ディレクトリ設定
+if ($outputMode.ToUpper() -eq "/NOTEPAD") {
+    $outputDir = Join-Path $scriptDir $outputFolderName
+    if (-not (Test-Path $outputDir)) {
+        New-Item -ItemType Directory -Path $outputDir -Force | Out-Null
+    }
+}
 
 if ($outputMode.ToUpper() -eq "/EXCEL") {
     # --------------------------------------------------------------
@@ -832,17 +835,17 @@ for ($i = 0; $i -lt $jobInfoList.Count; $i++) {
         # 終了状態を取得（日本語変換済み）
         $endStatusDisplay = Get-StatusDisplayName -status $jobInfo.JobStatus
 
-        # 出力ファイル名を生成
-        $outputFileName = "【ジョブ実行結果】【${startTimeForFileName}実行分】【${endStatusDisplay}】$($jobInfo.JobnetName)_$($jobInfo.JobnetComment).txt"
-        $outputFilePath = Join-Path $outputDir $outputFileName
-
-        # 実行結果詳細をファイルに出力
-        $execResultContent | Out-File -FilePath $outputFilePath -Encoding Default
-        $jobInfoList[$i].OutputFilePath = $outputFilePath
-
         # 出力オプションに応じた後処理
         switch ($outputMode.ToUpper()) {
             "/NOTEPAD" {
+                # 出力ファイル名を生成
+                $outputFileName = "【ジョブ実行結果】【${startTimeForFileName}実行分】【${endStatusDisplay}】$($jobInfo.JobnetName)_$($jobInfo.JobnetComment).txt"
+                $outputFilePath = Join-Path $outputDir $outputFileName
+
+                # 実行結果詳細をファイルに出力
+                $execResultContent | Out-File -FilePath $outputFilePath -Encoding Default
+                $jobInfoList[$i].OutputFilePath = $outputFilePath
+
                 # メモ帳で開く
                 Start-Process notepad $outputFilePath
 
