@@ -164,8 +164,8 @@ if $WAIT_MODE; then
                 exit 1
             fi
 
-            # 出力ファイルをチェック
-            if [ -f "$OUTPUT_FILE" ] && grep -q "$prompt" "$OUTPUT_FILE" 2>/dev/null; then
+            # 出力ファイルをチェック（-F: 固定文字列として検索）
+            if [ -f "$OUTPUT_FILE" ] && grep -qF "$prompt" "$OUTPUT_FILE" 2>/dev/null; then
                 found=true
                 break
             fi
