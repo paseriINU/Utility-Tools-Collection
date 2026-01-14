@@ -117,7 +117,7 @@ $BUILD_OPTION_FULL = "2"        # フルコンパイル時の追加選択番号
 
 # 業務ID → ビルドシェルの選択番号 マッピング
 # 転送ファイルの親フォルダ名（業務ID）に対応するビルドシェルの番号を定義
-# 例: gyomu/AAA1/AAA1001.c → 業務ID: AAA1
+# 例: gyoumu/online/AAA1/AAA1001.c → 業務ID: AAA1
 $GYOMU_BUILD_MAP = @{
     "AAA1" = "1"
     "BBB2" = "2"
@@ -127,8 +127,15 @@ $GYOMU_BUILD_MAP = @{
 }
 
 # ビルド対象フォルダのプレフィックス（これらのフォルダ配下のみ業務ID単位ビルド対象）
-# 例: gyomu/業務ID/xxx.c, remote/業務ID/xxx.c
-$BUILD_TARGET_PREFIXES = @("gyomu/", "remote/")
+# 例: gyoumu/online/業務ID/xxx.c, gyoumu/remote/業務ID/xxx.c
+$BUILD_TARGET_PREFIXES = @("gyoumu/online/", "gyoumu/remote/", "gyoumu/batch/")
+
+# comフォルダ用のプレフィックス（特別ルール適用）
+$BUILD_TARGET_PREFIX_COM = "gyoumu/com/"
+
+# comフォルダ内で業務ID単位ビルド対象とする業務IDリスト
+# これ以外の業務IDはフルコンパイル対象となる
+$COM_ALLOWED_GYOMU_IDS = @("ZSG030", "ZSG060", "ZSG100", "ZSG920", "ZSG960", "ZSG970")
 
 #==============================================================================
 #endregion
@@ -452,9 +459,10 @@ if ($transferMode -eq "all") {
         $filePath = $file.Path.Replace("\", "/")
         $isGyomuFile = $false
 
+        # 通常のプレフィックス（online, remote, batch）をチェック
         foreach ($prefix in $BUILD_TARGET_PREFIXES) {
             if ($filePath.StartsWith($prefix)) {
-                # gyomu/業務ID/xxx.c または remote/業務ID/xxx.c の形式
+                # gyoumu/online/業務ID/xxx.c の形式
                 $pathParts = $filePath.Substring($prefix.Length).Split("/")
                 if ($pathParts.Count -ge 2) {
                     # 業務IDは親フォルダ名（.c/.hファイルの直上フォルダ）
@@ -468,6 +476,30 @@ if ($transferMode -eq "all") {
                     }
                 }
                 break
+            }
+        }
+
+        # comフォルダの特別処理
+        if (-not $isGyomuFile -and $filePath.StartsWith($BUILD_TARGET_PREFIX_COM)) {
+            # gyoumu/com/業務ID/xxx.c の形式
+            $pathParts = $filePath.Substring($BUILD_TARGET_PREFIX_COM.Length).Split("/")
+            if ($pathParts.Count -ge 2) {
+                $gyomuId = $pathParts[0]
+                if ($gyomuId.Length -gt 0) {
+                    # comフォルダ内で許可された業務IDかチェック
+                    if ($COM_ALLOWED_GYOMU_IDS -contains $gyomuId) {
+                        if (-not $gyomuIds.ContainsKey($gyomuId)) {
+                            $gyomuIds[$gyomuId] = @()
+                        }
+                        $gyomuIds[$gyomuId] += $filePath
+                        $isGyomuFile = $true
+                    } else {
+                        # 許可リストにない業務ID → フルコンパイル対象
+                        Write-Color "[判定] comフォルダ内の非許可業務ID: $gyomuId → フルコンパイル対象" "Yellow"
+                        $hasNonGyomuFiles = $true
+                        $isGyomuFile = $true  # 後続の重複判定を防ぐ
+                    }
+                }
             }
         }
 
