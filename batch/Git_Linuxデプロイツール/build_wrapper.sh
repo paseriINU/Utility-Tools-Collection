@@ -416,6 +416,7 @@ elif $MULTI_MODE; then
     exec 3>"$INPUT_FIFO"
 
     BUILD_ERRORS=0
+    BUILD_ERROR_IDS=()
     SEARCH_POS=0
 
     # 1. 環境選択プロンプト
@@ -495,6 +496,7 @@ elif $MULTI_MODE; then
                 if tail -c "+$((BEFORE_BUILD_SIZE + 1))" "$OUTPUT_FILE" 2>/dev/null | grep -qF "$ERROR_PATTERN"; then
                     echo "[エラー] ビルドエラーを検出しました: 業務ID $gyomu_id"
                     BUILD_ERRORS=$((BUILD_ERRORS + 1))
+                    BUILD_ERROR_IDS+=("$gyomu_id")
                 else
                     echo "[OK] 業務ID $gyomu_id のビルド完了"
                 fi
@@ -526,7 +528,12 @@ elif $MULTI_MODE; then
         echo "[結果] *** ビルドエラー: $BUILD_ERRORS 件 ***"
         echo "========================================"
         echo ""
-        echo "エラーが発生した業務IDを確認してください。"
+        echo "エラーが発生した業務ID:"
+        for error_id in "${BUILD_ERROR_IDS[@]}"; do
+            echo "  - $error_id"
+        done
+        echo ""
+        echo "上記の業務IDを確認してください。"
         exit 1
     else
         echo "[結果] すべてのビルドが正常に完了しました"
