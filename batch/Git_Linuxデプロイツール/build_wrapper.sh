@@ -336,18 +336,17 @@ if $FULL_MODE; then
     wait $SCRIPT_PID 2>/dev/null || true
     EXIT_CODE=$?
 
-    # 出力を表示
     echo ""
-    echo "======== ビルド出力 ========"
-    cat "$OUTPUT_FILE"
-    echo "============================"
-
-    echo ""
+    echo "========================================"
     if $BUILD_ERROR; then
-        echo "[結果] フルコンパイルでエラーが発生しました"
+        echo "[結果] *** フルコンパイルでエラーが発生しました ***"
+        echo "========================================"
+        echo ""
+        echo "エラー内容を確認してください。"
         exit 1
     else
         echo "[結果] フルコンパイルが正常に完了しました"
+        echo "========================================"
         exit 0
     fi
 
@@ -417,6 +416,7 @@ elif $MULTI_MODE; then
     exec 3>"$INPUT_FIFO"
 
     BUILD_ERRORS=0
+    BUILD_ERROR_IDS=()
     SEARCH_POS=0
 
     # 1. 環境選択プロンプト
@@ -496,6 +496,7 @@ elif $MULTI_MODE; then
                 if tail -c "+$((BEFORE_BUILD_SIZE + 1))" "$OUTPUT_FILE" 2>/dev/null | grep -qF "$ERROR_PATTERN"; then
                     echo "[エラー] ビルドエラーを検出しました: 業務ID $gyomu_id"
                     BUILD_ERRORS=$((BUILD_ERRORS + 1))
+                    BUILD_ERROR_IDS+=("$gyomu_id")
                 else
                     echo "[OK] 業務ID $gyomu_id のビルド完了"
                 fi
@@ -521,18 +522,22 @@ elif $MULTI_MODE; then
     wait $SCRIPT_PID 2>/dev/null || true
     EXIT_CODE=$?
 
-    # 出力を表示
     echo ""
-    echo "======== ビルド出力 ========"
-    cat "$OUTPUT_FILE"
-    echo "============================"
-
-    echo ""
+    echo "========================================"
     if [ $BUILD_ERRORS -gt 0 ]; then
-        echo "[結果] ビルドエラー: $BUILD_ERRORS 件"
+        echo "[結果] *** ビルドエラー: $BUILD_ERRORS 件 ***"
+        echo "========================================"
+        echo ""
+        echo "エラーが発生した業務ID:"
+        for error_id in "${BUILD_ERROR_IDS[@]}"; do
+            echo "  - $error_id"
+        done
+        echo ""
+        echo "上記の業務IDを確認してください。"
         exit 1
     else
-        echo "[結果] すべてのビルドが完了しました"
+        echo "[結果] すべてのビルドが正常に完了しました"
+        echo "========================================"
         exit 0
     fi
 
@@ -632,11 +637,15 @@ elif $WAIT_MODE; then
     wait $SCRIPT_PID 2>/dev/null
     EXIT_CODE=$?
 
-    # 出力を表示
     echo ""
-    echo "======== ビルド出力 ========"
-    cat "$OUTPUT_FILE"
-    echo "============================"
+    echo "========================================"
+    if [ $EXIT_CODE -eq 0 ]; then
+        echo "[結果] プロンプト待機モードが正常に完了しました"
+    else
+        echo "[結果] *** プロンプト待機モードでエラーが発生しました ***"
+    fi
+    echo "========================================"
+    exit $EXIT_CODE
 
 else
     #==========================================================================
