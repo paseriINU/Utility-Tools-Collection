@@ -186,8 +186,8 @@ $credentialTarget = "JP1_WebConsole"
 $timeoutSeconds = 3600
 
 # ステータス確認間隔（秒）
-# ★ デフォルト: 5秒
-$pollIntervalSeconds = 5
+# ★ デフォルト: 1秒
+$pollIntervalSeconds = 1
 
 # ------------------------------------------------------------------------------
 # Excel貼り付け設定（/EXCEL オプション使用時）

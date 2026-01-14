@@ -356,10 +356,10 @@ $maxWaitSeconds = 60
 # 短くすると応答が早くなりますが、サーバーへの負荷が増えます。
 #
 # 設定例:
+#   $checkIntervalSeconds = 1    # 1秒ごとにチェック（デフォルト）
 #   $checkIntervalSeconds = 5    # 5秒ごとにチェック
-#   $checkIntervalSeconds = 10   # 10秒ごとにチェック（デフォルト）
-#   $checkIntervalSeconds = 30   # 30秒ごとにチェック
-$checkIntervalSeconds = 10
+#   $checkIntervalSeconds = 10   # 10秒ごとにチェック
+$checkIntervalSeconds = 1
 
 # ------------------------------------------------------------------------------
 # 出力設定
