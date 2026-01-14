@@ -1026,7 +1026,15 @@ for ($i = 0; $i -lt $jobInfoList.Count; $i++) {
             }
             "/WINMERGE" {
                 # WinMerge処理
-                # まずファイルを作成
+                # 出力ディレクトリが未設定の場合は設定
+                if (-not $outputDir) {
+                    $outputDir = Join-Path $scriptDir $outputFolderName
+                    if (-not (Test-Path $outputDir)) {
+                        New-Item -ItemType Directory -Path $outputDir -Force | Out-Null
+                    }
+                }
+
+                # ファイルを作成
                 $outputFileName = "【ジョブ実行結果】【${startTimeForFileName}実行分】【${endStatusDisplay}】$($jobInfo.JobnetName)_$($jobInfo.JobnetComment).txt"
                 $outputFilePath = Join-Path $outputDir $outputFileName
 
