@@ -56,6 +56,8 @@ set "EXITCODE=%ERRORLEVEL%"
 
 rem 正常終了時はメモ帳でファイルを開く時間を確保するため10秒待機
 if %EXITCODE% equ 0 (
+    echo.
+    echo このウィンドウは10秒後に閉じます...
     timeout /t 10 /nobreak >nul
 )
 
