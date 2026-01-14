@@ -680,5 +680,9 @@ else
 fi
 
 echo ""
-echo "[完了] 終了コード: $EXIT_CODE"
+if [ $EXIT_CODE -eq 0 ]; then
+    echo "[完了] 正常終了 (終了コード: $EXIT_CODE)"
+else
+    echo "[エラー] 異常終了 (終了コード: $EXIT_CODE)"
+fi
 exit $EXIT_CODE
