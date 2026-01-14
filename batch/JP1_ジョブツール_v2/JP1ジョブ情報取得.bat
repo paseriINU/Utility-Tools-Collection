@@ -1754,9 +1754,15 @@ if (-not $outputMode) { $outputMode = "/NOTEPAD" }
 # 出力オプションに応じた後処理
 switch ($outputMode.ToUpper()) {
     "/NOTEPAD" {
-        # メモ帳で開く（全角括弧等の日本語ファイル名対応）
-        # Invoke-Itemは.txtの関連付けでメモ帳を開く
-        Invoke-Item -LiteralPath $outputFilePath
+        # ファイルが保存されるまで待機（最大5秒）
+        $waitCount = 0
+        while (-not (Test-Path -LiteralPath $outputFilePath) -and $waitCount -lt 10) {
+            Start-Sleep -Milliseconds 500
+            $waitCount++
+        }
+
+        # メモ帳で開く（明示的にnotepad.exeを指定）
+        Start-Process notepad -ArgumentList "`"$outputFilePath`""
 
         # スクロール位置の設定を環境変数から取得
         $scrollToText = $env:JP1_SCROLL_TO_TEXT
