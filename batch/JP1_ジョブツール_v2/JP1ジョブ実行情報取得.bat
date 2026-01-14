@@ -952,8 +952,10 @@ for ($i = 0; $i -lt $jobInfoList.Count; $i++) {
                     [System.Runtime.Interopservices.Marshal]::ReleaseComObject($workbook) | Out-Null
                     [System.Runtime.Interopservices.Marshal]::ReleaseComObject($excel) | Out-Null
                     Write-Host "    貼り付け完了: $excelFileName"
+                    Write-Host ""
 
                     # テキストファイル保存
+                    Write-Host "  [STEP 4] テキストファイル保存" -ForegroundColor Cyan
                     $textFileName = "runh_default.txt"
                     foreach ($key in $jobTextFileMapping.Keys) {
                         if ($jobInfo.UnitPath -eq $key) {
@@ -965,14 +967,26 @@ for ($i = 0; $i -lt $jobInfoList.Count; $i++) {
                     $convertBatchFile = Join-Path $scriptDir "【削除禁止】ConvertNS932Result.bat"
 
                     Get-Clipboard | Out-File -FilePath $clipboardOutputFile -Encoding Default
-                    Write-Host "    テキスト保存: $textFileName"
+                    Write-Host "    保存完了: $textFileName"
 
                     # 変換バッチファイルを実行
                     if (Test-Path $convertBatchFile) {
+                        Write-Host "    変換バッチ実行中..."
                         $env:OUTPUT_FOLDER = $dateFolderPath
                         & cmd /c "`"$convertBatchFile`""
                         $env:OUTPUT_FOLDER = $null
                     }
+                    Write-Host ""
+
+                    # 完了サマリー
+                    Write-Host "================================================================" -ForegroundColor Green
+                    Write-Host "  Excel貼り付け完了" -ForegroundColor Green
+                    Write-Host "================================================================" -ForegroundColor Green
+                    Write-Host ""
+                    Write-Host "  出力先フォルダ: $dateFolderPath"
+                    Write-Host "  Excelファイル : $excelFileName"
+                    Write-Host "  テキストファイル: $textFileName"
+                    Write-Host ""
 
                 } catch {
                     Write-Console "[エラー] Excel貼り付けに失敗しました: $($_.Exception.Message)"
