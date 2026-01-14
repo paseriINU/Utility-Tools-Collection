@@ -79,6 +79,9 @@ rem pushd は自動的に一時的なドライブ文字を割り当てます。
 rem 例: \\server\share → Z: にマッピング
 pushd "%~dp0"
 
+rem pushd後のカレントディレクトリを保存（UNCパスでも正しく動作するように）
+set "SCRIPT_DIR=%CD%"
+
 rem ----------------------------------------------------------------------------
 rem PowerShell実行
 rem ----------------------------------------------------------------------------
@@ -89,18 +92,28 @@ rem   -NoProfile        : PowerShellプロファイルを読み込まない（�
 rem   -ExecutionPolicy Bypass : スクリプト実行ポリシーを一時的に回避
 rem
 rem コマンドの説明:
-rem   $scriptDir=...    : バッチファイルのフォルダパスを変数に保存
+rem   $scriptDir=...    : バッチファイルのフォルダパスを変数に保存（pushd後のパスを使用）
 rem   gc '%~f0'         : このファイル自体の内容を読み込む（gcはGet-Contentの略）
 rem   -Encoding Default : Shift-JISエンコーディングで読み込む
 rem   -join "`n"        : 各行を改行で連結して1つの文字列にする
 rem   iex               : 読み込んだ内容をPowerShellコマンドとして実行（iexはInvoke-Expressionの略）
 rem   try-finally       : エラーが発生しても必ずSet-Locationを実行
 rem
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$scriptDir=('%~dp0' -replace '\\$',''); try { iex ((gc '%~f0' -Encoding Default) -join \"`n\") } finally { Set-Location C:\ }"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$scriptDir='%SCRIPT_DIR%'; try { iex ((gc '%~f0' -Encoding Default) -join \"`n\") } finally { Set-Location C:\ }"
 
 rem PowerShellの終了コードを保存
 rem %ERRORLEVEL% は直前に実行したコマンドの終了コードを保持しています
 set "EXITCODE=%ERRORLEVEL%"
+
+rem 正常終了時はメモ帳でファイルを開く時間を確保するため10秒待機
+rem ※ JP1_SKIP_FINAL_WAIT=1 の場合はスキップ（連続呼び出し時用）
+if %EXITCODE% equ 0 (
+    if not "%JP1_SKIP_FINAL_WAIT%"=="1" (
+        echo.
+        echo このウィンドウは10秒後に閉じます...
+        timeout /t 10 /nobreak >nul
+    )
+)
 
 rem 一時ドライブマッピングを解除
 rem pushd で作成したマッピングを元に戻します
@@ -353,10 +366,10 @@ $maxWaitSeconds = 60
 # 短くすると応答が早くなりますが、サーバーへの負荷が増えます。
 #
 # 設定例:
+#   $checkIntervalSeconds = 1    # 1秒ごとにチェック（デフォルト）
 #   $checkIntervalSeconds = 5    # 5秒ごとにチェック
-#   $checkIntervalSeconds = 10   # 10秒ごとにチェック（デフォルト）
-#   $checkIntervalSeconds = 30   # 30秒ごとにチェック
-$checkIntervalSeconds = 10
+#   $checkIntervalSeconds = 10   # 10秒ごとにチェック
+$checkIntervalSeconds = 1
 
 # ------------------------------------------------------------------------------
 # 出力設定
@@ -513,9 +526,9 @@ $holdPlan = "NO"
 # ------------------------------------------------------------------------------
 # Excel貼り付け設定（/EXCEL オプション使用時）
 # ------------------------------------------------------------------------------
-# 雛形フォルダ名（スクリプトと同じフォルダに配置）
-# このフォルダがyyyymmddフォルダにコピーされます
-$templateFolderName = "【雛形】【コピーして使うこと！】ツール・手順書"
+# ジャーナル統計のひな形フォルダ（親フォルダの03_templateに配置）
+# このフォルダの中身がyyyymmddフォルダにコピーされます
+$templateFolderName = "..\03_template\ジャーナル統計のひな形フォルダ"
 
 # 出力先フォルダ名（親フォルダの02_outputに出力）
 $outputFolderName = "..\02_output"
@@ -1247,6 +1260,10 @@ try {
         exit 3  # ユニット種別エラー（ジョブではない）
     }
 
+    # ユニット情報をコンソールに表示
+    Write-Console "  ジョブ名: $unitFullName"
+    Write-Console "  ユニット種別: $unitTypeValue"
+
 } catch {
     exit 9  # API接続エラー（存在確認）
 }
@@ -1306,6 +1323,14 @@ try {
 } catch {
     # コメント取得失敗は無視して続行（必須ではない）
     $jobnetComment = ""
+}
+
+# コメント取得結果をコンソールに表示
+Write-Console "  親ジョブネット: $jobnetName"
+if ($jobnetComment) {
+    Write-Console "  コメント: $jobnetComment"
+} else {
+    Write-Console "  コメント: (未設定)"
 }
 
 # ==============================================================================
@@ -1518,6 +1543,14 @@ try {
         exit 4  # 実行世代なし
     }
 
+    # 取得した実行情報を表示
+    $latestExec = $execIdList[0]
+    $startTimeDisplay = if ($latestExec.StartTime) { $latestExec.StartTime } else { "N/A" }
+    $statusDisplay = Get-StatusDisplayName -status $latestExec.Status
+    Write-Console "  execID: $($latestExec.ExecId)"
+    Write-Console "  開始時刻: $startTimeDisplay"
+    Write-Console "  ステータス: $statusDisplay"
+
 } catch {
     exit 9  # API接続エラー（状態取得）
 }
@@ -1610,8 +1643,8 @@ if ($execIdList.Count -gt 0) {
             # 終了状態を取得（日本語変換済み）
             $endStatusDisplay = Get-StatusDisplayName -status $targetEndStatus
 
-            # NOTEPADモード時のみファイル出力
-            if ($env:JP1_OUTPUT_MODE -eq $null -or $env:JP1_OUTPUT_MODE.ToUpper() -eq "/NOTEPAD") {
+            # NOTEPAD/WinMergeモード時はファイル出力
+            if ($env:JP1_OUTPUT_MODE -eq $null -or $env:JP1_OUTPUT_MODE.ToUpper() -eq "/NOTEPAD" -or $env:JP1_OUTPUT_MODE.ToUpper() -eq "/WINMERGE") {
                 # 出力ディレクトリを作成（設定セクションの$outputFolderを使用）
                 if ([System.IO.Path]::IsPathRooted($outputFolder)) {
                     $outputDir = $outputFolder
@@ -1628,6 +1661,9 @@ if ($execIdList.Count -gt 0) {
 
                 # 実行結果詳細をファイルに出力
                 $execResultContent | Out-File -FilePath $outputFilePath -Encoding Default
+
+                # 保存完了メッセージ
+                Write-Console "  保存先: $outputFilePath"
             }
 
         } catch {
@@ -1658,9 +1694,6 @@ if ($selectedPath) {
         Write-Host "          開始日時: $rejectedTime"
     }
     Write-Host ""
-    Write-Host "  続行する場合は任意のキーを押してください..."
-    Write-Host ""
-    $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
 }
 
 # ------------------------------------------------------------------------------
@@ -1728,8 +1761,15 @@ if (-not $outputMode) { $outputMode = "/NOTEPAD" }
 # 出力オプションに応じた後処理
 switch ($outputMode.ToUpper()) {
     "/NOTEPAD" {
-        # メモ帳で開く
-        Start-Process notepad $outputFilePath
+        # ファイルが保存されるまで待機（最大5秒）
+        $waitCount = 0
+        while (-not (Test-Path -LiteralPath $outputFilePath) -and $waitCount -lt 10) {
+            Start-Sleep -Milliseconds 500
+            $waitCount++
+        }
+
+        # メモ帳で開く（明示的にnotepad.exeを指定）
+        Start-Process notepad -ArgumentList "`"$outputFilePath`""
 
         # スクロール位置の設定を環境変数から取得
         $scrollToText = $env:JP1_SCROLL_TO_TEXT
@@ -1980,6 +2020,17 @@ switch ($outputMode.ToUpper()) {
         # キーワードが見つからない場合は元のログファイルを開きます。
         # ======================================================================
 
+        # 出力ディレクトリのパスを解決（未設定または相対パスの場合は絶対パスに変換）
+        if (-not $outputFolder) {
+            $outputFolder = "..\02_output"
+        }
+        if (-not [System.IO.Path]::IsPathRooted($outputFolder)) {
+            $outputFolder = Join-Path $scriptDir $outputFolder
+        }
+        if (-not (Test-Path $outputFolder)) {
+            New-Item -ItemType Directory -Path $outputFolder -Force | Out-Null
+        }
+
         # WinMergeの実行ファイルパス（デフォルトのインストール先）
         $winMergePath = "C:\Program Files\WinMerge\WinMergeU.exe"
 
@@ -2081,12 +2132,65 @@ switch ($outputMode.ToUpper()) {
     }
 }
 
-# 完了表示
+# 完了表示（ステータスに応じて色を変更）
 Write-Host ""
-Write-Host "================================================================" -ForegroundColor Green
-Write-Host "  取得完了" -ForegroundColor Green
-Write-Host "================================================================" -ForegroundColor Green
+
+# ステータスに応じた色とメッセージを決定
+$resultColor = "Green"
+$resultTitle = "正常終了"
+$resultMessage = "ジョブは正常に終了しました"
+
+switch ($targetEndStatus) {
+    "NORMAL" {
+        $resultColor = "Green"
+        $resultTitle = "正常終了"
+        $resultMessage = "ジョブは正常に終了しました"
+    }
+    "WARNING" {
+        $resultColor = "Yellow"
+        $resultTitle = "警告終了"
+        $resultMessage = "ジョブは警告付きで終了しました"
+    }
+    "ABNORMAL" {
+        $resultColor = "Red"
+        $resultTitle = "異常終了"
+        $resultMessage = "ジョブは異常終了しました"
+    }
+    "KILL" {
+        $resultColor = "Red"
+        $resultTitle = "強制終了"
+        $resultMessage = "ジョブは強制終了されました"
+    }
+    "INTERRUPT" {
+        $resultColor = "Red"
+        $resultTitle = "中断"
+        $resultMessage = "ジョブは中断されました"
+    }
+    "FAIL" {
+        $resultColor = "Red"
+        $resultTitle = "起動失敗"
+        $resultMessage = "ジョブの起動に失敗しました"
+    }
+    default {
+        if ($targetEndStatus -match "NORMAL") {
+            $resultColor = "Green"
+            $resultTitle = "正常終了"
+            $resultMessage = "ジョブは正常に終了しました"
+        } else {
+            $resultColor = "Yellow"
+            $resultTitle = "終了"
+            $resultMessage = "ジョブは終了しました（$endStatusDisplay）"
+        }
+    }
+}
+
+Write-Host "================================================================" -ForegroundColor $resultColor
+Write-Host "  ★★★ $resultTitle ★★★" -ForegroundColor $resultColor
+Write-Host "================================================================" -ForegroundColor $resultColor
 Write-Host ""
+Write-Host "  $resultMessage" -ForegroundColor $resultColor
+Write-Host ""
+Write-Host "----------------------------------------------------------------"
 Write-Host "ジョブネット名: $jobnetName"
 Write-Host "コメント:       $jobnetComment"
 Write-Host "ジョブ開始日時: $startTimeForFileName"

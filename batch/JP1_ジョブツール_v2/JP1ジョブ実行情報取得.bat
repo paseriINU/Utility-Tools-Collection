@@ -43,13 +43,26 @@ if not "%~2"=="" (
 rem UNCパス対応（PushD/PopDで自動マッピング）
 pushd "%~dp0"
 
+rem pushd後のカレントディレクトリを保存（UNCパスでも正しく動作するように）
+set "SCRIPT_DIR=%CD%"
+
 rem PowerShellを起動し、このファイル自体をスクリプトとして実行
 rem -NoProfile: プロファイルを読み込まない（高速化）
 rem -ExecutionPolicy Bypass: 実行ポリシーを回避
 rem gc '%~f0': このファイル自体を読み込む
 rem iex: 読み込んだ内容をPowerShellスクリプトとして実行
-powershell -NoProfile -ExecutionPolicy Bypass -Command "$scriptDir=('%~dp0' -replace '\\$',''); try { iex ((gc '%~f0' -Encoding Default) -join \"`n\") } finally { Set-Location C:\ }"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$scriptDir='%SCRIPT_DIR%'; try { iex ((gc '%~f0' -Encoding Default) -join \"`n\") } finally { Set-Location C:\ }"
 set "EXITCODE=%ERRORLEVEL%"
+
+rem 正常終了時はメモ帳でファイルを開く時間を確保するため10秒待機
+rem ※ JP1_SKIP_FINAL_WAIT=1 の場合はスキップ（連続呼び出し時用）
+if %EXITCODE% equ 0 (
+    if not "%JP1_SKIP_FINAL_WAIT%"=="1" (
+        echo.
+        echo このウィンドウは10秒後に閉じます...
+        timeout /t 10 /nobreak >nul
+    )
+)
 
 popd
 
@@ -183,15 +196,15 @@ $credentialTarget = "JP1_WebConsole"
 $timeoutSeconds = 3600
 
 # ステータス確認間隔（秒）
-# ★ デフォルト: 5秒
-$pollIntervalSeconds = 5
+# ★ デフォルト: 1秒
+$pollIntervalSeconds = 1
 
 # ------------------------------------------------------------------------------
 # Excel貼り付け設定（/EXCEL オプション使用時）
 # ------------------------------------------------------------------------------
-# 雛形フォルダ名（スクリプトと同じフォルダに配置）
-# このフォルダがyyyymmddフォルダにコピーされます
-$templateFolderName = "【雛形】【コピーして使うこと！】ツール・手順書"
+# ジャーナル統計のひな形フォルダ（親フォルダの03_templateに配置）
+# このフォルダの中身がyyyymmddフォルダにコピーされます
+$templateFolderName = "..\03_template\ジャーナル統計のひな形フォルダ"
 
 # 出力先フォルダ名（親フォルダの02_outputに出力）
 $outputFolderName = "..\02_output"
@@ -534,6 +547,14 @@ try {
     $jobnetComment = ""
 }
 
+# コメント取得結果をコンソールに表示
+Write-Console "  親ジョブネット: $($jobInfo.JobnetName)"
+if ($jobnetComment) {
+    Write-Console "  コメント: $jobnetComment"
+} else {
+    Write-Console "  コメント: (未設定)"
+}
+
 # 全ジョブにコメントを設定
 for ($i = 0; $i -lt $jobInfoList.Count; $i++) {
     $jobInfoList[$i].JobnetComment = $jobnetComment
@@ -873,8 +894,18 @@ for ($i = 0; $i -lt $jobInfoList.Count; $i++) {
                 $execResultContent | Out-File -FilePath $outputFilePath -Encoding Default
                 $jobInfoList[$i].OutputFilePath = $outputFilePath
 
-                # メモ帳で開く
-                Start-Process notepad $outputFilePath
+                # 保存完了メッセージ
+                Write-Console "  保存先: $outputFilePath"
+
+                # ファイルが保存されるまで待機（最大5秒）
+                $waitCount = 0
+                while (-not (Test-Path -LiteralPath $outputFilePath) -and $waitCount -lt 10) {
+                    Start-Sleep -Milliseconds 500
+                    $waitCount++
+                }
+
+                # メモ帳で開く（明示的にnotepad.exeを指定）
+                Start-Process notepad -ArgumentList "`"$outputFilePath`""
 
                 # スクロール位置の設定（環境変数から取得）
                 $scrollToText = $env:JP1_SCROLL_TO_TEXT
@@ -1026,12 +1057,15 @@ for ($i = 0; $i -lt $jobInfoList.Count; $i++) {
             }
             "/WINMERGE" {
                 # WinMerge処理
-                # 出力ディレクトリが未設定の場合は設定
+                # 出力ディレクトリのパスを解決（未設定または相対パスの場合は絶対パスに変換）
                 if (-not $outputDir) {
-                    $outputDir = Join-Path $scriptDir $outputFolderName
-                    if (-not (Test-Path $outputDir)) {
-                        New-Item -ItemType Directory -Path $outputDir -Force | Out-Null
-                    }
+                    $outputDir = $outputFolderName
+                }
+                if (-not [System.IO.Path]::IsPathRooted($outputDir)) {
+                    $outputDir = Join-Path $scriptDir $outputDir
+                }
+                if (-not (Test-Path $outputDir)) {
+                    New-Item -ItemType Directory -Path $outputDir -Force | Out-Null
                 }
 
                 # ファイルを作成
@@ -1062,24 +1096,77 @@ for ($i = 0; $i -lt $jobInfoList.Count; $i++) {
 # 完了サマリー
 # ==============================================================================
 Write-Host ""
-if ($hasError) {
-    Write-Host "================================================================" -ForegroundColor Red
-    Write-Host "  処理完了（エラーあり）" -ForegroundColor Red
-    Write-Host "================================================================" -ForegroundColor Red
-} else {
-    Write-Host "================================================================" -ForegroundColor Green
-    Write-Host "  処理完了" -ForegroundColor Green
-    Write-Host "================================================================" -ForegroundColor Green
+
+# 各ジョブの終了状態を判定
+$hasAbnormal = $false
+$hasWarning = $false
+$allNormal = $true
+
+foreach ($jobInfo in $jobInfoList) {
+    $status = $jobInfo.JobStatus
+    if ($status -match "ABNORMAL|KILL|INTERRUPT|FAIL|UNKNOWN") {
+        $hasAbnormal = $true
+        $allNormal = $false
+    } elseif ($status -match "WARNING") {
+        $hasWarning = $true
+        $allNormal = $false
+    } elseif ($status -notmatch "NORMAL") {
+        $allNormal = $false
+    }
 }
+
+# 結果表示の色とタイトルを決定
+if ($hasError -or $hasAbnormal) {
+    $resultColor = "Red"
+    $resultTitle = "異常終了"
+    $resultMessage = "ジョブが異常終了しました"
+} elseif ($hasWarning) {
+    $resultColor = "Yellow"
+    $resultTitle = "警告終了"
+    $resultMessage = "ジョブが警告付きで終了しました"
+} elseif ($allNormal) {
+    $resultColor = "Green"
+    $resultTitle = "正常終了"
+    $resultMessage = "すべてのジョブが正常に終了しました"
+} else {
+    $resultColor = "Yellow"
+    $resultTitle = "終了"
+    $resultMessage = "ジョブが終了しました"
+}
+
+Write-Host "================================================================" -ForegroundColor $resultColor
+Write-Host "  ★★★ $resultTitle ★★★" -ForegroundColor $resultColor
+Write-Host "================================================================" -ForegroundColor $resultColor
 Write-Host ""
+Write-Host "  $resultMessage" -ForegroundColor $resultColor
+Write-Host ""
+Write-Host "----------------------------------------------------------------"
 Write-Host "  処理ジョブ数: $($jobInfoList.Count)"
+
+# 各ジョブの状態を表示
+foreach ($jobInfo in $jobInfoList) {
+    $status = $jobInfo.JobStatus
+    $statusDisplay = Get-StatusDisplayName -status $status
+    $jobColor = "White"
+    if ($status -match "ABNORMAL|KILL|INTERRUPT|FAIL|UNKNOWN") {
+        $jobColor = "Red"
+    } elseif ($status -match "WARNING") {
+        $jobColor = "Yellow"
+    } elseif ($status -match "NORMAL") {
+        $jobColor = "Green"
+    }
+    Write-Host "    - $($jobInfo.JobName): " -NoNewline
+    Write-Host "$statusDisplay" -ForegroundColor $jobColor
+}
+
 if ($dateFolderPath) {
+    Write-Host ""
     Write-Host "  出力先: $dateFolderPath"
 }
 Write-Host ""
 
 # 終了コード（エラーがあれば1、なければ0）
-if ($hasError) {
+if ($hasError -or $hasAbnormal) {
     exit 1
 } else {
     exit 0
