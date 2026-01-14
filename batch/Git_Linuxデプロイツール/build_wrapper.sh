@@ -136,7 +136,8 @@ if $WAIT_MODE; then
     trap cleanup EXIT
 
     # scriptコマンドでビルドシェルを実行（バックグラウンド）
-    script -q -c "$BUILD_SCRIPT" "$OUTPUT_FILE" < "$INPUT_FIFO" &
+    # -f: 出力を即座にフラッシュ（バッファリングを無効化）
+    script -qf -c "$BUILD_SCRIPT" "$OUTPUT_FILE" < "$INPUT_FIFO" &
     SCRIPT_PID=$!
 
     # 入力FIFOを開いておく（閉じるとプロセスが終了する）
