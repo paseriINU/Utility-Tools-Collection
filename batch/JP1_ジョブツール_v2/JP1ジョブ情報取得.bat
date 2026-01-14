@@ -1610,22 +1610,25 @@ if ($execIdList.Count -gt 0) {
             # 終了状態を取得（日本語変換済み）
             $endStatusDisplay = Get-StatusDisplayName -status $targetEndStatus
 
-            # 出力ディレクトリを作成（設定セクションの$outputFolderを使用）
-            if ([System.IO.Path]::IsPathRooted($outputFolder)) {
-                $outputDir = $outputFolder
-            } else {
-                $outputDir = Join-Path $scriptDir $outputFolder
-            }
-            if (-not (Test-Path $outputDir)) {
-                New-Item -ItemType Directory -Path $outputDir -Force | Out-Null
-            }
+            # NOTEPADモード時のみファイル出力
+            if ($env:JP1_OUTPUT_MODE -eq $null -or $env:JP1_OUTPUT_MODE.ToUpper() -eq "/NOTEPAD") {
+                # 出力ディレクトリを作成（設定セクションの$outputFolderを使用）
+                if ([System.IO.Path]::IsPathRooted($outputFolder)) {
+                    $outputDir = $outputFolder
+                } else {
+                    $outputDir = Join-Path $scriptDir $outputFolder
+                }
+                if (-not (Test-Path $outputDir)) {
+                    New-Item -ItemType Directory -Path $outputDir -Force | Out-Null
+                }
 
-            # 出力ファイル名を生成（設定セクションの$outputFilePrefixを使用）
-            $outputFileName = "${outputFilePrefix}【${startTimeForFileName}実行分】【${endStatusDisplay}】${jobnetName}_${jobnetComment}.txt"
-            $outputFilePath = Join-Path $outputDir $outputFileName
+                # 出力ファイル名を生成（設定セクションの$outputFilePrefixを使用）
+                $outputFileName = "${outputFilePrefix}【${startTimeForFileName}実行分】【${endStatusDisplay}】${jobnetName}_${jobnetComment}.txt"
+                $outputFilePath = Join-Path $outputDir $outputFileName
 
-            # 実行結果詳細をファイルに出力
-            $execResultContent | Out-File -FilePath $outputFilePath -Encoding Default
+                # 実行結果詳細をファイルに出力
+                $execResultContent | Out-File -FilePath $outputFilePath -Encoding Default
+            }
 
         } catch {
             exit 6  # 詳細取得エラー
