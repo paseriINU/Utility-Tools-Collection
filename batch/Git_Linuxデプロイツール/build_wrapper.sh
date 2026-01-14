@@ -272,19 +272,15 @@ if $FULL_MODE; then
     # 4. ビルド完了を待機（オプションプロンプトが再度出るまで）
     echo "[待機] フルコンパイル実行中（タイムアウト: ${BUILD_TIMEOUT}秒）..."
 
-    # 現在の出力を保存してエラーチェック用に使用
-    BEFORE_BUILD_LINES=$(wc -l < "$OUTPUT_FILE" 2>/dev/null || echo "0")
-
     if ! wait_for_prompt "$EXIT_PROMPT" "$OUTPUT_FILE" "$BUILD_TIMEOUT"; then
         echo "[エラー] フルコンパイルがタイムアウトしました（${BUILD_TIMEOUT}秒）"
         kill $SCRIPT_PID 2>/dev/null
         exit 1
     fi
 
-    # エラーチェック
+    # エラーチェック（出力全体からエラーパターンを検索）
     if [ -n "$ERROR_PATTERN" ]; then
-        # ビルド後の出力からエラーパターンを検索
-        if tail -n +$((BEFORE_BUILD_LINES + 1)) "$OUTPUT_FILE" 2>/dev/null | grep -qF "$ERROR_PATTERN"; then
+        if grep -qF "$ERROR_PATTERN" "$OUTPUT_FILE" 2>/dev/null; then
             echo "[エラー] フルコンパイルでエラーを検出しました"
             BUILD_ERROR=true
         else
@@ -445,7 +441,7 @@ elif $MULTI_MODE; then
         echo "[待機] ビルド完了（オプションプロンプト待機）: '$OPTION_PROMPT'"
 
         # 現在の出力を保存してエラーチェック用に使用
-        BEFORE_BUILD_LINES=$(wc -l < "$OUTPUT_FILE" 2>/dev/null || echo "0")
+        BEFORE_BUILD_SIZE=$(stat -c %s "$OUTPUT_FILE" 2>/dev/null || echo "0")
 
         if ! wait_for_prompt "$OPTION_PROMPT" "$OUTPUT_FILE" 300; then
             echo "[エラー] ビルド完了待機がタイムアウトしました（5分）"
@@ -453,10 +449,11 @@ elif $MULTI_MODE; then
             exit 1
         fi
 
-        # エラーチェック
+        # エラーチェック（ビルド後の新しい出力からエラーパターンを検索）
         if [ -n "$ERROR_PATTERN" ]; then
-            # ビルド後の出力からエラーパターンを検索
-            if tail -n +$((BEFORE_BUILD_LINES + 1)) "$OUTPUT_FILE" 2>/dev/null | grep -qF "$ERROR_PATTERN"; then
+            # ビルド後の新しい出力を取得してエラーパターンを検索
+            NEW_OUTPUT=$(tail -c +$((BEFORE_BUILD_SIZE + 1)) "$OUTPUT_FILE" 2>/dev/null)
+            if echo "$NEW_OUTPUT" | grep -qF "$ERROR_PATTERN"; then
                 echo "[エラー] ビルドエラーを検出しました: 業務ID $gyomu_id"
                 BUILD_ERRORS=$((BUILD_ERRORS + 1))
             else
