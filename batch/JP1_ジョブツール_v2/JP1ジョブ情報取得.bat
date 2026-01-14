@@ -1916,35 +1916,6 @@ switch ($outputMode.ToUpper()) {
             Write-Host ""
 
             # ------------------------------------------------------------------
-            # STEP 5: クリップボード内容をファイルに保存し、変換バッチを実行
-            # ------------------------------------------------------------------
-            Write-Host "  [STEP 4] テキストファイル保存" -ForegroundColor Cyan
-            # ジョブパスに対応するテキストファイル名を取得
-            $textFileName = "runh_default.txt"  # デフォルト値
-            foreach ($key in $jobTextFileMapping.Keys) {
-                if ($unitPath -eq $key) {
-                    $textFileName = $jobTextFileMapping[$key]
-                    break
-                }
-            }
-            # クリップボード内容は02_output/yyyymmddフォルダに保存
-            $clipboardOutputFile = Join-Path $dateFolderPath $textFileName
-            $convertBatchFile = Join-Path $scriptDir "【削除禁止】ConvertNS932Result.bat"
-
-            # クリップボードの内容をファイルに保存
-            Get-Clipboard | Out-File -FilePath $clipboardOutputFile -Encoding Default
-            Write-Host "    保存完了: $textFileName"
-
-            # 変換バッチファイルを実行（出力先フォルダを環境変数で渡す）
-            if (Test-Path $convertBatchFile) {
-                Write-Host "    変換バッチ実行中..."
-                $env:OUTPUT_FOLDER = $dateFolderPath
-                & cmd /c "`"$convertBatchFile`""
-                $env:OUTPUT_FOLDER = $null
-            }
-            Write-Host ""
-
-            # ------------------------------------------------------------------
             # 完了サマリー
             # ------------------------------------------------------------------
             Write-Host "================================================================" -ForegroundColor Green
@@ -1953,7 +1924,6 @@ switch ($outputMode.ToUpper()) {
             Write-Host ""
             Write-Host "  出力先フォルダ: $dateFolderPath"
             Write-Host "  Excelファイル : $excelFileName"
-            Write-Host "  テキストファイル: $textFileName"
             Write-Host ""
         } catch {
             Write-Console "[エラー] Excel貼り付けに失敗しました: $($_.Exception.Message)"
