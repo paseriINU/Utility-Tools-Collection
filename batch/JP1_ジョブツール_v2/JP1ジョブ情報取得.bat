@@ -1694,9 +1694,6 @@ if ($selectedPath) {
         Write-Host "          開始日時: $rejectedTime"
     }
     Write-Host ""
-    Write-Host "  続行する場合は任意のキーを押してください..."
-    Write-Host ""
-    $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
 }
 
 # ------------------------------------------------------------------------------
