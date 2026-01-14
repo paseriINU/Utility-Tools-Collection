@@ -192,11 +192,6 @@ if not "%UNIT_PATH_6%"=="" (
     echo.
 )
 
-rem メモ帳/Excelでファイルを開く時間を確保するため10秒待機
-echo.
-echo このウィンドウは10秒後に閉じます...
-timeout /t 10 /nobreak >nul
-
 popd
 
 rem 結果サマリー
@@ -230,5 +225,7 @@ if not "%UNIT_PATH_6%"=="" (
 echo ================================================================
 echo.
 
-pause
+rem メモ帳/Excelでファイルを開く時間を確保するため10秒待機
+echo このウィンドウは10秒後に閉じます...
+timeout /t 10 /nobreak >nul
 exit /b 0
