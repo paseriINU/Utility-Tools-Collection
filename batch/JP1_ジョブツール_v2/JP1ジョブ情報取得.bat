@@ -105,6 +105,11 @@ rem PowerShellの終了コードを保存
 rem %ERRORLEVEL% は直前に実行したコマンドの終了コードを保持しています
 set "EXITCODE=%ERRORLEVEL%"
 
+rem 正常終了時はメモ帳でファイルを開く時間を確保するため10秒待機
+if %EXITCODE% equ 0 (
+    timeout /t 10 /nobreak >nul
+)
+
 rem 一時ドライブマッピングを解除
 rem pushd で作成したマッピングを元に戻します
 popd

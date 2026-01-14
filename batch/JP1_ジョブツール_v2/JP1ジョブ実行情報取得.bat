@@ -54,6 +54,11 @@ rem iex: 読み込んだ内容をPowerShellスクリプトとして実行
 powershell -NoProfile -ExecutionPolicy Bypass -Command "$scriptDir='%SCRIPT_DIR%'; try { iex ((gc '%~f0' -Encoding Default) -join \"`n\") } finally { Set-Location C:\ }"
 set "EXITCODE=%ERRORLEVEL%"
 
+rem 正常終了時はメモ帳でファイルを開く時間を確保するため10秒待機
+if %EXITCODE% equ 0 (
+    timeout /t 10 /nobreak >nul
+)
+
 popd
 
 rem PowerShellの終了コードをそのまま返す
