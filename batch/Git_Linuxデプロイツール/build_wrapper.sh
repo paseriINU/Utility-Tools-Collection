@@ -138,14 +138,14 @@ echo ""
 
 #==============================================================================
 # プロンプト待機関数
-# 引数: $1=プロンプト, $2=出力ファイル, $3=タイムアウト秒
-# 戻り値: 0=成功, 1=タイムアウト
+# 引数: $1=プロンプト, $2=出力ファイル, $3=タイムアウト秒, $4=期待するカウント（省略時は1以上）
+# 戻り値: 0=成功, 1=タイムアウト, 2=プロセス終了
 #==============================================================================
 wait_for_prompt() {
     local prompt="$1"
     local output_file="$2"
     local timeout_sec="$3"
-    local last_line_count=0
+    local expected_count="${4:-1}"  # 期待する最小出現回数（デフォルト1）
 
     local start_time=$(date +%s)
 
@@ -158,10 +158,9 @@ wait_for_prompt() {
         fi
 
         # 出力ファイルをチェック（-F: 固定文字列として検索）
-        if [ -f "$output_file" ] && grep -qF "$prompt" "$output_file" 2>/dev/null; then
-            # プロンプトが見つかったらカウントをリセット
+        if [ -f "$output_file" ]; then
             local current_count=$(grep -cF "$prompt" "$output_file" 2>/dev/null || echo "0")
-            if [ "$current_count" -gt "$last_line_count" ]; then
+            if [ "$current_count" -ge "$expected_count" ]; then
                 return 0
             fi
         fi
@@ -173,6 +172,22 @@ wait_for_prompt() {
 
         sleep 0.5
     done
+}
+
+#==============================================================================
+# プロンプトの現在のカウントを取得
+# 引数: $1=プロンプト, $2=出力ファイル
+# 出力: 現在の出現回数
+#==============================================================================
+get_prompt_count() {
+    local prompt="$1"
+    local output_file="$2"
+
+    if [ -f "$output_file" ]; then
+        grep -cF "$prompt" "$output_file" 2>/dev/null || echo "0"
+    else
+        echo "0"
+    fi
 }
 
 #==============================================================================
@@ -236,6 +251,10 @@ if $FULL_MODE; then
 
     BUILD_ERROR=false
 
+    # プロンプトカウントの初期化
+    OPTION_PROMPT_COUNT=0
+    CONFIRM_PROMPT_COUNT=0
+
     # 1. 環境選択プロンプト
     echo "[待機] 環境選択プロンプト: '$ENV_PROMPT'"
     if ! wait_for_prompt "$ENV_PROMPT" "$OUTPUT_FILE" "$TIMEOUT"; then
@@ -247,9 +266,10 @@ if $FULL_MODE; then
     sleep "$DELAY"
     echo "$ENV_INPUT" >&3
 
-    # 2. ビルドオプションプロンプト
-    echo "[待機] オプションプロンプト: '$OPTION_PROMPT'"
-    if ! wait_for_prompt "$OPTION_PROMPT" "$OUTPUT_FILE" "$TIMEOUT"; then
+    # 2. ビルドオプションプロンプト（1回目）
+    OPTION_PROMPT_COUNT=$((OPTION_PROMPT_COUNT + 1))
+    echo "[待機] オプションプロンプト: '$OPTION_PROMPT' (${OPTION_PROMPT_COUNT}回目)"
+    if ! wait_for_prompt "$OPTION_PROMPT" "$OUTPUT_FILE" "$TIMEOUT" "$OPTION_PROMPT_COUNT"; then
         echo "[エラー] オプションプロンプトがタイムアウトしました"
         kill $SCRIPT_PID 2>/dev/null
         exit 1
@@ -259,8 +279,9 @@ if $FULL_MODE; then
     echo "$OPTION_INPUT" >&3
 
     # 3. 確認プロンプト
-    echo "[待機] 確認プロンプト: '$CONFIRM_PROMPT'"
-    if ! wait_for_prompt "$CONFIRM_PROMPT" "$OUTPUT_FILE" "$TIMEOUT"; then
+    CONFIRM_PROMPT_COUNT=$((CONFIRM_PROMPT_COUNT + 1))
+    echo "[待機] 確認プロンプト: '$CONFIRM_PROMPT' (${CONFIRM_PROMPT_COUNT}回目)"
+    if ! wait_for_prompt "$CONFIRM_PROMPT" "$OUTPUT_FILE" "$TIMEOUT" "$CONFIRM_PROMPT_COUNT"; then
         echo "[エラー] 確認プロンプトがタイムアウトしました"
         kill $SCRIPT_PID 2>/dev/null
         exit 1
@@ -269,20 +290,30 @@ if $FULL_MODE; then
     sleep "$DELAY"
     echo "$CONFIRM_INPUT" >&3
 
-    # 4. ビルド完了を待機（オプションプロンプトが再度出るまで）
-    echo "[待機] フルコンパイル実行中（タイムアウト: ${BUILD_TIMEOUT}秒）..."
+    # 現在の出力サイズを保存してエラーチェック用に使用
+    BEFORE_BUILD_SIZE=$(stat -c %s "$OUTPUT_FILE" 2>/dev/null || echo "0")
 
-    if ! wait_for_prompt "$EXIT_PROMPT" "$OUTPUT_FILE" "$BUILD_TIMEOUT"; then
+    # 4. ビルド完了を待機（オプションプロンプトが再度出るまで）
+    OPTION_PROMPT_COUNT=$((OPTION_PROMPT_COUNT + 1))
+    echo "[待機] フルコンパイル実行中（タイムアウト: ${BUILD_TIMEOUT}秒）..."
+    echo "[待機] オプションプロンプト: '$EXIT_PROMPT' (${OPTION_PROMPT_COUNT}回目)"
+
+    if ! wait_for_prompt "$EXIT_PROMPT" "$OUTPUT_FILE" "$BUILD_TIMEOUT" "$OPTION_PROMPT_COUNT"; then
         echo "[エラー] フルコンパイルがタイムアウトしました（${BUILD_TIMEOUT}秒）"
         kill $SCRIPT_PID 2>/dev/null
         exit 1
     fi
 
-    # エラーチェック（出力全体からエラーパターンを検索）
+    # エラーチェック（ビルド後の新しい出力からエラーパターンを検索）
     if [ -n "$ERROR_PATTERN" ]; then
-        if grep -qF "$ERROR_PATTERN" "$OUTPUT_FILE" 2>/dev/null; then
-            echo "[エラー] フルコンパイルでエラーを検出しました"
-            BUILD_ERROR=true
+        CURRENT_SIZE=$(stat -c %s "$OUTPUT_FILE" 2>/dev/null || echo "0")
+        if [ "$CURRENT_SIZE" -gt "$BEFORE_BUILD_SIZE" ]; then
+            if tail -c "+$((BEFORE_BUILD_SIZE + 1))" "$OUTPUT_FILE" 2>/dev/null | grep -qF "$ERROR_PATTERN"; then
+                echo "[エラー] フルコンパイルでエラーを検出しました"
+                BUILD_ERROR=true
+            else
+                echo "[OK] フルコンパイル完了"
+            fi
         else
             echo "[OK] フルコンパイル完了"
         fi
@@ -408,6 +439,11 @@ elif $MULTI_MODE; then
     sleep "$DELAY"
     echo "$OPTION_INPUT" >&3
 
+    # プロンプトカウントの初期化（オプションプロンプトは最初に1回出現済み）
+    OPTION_PROMPT_COUNT=1
+    GYOMU_PROMPT_COUNT=0
+    CONFIRM_PROMPT_COUNT=0
+
     # 3. 各業務IDをループ処理
     for gyomu_id in "${GYOMU_ARRAY[@]}"; do
         echo ""
@@ -415,9 +451,10 @@ elif $MULTI_MODE; then
         echo "[ビルド] 業務ID: $gyomu_id"
         echo "========================================"
 
-        # 業務ID選択プロンプト
-        echo "[待機] 業務IDプロンプト: '$GYOMU_PROMPT'"
-        if ! wait_for_prompt "$GYOMU_PROMPT" "$OUTPUT_FILE" "$TIMEOUT"; then
+        # 業務ID選択プロンプト（次の出現を待つ）
+        GYOMU_PROMPT_COUNT=$((GYOMU_PROMPT_COUNT + 1))
+        echo "[待機] 業務IDプロンプト: '$GYOMU_PROMPT' (${GYOMU_PROMPT_COUNT}回目)"
+        if ! wait_for_prompt "$GYOMU_PROMPT" "$OUTPUT_FILE" "$TIMEOUT" "$GYOMU_PROMPT_COUNT"; then
             echo "[エラー] 業務IDプロンプトがタイムアウトしました"
             kill $SCRIPT_PID 2>/dev/null
             exit 1
@@ -426,9 +463,10 @@ elif $MULTI_MODE; then
         sleep "$DELAY"
         echo "$gyomu_id" >&3
 
-        # 確認プロンプト
-        echo "[待機] 確認プロンプト: '$CONFIRM_PROMPT'"
-        if ! wait_for_prompt "$CONFIRM_PROMPT" "$OUTPUT_FILE" "$TIMEOUT"; then
+        # 確認プロンプト（次の出現を待つ）
+        CONFIRM_PROMPT_COUNT=$((CONFIRM_PROMPT_COUNT + 1))
+        echo "[待機] 確認プロンプト: '$CONFIRM_PROMPT' (${CONFIRM_PROMPT_COUNT}回目)"
+        if ! wait_for_prompt "$CONFIRM_PROMPT" "$OUTPUT_FILE" "$TIMEOUT" "$CONFIRM_PROMPT_COUNT"; then
             echo "[エラー] 確認プロンプトがタイムアウトしました"
             kill $SCRIPT_PID 2>/dev/null
             exit 1
@@ -437,13 +475,14 @@ elif $MULTI_MODE; then
         sleep "$DELAY"
         echo "$CONFIRM_INPUT" >&3
 
-        # ビルド完了を待機（オプションプロンプトが再度出るまで）
-        echo "[待機] ビルド完了（オプションプロンプト待機）: '$OPTION_PROMPT'"
-
-        # 現在の出力を保存してエラーチェック用に使用
+        # 現在の出力サイズを保存してエラーチェック用に使用
         BEFORE_BUILD_SIZE=$(stat -c %s "$OUTPUT_FILE" 2>/dev/null || echo "0")
 
-        if ! wait_for_prompt "$OPTION_PROMPT" "$OUTPUT_FILE" 300; then
+        # ビルド完了を待機（オプションプロンプトが再度出るまで）
+        OPTION_PROMPT_COUNT=$((OPTION_PROMPT_COUNT + 1))
+        echo "[待機] ビルド完了（オプションプロンプト待機）: '$OPTION_PROMPT' (${OPTION_PROMPT_COUNT}回目)"
+
+        if ! wait_for_prompt "$OPTION_PROMPT" "$OUTPUT_FILE" 300 "$OPTION_PROMPT_COUNT"; then
             echo "[エラー] ビルド完了待機がタイムアウトしました（5分）"
             kill $SCRIPT_PID 2>/dev/null
             exit 1
@@ -452,10 +491,15 @@ elif $MULTI_MODE; then
         # エラーチェック（ビルド後の新しい出力からエラーパターンを検索）
         if [ -n "$ERROR_PATTERN" ]; then
             # ビルド後の新しい出力を取得してエラーパターンを検索
-            NEW_OUTPUT=$(tail -c +$((BEFORE_BUILD_SIZE + 1)) "$OUTPUT_FILE" 2>/dev/null)
-            if echo "$NEW_OUTPUT" | grep -qF "$ERROR_PATTERN"; then
-                echo "[エラー] ビルドエラーを検出しました: 業務ID $gyomu_id"
-                BUILD_ERRORS=$((BUILD_ERRORS + 1))
+            CURRENT_SIZE=$(stat -c %s "$OUTPUT_FILE" 2>/dev/null || echo "0")
+            if [ "$CURRENT_SIZE" -gt "$BEFORE_BUILD_SIZE" ]; then
+                # tail -c +N は N バイト目から出力（1-indexed）
+                if tail -c "+$((BEFORE_BUILD_SIZE + 1))" "$OUTPUT_FILE" 2>/dev/null | grep -qF "$ERROR_PATTERN"; then
+                    echo "[エラー] ビルドエラーを検出しました: 業務ID $gyomu_id"
+                    BUILD_ERRORS=$((BUILD_ERRORS + 1))
+                else
+                    echo "[OK] 業務ID $gyomu_id のビルド完了"
+                fi
             else
                 echo "[OK] 業務ID $gyomu_id のビルド完了"
             fi
