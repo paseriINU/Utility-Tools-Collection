@@ -55,10 +55,13 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command "$scriptDir='%SCRIPT_DIR%
 set "EXITCODE=%ERRORLEVEL%"
 
 rem 正常終了時はメモ帳でファイルを開く時間を確保するため10秒待機
+rem ※ JP1_SKIP_FINAL_WAIT=1 の場合はスキップ（連続呼び出し時用）
 if %EXITCODE% equ 0 (
-    echo.
-    echo このウィンドウは10秒後に閉じます...
-    timeout /t 10 /nobreak >nul
+    if not "%JP1_SKIP_FINAL_WAIT%"=="1" (
+        echo.
+        echo このウィンドウは10秒後に閉じます...
+        timeout /t 10 /nobreak >nul
+    )
 )
 
 popd
