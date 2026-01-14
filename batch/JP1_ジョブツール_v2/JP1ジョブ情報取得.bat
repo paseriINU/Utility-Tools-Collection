@@ -1610,8 +1610,8 @@ if ($execIdList.Count -gt 0) {
             # 終了状態を取得（日本語変換済み）
             $endStatusDisplay = Get-StatusDisplayName -status $targetEndStatus
 
-            # NOTEPADモード時のみファイル出力
-            if ($env:JP1_OUTPUT_MODE -eq $null -or $env:JP1_OUTPUT_MODE.ToUpper() -eq "/NOTEPAD") {
+            # NOTEPAD/WinMergeモード時はファイル出力
+            if ($env:JP1_OUTPUT_MODE -eq $null -or $env:JP1_OUTPUT_MODE.ToUpper() -eq "/NOTEPAD" -or $env:JP1_OUTPUT_MODE.ToUpper() -eq "/WINMERGE") {
                 # 出力ディレクトリを作成（設定セクションの$outputFolderを使用）
                 if ([System.IO.Path]::IsPathRooted($outputFolder)) {
                     $outputDir = $outputFolder
