@@ -2288,6 +2288,16 @@
                                             objStmTitleCount++;
                                             byteExtractedCount++;
 
+                                            // デバッグ: タイトル抽出の詳細を出力
+                                            if (debugMode) {
+                                                console.log(`[DEBUG] タイトル抽出: "${title.trim()}"`);
+                                                console.log(`  オブジェクト番号: ${obj.number}`);
+                                                console.log(`  オブジェクトバイト範囲: ${objByteStart} - ${objByteEnd}`);
+                                                console.log(`  タイトルバイト範囲: ${parenStart} - ${parenEnd}`);
+                                                console.log(`  生バイト(先頭50): ${Array.from(rawTitleBytes.slice(0, 50)).map(b => b.toString(16).padStart(2, '0')).join(' ')}`);
+                                                console.log(`  ページ参照: ${pageRef || '(なし)'}`);
+                                            }
+
                                             // デコード済みタイトルとページ参照、親参照、オブジェクト番号を追加
                                             const bookmarkItem = { title: title.trim(), pageRef: pageRef, parentRef: parentRef, objNum: obj.number };
                                             decodedTitles.push(bookmarkItem);
