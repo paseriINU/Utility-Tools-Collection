@@ -1,100 +1,15 @@
-'==============================================================================
-' Git コマンド解説書 生成ツール
-' モジュール名: GitCommandGuide
-'==============================================================================
-' 概要:
-'   Git初心者向けのコマンド解説書をExcelで生成するツールです。
-'   基本的なGitコマンドから実践的な使い方まで、わかりやすく解説します。
-'
-' 使い方:
-'   1. このモジュールをExcelのVBAエディタにインポート
-'   2. CreateGitCommandGuide マクロを実行
-'   3. 解説書シートが自動生成されます
-'
-' 作成日: 2025-12-13
-'==============================================================================
-
+Attribute VB_Name = "GCG_Main"
 Option Explicit
 
 '==============================================================================
-' メイン: Git解説書を生成
+' Git コマンド解説書 生成ツール - メインモジュール
+' 各シートのコンテンツ生成機能を提供
 '==============================================================================
-Public Sub CreateGitCommandGuide()
-    On Error GoTo ErrorHandler
-
-    Application.ScreenUpdating = False
-
-    ' シートを作成
-    CreateSheet "Git基礎知識"
-    CreateSheet "基本コマンド"
-    CreateSheet "ブランチ操作"
-    CreateSheet "リモート操作"
-    CreateSheet "履歴・差分確認"
-    CreateSheet "取り消し・修正"
-    CreateSheet "実践シナリオ"
-    CreateSheet "トラブル対処"
-
-    ' 各シートの内容を作成
-    FormatBasicsSheet
-    FormatBasicCommandsSheet
-    FormatBranchSheet
-    FormatRemoteSheet
-    FormatHistorySheet
-    FormatUndoSheet
-    FormatScenarioSheet
-    FormatTroubleshootSheet
-
-    ' 最初のシートをアクティブに
-    Sheets("Git基礎知識").Activate
-
-    Application.ScreenUpdating = True
-
-    MsgBox "Git コマンド解説書を作成しました。" & vbCrLf & vbCrLf & _
-           "【シート構成】" & vbCrLf & _
-           "1. Git基礎知識 - Gitの概念を理解" & vbCrLf & _
-           "2. 基本コマンド - よく使うコマンド" & vbCrLf & _
-           "3. ブランチ操作 - ブランチの使い方" & vbCrLf & _
-           "4. リモート操作 - GitHubとの連携" & vbCrLf & _
-           "5. 履歴・差分確認 - 変更の確認方法" & vbCrLf & _
-           "6. 取り消し・修正 - 間違いの修正方法" & vbCrLf & _
-           "7. 実践シナリオ - 実際の作業フロー" & vbCrLf & _
-           "8. トラブル対処 - よくある問題と解決法", _
-           vbInformation, "作成完了"
-
-    Exit Sub
-
-ErrorHandler:
-    Application.ScreenUpdating = True
-    MsgBox "エラーが発生しました: " & Err.Description, vbCritical, "エラー"
-End Sub
-
-'==============================================================================
-' シート作成ヘルパー
-'==============================================================================
-Private Sub CreateSheet(ByVal sheetName As String)
-    Dim ws As Worksheet
-    Dim exists As Boolean
-
-    exists = False
-    On Error Resume Next
-    Set ws = ThisWorkbook.Sheets(sheetName)
-    If Not ws Is Nothing Then exists = True
-    Err.Clear
-    On Error GoTo 0
-
-    If exists Then
-        ws.Cells.Clear
-        ws.Cells.Interior.ColorIndex = xlNone
-    Else
-        Set ws = ThisWorkbook.Sheets.Add(After:=ThisWorkbook.Sheets(ThisWorkbook.Sheets.Count))
-        ws.Name = sheetName
-    End If
-End Sub
 
 '==============================================================================
 ' Git基礎知識シート
 '==============================================================================
-Private Sub FormatBasicsSheet()
+Public Sub FormatBasicsSheet()
     Dim ws As Worksheet
     Set ws = Sheets("Git基礎知識")
 
@@ -225,7 +140,7 @@ End Sub
 '==============================================================================
 ' 基本コマンドシート
 '==============================================================================
-Private Sub FormatBasicCommandsSheet()
+Public Sub FormatBasicCommandsSheet()
     Dim ws As Worksheet
     Set ws = Sheets("基本コマンド")
 
@@ -332,7 +247,7 @@ End Sub
 '==============================================================================
 ' ブランチ操作シート
 '==============================================================================
-Private Sub FormatBranchSheet()
+Public Sub FormatBranchSheet()
     Dim ws As Worksheet
     Set ws = Sheets("ブランチ操作")
 
@@ -458,7 +373,7 @@ End Sub
 '==============================================================================
 ' リモート操作シート
 '==============================================================================
-Private Sub FormatRemoteSheet()
+Public Sub FormatRemoteSheet()
     Dim ws As Worksheet
     Set ws = Sheets("リモート操作")
 
@@ -573,7 +488,7 @@ End Sub
 '==============================================================================
 ' 履歴・差分確認シート
 '==============================================================================
-Private Sub FormatHistorySheet()
+Public Sub FormatHistorySheet()
     Dim ws As Worksheet
     Set ws = Sheets("履歴・差分確認")
 
@@ -686,7 +601,7 @@ End Sub
 '==============================================================================
 ' 取り消し・修正シート
 '==============================================================================
-Private Sub FormatUndoSheet()
+Public Sub FormatUndoSheet()
     Dim ws As Worksheet
     Set ws = Sheets("取り消し・修正")
 
@@ -817,7 +732,7 @@ End Sub
 '==============================================================================
 ' 実践シナリオシート
 '==============================================================================
-Private Sub FormatScenarioSheet()
+Public Sub FormatScenarioSheet()
     Dim ws As Worksheet
     Set ws = Sheets("実践シナリオ")
 
@@ -949,7 +864,7 @@ End Sub
 '==============================================================================
 ' トラブル対処シート
 '==============================================================================
-Private Sub FormatTroubleshootSheet()
+Public Sub FormatTroubleshootSheet()
     Dim ws As Worksheet
     Set ws = Sheets("トラブル対処")
 
@@ -1048,3 +963,4 @@ Private Sub FormatTroubleshootSheet()
         .Columns("C").ColumnWidth = 50
     End With
 End Sub
+

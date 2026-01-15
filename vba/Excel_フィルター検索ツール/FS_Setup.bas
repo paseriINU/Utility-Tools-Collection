@@ -1,16 +1,18 @@
+Attribute VB_Name = "FS_Setup"
 Option Explicit
 
-' ========================================
-' フィルター検索ツール - 初期化モジュール
+'==============================================================================
+' Excel フィルター検索ツール - セットアップモジュール
 ' フォームとコントロールを自動作成
-' ========================================
+' ※このモジュールは初期化後に削除可能
+'==============================================================================
 
-' フォーム名（短縮版）
+' フォーム名
 Private Const FORM_NAME As String = "FSearchForm"
 
-' ========================================
+' ============================================================================
 ' 公開プロシージャ
-' ========================================
+' ============================================================================
 
 ' フォームを自動作成して初期化
 Public Sub InitializeFilterSearchTool()
@@ -46,9 +48,9 @@ ErrorHandler:
     End If
 End Sub
 
-' ========================================
+' ============================================================================
 ' 内部プロシージャ
-' ========================================
+' ============================================================================
 
 ' 既存のフォームを削除
 Private Sub DeleteExistingForm()
@@ -219,7 +221,7 @@ Private Sub AddFormCode(vbComp As Object)
     code = code & "    " & vbCrLf
     code = code & "    ReDim Preserve keywords(1 To count)" & vbCrLf
     code = code & "    Me.Hide" & vbCrLf
-    code = code & "    Call FSearch.ApplyOrFilter(keywords)" & vbCrLf
+    code = code & "    Call FS_Main.ApplyOrFilter(keywords)" & vbCrLf
     code = code & "    Unload Me" & vbCrLf
     code = code & "End Sub" & vbCrLf & vbCrLf
 
@@ -246,3 +248,4 @@ Private Sub AddFormCode(vbComp As Object)
     ' コードを追加
     vbComp.CodeModule.AddFromString code
 End Sub
+
