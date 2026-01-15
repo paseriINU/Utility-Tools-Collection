@@ -7,36 +7,28 @@ Option Explicit
 
 ' === シート名定数 ===
 Public Const SHEET_MAIN As String = "Word_しおり整理ツール"
+Public Const SHEET_SETTINGS As String = "設定"
 
-' === セル位置定数 ===
-' パターン設定テーブル
-Public Const ROW_PATTERN_HEADER As Long = 16
-Public Const ROW_PATTERN_LEVEL1 As Long = 17
-Public Const ROW_PATTERN_LEVEL2 As Long = 18
-Public Const ROW_PATTERN_LEVEL3 As Long = 19   ' 第X節/X-X（節の有無で自動切替）
-Public Const ROW_PATTERN_LEVEL4 As Long = 20   ' X-X/X-X,X（節の有無で自動切替）
-Public Const ROW_PATTERN_LEVEL5 As Long = 21   ' X-X,X（節がある場合のみ使用）
-Public Const ROW_PATTERN_EXCEPTION1 As Long = 22
-Public Const ROW_PATTERN_EXCEPTION2 As Long = 23
-Public Const ROW_PATTERN_HYOHYO As Long = 24   ' 帳票パターン（X123）/（XX12）
-Public Const ROW_PATTERN_SPECIAL1 As Long = 25  ' 特定テキスト1
-Public Const ROW_PATTERN_SPECIAL2 As Long = 26  ' 特定テキスト2
+' === 設定シートのセル位置定数 ===
+' フォルダ設定
+Public Const SETTINGS_ROW_FOLDER_HEADER As Long = 2
+Public Const SETTINGS_ROW_INPUT_FOLDER As Long = 3
+Public Const SETTINGS_ROW_OUTPUT_FOLDER As Long = 4
 
-Public Const COL_LEVEL As Long = 2          ' B列
-Public Const COL_PATTERN_DESC As Long = 3   ' C列
-Public Const COL_STYLE_NAME As Long = 4     ' D列
+' スタイル設定テーブル
+Public Const SETTINGS_ROW_STYLE_HEADER As Long = 7
+Public Const SETTINGS_ROW_STYLE_START As Long = 8   ' スタイル設定開始行
 
 ' オプション設定
-Public Const ROW_OPTION_PDF_OUTPUT As Long = 28
-Public Const COL_OPTION_LABEL As Long = 2   ' B列
-Public Const COL_OPTION_VALUE As Long = 3   ' C列
+Public Const SETTINGS_ROW_OPTION_HEADER As Long = 30
+Public Const SETTINGS_ROW_PDF_OUTPUT As Long = 31
 
-' ボタン行
-Public Const ROW_BUTTON As Long = 30
-
-' フォルダパス表示
-Public Const ROW_INPUT_FOLDER As Long = 10
-Public Const ROW_OUTPUT_FOLDER As Long = 12
+' 列定数
+Public Const SETTINGS_COL_LABEL As Long = 2     ' B列
+Public Const SETTINGS_COL_VALUE As Long = 3     ' C列
+Public Const SETTINGS_COL_PATTERN As Long = 4   ' D列（パターン）
+Public Const SETTINGS_COL_STYLE As Long = 5     ' E列（スタイル名）
+Public Const SETTINGS_COL_NOTE As Long = 6      ' F列（備考）
 
 ' ============================================================================
 ' メイン初期化プロシージャ
@@ -48,26 +40,40 @@ Public Sub InitializeWordしおり整理ツール()
 
     ' 既存シートがあれば削除
     Dim ws As Worksheet
-    For Each ws In ThisWorkbook.Worksheets
-        If ws.Name = SHEET_MAIN Then
-            Application.DisplayAlerts = False
-            ws.Delete
-            Application.DisplayAlerts = True
-            Exit For
-        End If
-    Next ws
+    Dim sheetNames As Variant
+    Dim sheetName As Variant
+    sheetNames = Array(SHEET_MAIN, SHEET_SETTINGS)
 
-    ' 新規シート作成
-    Set ws = ThisWorkbook.Worksheets.Add(After:=ThisWorkbook.Worksheets(ThisWorkbook.Worksheets.Count))
-    ws.Name = SHEET_MAIN
+    For Each sheetName In sheetNames
+        For Each ws In ThisWorkbook.Worksheets
+            If ws.Name = CStr(sheetName) Then
+                Application.DisplayAlerts = False
+                ws.Delete
+                Application.DisplayAlerts = True
+                Exit For
+            End If
+        Next ws
+    Next sheetName
 
-    ' フォーマット適用
-    FormatMainSheet ws
+    ' 設定シート作成
+    Dim wsSettings As Worksheet
+    Set wsSettings = ThisWorkbook.Worksheets.Add(After:=ThisWorkbook.Worksheets(ThisWorkbook.Worksheets.Count))
+    wsSettings.Name = SHEET_SETTINGS
+    FormatSettingsSheet wsSettings
+
+    ' メインシート作成
+    Dim wsMain As Worksheet
+    Set wsMain = ThisWorkbook.Worksheets.Add(After:=ThisWorkbook.Worksheets(ThisWorkbook.Worksheets.Count))
+    wsMain.Name = SHEET_MAIN
+    FormatMainSheet wsMain
+
+    ' メインシートを表示
+    wsMain.Activate
 
     Application.ScreenUpdating = True
 
     MsgBox "初期化が完了しました。" & vbCrLf & vbCrLf & _
-           "フォルダ設定を確認し、入力フォルダにWord文書を配置してください。", _
+           "「設定」シートでフォルダパスとスタイル設定を確認してください。", _
            vbInformation, "Word しおり整理ツール"
     Exit Sub
 
@@ -78,12 +84,236 @@ ErrorHandler:
 End Sub
 
 ' ============================================================================
-' メインシートのフォーマット
+' 設定シートのフォーマット
 ' ============================================================================
-Private Sub FormatMainSheet(ByRef ws As Worksheet)
+Private Sub FormatSettingsSheet(ByRef ws As Worksheet)
     Dim macroDir As String
     macroDir = ThisWorkbook.Path
 
+    With ws
+        ' 全体の背景色を白に
+        .Cells.Interior.Color = RGB(255, 255, 255)
+
+        ' === フォルダ設定セクション ===
+        .Cells(SETTINGS_ROW_FOLDER_HEADER, SETTINGS_COL_LABEL).Value = "■ フォルダ設定"
+        With .Cells(SETTINGS_ROW_FOLDER_HEADER, SETTINGS_COL_LABEL)
+            .Font.Name = "Meiryo UI"
+            .Font.Bold = True
+            .Font.Size = 12
+        End With
+
+        ' 入力フォルダ
+        .Cells(SETTINGS_ROW_INPUT_FOLDER, SETTINGS_COL_LABEL).Value = "入力フォルダ"
+        .Cells(SETTINGS_ROW_INPUT_FOLDER, SETTINGS_COL_LABEL).Font.Name = "Meiryo UI"
+        .Range(.Cells(SETTINGS_ROW_INPUT_FOLDER, SETTINGS_COL_VALUE), _
+               .Cells(SETTINGS_ROW_INPUT_FOLDER, SETTINGS_COL_NOTE)).Merge
+        .Cells(SETTINGS_ROW_INPUT_FOLDER, SETTINGS_COL_VALUE).Value = macroDir & "\Input\"
+        .Cells(SETTINGS_ROW_INPUT_FOLDER, SETTINGS_COL_VALUE).Font.Name = "Meiryo UI"
+        .Cells(SETTINGS_ROW_INPUT_FOLDER, SETTINGS_COL_VALUE).Interior.Color = RGB(255, 255, 204)
+
+        ' 出力フォルダ
+        .Cells(SETTINGS_ROW_OUTPUT_FOLDER, SETTINGS_COL_LABEL).Value = "出力フォルダ"
+        .Cells(SETTINGS_ROW_OUTPUT_FOLDER, SETTINGS_COL_LABEL).Font.Name = "Meiryo UI"
+        .Range(.Cells(SETTINGS_ROW_OUTPUT_FOLDER, SETTINGS_COL_VALUE), _
+               .Cells(SETTINGS_ROW_OUTPUT_FOLDER, SETTINGS_COL_NOTE)).Merge
+        .Cells(SETTINGS_ROW_OUTPUT_FOLDER, SETTINGS_COL_VALUE).Value = macroDir & "\Output\"
+        .Cells(SETTINGS_ROW_OUTPUT_FOLDER, SETTINGS_COL_VALUE).Font.Name = "Meiryo UI"
+        .Cells(SETTINGS_ROW_OUTPUT_FOLDER, SETTINGS_COL_VALUE).Interior.Color = RGB(255, 255, 204)
+
+        ' === スタイル設定セクション ===
+        .Cells(SETTINGS_ROW_STYLE_HEADER - 1, SETTINGS_COL_LABEL).Value = "■ スタイル設定（行を追加して設定を増やせます）"
+        With .Cells(SETTINGS_ROW_STYLE_HEADER - 1, SETTINGS_COL_LABEL)
+            .Font.Name = "Meiryo UI"
+            .Font.Bold = True
+            .Font.Size = 12
+        End With
+
+        ' ヘッダー行
+        .Cells(SETTINGS_ROW_STYLE_HEADER, SETTINGS_COL_LABEL).Value = "種別"
+        .Cells(SETTINGS_ROW_STYLE_HEADER, SETTINGS_COL_VALUE).Value = "レベル"
+        .Cells(SETTINGS_ROW_STYLE_HEADER, SETTINGS_COL_PATTERN).Value = "パターン/テキスト"
+        .Cells(SETTINGS_ROW_STYLE_HEADER, SETTINGS_COL_STYLE).Value = "適用スタイル"
+        .Cells(SETTINGS_ROW_STYLE_HEADER, SETTINGS_COL_NOTE).Value = "備考"
+
+        With .Range(.Cells(SETTINGS_ROW_STYLE_HEADER, SETTINGS_COL_LABEL), _
+                    .Cells(SETTINGS_ROW_STYLE_HEADER, SETTINGS_COL_NOTE))
+            .Font.Name = "Meiryo UI"
+            .Font.Bold = True
+            .Interior.Color = RGB(180, 198, 231)
+            .HorizontalAlignment = xlCenter
+        End With
+
+        ' デフォルトのスタイル設定を追加
+        Dim row As Long
+        row = SETTINGS_ROW_STYLE_START
+
+        ' レベル1: 第X部
+        AddStyleRow ws, row, "パターン", "1", "^第[0-9０-９]+部", "表題1", "第X部（ヘッダー空白時のみ）"
+        row = row + 1
+
+        ' レベル2: 第X章
+        AddStyleRow ws, row, "パターン", "2", "^第[0-9０-９]+章", "表題2", "第X章"
+        row = row + 1
+
+        ' レベル3: 第X節
+        AddStyleRow ws, row, "パターン", "3-節", "^第[0-9０-９]+節", "表題3", "第X節（節構造あり時）"
+        row = row + 1
+
+        ' レベル3: X-X（節なし時）
+        AddStyleRow ws, row, "パターン", "3", "^[0-9]+-[0-9]+(?![,\.0-9])", "表題3", "X-X（節構造なし時）"
+        row = row + 1
+
+        ' レベル4: X-X（節あり時）
+        AddStyleRow ws, row, "パターン", "4-節", "^[0-9]+-[0-9]+(?![,\.0-9])", "表題4", "X-X（節構造あり時）"
+        row = row + 1
+
+        ' レベル4: X-X.X（節なし時）
+        AddStyleRow ws, row, "パターン", "4", "^[0-9]+-[0-9]+[,\.][0-9]+", "表題4", "X-X.X（節構造なし時）"
+        row = row + 1
+
+        ' レベル5: X-X.X（節あり時）
+        AddStyleRow ws, row, "パターン", "5-節", "^[0-9]+-[0-9]+[,\.][0-9]+", "表題5", "X-X.X（節構造あり時）"
+        row = row + 1
+
+        ' 帳票パターン1
+        AddStyleRow ws, row, "帳票", "", "\([A-Za-z][0-9]{3}\)", "表題5", "(X123)形式"
+        row = row + 1
+
+        ' 帳票パターン2
+        AddStyleRow ws, row, "帳票", "", "\([A-Za-z]{2}[0-9]{2}\)", "表題5", "(XX12)形式"
+        row = row + 1
+
+        ' 特定テキスト1
+        AddStyleRow ws, row, "特定", "1", "本書の記述について", "表題3", "完全一致、アウトラインレベル1"
+        row = row + 1
+
+        ' 特定テキスト2
+        AddStyleRow ws, row, "特定", "1", "修正履歴", "表題3", "完全一致、アウトラインレベル1"
+        row = row + 1
+
+        ' 例外1
+        AddStyleRow ws, row, "例外", "1", "", "本文", "パターン外で見出しスタイル適用済み"
+        row = row + 1
+
+        ' 例外2
+        AddStyleRow ws, row, "例外", "2", "", "本文", "アウトライン設定済み"
+        row = row + 1
+
+        ' 追加用の空行を5行追加
+        Dim i As Long
+        For i = 1 To 5
+            AddStyleRow ws, row, "", "", "", "", ""
+            row = row + 1
+        Next i
+
+        ' テーブル罫線
+        With .Range(.Cells(SETTINGS_ROW_STYLE_HEADER, SETTINGS_COL_LABEL), _
+                    .Cells(row - 1, SETTINGS_COL_NOTE))
+            .Borders.LineStyle = xlContinuous
+            .Borders.Weight = xlThin
+        End With
+
+        ' === オプション設定セクション ===
+        .Cells(SETTINGS_ROW_OPTION_HEADER, SETTINGS_COL_LABEL).Value = "■ オプション設定"
+        With .Cells(SETTINGS_ROW_OPTION_HEADER, SETTINGS_COL_LABEL)
+            .Font.Name = "Meiryo UI"
+            .Font.Bold = True
+            .Font.Size = 12
+        End With
+
+        ' PDF出力
+        .Cells(SETTINGS_ROW_PDF_OUTPUT, SETTINGS_COL_LABEL).Value = "PDF出力"
+        .Cells(SETTINGS_ROW_PDF_OUTPUT, SETTINGS_COL_LABEL).Font.Name = "Meiryo UI"
+        .Cells(SETTINGS_ROW_PDF_OUTPUT, SETTINGS_COL_VALUE).Value = "はい"
+        AddDropdown ws, .Cells(SETTINGS_ROW_PDF_OUTPUT, SETTINGS_COL_VALUE), "はい,いいえ"
+        .Cells(SETTINGS_ROW_PDF_OUTPUT, SETTINGS_COL_VALUE).Interior.Color = RGB(255, 255, 204)
+        .Cells(SETTINGS_ROW_PDF_OUTPUT, SETTINGS_COL_VALUE).Font.Name = "Meiryo UI"
+
+        ' === 種別の説明 ===
+        Dim noteRow As Long
+        noteRow = SETTINGS_ROW_PDF_OUTPUT + 3
+
+        .Cells(noteRow, SETTINGS_COL_LABEL).Value = "■ 種別の説明"
+        With .Cells(noteRow, SETTINGS_COL_LABEL)
+            .Font.Name = "Meiryo UI"
+            .Font.Bold = True
+            .Font.Size = 12
+        End With
+        noteRow = noteRow + 1
+
+        .Cells(noteRow, SETTINGS_COL_LABEL).Value = "パターン"
+        .Cells(noteRow, SETTINGS_COL_VALUE).Value = "正規表現でテキストを判定。レベル列に数字を指定。"
+        noteRow = noteRow + 1
+
+        .Cells(noteRow, SETTINGS_COL_LABEL).Value = ""
+        .Cells(noteRow, SETTINGS_COL_VALUE).Value = "「X-節」は節構造あり時、数字のみは節構造なし時に適用。"
+        noteRow = noteRow + 1
+
+        .Cells(noteRow, SETTINGS_COL_LABEL).Value = "帳票"
+        .Cells(noteRow, SETTINGS_COL_VALUE).Value = "1ページ目に「帳票」がある文書のみ適用。"
+        noteRow = noteRow + 1
+
+        .Cells(noteRow, SETTINGS_COL_LABEL).Value = "特定"
+        .Cells(noteRow, SETTINGS_COL_VALUE).Value = "テキスト完全一致で適用。レベル列の数字でアウトラインレベルを設定。"
+        noteRow = noteRow + 1
+
+        .Cells(noteRow, SETTINGS_COL_LABEL).Value = "例外"
+        .Cells(noteRow, SETTINGS_COL_VALUE).Value = "例外1=見出しスタイル適用済み、例外2=アウトライン設定済み"
+        noteRow = noteRow + 1
+
+        .Range(.Cells(SETTINGS_ROW_PDF_OUTPUT + 4, SETTINGS_COL_LABEL), _
+               .Cells(noteRow - 1, SETTINGS_COL_VALUE)).Font.Name = "Meiryo UI"
+        .Range(.Cells(SETTINGS_ROW_PDF_OUTPUT + 4, SETTINGS_COL_LABEL), _
+               .Cells(noteRow - 1, SETTINGS_COL_VALUE)).Font.Size = 10
+
+        ' === 列幅調整 ===
+        .Columns("A").ColumnWidth = 3
+        .Columns("B").ColumnWidth = 12
+        .Columns("C").ColumnWidth = 10
+        .Columns("D").ColumnWidth = 30
+        .Columns("E").ColumnWidth = 15
+        .Columns("F").ColumnWidth = 35
+
+        ' A1セルを選択
+        .Range("A1").Select
+    End With
+End Sub
+
+' ============================================================================
+' スタイル設定行を追加
+' ============================================================================
+Private Sub AddStyleRow(ByRef ws As Worksheet, ByVal row As Long, _
+                        ByVal category As String, ByVal level As String, _
+                        ByVal pattern As String, ByVal styleName As String, _
+                        ByVal note As String)
+    With ws
+        .Cells(row, SETTINGS_COL_LABEL).Value = category
+        .Cells(row, SETTINGS_COL_VALUE).Value = level
+        .Cells(row, SETTINGS_COL_PATTERN).Value = pattern
+        .Cells(row, SETTINGS_COL_STYLE).Value = styleName
+        .Cells(row, SETTINGS_COL_NOTE).Value = note
+
+        ' フォント設定
+        .Range(.Cells(row, SETTINGS_COL_LABEL), .Cells(row, SETTINGS_COL_NOTE)).Font.Name = "Meiryo UI"
+
+        ' 入力可能セルの背景色
+        .Cells(row, SETTINGS_COL_LABEL).Interior.Color = RGB(255, 255, 204)
+        .Cells(row, SETTINGS_COL_VALUE).Interior.Color = RGB(255, 255, 204)
+        .Cells(row, SETTINGS_COL_PATTERN).Interior.Color = RGB(255, 255, 204)
+        .Cells(row, SETTINGS_COL_STYLE).Interior.Color = RGB(255, 255, 204)
+        .Cells(row, SETTINGS_COL_NOTE).Interior.Color = RGB(230, 230, 230)
+
+        ' 種別のドロップダウン
+        If category <> "" Then
+            AddDropdown ws, .Cells(row, SETTINGS_COL_LABEL), "パターン,帳票,特定,例外"
+        End If
+    End With
+End Sub
+
+' ============================================================================
+' メインシートのフォーマット
+' ============================================================================
+Private Sub FormatMainSheet(ByRef ws As Worksheet)
     With ws
         ' 全体の背景色を白に
         .Cells.Interior.Color = RGB(255, 255, 255)
@@ -104,230 +334,67 @@ Private Sub FormatMainSheet(ByRef ws As Worksheet)
         .Rows(3).RowHeight = 10
 
         ' === 説明エリア（行5-6） ===
-        .Range("B5").Value = "段落テキストをパターンマッチでスタイル適用します（「参照」・リンク・「・」始まりはスキップ）。"
+        .Range("B5").Value = "段落テキストをパターンマッチでスタイル適用します。"
         .Range("B6").Value = "PDFエクスポート時に正しいしおり（ブックマーク）を生成します。"
         .Range("B5:B6").Font.Name = "Meiryo UI"
         .Range("B5:B6").Font.Size = 11
 
-        ' === フォルダ設定セクション（行8-14） ===
-        .Range("B8").Value = "■ フォルダ設定"
+        ' === 設定シートへのリンク ===
+        .Range("B8").Value = "※ フォルダパス・スタイル設定は「設定」シートで変更してください"
         .Range("B8").Font.Name = "Meiryo UI"
-        .Range("B8").Font.Bold = True
-        .Range("B8").Font.Size = 12
+        .Range("B8").Font.Size = 10
+        .Range("B8").Font.Color = RGB(0, 112, 192)
 
-        .Range("B10").Value = "入力フォルダ:"
-        .Range("B10").Font.Name = "Meiryo UI"
-        .Range("C10:G10").Merge
-        .Range("C10").Value = macroDir & "\Input\"
-        .Range("C10").Font.Name = "Meiryo UI"
-        .Range("C10").Interior.Color = RGB(255, 255, 204)
+        ' === ボタン配置（行10） ===
+        AddButton ws, .Range("B10"), 200, 40, "OrganizeWordBookmarks", "しおりを整理してPDF出力", RGB(68, 114, 196)
 
-        .Range("B12").Value = "出力フォルダ:"
-        .Range("B12").Font.Name = "Meiryo UI"
-        .Range("C12:G12").Merge
-        .Range("C12").Value = macroDir & "\Output\"
-        .Range("C12").Font.Name = "Meiryo UI"
-        .Range("C12").Interior.Color = RGB(255, 255, 204)
-
-        ' === パターン設定セクション（行14-23） ===
-        .Range("B14").Value = "■ スタイル設定"
+        ' === 使い方セクション ===
+        .Range("B14").Value = "■ 使い方"
         .Range("B14").Font.Name = "Meiryo UI"
         .Range("B14").Font.Bold = True
         .Range("B14").Font.Size = 12
 
-        ' ヘッダー行
-        .Cells(ROW_PATTERN_HEADER, COL_LEVEL).Value = "レベル"
-        .Cells(ROW_PATTERN_HEADER, COL_PATTERN_DESC).Value = "テキストパターン"
-        .Cells(ROW_PATTERN_HEADER, COL_STYLE_NAME).Value = "適用スタイル"
-
-        With .Range(.Cells(ROW_PATTERN_HEADER, COL_LEVEL), .Cells(ROW_PATTERN_HEADER, COL_STYLE_NAME))
-            .Font.Name = "Meiryo UI"
-            .Font.Bold = True
-            .Interior.Color = RGB(180, 198, 231)
-            .HorizontalAlignment = xlCenter
-        End With
-
-        ' レベル1
-        .Cells(ROW_PATTERN_LEVEL1, COL_LEVEL).Value = "1"
-        .Cells(ROW_PATTERN_LEVEL1, COL_PATTERN_DESC).Value = "第X部"
-        .Cells(ROW_PATTERN_LEVEL1, COL_STYLE_NAME).Value = "表題1"
-
-        ' レベル2
-        .Cells(ROW_PATTERN_LEVEL2, COL_LEVEL).Value = "2"
-        .Cells(ROW_PATTERN_LEVEL2, COL_PATTERN_DESC).Value = "第X章"
-        .Cells(ROW_PATTERN_LEVEL2, COL_STYLE_NAME).Value = "表題2"
-
-        ' レベル3（節あり:第X節、節なし:X-X）
-        .Cells(ROW_PATTERN_LEVEL3, COL_LEVEL).Value = "3"
-        .Cells(ROW_PATTERN_LEVEL3, COL_PATTERN_DESC).Value = "第X節 / X-X"
-        .Cells(ROW_PATTERN_LEVEL3, COL_STYLE_NAME).Value = "表題3"
-
-        ' レベル4（節あり:X-X、節なし:X-X.X）
-        .Cells(ROW_PATTERN_LEVEL4, COL_LEVEL).Value = "4"
-        .Cells(ROW_PATTERN_LEVEL4, COL_PATTERN_DESC).Value = "X-X / X-X.X"
-        .Cells(ROW_PATTERN_LEVEL4, COL_STYLE_NAME).Value = "表題4"
-
-        ' レベル5（節がある場合のみ使用）
-        .Cells(ROW_PATTERN_LEVEL5, COL_LEVEL).Value = "5"
-        .Cells(ROW_PATTERN_LEVEL5, COL_PATTERN_DESC).Value = "X-X.X（※節あり時）"
-        .Cells(ROW_PATTERN_LEVEL5, COL_STYLE_NAME).Value = "表題5"
-
-        ' 例外1
-        .Cells(ROW_PATTERN_EXCEPTION1, COL_LEVEL).Value = "例外1"
-        .Cells(ROW_PATTERN_EXCEPTION1, COL_PATTERN_DESC).Value = "パターン外スタイル"
-        .Cells(ROW_PATTERN_EXCEPTION1, COL_STYLE_NAME).Value = "本文"
-
-        ' 例外2
-        .Cells(ROW_PATTERN_EXCEPTION2, COL_LEVEL).Value = "例外2"
-        .Cells(ROW_PATTERN_EXCEPTION2, COL_PATTERN_DESC).Value = "アウトライン設定済み"
-        .Cells(ROW_PATTERN_EXCEPTION2, COL_STYLE_NAME).Value = "本文"
-
-        ' 帳票パターン
-        .Cells(ROW_PATTERN_HYOHYO, COL_LEVEL).Value = "帳票"
-        .Cells(ROW_PATTERN_HYOHYO, COL_PATTERN_DESC).Value = "(X123)/(XX12)"
-        .Cells(ROW_PATTERN_HYOHYO, COL_STYLE_NAME).Value = "表題5"
-
-        ' 特定テキスト1（完全一致でスタイル適用、アウトラインレベル1）
-        .Cells(ROW_PATTERN_SPECIAL1, COL_LEVEL).Value = "特定1"
-        .Cells(ROW_PATTERN_SPECIAL1, COL_PATTERN_DESC).Value = "本書の記述について"
-        .Cells(ROW_PATTERN_SPECIAL1, COL_STYLE_NAME).Value = "表題3"
-
-        ' 特定テキスト2（完全一致でスタイル適用、アウトラインレベル1）
-        .Cells(ROW_PATTERN_SPECIAL2, COL_LEVEL).Value = "特定2"
-        .Cells(ROW_PATTERN_SPECIAL2, COL_PATTERN_DESC).Value = "修正履歴"
-        .Cells(ROW_PATTERN_SPECIAL2, COL_STYLE_NAME).Value = "表題3"
-
-        ' テーブル全体のフォント設定
-        With .Range(.Cells(ROW_PATTERN_LEVEL1, COL_LEVEL), .Cells(ROW_PATTERN_SPECIAL2, COL_STYLE_NAME))
-            .Font.Name = "Meiryo UI"
-        End With
-
-        ' テーブル罫線
-        With .Range(.Cells(ROW_PATTERN_HEADER, COL_LEVEL), .Cells(ROW_PATTERN_SPECIAL2, COL_STYLE_NAME))
-            .Borders.LineStyle = xlContinuous
-            .Borders.Weight = xlThin
-        End With
-
-        ' 入力セルの背景色（黄色）
-        With .Range(.Cells(ROW_PATTERN_LEVEL1, COL_STYLE_NAME), .Cells(ROW_PATTERN_SPECIAL2, COL_STYLE_NAME))
-            .Interior.Color = RGB(255, 255, 204)
-        End With
-
-        ' 特定テキストのパターン列も入力可能に
-        .Cells(ROW_PATTERN_SPECIAL1, COL_PATTERN_DESC).Interior.Color = RGB(255, 255, 204)
-        .Cells(ROW_PATTERN_SPECIAL2, COL_PATTERN_DESC).Interior.Color = RGB(255, 255, 204)
-
-        ' === オプション設定セクション（行27） ===
-        .Cells(ROW_OPTION_PDF_OUTPUT, COL_OPTION_LABEL).Value = "PDF出力:"
-        .Cells(ROW_OPTION_PDF_OUTPUT, COL_OPTION_LABEL).Font.Name = "Meiryo UI"
-        .Cells(ROW_OPTION_PDF_OUTPUT, COL_OPTION_VALUE).Value = "はい"
-        AddDropdown ws, .Cells(ROW_OPTION_PDF_OUTPUT, COL_OPTION_VALUE), "はい,いいえ"
-
-        With .Cells(ROW_OPTION_PDF_OUTPUT, COL_OPTION_VALUE)
-            .Interior.Color = RGB(255, 255, 204)
-            .Font.Name = "Meiryo UI"
-        End With
-
-        ' === ボタン配置（行30） ===
-        AddButton ws, .Range("B" & ROW_BUTTON), 180, 35, "OrganizeWordBookmarks", "しおりを整理してPDF出力", RGB(68, 114, 196)
-
-        ' === 使い方セクション ===
-        .Range("B34").Value = "■ 使い方"
-        .Range("B34").Font.Name = "Meiryo UI"
-        .Range("B34").Font.Bold = True
-        .Range("B34").Font.Size = 12
-
-        .Range("B36").Value = "1. 「フォルダ設定」の入力/出力フォルダパスを確認・編集します"
-        .Range("B37").Value = "2. 処理したいWord文書(.docx/.doc)を入力フォルダに配置します"
-        .Range("B38").Value = "3. 「適用スタイル」欄にWord文書で使用するスタイル名を入力します"
-        .Range("B39").Value = "4. 「しおりを整理してPDF出力」ボタンをクリックします"
-        .Range("B40").Value = "5. 出力フォルダに処理済みのWord文書とPDFが出力されます"
-        .Range("B36:B40").Font.Name = "Meiryo UI"
-        .Range("B36:B40").Font.Size = 10
+        .Range("B16").Value = "1. 「設定」シートでフォルダパスとスタイル設定を確認・編集します"
+        .Range("B17").Value = "2. 処理したいWord文書(.docx/.doc)を入力フォルダに配置します"
+        .Range("B18").Value = "3. 「しおりを整理してPDF出力」ボタンをクリックします"
+        .Range("B19").Value = "4. 出力フォルダに処理済みのWord文書とPDFが出力されます"
+        .Range("B16:B19").Font.Name = "Meiryo UI"
+        .Range("B16:B19").Font.Size = 10
 
         ' === 動作説明セクション ===
-        .Range("B43").Value = "■ 動作の説明"
-        .Range("B43").Font.Name = "Meiryo UI"
-        .Range("B43").Font.Bold = True
-        .Range("B43").Font.Size = 12
+        .Range("B22").Value = "■ 動作の説明"
+        .Range("B22").Font.Name = "Meiryo UI"
+        .Range("B22").Font.Bold = True
+        .Range("B22").Font.Size = 12
 
         ' パターンマッチ方式
-        .Range("B45").Value = "【パターンマッチ方式】"
-        .Range("B45").Font.Bold = True
-        .Range("B46").Value = "  段落テキストを正規表現でパターンマッチし、該当するスタイルを適用します。"
-        .Range("B47").Value = "  ・レベル1「第X部」: 段落先頭が「第1部」「第2部」等で始まる（ヘッダー空欄時のみ）"
-        .Range("B48").Value = "  ・レベル2「第X章」: 段落先頭が「第1章」「第2章」等で始まる"
-        .Range("B49").Value = "  ・レベル3「第X節/X-X」: 節あり→「第1節」等、節なし→「1-1」「2-3」等"
-        .Range("B50").Value = "  ・レベル4「X-X/X-X.X」: 節あり→「1-1」等、節なし→「1-1.1」「2-3.4」等"
-        .Range("B51").Value = "  ・レベル5「X-X.X」: 節あり時のみ「1-1.1」「2-3.4」等"
+        .Range("B24").Value = "【パターンマッチ方式】"
+        .Range("B24").Font.Bold = True
+        .Range("B25").Value = "  段落テキストを正規表現でパターンマッチし、該当するスタイルを適用します。"
+        .Range("B26").Value = "  設定シートで自由にパターンとスタイルの組み合わせを追加できます。"
 
         ' スキップ条件
-        .Range("B53").Value = "【スキップ条件】"
-        .Range("B53").Font.Bold = True
-        .Range("B54").Value = "  以下の段落はスタイル適用をスキップします:"
-        .Range("B55").Value = "  ・「参照」という文字を含む段落"
-        .Range("B56").Value = "  ・「・」（中黒）で始まる段落（目次形式「・ 第1章」など）"
-        .Range("B57").Value = "  ・ハイパーリンクを含む段落（目次のリンク等）"
-        .Range("B58").Value = "  ・表（テーブル）内の段落"
+        .Range("B28").Value = "【スキップ条件】"
+        .Range("B28").Font.Bold = True
+        .Range("B29").Value = "  ・「参照」という文字を含む段落"
+        .Range("B30").Value = "  ・「・」（中黒）で始まる段落（目次形式など）"
+        .Range("B31").Value = "  ・ハイパーリンクを含む段落、表内の段落"
 
         ' 節構造の自動判定
-        .Range("B60").Value = "【節構造の自動判定】"
-        .Range("B60").Font.Bold = True
-        .Range("B61").Value = "  文書のヘッダーに「第X節」があるかを事前に判定し、レベル構造を自動で切り替えます。"
-        .Range("B62").Value = "  ・節あり（5レベル構造）: レベル3=第X節、レベル4=X-X、レベル5=X-X.X"
-        .Range("B63").Value = "  ・節なし（4レベル構造）: レベル3=X-X、レベル4=X-X.X、レベル5=未使用"
+        .Range("B33").Value = "【節構造の自動判定】"
+        .Range("B33").Font.Bold = True
+        .Range("B34").Value = "  文書のヘッダーに「第X節」があるかを判定し、適用パターンを自動で切り替えます。"
+        .Range("B35").Value = "  設定シートのレベル欄で「X-節」と指定すると節構造あり時のみ適用されます。"
 
-        ' 特定テキストの処理
-        .Range("B65").Value = "【特定テキストの処理】"
-        .Range("B65").Font.Bold = True
-        .Range("B66").Value = "  「特定1」「特定2」欄で指定したテキストと完全一致する段落に対し:"
-        .Range("B67").Value = "  ・指定したスタイルを適用"
-        .Range("B68").Value = "  ・アウトラインレベルを1に設定（しおりの最上位階層に表示）"
-
-        ' 帳票文書の自動判定
-        .Range("B70").Value = "【帳票文書の自動判定】"
-        .Range("B70").Font.Bold = True
-        .Range("B71").Value = "  1ページ目（本文またはテキストボックス内）に「帳票」という文字がある場合:"
-        .Range("B72").Value = "  ・(X123)パターン: 英字1文字+数字3桁を括弧で囲んだもの 例:(A001)(B123)"
-        .Range("B73").Value = "  ・(XX12)パターン: 英字2文字+数字2桁を括弧で囲んだもの 例:(AB01)(CD99)"
-        .Range("B74").Value = "  ※全角・半角どちらでも検出。「帳票」欄で指定したスタイルを適用。"
-
-        ' 例外スタイル
-        .Range("B76").Value = "【例外スタイル】"
-        .Range("B76").Font.Bold = True
-        .Range("B77").Value = "  ・例外1: パターンに一致しないがレベル1-5のスタイルが既に適用されている段落"
-        .Range("B78").Value = "  ・例外2: アウトラインレベルが設定済みの段落（スタイル定義または直接設定）"
-
-        ' ヘッダーフィールド更新
-        .Range("B80").Value = "【ヘッダーフィールド更新】"
-        .Range("B80").Font.Bold = True
-        .Range("B81").Value = "  スタイル適用後、ヘッダー内のSTYLEREFフィールドのスタイル名を自動更新します。"
-        .Range("B82").Value = "  例: STYLEREF ""表題1"" → 設定したスタイル名に置換"
-
-        .Range("B84").Value = "※ 図形（テキストボックス等）内のテキストも処理対象です"
-        .Range("B84").Font.Color = RGB(0, 112, 192)
-
-        .Range("B45:B84").Font.Name = "Meiryo UI"
-        .Range("B45:B84").Font.Size = 10
+        .Range("B24:B35").Font.Name = "Meiryo UI"
+        .Range("B24:B35").Font.Size = 10
 
         ' === 列幅調整 ===
         .Columns("A").ColumnWidth = 3
-        .Columns("B").ColumnWidth = 18
-        .Columns("C").ColumnWidth = 20
-        .Columns("D").ColumnWidth = 15
-        .Columns("E").ColumnWidth = 12
-        .Columns("F").ColumnWidth = 12
+        .Columns("B").ColumnWidth = 80
 
         ' 行の高さ調整
-        .Rows(ROW_BUTTON).RowHeight = 40
-
-        ' 入力可能セルをアンロック（シート保護時用）
-        .Range(.Cells(ROW_PATTERN_LEVEL1, COL_STYLE_NAME), .Cells(ROW_PATTERN_SPECIAL2, COL_STYLE_NAME)).Locked = False
-        .Cells(ROW_PATTERN_SPECIAL1, COL_PATTERN_DESC).Locked = False
-        .Cells(ROW_PATTERN_SPECIAL2, COL_PATTERN_DESC).Locked = False
-        .Cells(ROW_OPTION_PDF_OUTPUT, COL_OPTION_VALUE).Locked = False
-        .Range("C10:G10").Locked = False
-        .Range("C12:G12").Locked = False
+        .Rows(10).RowHeight = 45
 
         ' A1セルを選択
         .Range("A1").Select
@@ -366,7 +433,7 @@ Private Sub AddButton(ByRef ws As Worksheet, ByRef cell As Range, _
         .Line.Visible = msoFalse
         .TextFrame2.TextRange.Characters.Text = caption
         .TextFrame2.TextRange.Font.Fill.ForeColor.RGB = RGB(255, 255, 255)
-        .TextFrame2.TextRange.Font.Size = 11
+        .TextFrame2.TextRange.Font.Size = 12
         .TextFrame2.TextRange.Font.Bold = msoTrue
         .TextFrame2.TextRange.ParagraphFormat.Alignment = msoAlignCenter
         .TextFrame2.VerticalAnchor = msoAnchorMiddle
@@ -375,4 +442,3 @@ Private Sub AddButton(ByRef ws As Worksheet, ByRef cell As Range, _
         .Placement = xlFreeFloating
     End With
 End Sub
-
