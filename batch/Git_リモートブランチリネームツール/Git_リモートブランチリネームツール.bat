@@ -153,8 +153,7 @@ function Rename-RemoteBranch {
     $remoteName = git remote | Select-Object -First 1
     if (-not $remoteName) {
         Write-Host "[エラー] リモートリポジトリが設定されていません" -ForegroundColor Red
-        Read-Host "Enterキーで戻る"
-        return
+        return $false
     }
 
     # 現在のブランチ取得
@@ -183,8 +182,7 @@ function Rename-RemoteBranch {
         Write-Host "リネーム可能なリモートブランチが見つかりません" -ForegroundColor Yellow
         Write-Host ""
         Write-Host "保護ブランチ ($($ProtectedBranches -join ', ')) はリネームできません" -ForegroundColor Gray
-        Read-Host "Enterキーで戻る"
-        return
+        return $false
     }
 
     # ブランチを番号付きで表示
@@ -207,7 +205,7 @@ function Rename-RemoteBranch {
     $maxNum = $remoteBranches.Count
     $selection = Read-Host "リネームするブランチ番号を入力 (0-$maxNum)"
 
-    if ($selection -eq "0") { return }
+    if ($selection -eq "0") { return $false }
 
     if ($selection -match '^\d+$' -and [int]$selection -ge 1 -and [int]$selection -le $maxNum) {
         $selectedBranch = $remoteBranches[[int]$selection - 1]
@@ -222,8 +220,7 @@ function Rename-RemoteBranch {
         # 保護ブランチチェック（念のため）
         if ($ProtectedBranches -contains $oldBranchName) {
             Write-Host "[エラー] $oldBranchName は保護されています。リネームできません。" -ForegroundColor Red
-            Read-Host "Enterキーで戻る"
-            return
+            return $false
         }
 
         # 新しいブランチ名を入力
@@ -234,8 +231,7 @@ function Rename-RemoteBranch {
 
         if ([string]::IsNullOrWhiteSpace($newBranchName)) {
             Write-Host "キャンセルしました" -ForegroundColor Yellow
-            Read-Host "Enterキーで戻る"
-            return
+            return $false
         }
 
         # ブランチ名バリデーション
@@ -243,24 +239,21 @@ function Rename-RemoteBranch {
         if (-not $validation.Valid) {
             Write-Host ""
             Write-Host "[エラー] $($validation.Message)" -ForegroundColor Red
-            Read-Host "Enterキーで戻る"
-            return
+            return $false
         }
 
         # 同じ名前チェック
         if ($oldBranchName -eq $newBranchName) {
             Write-Host ""
             Write-Host "[エラー] 同じブランチ名です" -ForegroundColor Red
-            Read-Host "Enterキーで戻る"
-            return
+            return $false
         }
 
         # 保護ブランチ名へのリネームチェック
         if ($ProtectedBranches -contains $newBranchName) {
             Write-Host ""
             Write-Host "[エラー] $newBranchName は保護ブランチ名のため使用できません" -ForegroundColor Red
-            Read-Host "Enterキーで戻る"
-            return
+            return $false
         }
 
         # 既存ブランチ名チェック
@@ -268,8 +261,7 @@ function Rename-RemoteBranch {
         if ($existingBranches -contains $newBranchName) {
             Write-Host ""
             Write-Host "[エラー] ブランチ '$newBranchName' は既に存在します" -ForegroundColor Red
-            Read-Host "Enterキーで戻る"
-            return
+            return $false
         }
 
         # ローカルブランチ存在チェック
@@ -301,8 +293,7 @@ function Rename-RemoteBranch {
         $confirm = Read-Host "リネームを実行しますか? (y/n)"
         if ($confirm -ne "y") {
             Write-Host "キャンセルしました" -ForegroundColor Yellow
-            Read-Host "Enterキーで戻る"
-            return
+            return $false
         }
 
         Write-Host ""
@@ -397,10 +388,10 @@ function Rename-RemoteBranch {
             Write-Host "========================================================================" -ForegroundColor Red
         }
 
-        Read-Host "Enterキーで戻る"
+        return $success
     } else {
         Write-Host "無効な番号です" -ForegroundColor Red
-        Read-Host "Enterキーで戻る"
+        return $false
     }
 }
 #endregion
@@ -417,8 +408,7 @@ function Rename-RemoteBranchDirect {
     $remoteName = git remote | Select-Object -First 1
     if (-not $remoteName) {
         Write-Host "[エラー] リモートリポジトリが設定されていません" -ForegroundColor Red
-        Read-Host "Enterキーで戻る"
-        return
+        return $false
     }
 
     # 現在のブランチ取得
@@ -436,16 +426,14 @@ function Rename-RemoteBranchDirect {
 
     if ([string]::IsNullOrWhiteSpace($oldBranchName)) {
         Write-Host "キャンセルしました" -ForegroundColor Yellow
-        Read-Host "Enterキーで戻る"
-        return
+        return $false
     }
 
     # 保護ブランチチェック
     if ($ProtectedBranches -contains $oldBranchName) {
         Write-Host ""
         Write-Host "[エラー] $oldBranchName は保護されています。リネームできません。" -ForegroundColor Red
-        Read-Host "Enterキーで戻る"
-        return
+        return $false
     }
 
     # リモートブランチ存在チェック
@@ -453,8 +441,7 @@ function Rename-RemoteBranchDirect {
     if (-not $remoteBranchExists) {
         Write-Host ""
         Write-Host "[エラー] リモートブランチ '$oldBranchName' が見つかりません" -ForegroundColor Red
-        Read-Host "Enterキーで戻る"
-        return
+        return $false
     }
 
     Write-Host ""
@@ -465,8 +452,7 @@ function Rename-RemoteBranchDirect {
 
     if ([string]::IsNullOrWhiteSpace($newBranchName)) {
         Write-Host "キャンセルしました" -ForegroundColor Yellow
-        Read-Host "Enterキーで戻る"
-        return
+        return $false
     }
 
     # ブランチ名バリデーション
@@ -474,24 +460,21 @@ function Rename-RemoteBranchDirect {
     if (-not $validation.Valid) {
         Write-Host ""
         Write-Host "[エラー] $($validation.Message)" -ForegroundColor Red
-        Read-Host "Enterキーで戻る"
-        return
+        return $false
     }
 
     # 同じ名前チェック
     if ($oldBranchName -eq $newBranchName) {
         Write-Host ""
         Write-Host "[エラー] 同じブランチ名です" -ForegroundColor Red
-        Read-Host "Enterキーで戻る"
-        return
+        return $false
     }
 
     # 保護ブランチ名へのリネームチェック
     if ($ProtectedBranches -contains $newBranchName) {
         Write-Host ""
         Write-Host "[エラー] $newBranchName は保護ブランチ名のため使用できません" -ForegroundColor Red
-        Read-Host "Enterキーで戻る"
-        return
+        return $false
     }
 
     # 既存ブランチ名チェック
@@ -499,8 +482,7 @@ function Rename-RemoteBranchDirect {
     if ($existingBranches -contains $newBranchName) {
         Write-Host ""
         Write-Host "[エラー] ブランチ '$newBranchName' は既に存在します" -ForegroundColor Red
-        Read-Host "Enterキーで戻る"
-        return
+        return $false
     }
 
     # ローカルブランチ存在チェック
@@ -532,8 +514,7 @@ function Rename-RemoteBranchDirect {
     $confirm = Read-Host "リネームを実行しますか? (y/n)"
     if ($confirm -ne "y") {
         Write-Host "キャンセルしました" -ForegroundColor Yellow
-        Read-Host "Enterキーで戻る"
-        return
+        return $false
     }
 
     Write-Host ""
@@ -622,7 +603,7 @@ function Rename-RemoteBranchDirect {
         Write-Host "========================================================================" -ForegroundColor Red
     }
 
-    Read-Host "Enterキーで戻る"
+    return $success
 }
 #endregion
 
@@ -642,34 +623,30 @@ function Show-ProtectedBranches {
     Write-Host "保護ブランチを変更する場合は、スクリプト内の" -ForegroundColor Gray
     Write-Host "`$ProtectedBranches 変数を編集してください。" -ForegroundColor Gray
     Write-Host ""
-    Read-Host "Enterキーで戻る"
 }
 #endregion
 
 #region メインメニュー
-while ($true) {
-    Write-Host ""
-    Write-Host "========================================================================" -ForegroundColor Cyan
-    Write-Host "  Git リモートブランチリネームツール - メインメニュー" -ForegroundColor Cyan
-    Write-Host "========================================================================" -ForegroundColor Cyan
-    Write-Host ""
-    Write-Host " 1. 一覧からブランチを選択してリネーム"
-    Write-Host " 2. ブランチ名を直接入力してリネーム"
-    Write-Host " 3. 保護ブランチ一覧を表示"
-    Write-Host ""
-    Write-Host " 0. 終了"
-    Write-Host ""
-    $choice = Read-Host "選択 (0-3)"
+Write-Host ""
+Write-Host "========================================================================" -ForegroundColor Cyan
+Write-Host "  Git リモートブランチリネームツール - メニュー" -ForegroundColor Cyan
+Write-Host "========================================================================" -ForegroundColor Cyan
+Write-Host ""
+Write-Host " 1. 一覧からブランチを選択してリネーム"
+Write-Host " 2. ブランチ名を直接入力してリネーム"
+Write-Host " 3. 保護ブランチ一覧を表示"
+Write-Host ""
+Write-Host " 0. 終了"
+Write-Host ""
+$choice = Read-Host "選択 (0-3)"
 
-    switch ($choice) {
-        "0" { exit 0 }
-        "1" { Rename-RemoteBranch }
-        "2" { Rename-RemoteBranchDirect }
-        "3" { Show-ProtectedBranches }
-        default {
-            Write-Host "無効な選択です" -ForegroundColor Red
-            Start-Sleep -Seconds 1
-        }
+switch ($choice) {
+    "0" { exit 0 }
+    "1" { $result = Rename-RemoteBranch }
+    "2" { $result = Rename-RemoteBranchDirect }
+    "3" { Show-ProtectedBranches }
+    default {
+        Write-Host "無効な選択です" -ForegroundColor Red
     }
 }
 #endregion
