@@ -609,6 +609,16 @@
 
 
         <!--
+        デバッグモード切り替え
+        -->
+        <div style="margin: 10px 0; text-align: left;">
+            <label style="cursor: pointer; font-size: 0.9em; color: #666;">
+                <input type="checkbox" id="debugModeCheck" style="margin-right: 5px;">
+                デバッグモード（ブラウザコンソールにログ出力）
+            </label>
+        </div>
+
+        <!--
         ボタングループ
         disabled属性: ボタンを無効化（クリックできない状態）
         -->
@@ -704,6 +714,9 @@
 
         let selectedMode = null;  // 選択された解析モード（'word' or 'javascript'）
 
+        // デバッグモード（ブラウザコンソールにログを出力）
+        let debugMode = false;
+
 
         /*
         ======================================================================
@@ -730,6 +743,15 @@
         const summary = document.getElementById('summary');           // サマリー
         const errorContainer = document.getElementById('errorContainer');    // エラーコンテナ
         const errorMessage = document.getElementById('errorMessage'); // エラーメッセージ
+        const debugModeCheck = document.getElementById('debugModeCheck'); // デバッグモードチェックボックス
+
+        // デバッグモードチェックボックスのイベントリスナー
+        debugModeCheck.addEventListener('change', () => {
+            debugMode = debugModeCheck.checked;
+            if (debugMode) {
+                console.log('%c[DEBUG] デバッグモードが有効になりました', 'color: blue; font-weight: bold');
+            }
+        });
 
         /*
         ======================================================================
@@ -1438,6 +1460,18 @@
             try {
                 const pageTexts = await extractPageTexts(content, bytes, objStmObjectsMap);
 
+                // デバッグ: 抽出されたしおり一覧を出力
+                if (debugMode) {
+                    console.log('%c[DEBUG] === 抽出されたしおり一覧 ===', 'color: blue; font-weight: bold');
+                    bookmarks.forEach((bm, i) => {
+                        console.log(`[DEBUG] しおり${i + 1}: "${bm.title}" (ページ: ${bm.page}, source: ${bm.source || 'unknown'})`);
+                    });
+                    console.log('%c[DEBUG] === ページテキスト一覧 ===', 'color: blue; font-weight: bold');
+                    pageTexts.forEach((text, page) => {
+                        console.log(`[DEBUG] ページ${page}: ${text.substring(0, 200)}${text.length > 200 ? '...' : ''}`);
+                    });
+                }
+
                 // 各しおりについて判定
                 // 注: source別のページ番号処理
                 // - 'javascript': 取得時に+1済み（0始まり→1始まり変換済み）
@@ -1470,21 +1504,40 @@
                             if (pageTextWithSpace.includes(titleWithSpace)) {
                                 // 空白も含めて一致 → OK
                                 bm.verified = true;
+                                if (debugMode) {
+                                    console.log(`%c[DEBUG] OK: "${bm.title}" → ページ${adjustedPage}に一致`, 'color: green');
+                                }
                             } else {
                                 // 空白の位置が異なる → NG
                                 bm.verified = false;
+                                if (debugMode) {
+                                    console.log(`%c[DEBUG] NG(空白位置): "${bm.title}"`, 'color: orange');
+                                    console.log(`  しおり(正規化): "${titleWithSpace}"`);
+                                    console.log(`  ページ(正規化): "${pageTextWithSpace.substring(0, 500)}..."`);
+                                }
                             }
                         } else {
                             // そもそもページ内にタイトルが存在しない → NG
                             bm.verified = false;
+                            if (debugMode) {
+                                console.log(`%c[DEBUG] NG(不一致): "${bm.title}" → ページ${adjustedPage}に存在しない`, 'color: red');
+                                console.log(`  しおり(空白除去): "${titleNoSpace}"`);
+                                console.log(`  ページ(空白除去,先頭500文字): "${pageTextNoSpace.substring(0, 500)}..."`);
+                            }
                         }
                     } else {
                         // ページテキストが取得できなかった場合は不明
                         bm.verified = null;
+                        if (debugMode) {
+                            console.log(`%c[DEBUG] 不明: "${bm.title}" → ページ${adjustedPage}のテキストが取得できず`, 'color: gray');
+                        }
                     }
                 }
             } catch (e) {
                 // エラー時は全て不明とする
+                if (debugMode) {
+                    console.log('%c[DEBUG] エラー発生: ' + e.message, 'color: red; font-weight: bold');
+                }
                 for (const bm of bookmarks) {
                     bm.verified = null;
                 }
