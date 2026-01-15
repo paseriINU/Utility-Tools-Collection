@@ -1580,13 +1580,21 @@
                     return pageA - pageB;
                 }
 
-                // 同じページ番号の場合は階層レベルで比較
+                // 同じページ番号の場合はしおりの階層レベル（level）で比較
+                // 階層が小さい方（浅い方）が上に来る
+                const levelA = a.level || 99;
+                const levelB = b.level || 99;
+
+                if (levelA !== levelB) {
+                    return levelA - levelB;
+                }
+
+                // 同じ階層レベルの場合はタイトルから推測した階層で比較
                 const titleA = a.title || '';
                 const titleB = b.title || '';
                 const hierA = getTitleHierarchy(titleA);
                 const hierB = getTitleHierarchy(titleB);
 
-                // 階層レベルが異なる場合は階層順
                 if (hierA !== hierB) {
                     return hierA - hierB;
                 }
