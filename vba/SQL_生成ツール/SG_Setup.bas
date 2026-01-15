@@ -817,80 +817,52 @@ Private Sub FormatHelpSheet()
 End Sub
 
 '==============================================================================
-' プルダウンリスト追加ヘルパー
+' プルダウンリスト追加ヘルパー（Setup用・Private）
+' ※初期化時のみ使用。プルダウン更新はSG_Generator.AddDropdownを使用
 '==============================================================================
-Public Sub AddDropdown(ByVal ws As Worksheet, ByVal cellAddr As String, ByVal listItems As String, Optional ByVal namePrefix As String = "DropList")
-    Dim items() As String
-    Dim wsDef As Worksheet
-    Dim rangeName As String
-    Dim startRow As Long
-    Dim i As Long
-    Dim listRange As Range
-    Dim listHash As Long
-    Dim existingName As Name
-    Dim targetCol As String
+Private Sub AddDropdownPrivate(ByVal ws As Worksheet, ByVal cellAddr As String, ByVal listItems As String, Optional ByVal namePrefix As String = "DropList")
+    On Error Resume Next
 
     With ws.Range(cellAddr).Validation
         .Delete
         If Len(listItems) > 0 Then
-            ' 255文字以下の場合は直接設定
+            ' 直接設定（255文字以下の場合）
             If Len(listItems) <= 255 Then
                 .Add Type:=xlValidateList, AlertStyle:=xlValidAlertStop, Formula1:=listItems
             Else
-                ' 255文字を超える場合は名前付き範囲を使用
+                ' 255文字を超える場合は先頭255文字で切り詰め
+                Dim truncatedList As String
+                Dim items() As String
+                Dim i As Long
+
                 items = Split(listItems, ",")
+                truncatedList = ""
 
-                ' テーブル定義シートに一時リストを作成
-                On Error Resume Next
-                Set wsDef = Sheets(SHEET_TABLE_DEF)
-                On Error GoTo 0
-
-                If Not wsDef Is Nothing Then
-                    ' プレフィックスに応じて異なる列を使用
-                    Select Case namePrefix
-                        Case "TableList"
-                            targetCol = "Z"
-                        Case "ColumnList"
-                            targetCol = "AA"
-                        Case Else
-                            targetCol = "AB"
-                    End Select
-
-                    ' リスト内容に基づいてユニークな名前を生成
-                    listHash = Len(listItems) + UBound(items) * 100
-                    rangeName = namePrefix & "_" & listHash
-
-                    ' 既存の名前付き範囲をチェック
-                    Set existingName = Nothing
-                    On Error Resume Next
-                    Set existingName = ThisWorkbook.Names(rangeName)
-                    On Error GoTo 0
-
-                    ' 名前付き範囲が存在しない場合のみ作成
-                    If existingName Is Nothing Then
-                        startRow = 1
-
-                        ' リストを縦方向に書き出し
-                        For i = LBound(items) To UBound(items)
-                            wsDef.Range(targetCol & (startRow + i)).Value = Trim(items(i))
-                        Next i
-
-                        ' 範囲に名前を付ける
-                        Set listRange = wsDef.Range(targetCol & startRow & ":" & targetCol & (startRow + UBound(items)))
-                        ThisWorkbook.Names.Add Name:=rangeName, RefersTo:=listRange
+                For i = LBound(items) To UBound(items)
+                    If truncatedList = "" Then
+                        truncatedList = Trim(items(i))
+                    ElseIf Len(truncatedList) + Len(items(i)) + 1 <= 255 Then
+                        truncatedList = truncatedList & "," & Trim(items(i))
+                    Else
+                        Exit For
                     End If
+                Next i
 
-                    ' 名前付き範囲を参照してドロップダウンを設定
-                    .Add Type:=xlValidateList, AlertStyle:=xlValidAlertStop, Formula1:="=" & rangeName
-                Else
-                    ' テーブル定義シートがない場合は直接設定を試みる
-                    .Add Type:=xlValidateList, AlertStyle:=xlValidAlertStop, Formula1:=listItems
-                End If
+                .Add Type:=xlValidateList, AlertStyle:=xlValidAlertStop, Formula1:=truncatedList
             End If
             .IgnoreBlank = True
             .InCellDropdown = True
         End If
     End With
+
+    On Error GoTo 0
+End Sub
+
+'==============================================================================
+' プルダウンリスト追加（Public wrapper - 互換性維持用）
+'==============================================================================
+Public Sub AddDropdown(ByVal ws As Worksheet, ByVal cellAddr As String, ByVal listItems As String, Optional ByVal namePrefix As String = "DropList")
+    AddDropdownPrivate ws, cellAddr, listItems, namePrefix
 End Sub
 
 '==============================================================================

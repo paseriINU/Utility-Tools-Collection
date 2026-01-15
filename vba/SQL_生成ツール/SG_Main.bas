@@ -278,11 +278,11 @@ Public Sub UpdateDropdownsFromTableDef()
     End If
 
     ' メインテーブルのプルダウンを更新（テーブル一覧用プレフィックス）
-    SG_Setup.AddDropdown wsMain, "B" & ROW_MAIN_TABLE + 1, tableList, "TableList"
+    SG_Generator.AddDropdown wsMain, "B" & ROW_MAIN_TABLE + 1, tableList, "TableList"
 
     ' JOINテーブルのプルダウンを更新（テーブル一覧用プレフィックス）
     For i = ROW_JOIN_START + 2 To ROW_JOIN_END
-        SG_Setup.AddDropdown wsMain, "C" & i, tableList, "TableList"
+        SG_Generator.AddDropdown wsMain, "C" & i, tableList, "TableList"
     Next i
 
     ' カラム選択のプルダウンを更新（全テーブルの全カラム、カラム一覧用プレフィックス）
@@ -291,21 +291,21 @@ Public Sub UpdateDropdownsFromTableDef()
 
     For i = ROW_COLUMNS_START To ROW_COLUMNS_END
         If columnList <> "" Then
-            SG_Setup.AddDropdown wsMain, "C" & i, columnList, "ColumnList"
+            SG_Generator.AddDropdown wsMain, "C" & i, columnList, "ColumnList"
         End If
     Next i
 
     ' WHERE句のカラムプルダウンを更新（カラム一覧用プレフィックス）
     For i = ROW_WHERE_START To ROW_WHERE_END
         If columnList <> "" Then
-            SG_Setup.AddDropdown wsMain, "E" & i, columnList, "ColumnList"
+            SG_Generator.AddDropdown wsMain, "E" & i, columnList, "ColumnList"
         End If
     Next i
 
     ' ORDER BY句のカラムプルダウンを更新（カラム一覧用プレフィックス）
     For i = ROW_ORDERBY_START To ROW_ORDERBY_END
         If columnList <> "" Then
-            SG_Setup.AddDropdown wsMain, "C" & i, columnList, "ColumnList"
+            SG_Generator.AddDropdown wsMain, "C" & i, columnList, "ColumnList"
         End If
     Next i
 
@@ -315,13 +315,13 @@ Public Sub UpdateDropdownsFromTableDef()
 
     If aliasList <> "" Then
         For i = ROW_COLUMNS_START To ROW_COLUMNS_END
-            SG_Setup.AddDropdown wsMain, "B" & i, aliasList
+            SG_Generator.AddDropdown wsMain, "B" & i, aliasList
         Next i
         For i = ROW_WHERE_START To ROW_WHERE_END
-            SG_Setup.AddDropdown wsMain, "D" & i, aliasList
+            SG_Generator.AddDropdown wsMain, "D" & i, aliasList
         Next i
         For i = ROW_ORDERBY_START To ROW_ORDERBY_END
-            SG_Setup.AddDropdown wsMain, "B" & i, aliasList
+            SG_Generator.AddDropdown wsMain, "B" & i, aliasList
         Next i
     End If
 
@@ -359,17 +359,17 @@ Public Sub RefreshColumnDropdownsByTable()
 
     ' カラム選択のプルダウンを更新（カラム一覧用プレフィックス）
     For i = ROW_COLUMNS_START To ROW_COLUMNS_END
-        SG_Setup.AddDropdown wsMain, "C" & i, columnList, "ColumnList"
+        SG_Generator.AddDropdown wsMain, "C" & i, columnList, "ColumnList"
     Next i
 
     ' WHERE句のカラムプルダウンを更新（カラム一覧用プレフィックス）
     For i = ROW_WHERE_START To ROW_WHERE_END
-        SG_Setup.AddDropdown wsMain, "E" & i, columnList, "ColumnList"
+        SG_Generator.AddDropdown wsMain, "E" & i, columnList, "ColumnList"
     Next i
 
     ' ORDER BY句のカラムプルダウンを更新（カラム一覧用プレフィックス）
     For i = ROW_ORDERBY_START To ROW_ORDERBY_END
-        SG_Setup.AddDropdown wsMain, "C" & i, columnList, "ColumnList"
+        SG_Generator.AddDropdown wsMain, "C" & i, columnList, "ColumnList"
     Next i
 
     ' 選択されたテーブル数をカウント
@@ -449,17 +449,17 @@ Public Sub OnTableSelectionChanged(ByVal changedRange As Range)
 
     ' カラム選択のプルダウンを更新（カラム一覧用プレフィックス）
     For i = ROW_COLUMNS_START To ROW_COLUMNS_END
-        SG_Setup.AddDropdown wsMain, "C" & i, columnList, "ColumnList"
+        SG_Generator.AddDropdown wsMain, "C" & i, columnList, "ColumnList"
     Next i
 
     ' WHERE句のカラムプルダウンを更新（カラム一覧用プレフィックス）
     For i = ROW_WHERE_START To ROW_WHERE_END
-        SG_Setup.AddDropdown wsMain, "E" & i, columnList, "ColumnList"
+        SG_Generator.AddDropdown wsMain, "E" & i, columnList, "ColumnList"
     Next i
 
     ' ORDER BY句のカラムプルダウンを更新（カラム一覧用プレフィックス）
     For i = ROW_ORDERBY_START To ROW_ORDERBY_END
-        SG_Setup.AddDropdown wsMain, "C" & i, columnList, "ColumnList"
+        SG_Generator.AddDropdown wsMain, "C" & i, columnList, "ColumnList"
     Next i
 
     Application.EnableEvents = True
@@ -488,15 +488,15 @@ Public Sub RefreshAliasDropdowns()
 
     ' 各セクションの「テーブル別名」プルダウンを更新
     For i = ROW_COLUMNS_START To ROW_COLUMNS_END
-        SG_Setup.AddDropdown wsMain, "B" & i, aliasList
+        SG_Generator.AddDropdown wsMain, "B" & i, aliasList
     Next i
 
     For i = ROW_WHERE_START To ROW_WHERE_END
-        SG_Setup.AddDropdown wsMain, "D" & i, aliasList
+        SG_Generator.AddDropdown wsMain, "D" & i, aliasList
     Next i
 
     For i = ROW_ORDERBY_START To ROW_ORDERBY_END
-        SG_Setup.AddDropdown wsMain, "B" & i, aliasList
+        SG_Generator.AddDropdown wsMain, "B" & i, aliasList
     Next i
 
     MsgBox "テーブル別名のプルダウンを更新しました。" & vbCrLf & _
