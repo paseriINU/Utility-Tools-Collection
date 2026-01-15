@@ -54,7 +54,7 @@ if (-not $winmergePath) {
 #region フォーム作成
 $form = New-Object System.Windows.Forms.Form
 $form.Text = "PDF テキスト比較ツール"
-$form.Size = New-Object System.Drawing.Size(500, 400)
+$form.Size = New-Object System.Drawing.Size(500, 420)
 $form.StartPosition = "CenterScreen"
 $form.FormBorderStyle = "FixedDialog"
 $form.MaximizeBox = $false
@@ -69,16 +69,24 @@ $titleLabel.Size = New-Object System.Drawing.Size(450, 25)
 $titleLabel.Font = New-Object System.Drawing.Font("Meiryo UI", 11, [System.Drawing.FontStyle]::Bold)
 $form.Controls.Add($titleLabel)
 
+# 説明ラベル
+$descLabel = New-Object System.Windows.Forms.Label
+$descLabel.Text = "※ PDFをWordで開いてテキスト抽出し、WinMergeで比較します"
+$descLabel.Location = New-Object System.Drawing.Point(20, 42)
+$descLabel.Size = New-Object System.Drawing.Size(450, 18)
+$descLabel.ForeColor = [System.Drawing.Color]::FromArgb(100, 100, 100)
+$form.Controls.Add($descLabel)
+
 # 旧PDFラベル
 $oldLabel = New-Object System.Windows.Forms.Label
 $oldLabel.Text = "旧PDF（比較元）:"
-$oldLabel.Location = New-Object System.Drawing.Point(20, 55)
+$oldLabel.Location = New-Object System.Drawing.Point(20, 68)
 $oldLabel.Size = New-Object System.Drawing.Size(120, 20)
 $form.Controls.Add($oldLabel)
 
 # 旧PDFドロップゾーン
 $oldDropZone = New-Object System.Windows.Forms.Panel
-$oldDropZone.Location = New-Object System.Drawing.Point(20, 75)
+$oldDropZone.Location = New-Object System.Drawing.Point(20, 88)
 $oldDropZone.Size = New-Object System.Drawing.Size(440, 80)
 $oldDropZone.BorderStyle = "FixedSingle"
 $oldDropZone.BackColor = [System.Drawing.Color]::FromArgb(245, 245, 245)
@@ -95,13 +103,13 @@ $oldDropZone.Controls.Add($oldDropLabel)
 # 新PDFラベル
 $newLabel = New-Object System.Windows.Forms.Label
 $newLabel.Text = "新PDF（比較先）:"
-$newLabel.Location = New-Object System.Drawing.Point(20, 165)
+$newLabel.Location = New-Object System.Drawing.Point(20, 178)
 $newLabel.Size = New-Object System.Drawing.Size(120, 20)
 $form.Controls.Add($newLabel)
 
 # 新PDFドロップゾーン
 $newDropZone = New-Object System.Windows.Forms.Panel
-$newDropZone.Location = New-Object System.Drawing.Point(20, 185)
+$newDropZone.Location = New-Object System.Drawing.Point(20, 198)
 $newDropZone.Size = New-Object System.Drawing.Size(440, 80)
 $newDropZone.BorderStyle = "FixedSingle"
 $newDropZone.BackColor = [System.Drawing.Color]::FromArgb(245, 245, 245)
@@ -118,7 +126,7 @@ $newDropZone.Controls.Add($newDropLabel)
 # 比較実行ボタン
 $compareButton = New-Object System.Windows.Forms.Button
 $compareButton.Text = "比較実行"
-$compareButton.Location = New-Object System.Drawing.Point(180, 285)
+$compareButton.Location = New-Object System.Drawing.Point(180, 298)
 $compareButton.Size = New-Object System.Drawing.Size(120, 35)
 $compareButton.Enabled = $false
 $compareButton.Font = New-Object System.Drawing.Font("Meiryo UI", 10, [System.Drawing.FontStyle]::Bold)
@@ -127,7 +135,7 @@ $form.Controls.Add($compareButton)
 # ステータスラベル
 $statusLabel = New-Object System.Windows.Forms.Label
 $statusLabel.Text = ""
-$statusLabel.Location = New-Object System.Drawing.Point(20, 330)
+$statusLabel.Location = New-Object System.Drawing.Point(20, 343)
 $statusLabel.Size = New-Object System.Drawing.Size(450, 20)
 $statusLabel.ForeColor = [System.Drawing.Color]::Gray
 $form.Controls.Add($statusLabel)
