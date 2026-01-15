@@ -1796,157 +1796,85 @@
             const result = [];
             let i = 0;
 
-            // UTF-16BE BOM (FE FF) をチェック
-            const isUtf16BE = inputBytes.length >= 2 &&
-                              inputBytes[0] === 0xFE && inputBytes[1] === 0xFF;
+            while (i < inputBytes.length) {
+                if (inputBytes[i] === 0x5C && i + 1 < inputBytes.length) { // バックスラッシュ '\'
+                    const nextByte = inputBytes[i + 1];
 
-            if (isUtf16BE) {
-                // UTF-16BEモード: 2バイト単位で処理
-                // BOMをそのまま追加
-                result.push(inputBytes[0], inputBytes[1]);
-                i = 2;
-
-                while (i + 1 < inputBytes.length) {
-                    const highByte = inputBytes[i];
-                    const lowByte = inputBytes[i + 1];
-
-                    // UTF-16BEでのASCIIバックスラッシュ: 00 5C
-                    if (highByte === 0x00 && lowByte === 0x5C && i + 3 < inputBytes.length) {
-                        // 次の文字を確認（これもUTF-16BE: 00 XX）
-                        const nextHigh = inputBytes[i + 2];
-                        const nextLow = inputBytes[i + 3];
-
-                        if (nextHigh === 0x00) {
-                            // ASCII互換のエスケープシーケンス
-                            // 8進数エスケープ: \0 - \7
-                            if (nextLow >= 0x30 && nextLow <= 0x37) {
-                                // UTF-16BEでの8進数エスケープは複雑なのでスキップ
-                                // そのまま出力
-                                result.push(highByte, lowByte);
-                                i += 2;
-                                continue;
-                            }
-
-                            switch (nextLow) {
-                                case 0x6E: // \n
-                                    result.push(0x00, 0x0A);
-                                    i += 4;
-                                    continue;
-                                case 0x72: // \r
-                                    result.push(0x00, 0x0D);
-                                    i += 4;
-                                    continue;
-                                case 0x74: // \t
-                                    result.push(0x00, 0x09);
-                                    i += 4;
-                                    continue;
-                                case 0x28: // \(
-                                    result.push(0x00, 0x28);
-                                    i += 4;
-                                    continue;
-                                case 0x29: // \)
-                                    result.push(0x00, 0x29);
-                                    i += 4;
-                                    continue;
-                                case 0x5C: // \\
-                                    result.push(0x00, 0x5C);
-                                    i += 4;
-                                    continue;
+                    // 8進数エスケープ: \0 - \377
+                    if (nextByte >= 0x30 && nextByte <= 0x37) { // '0'-'7'
+                        // 最大3桁の8進数を取得
+                        let octalValue = 0;
+                        let digits = 0;
+                        let j = i + 1;
+                        while (j < inputBytes.length && digits < 3) {
+                            const digit = inputBytes[j];
+                            if (digit >= 0x30 && digit <= 0x37) { // '0'-'7'
+                                octalValue = octalValue * 8 + (digit - 0x30);
+                                digits++;
+                                j++;
+                            } else {
+                                break;
                             }
                         }
+                        result.push(octalValue & 0xFF);
+                        i = j;
+                        continue;
                     }
 
-                    // 通常の2バイト文字
-                    result.push(highByte, lowByte);
-                    i += 2;
-                }
-
-                // 残りのバイト（奇数バイトの場合）
-                if (i < inputBytes.length) {
-                    result.push(inputBytes[i]);
-                }
-            } else {
-                // Latin-1/ASCIIモード: 1バイト単位で処理（従来の処理）
-                while (i < inputBytes.length) {
-                    if (inputBytes[i] === 0x5C && i + 1 < inputBytes.length) { // バックスラッシュ '\'
-                        const nextByte = inputBytes[i + 1];
-
-                        // 8進数エスケープ: \0 - \377
-                        if (nextByte >= 0x30 && nextByte <= 0x37) { // '0'-'7'
-                            // 最大3桁の8進数を取得
-                            let octalValue = 0;
-                            let digits = 0;
-                            let j = i + 1;
-                            while (j < inputBytes.length && digits < 3) {
-                                const digit = inputBytes[j];
-                                if (digit >= 0x30 && digit <= 0x37) { // '0'-'7'
-                                    octalValue = octalValue * 8 + (digit - 0x30);
-                                    digits++;
-                                    j++;
-                                } else {
-                                    break;
-                                }
-                            }
-                            result.push(octalValue & 0xFF);
-                            i = j;
+                    // 特殊文字エスケープ
+                    switch (nextByte) {
+                        case 0x6E: // \n
+                            result.push(0x0A);
+                            i += 2;
                             continue;
-                        }
-
-                        // 特殊文字エスケープ
-                        switch (nextByte) {
-                            case 0x6E: // \n
-                                result.push(0x0A);
-                                i += 2;
-                                continue;
-                            case 0x72: // \r
-                                result.push(0x0D);
-                                i += 2;
-                                continue;
-                            case 0x74: // \t
-                                result.push(0x09);
-                                i += 2;
-                                continue;
-                            case 0x62: // \b
-                                result.push(0x08);
-                                i += 2;
-                                continue;
-                            case 0x66: // \f
-                                result.push(0x0C);
-                                i += 2;
-                                continue;
-                            case 0x28: // \(
-                                result.push(0x28);
-                                i += 2;
-                                continue;
-                            case 0x29: // \)
-                                result.push(0x29);
-                                i += 2;
-                                continue;
-                            case 0x5C: // \\
-                                result.push(0x5C);
-                                i += 2;
-                                continue;
-                            case 0x0D: // \<CR> - 行継続（無視）
-                                i += 2;
-                                if (i < inputBytes.length && inputBytes[i] === 0x0A) {
-                                    i++; // \<CR><LF>
-                                }
-                                continue;
-                            case 0x0A: // \<LF> - 行継続（無視）
-                                i += 2;
-                                continue;
-                            default:
-                                // 未知のエスケープは文字そのものとして扱う
-                                result.push(nextByte);
-                                i += 2;
-                                continue;
-                        }
+                        case 0x72: // \r
+                            result.push(0x0D);
+                            i += 2;
+                            continue;
+                        case 0x74: // \t
+                            result.push(0x09);
+                            i += 2;
+                            continue;
+                        case 0x62: // \b
+                            result.push(0x08);
+                            i += 2;
+                            continue;
+                        case 0x66: // \f
+                            result.push(0x0C);
+                            i += 2;
+                            continue;
+                        case 0x28: // \(
+                            result.push(0x28);
+                            i += 2;
+                            continue;
+                        case 0x29: // \)
+                            result.push(0x29);
+                            i += 2;
+                            continue;
+                        case 0x5C: // \\
+                            result.push(0x5C);
+                            i += 2;
+                            continue;
+                        case 0x0D: // \<CR> - 行継続（無視）
+                            i += 2;
+                            if (i < inputBytes.length && inputBytes[i] === 0x0A) {
+                                i++; // \<CR><LF>
+                            }
+                            continue;
+                        case 0x0A: // \<LF> - 行継続（無視）
+                            i += 2;
+                            continue;
+                        default:
+                            // 未知のエスケープは文字そのものとして扱う
+                            result.push(nextByte);
+                            i += 2;
+                            continue;
                     }
-
-                    // 通常のバイト
-                    result.push(inputBytes[i]);
-                    i++;
                 }
+
+                // 通常のバイト
+                result.push(inputBytes[i]);
+                i++;
             }
 
             return new Uint8Array(result);
