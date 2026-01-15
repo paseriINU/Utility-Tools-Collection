@@ -1249,11 +1249,12 @@
                 return String.fromCharCode(char.charCodeAt(0) - 0xFEE0);
             });
 
-            // 全角スペース→半角スペース
-            result = result.replace(/　/g, ' ');
-
-            // タブ文字→半角スペース
-            result = result.replace(/\t/g, ' ');
+            // すべての空白類文字を半角スペースに統一
+            // - 全角スペース (U+3000)
+            // - ノーブレークスペース (U+00A0)
+            // - 各種Unicodeスペース (U+2000-U+200B, U+202F, U+205F, U+FEFF)
+            // - タブ、改行、復帰文字
+            result = result.replace(/[\u3000\u00A0\u2000-\u200B\u202F\u205F\uFEFF\t\n\r]/g, ' ');
 
             // 全角記号→半角記号（よく使われるもの）
             const symbolMap = {
@@ -1271,6 +1272,31 @@
             }
 
             return result;
+        }
+
+        /*
+        ======================================================================
+          しおりタイトルの空白問題チェック関数
+
+          しおりタイトルに以下の空白問題があるかをチェック：
+          - 先頭または末尾に空白がある
+          - 連続した空白（2つ以上）がある
+          - 全角スペースが含まれている
+        ======================================================================
+        */
+        function hasWhitespaceIssue(title) {
+            if (!title) return false;
+
+            // 先頭または末尾に空白がある
+            if (title !== title.trim()) return true;
+
+            // 連続した空白がある（半角スペース、タブなど）
+            if (/\s{2,}/.test(title)) return true;
+
+            // 全角スペースが含まれている
+            if (/\u3000/.test(title)) return true;
+
+            return false;
         }
 
         /*
@@ -1424,17 +1450,32 @@
                         : bm.page;
                     if (adjustedPage && pageTexts.has(adjustedPage)) {
                         const pageText = pageTexts.get(adjustedPage);
-                        // 全角・半角正規化 + 空白除去 + 小文字化で比較精度を向上
-                        // 例: 「第２部」と「第2部」を一致させる
-                        const normalizedTitle = normalizeFullWidthToHalfWidth(bm.title).replace(/\s+/g, '').toLowerCase();
-                        const normalizedPageText = normalizeFullWidthToHalfWidth(pageText).replace(/\s+/g, '').toLowerCase();
 
-                        const fullMatch = normalizedPageText.includes(normalizedTitle);
-                        const partialMatch = normalizedTitle.length > 3 && normalizedPageText.includes(normalizedTitle.substring(0, Math.min(10, normalizedTitle.length)));
+                        // 空白除去バージョン（位置確認用）
+                        // 全角・半角正規化 + 空白除去 + 小文字化
+                        const titleNoSpace = normalizeFullWidthToHalfWidth(bm.title).replace(/\s+/g, '').toLowerCase();
+                        const pageTextNoSpace = normalizeFullWidthToHalfWidth(pageText).replace(/\s+/g, '').toLowerCase();
 
-                        if (fullMatch || partialMatch) {
-                            bm.verified = true;
+                        // 空白を正規化したバージョン（厳密比較用）
+                        // 連続空白を1つに正規化し、先頭末尾の空白を除去
+                        const titleWithSpace = normalizeFullWidthToHalfWidth(bm.title).replace(/\s+/g, ' ').trim().toLowerCase();
+                        const pageTextWithSpace = normalizeFullWidthToHalfWidth(pageText).replace(/\s+/g, ' ').trim().toLowerCase();
+
+                        // まず空白除去バージョンでタイトルがページ内に存在するか確認
+                        const existsInPage = pageTextNoSpace.includes(titleNoSpace);
+                        const partialExists = titleNoSpace.length > 3 && pageTextNoSpace.includes(titleNoSpace.substring(0, Math.min(10, titleNoSpace.length)));
+
+                        if (existsInPage || partialExists) {
+                            // 空白除去バージョンでは一致 → 次に空白の位置を確認
+                            if (pageTextWithSpace.includes(titleWithSpace)) {
+                                // 空白も含めて一致 → OK
+                                bm.verified = true;
+                            } else {
+                                // 空白の位置が異なる → NG
+                                bm.verified = false;
+                            }
                         } else {
+                            // そもそもページ内にタイトルが存在しない → NG
                             bm.verified = false;
                         }
                     } else {
