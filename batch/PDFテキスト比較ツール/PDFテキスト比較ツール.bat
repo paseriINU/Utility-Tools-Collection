@@ -211,11 +211,9 @@ function Extract-TextFromPdf($pdfPath) {
 
         # ページ数を取得
         $pageCount = $doc.ComputeStatistics($wdStatisticPages)
-        $allPages = @()
+        $allTexts = @()
 
         for ($page = 1; $page -le $pageCount; $page++) {
-            $pageTexts = @()
-
             # ページの開始位置を取得
             $pageStart = $doc.GoTo($wdGoToPage, $wdGoToAbsolute, $page)
             $startPos = $pageStart.Start
@@ -237,7 +235,7 @@ function Extract-TextFromPdf($pdfPath) {
                     if ($header.Exists) {
                         $headerText = $header.Range.Text.Trim()
                         if ($headerText) {
-                            $pageTexts += $headerText
+                            $allTexts += $headerText
                         }
                     }
                 } catch { }
@@ -247,7 +245,7 @@ function Extract-TextFromPdf($pdfPath) {
             $range = $doc.Range($startPos, $endPos)
             $bodyText = $range.Text.Trim()
             if ($bodyText) {
-                $pageTexts += $bodyText
+                $allTexts += $bodyText
             }
 
             # そのページに対応するセクションのフッターを取得
@@ -258,19 +256,14 @@ function Extract-TextFromPdf($pdfPath) {
                     if ($footer.Exists) {
                         $footerText = $footer.Range.Text.Trim()
                         if ($footerText) {
-                            $pageTexts += $footerText
+                            $allTexts += $footerText
                         }
                     }
                 } catch { }
             }
-
-            # ページ区切りを追加
-            $allPages += "--- ページ $page ---"
-            $allPages += ($pageTexts -join "`r`n")
-            $allPages += ""
         }
 
-        $text = $allPages -join "`r`n"
+        $text = $allTexts -join "`r`n"
         $doc.Close($false)
     } catch {
         throw "PDFの読み込みに失敗しました: $($_.Exception.Message)"
