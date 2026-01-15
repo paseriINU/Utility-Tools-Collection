@@ -194,7 +194,64 @@ function Extract-TextFromPdf($pdfPath) {
         $wordApp.DisplayAlerts = 0
 
         $doc = $wordApp.Documents.Open($pdfPath, $false, $true)
-        $text = $doc.Content.Text
+
+        # ヘッダー/フッターのテキストを収集
+        $headerTexts = @()
+        $footerTexts = @()
+
+        # Word定数
+        $wdHeaderFooterPrimary = 1
+        $wdHeaderFooterFirstPage = 2
+        $wdHeaderFooterEvenPages = 3
+
+        foreach ($section in $doc.Sections) {
+            # 各種ヘッダーを取得
+            foreach ($headerType in @($wdHeaderFooterPrimary, $wdHeaderFooterFirstPage, $wdHeaderFooterEvenPages)) {
+                try {
+                    $header = $section.Headers.Item($headerType)
+                    if ($header.Exists -and $header.Range.Text.Trim()) {
+                        $headerText = $header.Range.Text.Trim()
+                        if ($headerText -and $headerTexts -notcontains $headerText) {
+                            $headerTexts += $headerText
+                        }
+                    }
+                } catch { }
+            }
+
+            # 各種フッターを取得
+            foreach ($footerType in @($wdHeaderFooterPrimary, $wdHeaderFooterFirstPage, $wdHeaderFooterEvenPages)) {
+                try {
+                    $footer = $section.Footers.Item($footerType)
+                    if ($footer.Exists -and $footer.Range.Text.Trim()) {
+                        $footerText = $footer.Range.Text.Trim()
+                        if ($footerText -and $footerTexts -notcontains $footerText) {
+                            $footerTexts += $footerText
+                        }
+                    }
+                } catch { }
+            }
+        }
+
+        # テキストを結合（ヘッダー → 本文 → フッター）
+        $allParts = @()
+
+        if ($headerTexts.Count -gt 0) {
+            $allParts += "【ヘッダー】"
+            $allParts += $headerTexts -join "`r`n"
+            $allParts += ""
+        }
+
+        $allParts += "【本文】"
+        $allParts += $doc.Content.Text
+
+        if ($footerTexts.Count -gt 0) {
+            $allParts += ""
+            $allParts += "【フッター】"
+            $allParts += $footerTexts -join "`r`n"
+        }
+
+        $text = $allParts -join "`r`n"
+
         $doc.Close($false)
     } catch {
         throw "PDFの読み込みに失敗しました: $($_.Exception.Message)"
