@@ -195,63 +195,74 @@ function Extract-TextFromPdf($pdfPath) {
 
         $doc = $wordApp.Documents.Open($pdfPath, $false, $true)
 
-        # ヘッダー/フッターのテキストを収集
-        $headerTexts = @()
-        $footerTexts = @()
-
         # Word定数
+        $wdGoToPage = 1
+        $wdGoToAbsolute = 1
+        $wdStatisticPages = 2
         $wdHeaderFooterPrimary = 1
-        $wdHeaderFooterFirstPage = 2
-        $wdHeaderFooterEvenPages = 3
 
-        foreach ($section in $doc.Sections) {
-            # 各種ヘッダーを取得
-            foreach ($headerType in @($wdHeaderFooterPrimary, $wdHeaderFooterFirstPage, $wdHeaderFooterEvenPages)) {
+        # ページ数を取得
+        $pageCount = $doc.ComputeStatistics($wdStatisticPages)
+        $allPages = @()
+
+        for ($page = 1; $page -le $pageCount; $page++) {
+            $pageTexts = @()
+
+            # ページの開始位置を取得
+            $pageStart = $doc.GoTo($wdGoToPage, $wdGoToAbsolute, $page)
+            $startPos = $pageStart.Start
+
+            # ページの終了位置を取得
+            if ($page -lt $pageCount) {
+                $nextPage = $doc.GoTo($wdGoToPage, $wdGoToAbsolute, $page + 1)
+                $endPos = $nextPage.Start
+            } else {
+                $endPos = $doc.Content.End
+            }
+
+            # そのページに対応するセクションのヘッダーを取得
+            $sectionIndex = $pageStart.Information(10)  # wdActiveEndSectionNumber = 10
+            if ($sectionIndex -ge 1 -and $sectionIndex -le $doc.Sections.Count) {
                 try {
-                    $header = $section.Headers.Item($headerType)
-                    if ($header.Exists -and $header.Range.Text.Trim()) {
+                    $section = $doc.Sections.Item($sectionIndex)
+                    $header = $section.Headers.Item($wdHeaderFooterPrimary)
+                    if ($header.Exists) {
                         $headerText = $header.Range.Text.Trim()
-                        if ($headerText -and $headerTexts -notcontains $headerText) {
-                            $headerTexts += $headerText
+                        if ($headerText) {
+                            $pageTexts += $headerText
                         }
                     }
                 } catch { }
             }
 
-            # 各種フッターを取得
-            foreach ($footerType in @($wdHeaderFooterPrimary, $wdHeaderFooterFirstPage, $wdHeaderFooterEvenPages)) {
+            # ページ範囲のテキストを取得
+            $range = $doc.Range($startPos, $endPos)
+            $bodyText = $range.Text.Trim()
+            if ($bodyText) {
+                $pageTexts += $bodyText
+            }
+
+            # そのページに対応するセクションのフッターを取得
+            if ($sectionIndex -ge 1 -and $sectionIndex -le $doc.Sections.Count) {
                 try {
-                    $footer = $section.Footers.Item($footerType)
-                    if ($footer.Exists -and $footer.Range.Text.Trim()) {
+                    $section = $doc.Sections.Item($sectionIndex)
+                    $footer = $section.Footers.Item($wdHeaderFooterPrimary)
+                    if ($footer.Exists) {
                         $footerText = $footer.Range.Text.Trim()
-                        if ($footerText -and $footerTexts -notcontains $footerText) {
-                            $footerTexts += $footerText
+                        if ($footerText) {
+                            $pageTexts += $footerText
                         }
                     }
                 } catch { }
             }
+
+            # ページ区切りを追加
+            $allPages += "--- ページ $page ---"
+            $allPages += ($pageTexts -join "`r`n")
+            $allPages += ""
         }
 
-        # テキストを結合（ヘッダー → 本文 → フッター）
-        $allParts = @()
-
-        if ($headerTexts.Count -gt 0) {
-            $allParts += "【ヘッダー】"
-            $allParts += $headerTexts -join "`r`n"
-            $allParts += ""
-        }
-
-        $allParts += "【本文】"
-        $allParts += $doc.Content.Text
-
-        if ($footerTexts.Count -gt 0) {
-            $allParts += ""
-            $allParts += "【フッター】"
-            $allParts += $footerTexts -join "`r`n"
-        }
-
-        $text = $allParts -join "`r`n"
-
+        $text = $allPages -join "`r`n"
         $doc.Close($false)
     } catch {
         throw "PDFの読み込みに失敗しました: $($_.Exception.Message)"
