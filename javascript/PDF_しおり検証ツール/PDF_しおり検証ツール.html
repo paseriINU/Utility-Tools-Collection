@@ -746,12 +746,12 @@
         const debugModeCheck = document.getElementById('debugModeCheck'); // デバッグモードチェックボックス
 
         // デバッグモードチェックボックスのイベントリスナー
-        debugModeCheck.addEventListener('change', () => {
-            debugMode = debugModeCheck.checked;
-            if (debugMode) {
-                console.log('%c[DEBUG] デバッグモードが有効になりました', 'color: blue; font-weight: bold');
-            }
-        });
+        if (debugModeCheck) {
+            debugModeCheck.addEventListener('change', () => {
+                debugMode = debugModeCheck.checked;
+                console.log('[DEBUG] デバッグモード: ' + (debugMode ? 'ON' : 'OFF'));
+            });
+        }
 
         /*
         ======================================================================
@@ -1346,6 +1346,12 @@
         ======================================================================
         */
         async function parsePDFBookmarks(arrayBuffer, mode = 'word') {
+            // デバッグ: 検証開始ログ
+            if (debugMode) {
+                console.log('%c[DEBUG] ========== PDF解析開始 ==========', 'color: blue; font-weight: bold; font-size: 14px');
+                console.log('[DEBUG] 解析モード: ' + mode);
+            }
+
             // Uint8Array: バイト配列（0-255の数値の配列）
             const bytes = new Uint8Array(arrayBuffer);
 
@@ -1485,44 +1491,25 @@
                     if (adjustedPage && pageTexts.has(adjustedPage)) {
                         const pageText = pageTexts.get(adjustedPage);
 
-                        // 空白除去バージョン（位置確認用）
-                        // 全角・半角正規化 + 空白除去 + 小文字化
-                        const titleNoSpace = normalizeFullWidthToHalfWidth(bm.title).replace(/\s+/g, '').toLowerCase();
-                        const pageTextNoSpace = normalizeFullWidthToHalfWidth(pageText).replace(/\s+/g, '').toLowerCase();
+                        // 全角・半角正規化 + 空白除去 + 小文字化で比較精度を向上
+                        // 例: 「第２部」と「第2部」、「2-1 テスト」と「2-1テスト」を一致させる
+                        const normalizedTitle = normalizeFullWidthToHalfWidth(bm.title).replace(/\s+/g, '').toLowerCase();
+                        const normalizedPageText = normalizeFullWidthToHalfWidth(pageText).replace(/\s+/g, '').toLowerCase();
 
-                        // 空白を正規化したバージョン（厳密比較用）
-                        // 連続空白を1つに正規化し、先頭末尾の空白を除去
-                        const titleWithSpace = normalizeFullWidthToHalfWidth(bm.title).replace(/\s+/g, ' ').trim().toLowerCase();
-                        const pageTextWithSpace = normalizeFullWidthToHalfWidth(pageText).replace(/\s+/g, ' ').trim().toLowerCase();
+                        const fullMatch = normalizedPageText.includes(normalizedTitle);
+                        const partialMatch = normalizedTitle.length > 3 && normalizedPageText.includes(normalizedTitle.substring(0, Math.min(10, normalizedTitle.length)));
 
-                        // まず空白除去バージョンでタイトルがページ内に存在するか確認
-                        const existsInPage = pageTextNoSpace.includes(titleNoSpace);
-                        const partialExists = titleNoSpace.length > 3 && pageTextNoSpace.includes(titleNoSpace.substring(0, Math.min(10, titleNoSpace.length)));
-
-                        if (existsInPage || partialExists) {
-                            // 空白除去バージョンでは一致 → 次に空白の位置を確認
-                            if (pageTextWithSpace.includes(titleWithSpace)) {
-                                // 空白も含めて一致 → OK
-                                bm.verified = true;
-                                if (debugMode) {
-                                    console.log(`%c[DEBUG] OK: "${bm.title}" → ページ${adjustedPage}に一致`, 'color: green');
-                                }
-                            } else {
-                                // 空白の位置が異なる → NG
-                                bm.verified = false;
-                                if (debugMode) {
-                                    console.log(`%c[DEBUG] NG(空白位置): "${bm.title}"`, 'color: orange');
-                                    console.log(`  しおり(正規化): "${titleWithSpace}"`);
-                                    console.log(`  ページ(正規化): "${pageTextWithSpace.substring(0, 500)}..."`);
-                                }
+                        if (fullMatch || partialMatch) {
+                            bm.verified = true;
+                            if (debugMode) {
+                                console.log(`%c[DEBUG] OK: "${bm.title}" → ページ${adjustedPage}に一致`, 'color: green');
                             }
                         } else {
-                            // そもそもページ内にタイトルが存在しない → NG
                             bm.verified = false;
                             if (debugMode) {
-                                console.log(`%c[DEBUG] NG(不一致): "${bm.title}" → ページ${adjustedPage}に存在しない`, 'color: red');
-                                console.log(`  しおり(空白除去): "${titleNoSpace}"`);
-                                console.log(`  ページ(空白除去,先頭500文字): "${pageTextNoSpace.substring(0, 500)}..."`);
+                                console.log(`%c[DEBUG] NG: "${bm.title}" → ページ${adjustedPage}に存在しない`, 'color: red');
+                                console.log(`  しおり(正規化): "${normalizedTitle}"`);
+                                console.log(`  ページ(正規化,先頭500文字): "${normalizedPageText.substring(0, 500)}..."`);
                             }
                         }
                     } else {
