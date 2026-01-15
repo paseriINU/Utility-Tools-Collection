@@ -882,3 +882,46 @@ Public Function GetTableDescription(ByVal ws As Worksheet) As String
     GetTableDescription = desc
 End Function
 
+'==============================================================================
+' プルダウンリスト追加ヘルパー
+' ※Setupモジュール削除後も動作するようSG_Generatorに配置
+'==============================================================================
+Public Sub AddDropdown(ByVal ws As Worksheet, ByVal cellAddr As String, ByVal listItems As String, Optional ByVal namePrefix As String = "DropList")
+    On Error Resume Next
+
+    With ws.Range(cellAddr).Validation
+        .Delete
+        If Len(listItems) > 0 Then
+            ' 直接設定（255文字以下の場合）
+            If Len(listItems) <= 255 Then
+                .Add Type:=xlValidateList, AlertStyle:=xlValidAlertStop, Formula1:=listItems
+            Else
+                ' 255文字を超える場合は先頭255文字で切り詰め（名前付き範囲は使用しない）
+                ' ※名前付き範囲を使うと複雑になるため、シンプルに切り詰める
+                Dim truncatedList As String
+                Dim items() As String
+                Dim i As Long
+
+                items = Split(listItems, ",")
+                truncatedList = ""
+
+                For i = LBound(items) To UBound(items)
+                    If truncatedList = "" Then
+                        truncatedList = Trim(items(i))
+                    ElseIf Len(truncatedList) + Len(items(i)) + 1 <= 255 Then
+                        truncatedList = truncatedList & "," & Trim(items(i))
+                    Else
+                        Exit For
+                    End If
+                Next i
+
+                .Add Type:=xlValidateList, AlertStyle:=xlValidAlertStop, Formula1:=truncatedList
+            End If
+            .IgnoreBlank = True
+            .InCellDropdown = True
+        End If
+    End With
+
+    On Error GoTo 0
+End Sub
+
