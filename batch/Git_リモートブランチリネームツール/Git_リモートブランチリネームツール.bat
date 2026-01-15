@@ -317,16 +317,17 @@ function Rename-RemoteBranch {
 
             if ($isCurrentBranch) {
                 # 現在のブランチの場合は git branch -m を使用
-                git branch -m $oldBranchName $newBranchName 2>&1
+                $output = git branch -m $oldBranchName $newBranchName 2>&1
             } else {
                 # 現在のブランチでない場合
-                git branch -m $oldBranchName $newBranchName 2>&1
+                $output = git branch -m $oldBranchName $newBranchName 2>&1
             }
 
             if ($LASTEXITCODE -eq 0) {
                 Write-Host "      [OK] ローカルブランチをリネームしました" -ForegroundColor Green
             } else {
                 Write-Host "      [NG] ローカルブランチのリネームに失敗しました" -ForegroundColor Red
+                Write-Host "      $output" -ForegroundColor Red
                 $success = $false
             }
         }
@@ -337,16 +338,17 @@ function Rename-RemoteBranch {
             Write-Host "[$stepNum] 新しいブランチをリモートにプッシュ中..." -ForegroundColor Cyan
 
             if ($localBranchExists) {
-                git push -u $remoteName $newBranchName 2>&1
+                $output = git push -u $remoteName $newBranchName 2>&1
             } else {
                 # ローカルブランチがない場合はリモートブランチから新規作成
-                git push $remoteName "$remoteName/$oldBranchName`:refs/heads/$newBranchName" 2>&1
+                $output = git push $remoteName "$remoteName/$oldBranchName`:refs/heads/$newBranchName" 2>&1
             }
 
             if ($LASTEXITCODE -eq 0) {
                 Write-Host "      [OK] リモートにプッシュしました" -ForegroundColor Green
             } else {
                 Write-Host "      [NG] リモートへのプッシュに失敗しました" -ForegroundColor Red
+                Write-Host "      $output" -ForegroundColor Red
                 $success = $false
             }
         }
@@ -355,12 +357,13 @@ function Rename-RemoteBranch {
             # 旧リモートブランチを削除
             $stepNum = if ($localBranchExists) { "3/4" } else { "2/2" }
             Write-Host "[$stepNum] 旧リモートブランチを削除中..." -ForegroundColor Cyan
-            git push $remoteName --delete $oldBranchName 2>&1
+            $output = git push $remoteName --delete $oldBranchName 2>&1
 
             if ($LASTEXITCODE -eq 0) {
                 Write-Host "      [OK] 旧リモートブランチを削除しました" -ForegroundColor Green
             } else {
                 Write-Host "      [NG] 旧リモートブランチの削除に失敗しました" -ForegroundColor Red
+                Write-Host "      $output" -ForegroundColor Red
                 Write-Host "      新しいブランチは作成されていますが、旧ブランチが残っています" -ForegroundColor Yellow
                 $success = $false
             }
@@ -369,12 +372,13 @@ function Rename-RemoteBranch {
         if ($success -and $localBranchExists) {
             # 追跡ブランチを設定
             Write-Host "[4/4] 追跡ブランチを設定中..." -ForegroundColor Cyan
-            git branch -u "$remoteName/$newBranchName" $newBranchName 2>&1
+            $output = git branch -u "$remoteName/$newBranchName" $newBranchName 2>&1
 
             if ($LASTEXITCODE -eq 0) {
                 Write-Host "      [OK] 追跡ブランチを設定しました" -ForegroundColor Green
             } else {
                 Write-Host "      [NG] 追跡ブランチの設定に失敗しました（手動で設定してください）" -ForegroundColor Yellow
+                Write-Host "      $output" -ForegroundColor Yellow
             }
         }
 
@@ -543,15 +547,16 @@ function Rename-RemoteBranchDirect {
         Write-Host "[1/4] ローカルブランチをリネーム中..." -ForegroundColor Cyan
 
         if ($isCurrentBranch) {
-            git branch -m $oldBranchName $newBranchName 2>&1
+            $output = git branch -m $oldBranchName $newBranchName 2>&1
         } else {
-            git branch -m $oldBranchName $newBranchName 2>&1
+            $output = git branch -m $oldBranchName $newBranchName 2>&1
         }
 
         if ($LASTEXITCODE -eq 0) {
             Write-Host "      [OK] ローカルブランチをリネームしました" -ForegroundColor Green
         } else {
             Write-Host "      [NG] ローカルブランチのリネームに失敗しました" -ForegroundColor Red
+            Write-Host "      $output" -ForegroundColor Red
             $success = $false
         }
     }
@@ -561,15 +566,16 @@ function Rename-RemoteBranchDirect {
         Write-Host "[$stepNum] 新しいブランチをリモートにプッシュ中..." -ForegroundColor Cyan
 
         if ($localBranchExists) {
-            git push -u $remoteName $newBranchName 2>&1
+            $output = git push -u $remoteName $newBranchName 2>&1
         } else {
-            git push $remoteName "$remoteName/$oldBranchName`:refs/heads/$newBranchName" 2>&1
+            $output = git push $remoteName "$remoteName/$oldBranchName`:refs/heads/$newBranchName" 2>&1
         }
 
         if ($LASTEXITCODE -eq 0) {
             Write-Host "      [OK] リモートにプッシュしました" -ForegroundColor Green
         } else {
             Write-Host "      [NG] リモートへのプッシュに失敗しました" -ForegroundColor Red
+            Write-Host "      $output" -ForegroundColor Red
             $success = $false
         }
     }
@@ -577,12 +583,13 @@ function Rename-RemoteBranchDirect {
     if ($success) {
         $stepNum = if ($localBranchExists) { "3/4" } else { "2/2" }
         Write-Host "[$stepNum] 旧リモートブランチを削除中..." -ForegroundColor Cyan
-        git push $remoteName --delete $oldBranchName 2>&1
+        $output = git push $remoteName --delete $oldBranchName 2>&1
 
         if ($LASTEXITCODE -eq 0) {
             Write-Host "      [OK] 旧リモートブランチを削除しました" -ForegroundColor Green
         } else {
             Write-Host "      [NG] 旧リモートブランチの削除に失敗しました" -ForegroundColor Red
+            Write-Host "      $output" -ForegroundColor Red
             Write-Host "      新しいブランチは作成されていますが、旧ブランチが残っています" -ForegroundColor Yellow
             $success = $false
         }
@@ -590,12 +597,13 @@ function Rename-RemoteBranchDirect {
 
     if ($success -and $localBranchExists) {
         Write-Host "[4/4] 追跡ブランチを設定中..." -ForegroundColor Cyan
-        git branch -u "$remoteName/$newBranchName" $newBranchName 2>&1
+        $output = git branch -u "$remoteName/$newBranchName" $newBranchName 2>&1
 
         if ($LASTEXITCODE -eq 0) {
             Write-Host "      [OK] 追跡ブランチを設定しました" -ForegroundColor Green
         } else {
             Write-Host "      [NG] 追跡ブランチの設定に失敗しました（手動で設定してください）" -ForegroundColor Yellow
+            Write-Host "      $output" -ForegroundColor Yellow
         }
     }
 
