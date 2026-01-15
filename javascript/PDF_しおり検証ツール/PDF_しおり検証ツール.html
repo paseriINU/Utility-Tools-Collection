@@ -865,8 +865,8 @@
                 document.getElementById('modeWord').classList.add('selected');
             } else if (mode === 'javascript') {
                 document.getElementById('modeJS').classList.add('selected');
-            
-            
+            }
+
             // 検証ボタンを有効化
             validateBtn.disabled = false;
         }
@@ -884,9 +884,8 @@
             // return: 関数の結果を返して終了
             if (bytes < 1024) return bytes + ' B';
             if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-            return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
-            }
             // toFixed(1): 小数点以下1桁に丸める
+            return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
         }
 
         /*
@@ -905,7 +904,6 @@
             if (!selectedMode) {
                 showError('解析モードを選択してください。');
                 return;
-                }
             }
 
             // ボタンを無効化して、テキストを「解析中...」に
@@ -1061,7 +1059,6 @@
             const min = String(date.getMinutes()).padStart(2, '0'); // 分（00-59）
             // padStart(2, '0'): 2桁になるように左側を'0'で埋める
             return `${y}${m}${d}_${h}${min}`;
-            }
         }
 
         /*
@@ -1091,8 +1088,7 @@
             if (bookmarks.length === 0) {
                 showError('このPDFにはしおりがありません。');
                 return;
-                }
-            
+            }
 
             // filter: 条件に合う要素だけを抽出
             const okCount = bookmarks.filter(b => b.verified === true).length;
@@ -1114,7 +1110,6 @@
                 <span style="color: #006100;"><strong>OK:</strong> ${okCount}</span>
                 <span style="color: #c00;"><strong>NG:</strong> ${ngCount}</span>
                 <span style="color: #666;"><strong>不明:</strong> ${unknownCount}</span>
-            
             `;
             }
 
@@ -1126,7 +1121,6 @@
                 const pageA = parseInt(a.page) || 0;
                 const pageB = parseInt(b.page) || 0;
                 return pageA - pageB;
-                }
             });
 
             // 各しおりに対してテーブル行を生成
@@ -1195,8 +1189,8 @@
             for (const item of items) {
                 if (item.objNum !== null && item.objNum !== undefined) {
                     objNumToItem.set(item.objNum, item);
-                
-            
+                }
+            }
 
             // 各アイテムの階層レベルを計算
             for (const item of items) {
@@ -1225,15 +1219,13 @@
                     } else {
                         // 親はOutlines辞書など（しおりではない）→ここで終了
                         break;
-                        }
-                    
-                
+                    }
+                }
 
                 item.level = level;
-            
+            }
 
             return items;
-            }
         }
 
         /*
@@ -1250,13 +1242,11 @@
             // 全角数字→半角数字 (０-９ → 0-9)
             let result = text.replace(/[０-９]/g, function(char) {
                 return String.fromCharCode(char.charCodeAt(0) - 0xFEE0);
-                }
             });
 
             // 全角英字→半角英字 (Ａ-Ｚ, ａ-ｚ → A-Z, a-z)
             result = result.replace(/[Ａ-Ｚａ-ｚ]/g, function(char) {
                 return String.fromCharCode(char.charCodeAt(0) - 0xFEE0);
-                }
             });
 
             // 全角スペース→半角スペース
@@ -1278,10 +1268,9 @@
             };
             for (const [full, half] of Object.entries(symbolMap)) {
                 result = result.split(full).join(half);
-            
+            }
 
             return result;
-            }
         }
 
         /*
@@ -1299,7 +1288,6 @@
             div.textContent = text;
             // innerHTMLで取得するとエスケープされた文字列が得られる
             return div.innerHTML;
-            }
         }
 
         /*
@@ -1361,7 +1349,7 @@
 
             if (!hasOutlines) {
                 throw new Error('このPDFにはしおりがありません。');
-            
+            }
 
             // ページオブジェクトとページ番号のマッピングを作成
             const pageObjects = buildPageMapping(content, objStmObjectsMap);
@@ -1473,7 +1461,7 @@
                 errorDetails += '・Adobe Acrobatで「名前を付けて保存」→「最適化されたPDF」で再保存\n';
                 errorDetails += '・PDFの暗号化を解除してから再度読み込み';
                 throw new Error(errorDetails);
-            
+            }
 
             // しおりをページ番号とタイトルでソート
             // 同じページ番号の場合は階層構造を考慮してソート
@@ -1496,8 +1484,7 @@
                 if (/^[0-9０-９]+-[0-9０-９]+\.[0-9０-９]+/.test(title)) return 6;
                 // その他
                 return 10;
-                }
-            
+            }
 
             bookmarks.sort((a, b) => {
                 // ページ番号を取得
@@ -1510,7 +1497,6 @@
                 // ページ番号が異なる場合はページ順
                 if (pageA !== pageB) {
                     return pageA - pageB;
-                    }
                 }
 
                 // 同じページ番号の場合は階層レベルで比較
@@ -1522,16 +1508,13 @@
                 // 階層レベルが異なる場合は階層順
                 if (hierA !== hierB) {
                     return hierA - hierB;
-                    }
                 }
 
                 // 同じ階層レベルの場合は自然順ソート
                 return titleA.localeCompare(titleB, 'ja', { numeric: true, sensitivity: 'base' });
-                }
             });
 
             return bookmarks;
-            }
         }
 
         /*
@@ -1560,7 +1543,6 @@
                     const hasFlate = beforeStream.match(/\/Filter\s*(?:\/FlateDecode|\[\s*(?:\/[A-Za-z]+Decode\s+)*\/FlateDecode)/);
                     if (!hasFlate) {
                         continue;
-                        }
                     }
 
                     // /Length を取得してストリーム長を確定
@@ -1627,7 +1609,6 @@
             }
 
             return decompressedParts.join('\n');
-            }
         }
 
         /*
@@ -1708,18 +1689,15 @@
 
                     if (result && result.length > 0) {
                         return result;
-                        }
                     }
                 } catch (e) {
                     // このメソッドでは失敗、次を試す
                     continue;
-                    }
                 }
             }
 
             // すべて失敗した場合はnullを返す
             return null;
-            }
         }
 
         /*
@@ -1755,14 +1733,12 @@
                                 j++;
                             } else {
                                 break;
-                                }
-                            
-                        
+                            }
+                        }
                         result.push(octalValue & 0xFF);
                         i = j;
                         continue;
-                        }
-                    
+                    }
 
                     // 特殊文字エスケープ
                     switch (nextByte) {
@@ -1770,59 +1746,48 @@
                             result.push(0x0A);
                             i += 2;
                             continue;
-                            }
                         case 0x72: // \r
                             result.push(0x0D);
                             i += 2;
                             continue;
-                            }
                         case 0x74: // \t
                             result.push(0x09);
                             i += 2;
                             continue;
-                            }
                         case 0x62: // \b
                             result.push(0x08);
                             i += 2;
                             continue;
-                            }
                         case 0x66: // \f
                             result.push(0x0C);
                             i += 2;
                             continue;
-                            }
                         case 0x28: // \(
                             result.push(0x28);
                             i += 2;
                             continue;
-                            }
                         case 0x29: // \)
                             result.push(0x29);
                             i += 2;
                             continue;
-                            }
                         case 0x5C: // \\
                             result.push(0x5C);
                             i += 2;
                             continue;
-                            }
                         case 0x0D: // \<CR> - 行継続（無視）
                             i += 2;
                             if (i < inputBytes.length && inputBytes[i] === 0x0A) {
                                 i++; // \<CR><LF>
                             }
                             continue;
-                            }
                         case 0x0A: // \<LF> - 行継続（無視）
                             i += 2;
                             continue;
-                            }
                         default:
                             // 未知のエスケープは文字そのものとして扱う
                             result.push(nextByte);
                             i += 2;
                             continue;
-                            }
                     }
                 }
 
@@ -1832,7 +1797,6 @@
             }
 
             return new Uint8Array(result);
-            }
         }
 
         // 同期的なObject Streams解析（解凍は非同期で後処理）
@@ -1872,11 +1836,10 @@
                     hasFlate,
                     streamData
                 });
-            
+            }
 
             // 同期版では空配列を返す（非同期版で処理）
             return [];
-            }
         }
 
         // 非同期版Object Streams解析
@@ -1906,9 +1869,9 @@
                     const dMatch = actionContent.match(/\/D\s*\[\s*(\d+)\s+0\s+R/);
                     if (dMatch) {
                         globalActionObjectMap.set(actionObjNum, dMatch[1] + ' 0 R');
-                    
-                
-            
+                    }
+                }
+            }
 
             // 未解決アクションオブジェクト番号を収集（後で検索用）
             const unresolvedActionObjNums = new Set();
@@ -1950,7 +1913,7 @@
                     const streamBytes = new Uint8Array(streamData.length);
                     for (let i = 0; i < streamData.length; i++) {
                         streamBytes[i] = streamData.charCodeAt(i) & 0xFF;
-                    
+                    }
 
                     let decompressed = null;
                     let decompressMethod = '';
@@ -1962,29 +1925,27 @@
                             decompressed = pako.inflate(streamBytes);
                             if (decompressed && decompressed.length > 0) {
                                 decompressMethod = 'pako';
-                                }
-                            
+                            }
                         } catch (e) {
                             // pako失敗時は生データ（zlibヘッダーなし）として試す
                             try {
                                 decompressed = pako.inflateRaw(streamBytes.slice(2));
                                 if (decompressed && decompressed.length > 0) {
                                     decompressMethod = 'pako.inflateRaw';
-                                    }
-                                
+                                }
                             } catch (e2) {
                                 // 解凍失敗
-                            
-                        
-                    
+                            }
+                        }
+                    }
 
                     // 方法2: DecompressionStream API（pakoが使えない場合）
                     if ((!decompressed || decompressed.length === 0) && typeof DecompressionStream !== 'undefined') {
                         decompressed = await decompressWithDecompressionStream(streamBytes);
                         if (decompressed && decompressed.length > 0) {
                             decompressMethod = 'DecompressionStream';
-                        
-                    
+                        }
+                    }
 
                     // 方法3: カスタムinflateRaw関数（フォールバック）
                     if (!decompressed || decompressed.length === 0) {
@@ -1993,11 +1954,11 @@
                             if (inflated && inflated.length > 0) {
                                 decompressed = new Uint8Array(inflated);
                                 decompressMethod = 'inflateRaw';
-                            
+                            }
                         } catch (e) {
                             // 解凍失敗
-                        
-                    
+                        }
+                    }
 
                     if (decompressed && decompressed.length > 0) {
                         // アクションオブジェクトをグローバルマップに追加（/A N 0 R 間接参照解決用）
@@ -2020,8 +1981,8 @@
                                 const objOffset = indexNums[idx + 1];
                                 if (!isNaN(objNumber) && !isNaN(objOffset)) {
                                     objOffsets.push({ number: objNumber, offset: objOffset });
-                                
-                            
+                                }
+                            }
 
                             // データ部分
                             const dataPart = fullObjStmStr.substring(firstOffset);
@@ -2041,8 +2002,8 @@
                                     const dMatch = objData.match(/\/D\s*\[\s*(\d+)\s+0\s+R/);
                                     if (dMatch) {
                                         globalActionObjectMap.set(obj.number, dMatch[1] + ' 0 R');
-                                    
-                                
+                                    }
+                                }
                                 // /S /JavaScript 形式のアクションオブジェクトを検出
                                 // 形式: <</S(this.pageNum =12)/S/JavaScript>>
                                 if (objData.includes('/JavaScript')) {
@@ -2050,12 +2011,12 @@
                                     if (pageNumMatch) {
                                         const pageNum = parseInt(pageNumMatch[1], 10);
                                         globalActionObjectMap.set(obj.number, 'PAGE:' + pageNum);
-                                    
-                                
-                            
+                                    }
+                                }
+                            }
                         } catch (e) {
                             // ObjStm解析エラー（無視して続行）
-                        
+                        }
 
                         // オブジェクト単位でしおりを抽出（インデックスに基づく正確な範囲指定）
                         // これにより、タイトルとページ参照の対応付けが正確になる
@@ -2078,9 +2039,8 @@
                                     if (decompressed[i + j] !== titlePattern[j]) {
                                         found = false;
                                         break;
-                                        }
-                                    
-                                
+                                    }
+                                }
                                 if (found) {
                                     // 括弧の開始位置
                                     const parenStart = i + titlePattern.length;
@@ -2118,22 +2078,20 @@
                                                                 const b3 = decompressed[parenEnd + 3];
                                                                 if (b3 >= 0x30 && b3 <= 0x37) {
                                                                     octalLen = 3;
-                                                                
-                                                            
-                                                        
-                                                    
+                                                                }
+                                                            }
+                                                        }
+                                                    }
                                                     parenEnd += 1 + octalLen; // \NNN をスキップ
                                                     decodedByteCount++; // デコード後は1バイト
                                                     continue;
-                                                    }
-                                                
+                                                }
 
                                                 // 特殊文字エスケープ \n, \r, \t, \\, \(, \) など
                                                 parenEnd += 2; // \ と次の1文字をスキップ
                                                 decodedByteCount++; // デコード後は1バイト
                                                 continue;
-                                                }
-                                            
+                                            }
 
                                             if (byte === 0x28) { // '('
                                                 // 2バイト境界で高バイト位置なら括弧、低バイト位置なら文字の一部
@@ -2141,7 +2099,7 @@
                                                     // 高バイト位置: 00 28 のパターンをチェック（前バイトが00か）
                                                     // ただし実際は ( がそのまま来ることもある
                                                     depth++;
-                                                
+                                                }
                                             } else if (byte === 0x29) { // ')'
                                                 // 2バイト境界をチェック
                                                 // BOM(2バイト)後、高バイト位置(偶数)なら終端、低バイト位置(奇数)なら文字の一部
@@ -2151,15 +2109,15 @@
                                                 } else if ((decodedByteCount - 2) % 2 === 0) {
                                                     // 高バイト位置（偶数オフセット）→ 終端の )
                                                     depth--;
-                                                
+                                                }
                                                 // 低バイト位置（奇数オフセット）→ 日本語文字の下位バイト（スキップ）
-                                            
+                                            }
 
                                             if (depth > 0) {
                                                 parenEnd++;
                                                 decodedByteCount++;
-                                            
-                                        
+                                            }
+                                        }
                                     } else {
                                         // Latin-1/ASCII: 従来の1バイト単位検出
                                         while (parenEnd < decompressed.length && depth > 0) {
@@ -2169,10 +2127,10 @@
                                                 depth++;
                                             } else if (decompressed[parenEnd] === 0x29 && prevByte !== 0x5C) { // ')' not escaped
                                                 depth--;
-                                            
+                                            }
                                             if (depth > 0) parenEnd++;
-                                        
-                                    
+                                        }
+                                    }
 
                                     if (parenEnd > parenStart) {
                                         // タイトルバイトを抽出
@@ -2189,14 +2147,14 @@
                                             for (let k = 2; k + 1 < titleBytes.length; k += 2) {
                                                 const charCode = (titleBytes[k] << 8) | titleBytes[k + 1];
                                                 if (charCode > 0) title += String.fromCharCode(charCode);
-                                            
+                                            }
                                         } else if (titleBytes.length >= 2 && titleBytes[0] === 0xFF && titleBytes[1] === 0xFE) {
                                             // UTF-16LE
                                             for (let k = 2; k + 1 < titleBytes.length; k += 2) {
                                                 const charCode = titleBytes[k] | (titleBytes[k + 1] << 8);
                                                 if (charCode > 0) title += String.fromCharCode(charCode);
-                                            
-                                        
+                                            }
+                                        }
 
                                         if (title && title.trim()) {
                                             // このオブジェクト全体からページ参照を取得（インデックスに基づく正確な範囲）
@@ -2228,23 +2186,23 @@
                                                             // マップにまだ存在しない場合、アクションオブジェクト番号を記録して後で解決
                                                             pageRef = '__UNRESOLVED__' + actionObjNum;
                                                             unresolvedActionObjNums.add(actionObjNum);
-                                                        
+                                                        }
                                                     } else {
                                                         // /D [N 0 R ...] パターンを直接検索（/A 外にある場合）
                                                         const dMatch = objStr.match(/\/D\s*\[\s*(\d+)\s+0\s+R/);
                                                         if (dMatch) {
                                                             pageRef = dMatch[1] + ' 0 R';
-                                                        
-                                                    
-                                                
-                                            
+                                                        }
+                                                    }
+                                                }
+                                            }
 
                                             // /Parent N 0 R パターンを検索（階層構造解析用）
                                             let parentRef = '';
                                             const parentMatch = objStr.match(/\/Parent\s+(\d+)\s+0\s+R/);
                                             if (parentMatch) {
                                                 parentRef = parentMatch[1] + ' 0 R';
-                                            
+                                            }
 
                                             objStmTitleCount++;
                                             byteExtractedCount++;
@@ -2252,26 +2210,24 @@
                                             // デコード済みタイトルとページ参照、親参照、オブジェクト番号を追加
                                             const bookmarkItem = { title: title.trim(), pageRef: pageRef, parentRef: parentRef, objNum: obj.number };
                                             decodedTitles.push(bookmarkItem);
-                                        
-                                    
-                                
-                            
-                        
+                                        }
+                                    }
+                                }
+                            }
+                        }
 
                         // バイト直接抽出が成功した場合、このObjStmは成功としてカウント
                         if (byteExtractedCount > 0) {
                             objStmSuccess++;
                             // バイト直接抽出が成功したので、古いlatin1Decode方式はスキップ
                             continue;
-                            }
-                        
+                        }
 
                         decompressedData = latin1Decode(decompressed);
                     } else {
                         continue;
-                        }
-                    
-                
+                    }
+                }
 
                 // インデックス部分とデータ部分を分離
                 if (firstOffset > decompressedData.length) continue;
@@ -2288,8 +2244,8 @@
                     const objOffset = indexNums[i + 1];
                     if (!isNaN(objNumber) && !isNaN(objOffset)) {
                         objects.push({ number: objNumber, offset: objOffset });
-                    
-                
+                    }
+                }
 
                 // 各オブジェクトのデータを抽出
                 let titleCount = 0;
@@ -2301,13 +2257,13 @@
                     if (objData.includes('/Title')) {
                         titleCount++;
                         rawContents.push(objData);
-                    
-                
+                    }
+                }
 
                 if (titleCount > 0) {
                     objStmSuccess++;
-                
-            
+                }
+            }
 
             // 未解決の間接参照を解決
             for (let i = 0; i < decodedTitles.length; i++) {
@@ -2332,8 +2288,8 @@
                                 decodedTitles[i].pageRef = 'PAGE:' + pageNumMatch[1];
                             } else {
                                 decodedTitles[i].pageRef = '';
-                            
-                        
+                            }
+                        }
                     } else {
                         // 解決できなかった場合 - PDFボディから直接オブジェクトを検索
                         const objContentPattern = new RegExp(actionObjNum + '\\s+0\\s+obj([\\s\\S]*?)endobj');
@@ -2346,16 +2302,15 @@
                                 decodedTitles[i].pageRef = dMatch[1] + ' 0 R';
                             } else {
                                 decodedTitles[i].pageRef = '(ページ不明)';
-                            
+                            }
                         } else {
                             decodedTitles[i].pageRef = '(ページ不明)';
-                        
-                    
-                
-            
+                        }
+                    }
+                }
+            }
 
             return { rawContents, decodedTitles, objStmObjectsMap };
-            }
         }
 
         /*
@@ -2377,7 +2332,7 @@
                 this.data = data;      // 入力バイト配列
                 this.bytePos = 0;      // 現在のバイト位置
                 this.bitPos = 0;       // 現在のビット位置（0-7）
-            
+            }
 
             // 指定ビット数を読み取る（最下位ビットから）
             readBits(n) {
@@ -2387,7 +2342,7 @@
                 while (bitsRead < n) {
                     if (this.bytePos >= this.data.length) {
                         throw new Error('Unexpected end of data');
-                    
+                    }
 
                     // 現在のバイトから読み取れるビット数
                     const bitsAvailable = 8 - this.bitPos;
@@ -2405,20 +2360,19 @@
                     if (this.bitPos >= 8) {
                         this.bitPos = 0;
                         this.bytePos++;
-                    
-                
+                    }
+                }
 
                 return result;
-                }
-            
+            }
 
             // バイト境界まで進める
             alignToByte() {
                 if (this.bitPos > 0) {
                     this.bitPos = 0;
                     this.bytePos++;
-                
-            
+                }
+            }
         }
 
         // ハフマンテーブルを構築
@@ -2430,7 +2384,7 @@
             const blCount = new Array(maxLen + 1).fill(0);
             for (const len of codeLengths) {
                 if (len > 0) blCount[len]++;
-            
+            }
 
             // 各コード長の開始コードを計算
             const nextCode = new Array(maxLen + 1).fill(0);
@@ -2438,7 +2392,7 @@
             for (let bits = 1; bits <= maxLen; bits++) {
                 code = (code + blCount[bits - 1]) << 1;
                 nextCode[bits] = code;
-            
+            }
 
             // シンボルにコードを割り当て
             const table = {};
@@ -2450,13 +2404,12 @@
                     let reversed = 0;
                     for (let i = 0; i < len; i++) {
                         reversed = (reversed << 1) | ((huffCode >> i) & 1);
-                    
+                    }
                     table[`${reversed}_${len}`] = symbol;
-                
-            
+                }
+            }
 
             return { table, maxLen };
-            }
         }
 
         // ハフマンテーブルからシンボルを読み取る
@@ -2467,9 +2420,8 @@
                 const key = `${code}_${len}`;
                 if (key in huffTable.table) {
                     return huffTable.table[key];
-                    }
-                
-            
+                }
+            }
             throw new Error('Invalid Huffman code');
         }
 
@@ -2481,13 +2433,11 @@
             for (let i = 256; i <= 279; i++) lengths[i] = 7;
             for (let i = 280; i <= 287; i++) lengths[i] = 8;
             return buildHuffmanTable(lengths);
-            }
         }
 
         function getFixedDistTable() {
             const lengths = new Array(32).fill(5);
             return buildHuffmanTable(lengths);
-            }
         }
 
         // Deflate解凍メイン関数
@@ -2497,7 +2447,7 @@
             let startOffset = 0;
             if (data.length >= 2 && (data[0] === 0x78 || data[0] === 0x68)) {
                 startOffset = 2;  // CMF + FLG をスキップ
-            
+            }
 
             const reader = new BitReader(data.subarray(startOffset));
             const output = [];
@@ -2517,7 +2467,7 @@
 
                     for (let i = 0; i < len; i++) {
                         output.push(reader.readBits(8));
-                    
+                    }
                 } else if (blockType === 1 || blockType === 2) {
                     // 圧縮ブロック（固定または動的ハフマン）
                     let litLenTable, distTable;
@@ -2531,7 +2481,7 @@
                         const tables = readDynamicTables(reader);
                         litLenTable = tables.litLen;
                         distTable = tables.dist;
-                    
+                    }
 
                     // ブロックデータを解凍
                     while (true) {
@@ -2543,7 +2493,6 @@
                         } else if (symbol === 256) {
                             // ブロック終了
                             break;
-                            }
                         } else {
                             // 長さ・距離ペア（LZ77）
                             const length = readLength(reader, symbol);
@@ -2554,16 +2503,15 @@
                             const startPos = output.length - distance;
                             for (let i = 0; i < length; i++) {
                                 output.push(output[startPos + i]);
-                            
-                        
-                    
+                            }
+                        }
+                    }
                 } else {
                     throw new Error('Invalid block type');
-                
-            
+                }
+            }
 
             return new Uint8Array(output);
-            }
         }
 
         // 動的ハフマンテーブルを読み取る
@@ -2579,7 +2527,7 @@
             const codeLenLengths = new Array(19).fill(0);
             for (let i = 0; i < hclen; i++) {
                 codeLenLengths[codeLenOrder[i]] = reader.readBits(3);
-            
+            }
 
             const codeLenTable = buildHuffmanTable(codeLenLengths);
 
@@ -2596,21 +2544,21 @@
                     const lastVal = allLengths[allLengths.length - 1] || 0;
                     for (let i = 0; i < repeat; i++) {
                         allLengths.push(lastVal);
-                    
+                    }
                 } else if (symbol === 17) {
                     // 0を繰り返す（3-10回）
                     const repeat = reader.readBits(3) + 3;
                     for (let i = 0; i < repeat; i++) {
                         allLengths.push(0);
-                    
+                    }
                 } else if (symbol === 18) {
                     // 0を繰り返す（11-138回）
                     const repeat = reader.readBits(7) + 11;
                     for (let i = 0; i < repeat; i++) {
                         allLengths.push(0);
-                    
-                
-            
+                    }
+                }
+            }
 
             return {
                 litLen: buildHuffmanTable(allLengths.slice(0, hlit)),
@@ -2629,12 +2577,11 @@
             const index = symbol - 257;
             if (index < 0 || index >= baseLengths.length) {
                 return 3;  // デフォルト
-            
+            }
 
             const base = baseLengths[index];
             const extra = extraBits[index];
             return base + (extra > 0 ? reader.readBits(extra) : 0);
-            }
         }
 
         // 距離コードから実際の距離を取得
@@ -2648,12 +2595,11 @@
 
             if (symbol < 0 || symbol >= baseDistances.length) {
                 return 1;  // デフォルト
-            
+            }
 
             const base = baseDistances[symbol];
             const extra = extraBits[symbol];
             return base + (extra > 0 ? reader.readBits(extra) : 0);
-            }
         }
 
         /*
@@ -2679,7 +2625,7 @@
                 const objNum = toUnicodeRefMatch[1];
                 if (processedRefs.has(objNum)) continue;
                 processedRefs.add(objNum);
-            
+            }
 
             // 各ToUnicodeオブジェクトを処理
             let streamFoundCount = 0;
@@ -2702,7 +2648,7 @@
                             const streamBytes = new Uint8Array(streamData.length);
                             for (let i = 0; i < streamData.length; i++) {
                                 streamBytes[i] = streamData.charCodeAt(i) & 0xFF;
-                            
+                            }
                             if (typeof pako !== 'undefined') {
                                 try {
                                     const decompressed = pako.inflate(streamBytes);
@@ -2714,25 +2660,25 @@
                                         cmapContent = latin1Decode(decompressed);
                                         decompressedCount++;
                                     } catch (e2) { /* 解凍失敗 */ }
-                                
-                            
+                                }
+                            }
                         } catch (e) { /* エラー */ }
                     } else {
                         cmapContent = streamData;
                         decompressedCount++;
-                    
+                    }
 
                     if (cmapContent) {
                         allCMapContent += cmapContent + '\n';
-                    
-                
-            
+                    }
+                }
+            }
 
             // 2. 非圧縮のCMapデータも含めて検索（PDF本体から直接）
             // 注: contentは非常に大きいため、解凍済みCMapがあればそれを優先
             if (allCMapContent.length === 0) {
                 allCMapContent = content;
-            
+            }
 
             // beginbfchar/endbfchar ブロックを解析
             // 形式: <CID> <Unicode>
@@ -2756,15 +2702,15 @@
                                 for (let i = 0; i < unicodeHex.length; i += 4) {
                                     const code = parseInt(unicodeHex.substring(i, i + 4), 16);
                                     str += String.fromCharCode(code);
-                                
+                                }
                                 cidToUnicode[cid] = str;
                             } else {
                                 cidToUnicode[cid] = String.fromCharCode(parseInt(unicodeHex, 16));
-                            
-                        
-                    
-                
-            
+                            }
+                        }
+                    }
+                }
+            }
 
             // beginbfrange/endbfrange ブロックを解析
             // 形式: <CID開始> <CID終了> <Unicode開始>
@@ -2787,9 +2733,9 @@
                                 const uMatch = unicodes[i].match(/<([0-9A-Fa-f]+)>/);
                                 if (uMatch) {
                                     cidToUnicode[start + i] = String.fromCharCode(parseInt(uMatch[1], 16));
-                                
-                            
-                        
+                                }
+                            }
+                        }
                     } else {
                         // 範囲形式: <start> <end> <unicode_start>
                         const rangeMatch = line.match(/<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>/);
@@ -2799,11 +2745,11 @@
                             const unicodeStart = parseInt(rangeMatch[3], 16);
                             for (let i = 0; i <= end - start; i++) {
                                 cidToUnicode[start + i] = String.fromCharCode(unicodeStart + i);
-                            
-                        
-                    
-                
-            
+                            }
+                        }
+                    }
+                }
+            }
 
             // 3. ToUnicodeマップが構築できなかった場合、/Encodingから構築を試みる
             if (Object.keys(cidToUnicode).length === 0) {
@@ -2824,36 +2770,36 @@
                     // ASCII範囲
                     for (let i = 0x20; i <= 0x7E; i++) {
                         cidToUnicode[i] = String.fromCharCode(i);
-                    
+                    }
                     // 日本語の主要な範囲（CIDがUnicodeに対応している場合）
                     // ひらがな (U+3040-U+309F)
                     for (let i = 0x3040; i <= 0x309F; i++) {
                         cidToUnicode[i] = String.fromCharCode(i);
-                    
+                    }
                     // カタカナ (U+30A0-U+30FF)
                     for (let i = 0x30A0; i <= 0x30FF; i++) {
                         cidToUnicode[i] = String.fromCharCode(i);
-                    
+                    }
                     // CJK統合漢字 (U+4E00-U+9FFF) - 基本的な漢字
                     for (let i = 0x4E00; i <= 0x9FFF; i++) {
                         cidToUnicode[i] = String.fromCharCode(i);
-                    
+                    }
                     // 全角英数・記号 (U+FF00-U+FFEF)
                     for (let i = 0xFF00; i <= 0xFFEF; i++) {
                         cidToUnicode[i] = String.fromCharCode(i);
-                    
+                    }
                     // CJK記号・句読点 (U+3000-U+303F)
                     for (let i = 0x3000; i <= 0x303F; i++) {
                         cidToUnicode[i] = String.fromCharCode(i);
-                    
-                
+                    }
+                }
 
                 // /Encoding /WinAnsiEncoding の場合
                 if (content.includes('/WinAnsiEncoding')) {
                     // WinAnsiEncoding（Windows-1252）のマッピング
                     for (let i = 0x20; i <= 0x7E; i++) {
                         cidToUnicode[i] = String.fromCharCode(i);
-                    
+                    }
                     // 特殊文字のマッピング（一部）
                     cidToUnicode[0x80] = '\u20AC'; // €
                     cidToUnicode[0x85] = '\u2026'; // …
@@ -2863,7 +2809,7 @@
                     cidToUnicode[0x94] = '\u201D'; // "
                     cidToUnicode[0x96] = '\u2013'; // –
                     cidToUnicode[0x97] = '\u2014'; // —
-                
+                }
 
                 // /Differences 配列を解析
                 const diffPattern = /\/Differences\s*\[([\s\S]*?)\]/g;
@@ -2882,16 +2828,15 @@
                                 const unicode = glyphNameToUnicode(glyphName);
                                 if (unicode) {
                                     cidToUnicode[currentCode] = unicode;
-                                
+                                }
                                 currentCode++;
-                            
-                        
-                    
-                
-            
+                            }
+                        }
+                    }
+                }
+            }
 
             return cidToUnicode;
-            }
         }
 
         // グリフ名からUnicodeへの変換（一般的なグリフ名のみ）
@@ -2927,19 +2872,16 @@
                 const code = parseInt(hex, 16);
                 if (!isNaN(code)) {
                     return String.fromCharCode(code);
-                    }
-                
-            
-            return glyphMap[name] || null;
+                }
             }
+            return glyphMap[name] || null;
         }
 
         // CIDフォントのグリフIDをUnicodeに変換
         function decodeCIDText(bytes, cidToUnicode) {
             if (!cidToUnicode || Object.keys(cidToUnicode).length === 0) {
                 return null;
-                }
-            
+            }
 
             let result = '';
             let decoded = false;
@@ -2956,11 +2898,10 @@
                 } else {
                     // 未知のCIDは□で表示
                     result += '\uFFFD';
-                
-            
+                }
+            }
 
             return decoded ? result : null;
-            }
         }
 
         /*
@@ -2977,9 +2918,8 @@
             for (let i = 0; i < bytes.length; i++) {
                 // String.fromCharCode(): 文字コードから文字を生成
                 result += String.fromCharCode(bytes[i]);
-            
-            return result;
             }
+            return result;
         }
 
         /*
@@ -3001,12 +2941,12 @@
             let objMatch;
             while ((objMatch = objPattern.exec(content)) !== null) {
                 allObjects.set(objMatch[1], objMatch[2]);
-            
+            }
 
             // ObjStmからオブジェクトを追加
             for (const [objNum, objData] of objStmObjectsMap.entries()) {
                 allObjects.set(String(objNum), objData);
-            
+            }
 
             // /Pages ツリーからページ順序を取得
             const pageOrder = [];
@@ -3019,10 +2959,9 @@
                     if (pagesRef) {
                         pagesObjNum = pagesRef[1];
                         break;
-                        }
-                    
-                
-            
+                    }
+                }
+            }
 
             // /Pages ツリーを再帰的に辿ってページ順序を取得
             function collectPagesFromTree(pagesObjNum, depth = 0) {
@@ -3043,13 +2982,13 @@
                         pageOrder.push(kidObjNum);
                     } else if (kidContent.match(/\/Type\s*\/Pages/)) {
                         collectPagesFromTree(kidObjNum, depth + 1);
-                    
-                
-            
+                    }
+                }
+            }
 
             if (pagesObjNum) {
                 collectPagesFromTree(pagesObjNum);
-            
+            }
 
             // /Pages ツリーから取得できなかった場合はフォールバック
             if (pageOrder.length === 0) {
@@ -3057,18 +2996,17 @@
                 let match;
                 while ((match = pageObjPattern.exec(content)) !== null) {
                     pageOrder.push(match[1]);
-                
-            
+                }
+            }
 
             // ページ番号を割り当て
             let pageNum = 1;
             for (const objNum of pageOrder) {
                 pageObjects[objNum] = pageNum;
                 pageNum++;
-            
+            }
 
             return pageObjects;
-            }
         }
 
         /*
@@ -3096,15 +3034,14 @@
                             pageTexts.set(pageNum, text);
                         } catch (pageErr) {
                             pageTexts.set(pageNum, '');
-                        
-                    
+                        }
+                    }
 
                     return pageTexts;
-                    }
                 } catch (pdfErr) {
                     // フォールバックして従来の方法を使用
-                
-            
+                }
+            }
 
             // === 従来の方法（PDF.js失敗時のフォールバック） ===
 
@@ -3116,12 +3053,12 @@
             let objMatch;
             while ((objMatch = objPattern.exec(content)) !== null) {
                 allObjects.set(objMatch[1], objMatch[2]);
-            
+            }
 
             // 2. ObjStmからオブジェクトを追加
             for (const [objNum, objData] of objStmObjectsMap.entries()) {
                 allObjects.set(String(objNum), objData);
-            
+            }
 
             // /Pages ツリーからページ順序を取得
             const pageOrder = [];
@@ -3135,10 +3072,9 @@
                     if (pagesRef) {
                         pagesObjNum = pagesRef[1];
                         break;
-                        }
-                    
-                
-            
+                    }
+                }
+            }
 
             // /Pages ツリーを再帰的に辿ってページ順序を取得
             function collectPagesFromTree(pagesObjNum, depth = 0) {
@@ -3163,23 +3099,23 @@
                     } else if (kidContent.match(/\/Type\s*\/Pages/)) {
                         // これは /Pages ノード、再帰的に処理
                         collectPagesFromTree(kidObjNum, depth + 1);
-                    
-                
-            
+                    }
+                }
+            }
 
             if (pagesObjNum) {
                 collectPagesFromTree(pagesObjNum);
-            
+            }
 
             // /Pages ツリーから取得できなかった場合はフォールバック
             if (pageOrder.length === 0) {
                 for (const [objNum, objContent] of allObjects.entries()) {
                     if (objContent.match(/\/Type\s*\/Page(?![s\w])/)) {
                         pageOrder.push({ objNum, objContent });
-                    
-                
+                    }
+                }
                 pageOrder.sort((a, b) => parseInt(a.objNum) - parseInt(b.objNum));
-            
+            }
 
             // ToUnicodeマップを構築（CIDフォント対応）
             const cidToUnicode = buildToUnicodeMap(content);
@@ -3202,14 +3138,14 @@
                     for (const ref of refs) {
                         const numMatch = ref.match(/(\d+)/);
                         if (numMatch) contentsObjNums.push(numMatch[1]);
-                    
-                
+                    }
+                }
 
                 if (contentsObjNums.length === 0) {
                     pageNum++;
                     continue;
-                    }
-                
+                }
+
                 contentsFoundCount++;
 
                 // 各コンテンツストリームからテキストを抽出
@@ -3232,38 +3168,37 @@
                                 const streamBytes = new Uint8Array(streamData.length);
                                 for (let i = 0; i < streamData.length; i++) {
                                     streamBytes[i] = streamData.charCodeAt(i) & 0xFF;
-                                
+                                }
                                 if (typeof pako !== 'undefined') {
                                     try {
                                         const decompressed = pako.inflate(streamBytes);
                                         streamContent = latin1Decode(decompressed);
                                     } catch (e) { /* 解凍失敗 */ }
-                                
+                                }
                             } catch (e) { /* エラー */ }
                         } else {
                             streamContent = streamData;
-                        
-                    
+                        }
+                    }
 
                     // テキスト演算子からテキストを抽出（ToUnicodeマップ使用）
                     if (streamContent) {
                         const extractedText = extractTextFromStream(streamContent, cidToUnicode);
                         if (extractedText) {
                             pageText += extractedText + ' ';
-                        
-                    
-                
+                        }
+                    }
+                }
 
                 if (pageText.trim()) {
                     pageTexts.set(pageNum, pageText.trim());
                     textExtractedCount++;
-                
+                }
 
                 pageNum++;
-            
+            }
 
             return pageTexts;
-            }
         }
 
         /*
@@ -3291,7 +3226,7 @@
                 while ((tjMatch = tjPattern.exec(textBlock)) !== null) {
                     const decoded = decodeTextWithCMap(tjMatch[1], cidToUnicode);
                     text += decoded + ' ';
-                
+                }
 
                 // TJ 演算子: [(text) num (text) ...] TJ
                 const tjArrayPattern = /\[([\s\S]*?)\]\s*TJ/g;
@@ -3304,9 +3239,9 @@
                     while ((stringMatch = stringPattern.exec(arrayContent)) !== null) {
                         const decoded = decodeTextWithCMap(stringMatch[1], cidToUnicode);
                         text += decoded;
-                    
+                    }
                     text += ' ';
-                
+                }
 
                 // 16進数文字列も処理: <hexstring> Tj
                 const hexTjPattern = /<([0-9A-Fa-f]+)>\s*Tj/g;
@@ -3314,7 +3249,7 @@
                 while ((hexTjMatch = hexTjPattern.exec(textBlock)) !== null) {
                     const decoded = decodeHexStringWithCMap(hexTjMatch[1], cidToUnicode);
                     text += decoded + ' ';
-                
+                }
 
                 // 16進数配列も処理: [<hex> num <hex> ...] TJ
                 const hexTjArrayPattern = /\[([\s\S]*?)\]\s*TJ/g;
@@ -3327,12 +3262,11 @@
                     while ((hexMatch = hexPattern.exec(arrayContent)) !== null) {
                         const decoded = decodeHexStringWithCMap(hexMatch[1], cidToUnicode);
                         text += decoded;
-                    
-                
-            
+                    }
+                }
+            }
 
             return text.trim();
-            }
         }
 
         // ToUnicodeマップを使用してテキストをデコード
@@ -3352,9 +3286,8 @@
                             result += cidToUnicode[cid];
                             i++; // 2バイト消費
                             continue;
-                            }
-                        
-                    
+                        }
+                    }
                     // 1バイトCIDとして解釈
                     if (cidToUnicode[code]) {
                         result += cidToUnicode[code];
@@ -3363,16 +3296,14 @@
                         result += decoded[i];
                     } else {
                         result += decoded[i];
-                    
-                
+                    }
+                }
                 if (result.length > 0) {
                     return result;
-                    }
-                
-            
+                }
+            }
 
             return decoded;
-            }
         }
 
         // 16進数文字列をToUnicodeマップでデコード
@@ -3385,8 +3316,8 @@
                     result += cidToUnicode[cid];
                 } else if (cid >= 0x20 && cid <= 0x7E) {
                     result += String.fromCharCode(cid);
-                
-            
+                }
+            }
             // 残りがある場合（2桁）
             if (hexStr.length % 4 === 2) {
                 const lastCid = parseInt(hexStr.substring(hexStr.length - 2), 16);
@@ -3394,10 +3325,9 @@
                     result += cidToUnicode[lastCid];
                 } else if (lastCid >= 0x20 && lastCid <= 0x7E) {
                     result += String.fromCharCode(lastCid);
-                
-            
-            return result;
+                }
             }
+            return result;
         }
 
         /*
@@ -3448,17 +3378,16 @@
                         depth++;
                     } else if (char === ')') {
                         depth--;
-                    
+                    }
                     end++;
-                
+                }
 
                 if (depth === 0) {
                     positions.push({ start, end: end - 1 });
-                
-            
+                }
+            }
 
             return positions;
-            }
         }
 
         /*
@@ -3471,10 +3400,9 @@
         function extractTitleBytes(bytes, start, end) {
             if (start < 0 || end > bytes.length || start >= end) {
                 return null;
-                }
-            
-            return bytes.slice(start, end);
             }
+
+            return bytes.slice(start, end);
         }
 
         /*
@@ -3489,14 +3417,13 @@
         function decodeTitle(titleBytes) {
             if (!titleBytes || titleBytes.length === 0) {
                 return '';
-                }
-            
+            }
 
             // PDFエスケープシーケンスを処理するためにまずLatin-1でデコード
             let rawStr = '';
             for (let i = 0; i < titleBytes.length; i++) {
                 rawStr += String.fromCharCode(titleBytes[i]);
-            
+            }
 
             // PDFエスケープシーケンスをデコード（8進数エスケープ等）
             const decodedStr = decodePDFString(rawStr);
@@ -3505,13 +3432,12 @@
             const processedBytes = new Uint8Array(decodedStr.length);
             for (let i = 0; i < decodedStr.length; i++) {
                 processedBytes[i] = decodedStr.charCodeAt(i) & 0xFF;
-            
+            }
 
             // 全てASCII範囲内ならそのまま返す
             if (/^[\x20-\x7E\t\n\r]+$/.test(decodedStr)) {
                 return decodedStr;
-                }
-            
+            }
 
             // UTF-16BE BOMチェック（FE FFで始まる）
             if (processedBytes.length >= 2 &&
@@ -3525,13 +3451,12 @@
                         if (utf16Str && utf16Str.trim()) {
                             // NUL文字を除去して返す
                             return utf16Str.replace(/\x00/g, '').trim();
-                            }
-                        
-                    
+                        }
+                    }
                 } catch (e) {
                     // デコード失敗
-                
-            
+                }
+            }
 
             // UTF-16LE BOMチェック（FF FEで始まる）- Acrobat JavaScript生成のしおり対応
             if (processedBytes.length >= 2 &&
@@ -3545,13 +3470,12 @@
                         if (utf16Str && utf16Str.trim()) {
                             // NUL文字を除去して返す
                             return utf16Str.replace(/\x00/g, '').trim();
-                            }
-                        
-                    
+                        }
+                    }
                 } catch (e) {
                     // デコード失敗
-                
-            
+                }
+            }
 
             // UTF-8 BOMチェック
             if (processedBytes.length >= 3 &&
@@ -3562,7 +3486,7 @@
                     const utf8Str = new TextDecoder('utf-8').decode(processedBytes.slice(3));
                     if (utf8Str && utf8Str.trim()) return utf8Str;
                 } catch (e) { }
-            
+            }
 
             // UTF-16検出（BOMなし）- Acrobat JavaScript生成のしおり対応
             // 偶数バイトの場合、UTF-16LE/BEの両方を試す
@@ -3592,7 +3516,7 @@
                     // LE評価: ASCII文字（byte2が0x00、byte1が印刷可能）
                     if (byte2 === 0x00 && ((byte1 >= 0x20 && byte1 <= 0x7E) || byte1 === 0x09 || byte1 === 0x0A || byte1 === 0x0D)) {
                         leScore += 3;
-                    
+                    }
                     // LE評価: 日本語文字
                     if ((leCharCode >= 0x3040 && leCharCode <= 0x309F) ||  // ひらがな
                         (leCharCode >= 0x30A0 && leCharCode <= 0x30FF) ||  // カタカナ
@@ -3600,12 +3524,12 @@
                         (leCharCode >= 0x3000 && leCharCode <= 0x303F) ||  // CJK記号・句読点
                         (leCharCode >= 0xFF00 && leCharCode <= 0xFFEF)) {  // 全角英数・半角カナ
                         leScore += 5;
-                    
+                    }
 
                     // BE評価: ASCII文字（byte1が0x00、byte2が印刷可能）
                     if (byte1 === 0x00 && ((byte2 >= 0x20 && byte2 <= 0x7E) || byte2 === 0x09 || byte2 === 0x0A || byte2 === 0x0D)) {
                         beScore += 3;
-                    
+                    }
                     // BE評価: 日本語文字
                     if ((beCharCode >= 0x3040 && beCharCode <= 0x309F) ||  // ひらがな
                         (beCharCode >= 0x30A0 && beCharCode <= 0x30FF) ||  // カタカナ
@@ -3613,8 +3537,8 @@
                         (beCharCode >= 0x3000 && beCharCode <= 0x303F) ||  // CJK記号・句読点
                         (beCharCode >= 0xFF00 && beCharCode <= 0xFFEF)) {  // 全角英数・半角カナ
                         beScore += 5;
-                    
-                
+                    }
+                }
 
                 // NULLバイトが多い場合はUTF-16の可能性が高い（ASCII文字のUTF-16表現）
                 const hasNullBytePattern = nullByteCount >= totalPairs * 0.3;
@@ -3638,15 +3562,14 @@
                                 // 有効な文字が半分以上あれば採用
                                 if (validChars > utf16Str.length * 0.5 && replacementChars < utf16Str.length * 0.1) {
                                     return utf16Str;
-                                    }
-                                
-                            
+                                }
+                            }
                         } catch (e) {
                             // デコード失敗
-                        
-                    
-                
-            
+                        }
+                    }
+                }
+            }
 
             // UTF-8として解釈を試みる
             try {
@@ -3655,11 +3578,10 @@
                 const controlChars = (utf8Str.match(/[\x00-\x1F]/g) || []).length;
                 if (controlChars < utf8Str.length * 0.1) {
                     return utf8Str;
-                    }
-                
+                }
             } catch (e) {
                 // UTF-8デコード失敗は頻繁に起こるためログ省略
-            
+            }
 
             // Shift_JIS (Windows-31J) として解釈を試みる
             try {
@@ -3668,11 +3590,10 @@
                 const replacementChars = (shiftJisStr.match(/\uFFFD/g) || []).length;
                 if (replacementChars < shiftJisStr.length * 0.2) {
                     return shiftJisStr;
-                    }
-                
+                }
             } catch (e) {
                 // Shift_JISデコード失敗はログ省略
-            
+            }
 
             // PDFDocEncodingとして解釈を試みる（0x80-0x9F範囲の特殊文字対応）
             try {
@@ -3682,16 +3603,14 @@
                     const controlChars = (pdfDocStr.match(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g) || []).length;
                     if (controlChars < pdfDocStr.length * 0.1) {
                         return pdfDocStr;
-                        }
-                    
-                
+                    }
+                }
             } catch (e) {
                 // PDFDocEncodingデコード失敗はログ省略
-            
+            }
 
             // 最終手段: PDFエスケープをデコードした文字列をそのまま返す
             return decodedStr;
-            }
         }
 
         /*
@@ -3712,21 +3631,20 @@
                 if (b1 <= 0x7F) {
                     result += String.fromCharCode(b1);
                     i++;
-                
+                }
                 // 半角カナ（0xA1-0xDF）
                 else if (b1 >= 0xA1 && b1 <= 0xDF) {
                     // 半角カナをUnicodeに変換（0xFF61 - 0xFF9F）
                     result += String.fromCharCode(0xFF61 + (b1 - 0xA1));
                     i++;
-                
+                }
                 // 2バイト文字の第1バイト
                 else if ((b1 >= 0x81 && b1 <= 0x9F) || (b1 >= 0xE0 && b1 <= 0xFC)) {
                     if (i + 1 >= bytes.length) {
                         result += '?';
                         i++;
                         continue;
-                        }
-                    
+                    }
                     const b2 = bytes[i + 1];
 
                     // JIS X 0208の区点コードに変換
@@ -3735,7 +3653,7 @@
                         ku = (b1 - 0x81) * 2 + 1;
                     } else {
                         ku = (b1 - 0xC1) * 2 + 1;
-                    
+                    }
 
                     if (b2 <= 0x7E) {
                         ten = b2 - 0x1F;
@@ -3744,7 +3662,7 @@
                     } else {
                         ku++;
                         ten = b2 - 0x9E;
-                    
+                    }
 
                     // 区点コードからUnicodeに変換
                     const unicode = jisToUnicode(ku, ten);
@@ -3752,16 +3670,15 @@
                         result += String.fromCharCode(unicode);
                     } else {
                         result += '?';
-                    
+                    }
                     i += 2;
                 } else {
                     result += '?';
                     i++;
-                
-            
+                }
+            }
 
             return result;
-            }
         }
 
         /*
@@ -3778,13 +3695,12 @@
             // ひらがな（区点コード 4区）
             if (ku === 4 && ten >= 1 && ten <= 83) {
                 return 0x3041 + (ten - 1);
-                }
-            
+            }
+
             // カタカナ（区点コード 5区）
             if (ku === 5 && ten >= 1 && ten <= 86) {
                 return 0x30A1 + (ten - 1);
-                }
-            
+            }
             // 記号類（1区）
             if (ku === 1) {
                 const symbols1 = [
@@ -3803,26 +3719,24 @@
                 ];
                 if (ten >= 1 && ten <= symbols1.length) {
                     return symbols1[ten - 1];
-                    }
-                
-            
+                }
+            }
+
             // 漢字（16区～84区）はUnicode CJK統合漢字に対応
             // 簡略化のため、線形近似で変換（精度は完璧ではない）
             if (ku >= 16 && ku <= 47) {
                 // 第1水準漢字
                 const offset = (ku - 16) * 94 + (ten - 1);
                 return 0x4E00 + offset;
-                }
-            
+            }
+
             if (ku >= 48 && ku <= 84) {
                 // 第2水準漢字
                 const offset = (ku - 48) * 94 + (ten - 1) + 2965;
                 return 0x4E00 + offset;
-                }
-            
+            }
 
             return null;
-            }
         }
 
         /*
@@ -3859,7 +3773,7 @@
                     const titleBytes = extractTitleBytes(bytes, pos.start, pos.end);
                     if (titleBytes && titleBytes.length > 0) {
                         title = decodeTitle(titleBytes);
-                    
+                    }
                 } else {
                     // 解凍されたコンテンツから抽出（文字列として処理）
                     const titleStr = content.substring(pos.start, pos.end);
@@ -3868,16 +3782,16 @@
                     const titleBytes = new Uint8Array(decoded.length);
                     for (let i = 0; i < decoded.length; i++) {
                         titleBytes[i] = decoded.charCodeAt(i) & 0xFF;
-                    
+                    }
                     title = decodeTitle(titleBytes);
-                
+                }
 
                 if (title && title.trim()) {
                     const trimmedTitle = title.trim();
                     // 重複チェックを削除 - 同名しおりも全て保持
                     bookmarks.push({ title: trimmedTitle, page: '', level: 1, source: 'manual' });
-                
-            
+                }
+            }
 
             /*
             --------------------------------------------------------------
@@ -3906,8 +3820,8 @@
                     for (let i = 0; i + 4 <= dataHex.length; i += 4) {
                         const charCode = parseInt(dataHex.substring(i, i + 4), 16);
                         if (charCode > 0) title += String.fromCharCode(charCode);
-                    
-                
+                    }
+                }
                 // UTF-16LE (FFFEで始まる) の場合 - Acrobat JavaScript対応
                 else if (hexStr.toUpperCase().startsWith('FFFE')) {
                     const dataHex = hexStr.substring(4);
@@ -3917,13 +3831,13 @@
                         const high = parseInt(dataHex.substring(i + 2, i + 4), 16);
                         const charCode = (high << 8) | low;
                         if (charCode > 0) title += String.fromCharCode(charCode);
-                    
+                    }
                 } else {
                     // BOMなしの場合、UTF-16BE/LEの両方をチェック
                     const titleBytes = new Uint8Array(hexStr.length / 2);
                     for (let i = 0; i + 2 <= hexStr.length; i += 2) {
                         titleBytes[i / 2] = parseInt(hexStr.substring(i, i + 2), 16);
-                    
+                    }
 
                     // BOMなしUTF-16の可能性をチェック（BE/LE両方）
                     if (hexStr.length % 4 === 0 && hexStr.length >= 4) {
@@ -3942,7 +3856,7 @@
                             // BE評価: ASCII（高バイト=0、低バイトが印刷可能ASCII）
                             if (byte1 === 0 && byte2 >= 0x20 && byte2 <= 0x7E) {
                                 beScore += 3;
-                            
+                            }
                             // BE評価: 日本語（ひらがな、カタカナ、漢字、記号）
                             if ((beCharCode >= 0x3040 && beCharCode <= 0x309F) ||
                                 (beCharCode >= 0x30A0 && beCharCode <= 0x30FF) ||
@@ -3950,12 +3864,12 @@
                                 (beCharCode >= 0x3000 && beCharCode <= 0x303F) ||
                                 (beCharCode >= 0xFF00 && beCharCode <= 0xFFEF)) {
                                 beScore += 5;
-                            
+                            }
 
                             // LE評価: ASCII（高バイト=0）
                             if (byte2 === 0 && byte1 >= 0x20 && byte1 <= 0x7E) {
                                 leScore += 3;
-                            
+                            }
                             // LE評価: 日本語
                             if ((leCharCode >= 0x3040 && leCharCode <= 0x309F) ||
                                 (leCharCode >= 0x30A0 && leCharCode <= 0x30FF) ||
@@ -3963,8 +3877,8 @@
                                 (leCharCode >= 0x3000 && leCharCode <= 0x303F) ||
                                 (leCharCode >= 0xFF00 && leCharCode <= 0xFFEF)) {
                                 leScore += 5;
-                            
-                        
+                            }
+                        }
 
                         // スコアが高い方のエンディアンを優先（同点ならBE優先：Adobe JS標準）
                         const tryEncodings = beScore >= leScore
@@ -3986,26 +3900,25 @@
                                 if (validRatio >= 0.7 && cleanStr.trim()) {
                                     title = cleanStr.trim();
                                     break;
-                                    }
-                                
+                                }
                             } catch (e) {
                                 // デコードエラーは無視
-                            
-                        
-                    
+                            }
+                        }
+                    }
 
                     // UTF-16として解釈できなかった場合は通常のデコード
                     if (!title) {
                         title = decodeTitle(titleBytes);
-                    
-                
+                    }
+                }
 
                 if (title && title.trim()) {
                     const trimmedTitle = title.trim();
                     // 重複チェックを削除 - 同名しおりも全て保持
                     bookmarks.push({ title: trimmedTitle, page: '', level: 1, source: 'manual' });
-                
-            
+                }
+            }
 
             /*
             --------------------------------------------------------------
@@ -4025,7 +3938,7 @@
                         const titleBytes = new Uint8Array(decoded.length);
                         for (let i = 0; i < decoded.length; i++) {
                             titleBytes[i] = decoded.charCodeAt(i) & 0xFF;
-                        
+                        }
 
                         title = decodeTitle(titleBytes);
                     } else if (match[2] !== undefined) {
@@ -4037,7 +3950,7 @@
                             for (let i = 0; i + 4 <= dataHex.length; i += 4) {
                                 const charCode = parseInt(dataHex.substring(i, i + 4), 16);
                                 if (charCode > 0) title += String.fromCharCode(charCode);
-                            
+                            }
                         } else if (hexStr.toUpperCase().startsWith('FFFE')) {
                             // UTF-16LE BOM - Acrobat JavaScript対応
                             const dataHex = hexStr.substring(4);
@@ -4046,20 +3959,20 @@
                                 const high = parseInt(dataHex.substring(i + 2, i + 4), 16);
                                 const charCode = (high << 8) | low;
                                 if (charCode > 0) title += String.fromCharCode(charCode);
-                            
+                            }
                         } else if (hexStr.length >= 2) {
                             const bytes = new Uint8Array(hexStr.length / 2);
                             for (let i = 0; i + 2 <= hexStr.length; i += 2) {
                                 bytes[i / 2] = parseInt(hexStr.substring(i, i + 2), 16);
-                            
+                            }
                             title = decodeTitle(bytes);
-                        
-                    
+                        }
+                    }
                     if (title && title.trim()) {
                         bookmarks.push({ title: title.trim(), page: '', level: 1, source: 'manual' });
-                    
-                
-            
+                    }
+                }
+            }
 
             /*
             --------------------------------------------------------------
@@ -4086,7 +3999,7 @@
                             const titleBytes = new Uint8Array(decoded.length);
                             for (let i = 0; i < decoded.length; i++) {
                                 titleBytes[i] = decoded.charCodeAt(i) & 0xFF;
-                            
+                            }
                             title = decodeTitle(titleBytes);
                         } else if (titleMatch[2] !== undefined) {
                             const hexStr = titleMatch[2].replace(/\s+/g, '');
@@ -4096,7 +4009,7 @@
                                 for (let i = 0; i + 4 <= dataHex.length; i += 4) {
                                     const charCode = parseInt(dataHex.substring(i, i + 4), 16);
                                     if (charCode > 0) title += String.fromCharCode(charCode);
-                                
+                                }
                             } else if (hexStr.toUpperCase().startsWith('FFFE')) {
                                 // UTF-16LE BOM - Acrobat JavaScript対応
                                 const dataHex = hexStr.substring(4);
@@ -4105,22 +4018,22 @@
                                     const high = parseInt(dataHex.substring(i + 2, i + 4), 16);
                                     const charCode = (high << 8) | low;
                                     if (charCode > 0) title += String.fromCharCode(charCode);
-                                
+                                }
                             } else if (hexStr.length >= 2) {
                                 const hexBytes = new Uint8Array(hexStr.length / 2);
                                 for (let i = 0; i + 2 <= hexStr.length; i += 2) {
                                     hexBytes[i / 2] = parseInt(hexStr.substring(i, i + 2), 16);
-                                
+                                }
                                 title = decodeTitle(hexBytes);
-                            
-                        
+                            }
+                        }
 
                         if (title && title.trim()) {
                             bookmarks.push({ title: title.trim(), page: '', level: 1, source: 'manual' });
-                        
-                    
-                
-            
+                        }
+                    }
+                }
+            }
 
             /*
             --------------------------------------------------------------
@@ -4157,15 +4070,13 @@
                         const byteArray = new Uint8Array(latin1Str.length);
                         for (let j = 0; j < latin1Str.length; j++) {
                             byteArray[j] = latin1Str.charCodeAt(j) & 0xFF;
-                        
+                        }
                         // Shift_JISとしてデコード
                         return new TextDecoder('shift_jis').decode(byteArray);
-                        }
                     } catch (e) {
                         return null;
-                        }
-                    
-                
+                    }
+                }
 
                 // UTF-8デコード関数（Latin-1文字列からUTF-8バイトとして解釈）
                 function decodeUTF8FromLatin1(latin1Str) {
@@ -4173,14 +4084,12 @@
                         const byteArray = new Uint8Array(latin1Str.length);
                         for (let j = 0; j < latin1Str.length; j++) {
                             byteArray[j] = latin1Str.charCodeAt(j) & 0xFF;
-                        
-                        return new TextDecoder('utf-8').decode(byteArray);
                         }
+                        return new TextDecoder('utf-8').decode(byteArray);
                     } catch (e) {
                         return null;
-                        }
-                    
-                
+                    }
+                }
 
                 // UTF-16デコード関数（Latin-1文字列からUTF-16バイトとして解釈）
                 function decodeUTF16FromLatin1(latin1Str, isLE) {
@@ -4188,15 +4097,13 @@
                         const byteArray = new Uint8Array(latin1Str.length);
                         for (let j = 0; j < latin1Str.length; j++) {
                             byteArray[j] = latin1Str.charCodeAt(j) & 0xFF;
-                        
+                        }
                         const encoding = isLE ? 'utf-16le' : 'utf-16be';
                         return new TextDecoder(encoding).decode(byteArray);
-                        }
                     } catch (e) {
                         return null;
-                        }
-                    
-                
+                    }
+                }
 
                 // バイトスワップしてUTF-16デコード（BOMと逆のエンディアン）
                 function decodeUTF16Swapped(latin1Str, bomIsLE) {
@@ -4206,25 +4113,22 @@
                         for (let j = 0; j < latin1Str.length - 1; j += 2) {
                             byteArray[j] = latin1Str.charCodeAt(j + 1) & 0xFF;
                             byteArray[j + 1] = latin1Str.charCodeAt(j) & 0xFF;
-                        
+                        }
                         if (latin1Str.length % 2 === 1) {
                             byteArray[latin1Str.length - 1] = latin1Str.charCodeAt(latin1Str.length - 1) & 0xFF;
-                        
+                        }
                         // BOMがLEならスワップ後はBEとして解釈
                         const encoding = bomIsLE ? 'utf-16be' : 'utf-16le';
                         return new TextDecoder(encoding).decode(byteArray);
-                        }
                     } catch (e) {
                         return null;
-                        }
-                    
-                
+                    }
+                }
 
                 // 日本語文字が含まれているかチェック
                 function hasJapanese(str) {
                     return /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]/.test(str);
-                    }
-                
+                }
 
                 // テキストが有効な日本語テキストかどうかをより厳密にチェック
                 // 偽陽性を減らすため、以下をチェック:
@@ -4256,8 +4160,7 @@
                     if (uncommonCJK > commonCJK * 0.5 && str.length > 5) return false;
 
                     return true;
-                    }
-                
+                }
 
                 // content内でBOMパターン（Latin-1文字として）を検索
                 // UTF-16LE BOM: \xFF\xFE → Latin-1では ÿþ (charCode 255, 254)
@@ -4271,7 +4174,7 @@
                         bomType = 'LE';
                     } else if (c1 === 0xFE && c2 === 0xFF) {
                         bomType = 'BE';
-                    
+                    }
 
                     if (bomType) {
                         // BOM後のデータを抽出（最大200文字）
@@ -4283,7 +4186,7 @@
                             // 改行
                             if (c === 0x0A || c === 0x0D) break;
                             endPos++;
-                        
+                        }
 
                         if (endPos > i + 4) {
                             const dataStr = content.substring(i + 2, endPos);
@@ -4297,7 +4200,7 @@
                             const cidBytes = new Uint8Array(dataStr.length);
                             for (let j = 0; j < dataStr.length; j++) {
                                 cidBytes[j] = dataStr.charCodeAt(j) & 0xFF;
-                            
+                            }
 
                             const candidates = [
                                 { fn: () => decodeUTF16FromLatin1(dataStr, bomType === 'LE'), name: 'UTF-16' + bomType },
@@ -4316,10 +4219,10 @@
                                             bestJPCount = jpMatches.length;
                                             bestTitle = decoded;
                                             bestEncoding = cand.name;
-                                        
-                                    
+                                        }
+                                    }
                                 } catch (e) {}
-                            
+                            }
 
                             let title = bestTitle;
                             let encoding = bestEncoding;
@@ -4331,12 +4234,12 @@
                                 const validJP = isValidJapaneseText(title);
                                 if (controlChars < title.length * 0.1 && validJP) {
                                     bookmarks.push({ title: title.trim(), page: '', level: 1, source: 'manual' });
-                                
-                            
-                        
-                    
-                
-            
+                                }
+                            }
+                        }
+                    }
+                }
+            }
 
             /*
             --------------------------------------------------------------
@@ -4361,10 +4264,9 @@
                         else if (b >= 0x30 && b <= 0x9F) utf16Score += 2;
                         // ASCII
                         else if (b >= 0x20 && b <= 0x7E) { utf8Score += 0.5; utf16Score += 0.5; }
-                    
-                    return utf8Score > utf16Score;
                     }
-                
+                    return utf8Score > utf16Score;
+                }
 
                 // UTF-8文字列の終端を探す関数
                 function findUTF8End(data, startPos, maxLen) {
@@ -4374,18 +4276,15 @@
                         // NULL終端または制御文字
                         if (b === 0 || (b < 0x20 && b !== 0x09 && b !== 0x0A && b !== 0x0D)) {
                             break;
-                            }
-                        
+                        }
                         // 閉じ括弧やPDF区切り文字
                         if (b === 0x29 || b === 0x3E || b === 0x3C) { // ) > <
                             break;
-                            }
-                        
+                        }
                         pos++;
-                    
-                    return pos;
                     }
-                
+                    return pos;
+                }
 
                 // UTF-16BE BOM (FEFF) または UTF-16LE BOM (FFFE) を探す
                 for (let i = 0; i < bytes.length - 4; i++) {
@@ -4394,7 +4293,7 @@
                         bomType = 'BE';
                     } else if (bytes[i] === 0xFF && bytes[i + 1] === 0xFE) {
                         bomType = 'LE';
-                    
+                    }
 
                     if (bomType) {
                         // BOM後のデータを取得
@@ -4422,14 +4321,14 @@
                                                     hex: hexDump,
                                                     decoded: title.trim().substring(0, 30)
                                                 });
-                                            
+                                            }
                                             bookmarks.push({ title: title.trim(), page: '', level: 1, source: 'manual' });
-                                        
-                                    
+                                        }
+                                    }
                                 } catch (e) {
                                     // デコードエラーは無視
-                                
-                            
+                                }
+                            }
                         } else {
                             // 従来のUTF-16デコード
                             let endPos = i + 2;
@@ -4441,10 +4340,9 @@
                                     const charCode = (high << 8) | low;
                                     if (charCode === 0 || (high === 0 && low < 0x20 && low !== 0x09 && low !== 0x0A && low !== 0x0D)) {
                                         break;
-                                        }
-                                    
+                                    }
                                     endPos += 2;
-                                
+                                }
                             } else {
                                 method6LECount++;
                                 while (endPos < bytes.length - 1 && endPos < i + 512) {
@@ -4453,11 +4351,10 @@
                                     const charCode = (high << 8) | low;
                                     if (charCode === 0 || (high === 0 && low < 0x20 && low !== 0x09 && low !== 0x0A && low !== 0x0D)) {
                                         break;
-                                        }
-                                    
+                                    }
                                     endPos += 2;
-                                
-                            
+                                }
+                            }
 
                             if (endPos > i + 4) {
                                 const titleBytes = bytes.slice(i, endPos);
@@ -4473,7 +4370,7 @@
                                     hasJapanese = /[\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF]/.test(title);
                                 } catch (e) {
                                     title = '';
-                                
+                                }
 
                                 // UTF-16で日本語が含まれなければCIDを試す
                                 if (title && !hasJapanese && Object.keys(cidToUnicode).length > 0) {
@@ -4482,8 +4379,8 @@
                                         title = cidDecoded;
                                         decodedType = 'CID';
                                         method6CIDCount++;
-                                    
-                                
+                                    }
+                                }
 
                                 if (title && title.trim().length >= 2) {
                                     const controlChars = (title.match(/[\x00-\x1F]/g) || []).length;
@@ -4495,16 +4392,15 @@
                                                 hex: hexDump,
                                                 decoded: title.trim().substring(0, 30)
                                             });
-                                        
+                                        }
                                         bookmarks.push({ title: title.trim(), page: '', level: 1, source: 'manual' });
-                                    
-                                
-                            
-                        
-                    
-                
-
-            
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
 
             /*
             --------------------------------------------------------------
@@ -4516,7 +4412,7 @@
             const destinations = [];
             while ((match = destPattern.exec(content)) !== null) {
                 destinations.push(match[1]);
-            
+            }
 
             // しおりにページ番号を割り当て
             // Math.min(): 小さい方の値を返す
@@ -4528,14 +4424,13 @@
                 } else {
                     // なければオブジェクト番号をそのまま使用
                     bookmarks[i].page = parseInt(pageRef) || '';
-                
-            
+                }
+            }
 
             // 階層構造の解析を試みる
             analyzeHierarchy(content, bookmarks);
 
             return bookmarks;
-            }
         }
 
         /*
@@ -4570,7 +4465,7 @@
                         while (j < str.length && j < i + 4 && str[j] >= '0' && str[j] <= '7') {
                             octalStr += str[j];
                             j++;
-                        
+                        }
                         const charCode = parseInt(octalStr, 8);
                         // 8進数の値が255を超える場合は分割処理
                         if (charCode <= 255) {
@@ -4581,10 +4476,9 @@
                             const twoDigitOctal = octalStr.substring(0, 2);
                             result += String.fromCharCode(parseInt(twoDigitOctal, 8));
                             i += 3; // \NN の分
-                        
-                        continue;
                         }
-                    
+                        continue;
+                    }
 
                     // 16進数エスケープ: \xNN
                     if (nextChar === 'x' && i + 3 < str.length) {
@@ -4593,9 +4487,8 @@
                             result += String.fromCharCode(parseInt(hexStr, 16));
                             i += 4;
                             continue;
-                            }
-                        
-                    
+                        }
+                    }
 
                     // 特殊文字エスケープ
                     switch (nextChar) {
@@ -4612,27 +4505,23 @@
                             i += 2;
                             if (i < str.length && str[i] === '\n') i++;
                             continue;
-                            }
                         case '\n':
                             // 行継続（\n）
                             i += 2;
                             continue;
-                            }
                         default:
                             // 不明なエスケープは文字そのものとして扱う
                             result += nextChar;
                             i += 2;
                             continue;
-                            }
-                    
-                
+                    }
+                }
 
                 result += str[i];
                 i++;
-            
+            }
 
             return result;
-            }
         }
 
         /*
@@ -4689,13 +4578,12 @@
                     const mapped = pdfDocEncodingMap[b];
                     if (mapped !== 0xFFFF) {
                         result += String.fromCharCode(mapped);
-                    
+                    }
                 } else {
                     result += String.fromCharCode(b);
-                
-            
-            return result;
+                }
             }
+            return result;
         }
 
         /*
@@ -4726,8 +4614,8 @@
                     const parentMatch = item.match(/\/Parent\s+(\d+)\s+\d+\s+R/);
                     if (parentMatch) {
                         parentMap[objNum] = parseInt(parentMatch[1]);
-                    
-                
+                    }
+                }
             });
 
             // ルートオブジェクト（/Outlines）を特定
@@ -4745,20 +4633,17 @@
                 if (!parentObjNum || parentObjNum === rootObjNum) {
                     // 親がない、またはルートが親 → レベル1
                     return 1;
-                    }
-                
+                }
 
                 // 親がしおり（/Title を持つオブジェクト）かどうか確認
                 if (objNumToIndex.hasOwnProperty(parentObjNum)) {
                     // 親もしおり → 親のレベル + 1
                     return Math.min(calculateLevel(parentObjNum, visited) + 1, 5);
-                    }
-                
+                }
 
                 // 親がルートアウトライン → レベル1
                 return 1;
-                }
-            
+            }
 
             // 各しおりにレベルを設定
             outlineItems.forEach((item, index) => {
@@ -4767,8 +4652,8 @@
                     if (objNumMatch) {
                         const objNum = parseInt(objNumMatch[1]);
                         bookmarks[index].level = calculateLevel(objNum);
-                    
-                
+                    }
+                }
             });
         }
     </script>
