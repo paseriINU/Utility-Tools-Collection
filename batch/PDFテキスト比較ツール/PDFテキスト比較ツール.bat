@@ -1,11 +1,8 @@
 <# :
 @echo off
 chcp 65001 >nul
-title PDF テキスト比較ツール（GUI版）
-setlocal
-
-powershell -NoProfile -ExecutionPolicy Bypass -Command "iex ((gc '%~f0' -Encoding UTF8) -join \"`n\")"
-exit /b %ERRORLEVEL%
+start "" /b powershell -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -STA -Command "iex ((gc '%~f0' -Encoding UTF8) -join \"`n\")"
+exit /b
 : #>
 
 #==============================================================================
@@ -212,6 +209,20 @@ function Extract-TextFromPdf($pdfPath) {
         [System.GC]::Collect()
         [System.GC]::WaitForPendingFinalizers()
     }
+
+    # テキストのクリーニング処理
+    # 1. Word特有のセクション区切り文字（垂直タブ等）を改行に置換
+    $text = $text -replace "`v", "`r`n"
+    # 2. フォームフィード文字を改行に置換
+    $text = $text -replace "`f", "`r`n"
+    # 3. ベル文字等の制御文字を除去（タブ、改行、復帰は保持）
+    $text = $text -replace '[^\x09\x0A\x0D\x20-\x7E\u0080-\uFFFF]', ''
+    # 4. 改行コードをCRLFに統一
+    $text = $text -replace "`r`n", "`n"
+    $text = $text -replace "`r", "`n"
+    $text = $text -replace "`n", "`r`n"
+    # 5. 連続する空行を2行までに制限
+    $text = $text -replace "(`r`n){3,}", "`r`n`r`n"
 
     return $text
 }
