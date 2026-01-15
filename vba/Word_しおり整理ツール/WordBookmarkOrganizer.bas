@@ -6,20 +6,12 @@ Option Explicit
 ' 該当するスタイルを適用。「参照」を含む段落はスキップ。
 ' ============================================================================
 
-' === スタイル設定構造体 ===
-Private Type StyleConfig
-    Level1Style As String  ' 第X部用（パターンマッチ、ヘッダー空白時のみ）
-    Level2Style As String  ' 第X章用（パターンマッチ、ヘッダー非空白時のみ）
-    Level3Style As String  ' 第X節/X-X用（パターンマッチ、自動判定）
-    Level4Style As String  ' X-X/X-X,X用（パターンマッチ）
-    Level5Style As String  ' X-X,X用（パターンマッチ、節あり時のみ）
-    Exception1Style As String
-    Exception2Style As String
-    HyohyoStyle As String  ' 帳票パターン（X123）/（XX12）用
-    Special1Text As String  ' 特定テキスト1（完全一致）
-    Special1Style As String ' 特定テキスト1のスタイル
-    Special2Text As String  ' 特定テキスト2（完全一致）
-    Special2Style As String ' 特定テキスト2のスタイル
+' === スタイル設定構造体（動的配列対応） ===
+Private Type StyleSetting
+    Category As String      ' 種別: パターン, 帳票, 特定, 例外
+    Level As String         ' レベル: 1, 2, 3, 3-節, 4, 4-節, 5-節 など
+    Pattern As String       ' パターン（正規表現）またはテキスト
+    StyleName As String     ' 適用スタイル名
 End Type
 
 ' === デフォルトスタイル名定数（ヘッダーのSTYLEREF更新用） ===
@@ -41,42 +33,50 @@ Public Sub OrganizeWordBookmarks()
     Dim processedCount As Long
     Dim inputDir As String
     Dim outputDir As String
-
-    ' 設定
-    Dim styles As StyleConfig
     Dim doPdfOutput As Boolean
 
-    ' Excelシートからフォルダパスを読み取る
-    Dim ws As Worksheet
-    Set ws = ThisWorkbook.Worksheets(SHEET_MAIN)
+    ' 動的スタイル設定
+    Dim styleSettings() As StyleSetting
+    Dim styleCount As Long
 
-    inputDir = CStr(ws.Cells(ROW_INPUT_FOLDER, 3).Value)  ' C10セル
-    outputDir = CStr(ws.Cells(ROW_OUTPUT_FOLDER, 3).Value)  ' C12セル
+    ' 設定シートからフォルダパスを読み取る
+    Dim wsSettings As Worksheet
+    On Error Resume Next
+    Set wsSettings = ThisWorkbook.Worksheets(SHEET_SETTINGS)
+    If wsSettings Is Nothing Then
+        MsgBox "エラー: 「設定」シートが見つかりません。" & vbCrLf & _
+               "初期化マクロを実行してください。", vbCritical
+        Exit Sub
+    End If
+    On Error GoTo 0
+
+    inputDir = CStr(wsSettings.Cells(SETTINGS_ROW_INPUT_FOLDER, SETTINGS_COL_VALUE).Value)
+    outputDir = CStr(wsSettings.Cells(SETTINGS_ROW_OUTPUT_FOLDER, SETTINGS_COL_VALUE).Value)
 
     ' 末尾に\を追加（なければ）
     If Right(inputDir, 1) <> "\" Then inputDir = inputDir & "\"
     If Right(outputDir, 1) <> "\" Then outputDir = outputDir & "\"
 
-    ' Inputフォルダの存在確認（存在しない場合はエラー）
+    ' Inputフォルダの存在確認
     If Dir(inputDir, vbDirectory) = "" Then
         MsgBox "エラー: 入力フォルダが存在しません。" & vbCrLf & vbCrLf & _
                inputDir & vbCrLf & vbCrLf & _
-               "フォルダ設定を確認してください。", vbCritical, "フォルダエラー"
+               "設定シートのフォルダ設定を確認してください。", vbCritical, "フォルダエラー"
         Exit Sub
     End If
 
-    ' Outputフォルダの存在確認（存在しない場合はエラー）
+    ' Outputフォルダの存在確認
     If Dir(outputDir, vbDirectory) = "" Then
         MsgBox "エラー: 出力フォルダが存在しません。" & vbCrLf & vbCrLf & _
                outputDir & vbCrLf & vbCrLf & _
-               "フォルダ設定を確認してください。", vbCritical, "フォルダエラー"
+               "設定シートのフォルダ設定を確認してください。", vbCritical, "フォルダエラー"
         Exit Sub
     End If
 
-    ' Excelシートから設定を読み込み
-    If Not LoadSettings(styles, doPdfOutput) Then
+    ' 設定シートから設定を動的に読み込み
+    If Not LoadDynamicSettings(wsSettings, styleSettings, styleCount, doPdfOutput) Then
         MsgBox "設定の読み込みに失敗しました。" & vbCrLf & _
-               "シートを初期化してください。", vbExclamation
+               "設定シートを確認してください。", vbExclamation
         Exit Sub
     End If
 
@@ -96,7 +96,7 @@ Public Sub OrganizeWordBookmarks()
 
     ' Wordアプリケーションを起動
     Set wordApp = CreateObject("Word.Application")
-    wordApp.Visible = False  ' バックグラウンドで実行
+    wordApp.Visible = False
 
     ' Word文書を開く
     Set wordDoc = wordApp.Documents.Open(filePath)
@@ -109,16 +109,13 @@ Public Sub OrganizeWordBookmarks()
     Dim isHyohyoDocument As Boolean
     isHyohyoDocument = HasHyohyoOnFirstPage(wordDoc)
 
-    ' スタイルの存在確認（節がない場合はLevel 5のチェックをスキップ）
+    ' スタイルの存在確認
     Dim missingStyles As String
-    missingStyles = ValidateStyles(wordDoc, styles, hasSections)
+    missingStyles = ValidateDynamicStyles(wordDoc, styleSettings, styleCount, hasSections)
     If missingStyles <> "" Then
         MsgBox "エラー: 以下のスタイルがWord文書に存在しません。" & vbCrLf & vbCrLf & _
                missingStyles & vbCrLf & _
-               "処理を中止します。" & vbCrLf & vbCrLf & _
-               "Word文書にスタイルを作成するか、" & vbCrLf & _
-               "Excelシートのスタイル名を修正してください。", _
-               vbCritical, "スタイルエラー"
+               "処理を中止します。", vbCritical, "スタイルエラー"
         wordDoc.Close SaveChanges:=False
         wordApp.Quit
         Set wordDoc = Nothing
@@ -130,8 +127,9 @@ Public Sub OrganizeWordBookmarks()
     Debug.Print "========================================="
     Debug.Print "Word文書のしおり整理を開始します"
     Debug.Print "対象ファイル: " & filePath
-    Debug.Print "節構造: " & IIf(hasSections, "あり（5レベル）", "なし（4レベル）")
-    Debug.Print "帳票文書: " & IIf(isHyohyoDocument, "あり（帳票番号パターン有効）", "なし")
+    Debug.Print "節構造: " & IIf(hasSections, "あり", "なし")
+    Debug.Print "帳票文書: " & IIf(isHyohyoDocument, "あり", "なし")
+    Debug.Print "スタイル設定数: " & styleCount
     Debug.Print "========================================="
 
     processedCount = 0
@@ -146,15 +144,15 @@ Public Sub OrganizeWordBookmarks()
         Debug.Print "-----------------------------------------"
         Debug.Print "セクション " & sectIndex & " を処理中..."
 
-        ' ヘッダーが空白かどうか判定（ヘッダーテキスト自体が空かどうか）
+        ' ヘッダーが空白かどうか判定
         Dim headerIsEmpty As Boolean
         headerIsEmpty = IsHeaderEmpty(sect)
         Debug.Print "  ヘッダー空白: " & headerIsEmpty
 
-        ' セクション内の段落を処理（パターンマッチ方式）
+        ' セクション内の段落を処理
         Dim para As Object
         For Each para In sect.Range.Paragraphs
-            processedCount = processedCount + ProcessParagraph(para, styles, hasSections, headerIsEmpty, isHyohyoDocument, wordDoc)
+            processedCount = processedCount + ProcessParagraphDynamic(para, styleSettings, styleCount, hasSections, headerIsEmpty, isHyohyoDocument, wordDoc)
         Next para
 
         ' セクション内の図形も処理
@@ -164,7 +162,7 @@ Public Sub OrganizeWordBookmarks()
         For Each shp In sect.Range.ShapeRange
             If shp.TextFrame.HasText Then
                 For Each shapePara In shp.TextFrame.TextRange.Paragraphs
-                    processedCount = processedCount + ProcessParagraph(shapePara, styles, hasSections, headerIsEmpty, isHyohyoDocument, wordDoc)
+                    processedCount = processedCount + ProcessParagraphDynamic(shapePara, styleSettings, styleCount, hasSections, headerIsEmpty, isHyohyoDocument, wordDoc)
                 Next shapePara
             End If
         Next shp
@@ -172,8 +170,8 @@ Public Sub OrganizeWordBookmarks()
         On Error GoTo ErrorHandler
     Next sect
 
-    ' ヘッダー内のフィールドを更新（STYLEREFのスタイル名も変更）
-    UpdateHeaderFields wordDoc, styles
+    ' ヘッダー内のフィールドを更新
+    UpdateHeaderFieldsDynamic wordDoc, styleSettings, styleCount
 
     ' Outputフォルダに名前を付けて保存
     wordDoc.SaveAs2 outputWordPath
@@ -204,7 +202,7 @@ Public Sub OrganizeWordBookmarks()
     Set wordDoc = Nothing
     Set wordApp = Nothing
 
-    ' 完了メッセージの作成
+    ' 完了メッセージ
     Dim msg As String
     msg = "しおりの整理が完了しました。" & vbCrLf & vbCrLf & _
           "処理件数: " & processedCount & " 個" & vbCrLf & _
@@ -219,12 +217,10 @@ Public Sub OrganizeWordBookmarks()
     Exit Sub
 
 ErrorHandler:
-    ' エラー処理
     MsgBox "エラーが発生しました: " & vbCrLf & vbCrLf & _
            "エラー番号: " & Err.Number & vbCrLf & _
            "エラー内容: " & Err.Description, vbCritical, "エラー"
 
-    ' Wordオブジェクトのクリーンアップ
     On Error Resume Next
     If Not wordDoc Is Nothing Then
         wordDoc.Close SaveChanges:=False
@@ -234,6 +230,450 @@ ErrorHandler:
     End If
     Set wordDoc = Nothing
     Set wordApp = Nothing
+    On Error GoTo 0
+End Sub
+
+' ============================================================================
+' 設定シートから動的に設定を読み込み
+' ============================================================================
+Private Function LoadDynamicSettings(ByRef wsSettings As Worksheet, _
+                                     ByRef styleSettings() As StyleSetting, _
+                                     ByRef styleCount As Long, _
+                                     ByRef doPdfOutput As Boolean) As Boolean
+    On Error GoTo ErrorHandler
+
+    Dim row As Long
+    Dim category As String
+    Dim maxRows As Long
+
+    ' 最大行数を設定（空行が続いたら終了）
+    maxRows = 100
+    styleCount = 0
+    ReDim styleSettings(0 To maxRows - 1)
+
+    ' スタイル設定を読み込み
+    row = SETTINGS_ROW_STYLE_START
+    Dim emptyRowCount As Long
+    emptyRowCount = 0
+
+    Do While row < SETTINGS_ROW_STYLE_START + maxRows
+        category = Trim(CStr(wsSettings.Cells(row, SETTINGS_COL_LABEL).Value))
+
+        ' 空行が3行連続したら終了
+        If category = "" Then
+            emptyRowCount = emptyRowCount + 1
+            If emptyRowCount >= 3 Then Exit Do
+            row = row + 1
+            GoTo NextRow
+        End If
+
+        emptyRowCount = 0
+
+        ' 有効な設定行を追加
+        styleSettings(styleCount).Category = category
+        styleSettings(styleCount).Level = Trim(CStr(wsSettings.Cells(row, SETTINGS_COL_VALUE).Value))
+        styleSettings(styleCount).Pattern = Trim(CStr(wsSettings.Cells(row, SETTINGS_COL_PATTERN).Value))
+        styleSettings(styleCount).StyleName = Trim(CStr(wsSettings.Cells(row, SETTINGS_COL_STYLE).Value))
+
+        styleCount = styleCount + 1
+        row = row + 1
+NextRow:
+    Loop
+
+    ' 配列をリサイズ
+    If styleCount > 0 Then
+        ReDim Preserve styleSettings(0 To styleCount - 1)
+    End If
+
+    ' オプション設定を読み込み
+    doPdfOutput = (CStr(wsSettings.Cells(SETTINGS_ROW_PDF_OUTPUT, SETTINGS_COL_VALUE).Value) = "はい")
+
+    LoadDynamicSettings = True
+    Exit Function
+
+ErrorHandler:
+    LoadDynamicSettings = False
+End Function
+
+' ============================================================================
+' 段落処理（動的設定対応）
+' ============================================================================
+Private Function ProcessParagraphDynamic(ByRef para As Object, _
+                                         ByRef styleSettings() As StyleSetting, _
+                                         ByVal styleCount As Long, _
+                                         ByVal hasSections As Boolean, _
+                                         ByVal headerIsEmpty As Boolean, _
+                                         ByVal isHyohyoDocument As Boolean, _
+                                         ByRef wordDoc As Object) As Long
+    On Error GoTo ErrorHandler
+
+    If para Is Nothing Then
+        ProcessParagraphDynamic = 0
+        Exit Function
+    End If
+
+    If para.Range Is Nothing Then
+        ProcessParagraphDynamic = 0
+        Exit Function
+    End If
+
+    Dim paraText As String
+    Dim paraTextHalf As String
+
+    ' 段落テキストを取得
+    paraText = Trim(Replace(para.Range.Text, vbCr, ""))
+    paraText = Replace(paraText, Chr(13), "")
+    paraText = Replace(paraText, Chr(12), "")
+    paraText = Replace(paraText, Chr(11), "")
+    paraText = Replace(paraText, Chr(7), "")
+    paraText = Trim(paraText)
+
+    ' 半角変換版
+    paraTextHalf = ConvertToHalfWidth(paraText)
+
+    ' 空の段落はスキップ
+    If paraText = "" Then
+        ProcessParagraphDynamic = 0
+        Exit Function
+    End If
+
+    ' 「参照」を含む段落はスキップ
+    If InStr(paraText, "参照") > 0 Then
+        ProcessParagraphDynamic = 0
+        Exit Function
+    End If
+
+    ' 「・」で始まる段落はスキップ
+    If Left(paraText, 1) = "・" Then
+        ProcessParagraphDynamic = 0
+        Exit Function
+    End If
+
+    ' ハイパーリンクを含む段落はスキップ
+    On Error Resume Next
+    If para.Range.Hyperlinks.Count > 0 Then
+        ProcessParagraphDynamic = 0
+        Exit Function
+    End If
+    If Err.Number <> 0 Then Err.Clear
+    On Error GoTo ErrorHandler
+
+    ' 表内の段落はスキップ
+    On Error Resume Next
+    If para.Range.Information(12) = True Then
+        ProcessParagraphDynamic = 0
+        Exit Function
+    End If
+    If Err.Number <> 0 Then Err.Clear
+    On Error GoTo ErrorHandler
+
+    ' 動的設定をループして処理
+    Dim i As Long
+    Dim setting As StyleSetting
+    Dim matched As Boolean
+    Dim targetStyle As String
+    Dim detectedLevel As String
+
+    matched = False
+
+    For i = 0 To styleCount - 1
+        setting = styleSettings(i)
+
+        ' スタイル名が空なら次へ
+        If setting.StyleName = "" Then GoTo NextSetting
+
+        Select Case setting.Category
+            Case "パターン"
+                ' レベルに「-節」が含まれる場合は節構造あり時のみ適用
+                If InStr(setting.Level, "-節") > 0 Then
+                    If Not hasSections Then GoTo NextSetting
+                ElseIf setting.Level = "1" Then
+                    ' レベル1はヘッダー空白時のみ
+                    If Not headerIsEmpty Then GoTo NextSetting
+                Else
+                    ' 「X-節」でないレベル設定は節構造なし時のみ適用
+                    ' ただしレベル1,2は除く
+                    If setting.Level <> "1" And setting.Level <> "2" Then
+                        ' 同じレベルで「-節」付きがあればスキップ（節構造あり時）
+                        If hasSections Then
+                            If HasSectionVariant(styleSettings, styleCount, setting.Level) Then
+                                GoTo NextSetting
+                            End If
+                        End If
+                    End If
+                End If
+
+                ' パターンマッチ（半角変換済みテキストでも試す）
+                If setting.Pattern <> "" Then
+                    If MatchPattern(paraText, setting.Pattern) Or _
+                       MatchPattern(paraTextHalf, setting.Pattern) Then
+                        matched = True
+                        targetStyle = setting.StyleName
+                        detectedLevel = setting.Level
+                        Exit For
+                    End If
+                End If
+
+            Case "帳票"
+                ' 帳票文書の場合のみ適用
+                If isHyohyoDocument And setting.Pattern <> "" Then
+                    If MatchPattern(paraTextHalf, setting.Pattern) Then
+                        matched = True
+                        targetStyle = setting.StyleName
+                        detectedLevel = "帳票"
+                        Debug.Print "  [帳票番号検出] " & Left(paraText, 50)
+                        Exit For
+                    End If
+                End If
+
+            Case "特定"
+                ' 完全一致
+                If setting.Pattern <> "" Then
+                    If paraText = setting.Pattern Then
+                        ApplyStyle para, setting.StyleName
+                        ' アウトラインレベルを設定
+                        Dim outlineLevel As Long
+                        If IsNumeric(setting.Level) Then
+                            outlineLevel = CLng(setting.Level)
+                            If outlineLevel >= 1 And outlineLevel <= 9 Then
+                                On Error Resume Next
+                                para.Range.ParagraphFormat.OutlineLevel = outlineLevel
+                                On Error GoTo ErrorHandler
+                            End If
+                        End If
+                        Debug.Print "  [特定テキスト→アウトライン" & setting.Level & "] " & paraText
+                        ProcessParagraphDynamic = 1
+                        Exit Function
+                    End If
+                End If
+
+            Case "例外"
+                ' 例外1: パターン外だが見出しスタイル適用済み
+                If setting.Level = "1" Then
+                    Dim currentStyle As String
+                    On Error Resume Next
+                    currentStyle = para.Style.NameLocal
+                    If Err.Number <> 0 Then
+                        currentStyle = ""
+                        Err.Clear
+                    End If
+                    On Error GoTo ErrorHandler
+
+                    If IsLevelStyleDynamic(currentStyle, styleSettings, styleCount) Then
+                        matched = True
+                        targetStyle = setting.StyleName
+                        detectedLevel = "例外1"
+                        Exit For
+                    End If
+                End If
+
+                ' 例外2: アウトライン設定済み
+                If setting.Level = "2" Then
+                    Dim currentOutline As Long
+                    On Error Resume Next
+                    currentOutline = para.OutlineLevel
+                    If Err.Number <> 0 Then
+                        currentOutline = 10
+                        Err.Clear
+                    End If
+                    On Error GoTo ErrorHandler
+
+                    If (currentOutline >= 1 And currentOutline <= 9) Then
+                        matched = True
+                        targetStyle = setting.StyleName
+                        detectedLevel = "例外2"
+                        Exit For
+                    ElseIf HasOutlineDefinedInStyle(para, wordDoc) Then
+                        matched = True
+                        targetStyle = setting.StyleName
+                        detectedLevel = "例外2"
+                        Exit For
+                    End If
+                End If
+        End Select
+NextSetting:
+    Next i
+
+    ' スタイル適用
+    If matched And targetStyle <> "" Then
+        ApplyStyle para, targetStyle
+        Debug.Print "  [" & detectedLevel & "] " & Left(paraText, 50)
+        ProcessParagraphDynamic = 1
+        Exit Function
+    End If
+
+    ProcessParagraphDynamic = 0
+    Exit Function
+
+ErrorHandler:
+    ProcessParagraphDynamic = 0
+End Function
+
+' ============================================================================
+' 同じレベルで「-節」バリアントがあるかチェック
+' ============================================================================
+Private Function HasSectionVariant(ByRef styleSettings() As StyleSetting, _
+                                   ByVal styleCount As Long, _
+                                   ByVal level As String) As Boolean
+    Dim i As Long
+    For i = 0 To styleCount - 1
+        If styleSettings(i).Level = level & "-節" Then
+            HasSectionVariant = True
+            Exit Function
+        End If
+    Next i
+    HasSectionVariant = False
+End Function
+
+' ============================================================================
+' スタイルがレベル系スタイルかチェック（動的版）
+' ============================================================================
+Private Function IsLevelStyleDynamic(ByVal styleName As String, _
+                                     ByRef styleSettings() As StyleSetting, _
+                                     ByVal styleCount As Long) As Boolean
+    If styleName = "" Then
+        IsLevelStyleDynamic = False
+        Exit Function
+    End If
+
+    Dim i As Long
+    For i = 0 To styleCount - 1
+        If styleSettings(i).Category = "パターン" And styleSettings(i).StyleName = styleName Then
+            IsLevelStyleDynamic = True
+            Exit Function
+        End If
+    Next i
+
+    IsLevelStyleDynamic = False
+End Function
+
+' ============================================================================
+' スタイルの存在確認（動的版）
+' ============================================================================
+Private Function ValidateDynamicStyles(ByRef wordDoc As Object, _
+                                       ByRef styleSettings() As StyleSetting, _
+                                       ByVal styleCount As Long, _
+                                       ByVal hasSections As Boolean) As String
+    Dim missingStyles As String
+    Dim checkedStyles As Collection
+    Dim i As Long
+    Dim setting As StyleSetting
+
+    missingStyles = ""
+    Set checkedStyles = New Collection
+
+    For i = 0 To styleCount - 1
+        setting = styleSettings(i)
+
+        ' 空のスタイル名はスキップ
+        If setting.StyleName = "" Then GoTo NextStyle
+
+        ' 節構造に応じてスキップ
+        If InStr(setting.Level, "-節") > 0 And Not hasSections Then GoTo NextStyle
+        If setting.Category = "パターン" And setting.Level <> "1" And setting.Level <> "2" Then
+            If Not InStr(setting.Level, "-節") > 0 And hasSections Then
+                If HasSectionVariant(styleSettings, styleCount, setting.Level) Then
+                    GoTo NextStyle
+                End If
+            End If
+        End If
+
+        ' 既にチェック済みならスキップ
+        On Error Resume Next
+        checkedStyles.Add setting.StyleName, setting.StyleName
+        If Err.Number <> 0 Then
+            Err.Clear
+            GoTo NextStyle
+        End If
+        On Error GoTo 0
+
+        ' スタイルの存在確認
+        If Not StyleExists(wordDoc, setting.StyleName) Then
+            missingStyles = missingStyles & "  - " & setting.StyleName & _
+                           " (" & setting.Category & ": " & setting.Pattern & ")" & vbCrLf
+        End If
+NextStyle:
+    Next i
+
+    ValidateDynamicStyles = missingStyles
+End Function
+
+' ============================================================================
+' ヘッダー内のフィールドを更新（動的版）
+' ============================================================================
+Private Sub UpdateHeaderFieldsDynamic(ByRef wordDoc As Object, _
+                                      ByRef styleSettings() As StyleSetting, _
+                                      ByVal styleCount As Long)
+    On Error Resume Next
+
+    Dim sect As Object
+    Dim hdr As Object
+    Dim fld As Object
+    Dim fieldCode As String
+    Dim newFieldCode As String
+    Dim i As Long
+
+    Debug.Print "========================================="
+    Debug.Print "ヘッダーのフィールドを更新しています..."
+
+    For Each sect In wordDoc.Sections
+        For Each hdr In sect.Headers
+            For Each fld In hdr.Range.Fields
+                fieldCode = fld.Code.Text
+
+                ' STYLEREFフィールドの場合、スタイル名を更新
+                If InStr(fieldCode, "STYLEREF") > 0 Then
+                    newFieldCode = fieldCode
+
+                    ' デフォルトスタイル名を新しいスタイル名に置換
+                    For i = 0 To styleCount - 1
+                        If styleSettings(i).Category = "パターン" Then
+                            Select Case styleSettings(i).Level
+                                Case "1"
+                                    If styleSettings(i).StyleName <> DEFAULT_LEVEL1_STYLE Then
+                                        newFieldCode = Replace(newFieldCode, DEFAULT_LEVEL1_STYLE, styleSettings(i).StyleName)
+                                    End If
+                                Case "2"
+                                    If styleSettings(i).StyleName <> DEFAULT_LEVEL2_STYLE Then
+                                        newFieldCode = Replace(newFieldCode, DEFAULT_LEVEL2_STYLE, styleSettings(i).StyleName)
+                                    End If
+                                Case "3", "3-節"
+                                    If styleSettings(i).StyleName <> DEFAULT_LEVEL3_STYLE Then
+                                        newFieldCode = Replace(newFieldCode, DEFAULT_LEVEL3_STYLE, styleSettings(i).StyleName)
+                                    End If
+                                Case "4", "4-節"
+                                    If styleSettings(i).StyleName <> DEFAULT_LEVEL4_STYLE Then
+                                        newFieldCode = Replace(newFieldCode, DEFAULT_LEVEL4_STYLE, styleSettings(i).StyleName)
+                                    End If
+                                Case "5", "5-節"
+                                    If styleSettings(i).StyleName <> DEFAULT_LEVEL5_STYLE Then
+                                        newFieldCode = Replace(newFieldCode, DEFAULT_LEVEL5_STYLE, styleSettings(i).StyleName)
+                                    End If
+                            End Select
+                        End If
+                    Next i
+
+                    If newFieldCode <> fieldCode Then
+                        fld.Code.Text = newFieldCode
+                        Debug.Print "  STYLEREF更新: " & Trim(fieldCode) & " → " & Trim(newFieldCode)
+                    End If
+                End If
+
+                fld.Update
+            Next fld
+        Next hdr
+
+        For Each hdr In sect.Footers
+            For Each fld In hdr.Range.Fields
+                fld.Update
+            Next fld
+        Next hdr
+    Next sect
+
+    wordDoc.Fields.Update
+
+    Debug.Print "ヘッダーのフィールド更新完了"
+
     On Error GoTo 0
 End Sub
 
@@ -260,319 +700,7 @@ Private Function IsHeaderEmpty(ByRef sect As Object) As Boolean
 End Function
 
 ' ============================================================================
-' 段落処理（パターンマッチ方式）
-' 戻り値: 処理された場合は1、それ以外は0
-' hasSections: 文書内に「第X節」が存在する場合True
-'   True の場合: Level3=第X節, Level4=X-X, Level5=X-X,X
-'   False の場合: Level3=X-X, Level4=X-X,X, Level5=未使用
-' headerIsEmpty: ヘッダーが空白の場合True
-' isHyohyoDocument: 1ページ目に「帳票」がある場合True
-'   True の場合: (X123)/(XX12)パターンにLevel5スタイルを適用
-' ============================================================================
-Private Function ProcessParagraph(ByRef para As Object, _
-                                  ByRef styles As StyleConfig, _
-                                  ByVal hasSections As Boolean, _
-                                  ByVal headerIsEmpty As Boolean, _
-                                  ByVal isHyohyoDocument As Boolean, _
-                                  ByRef wordDoc As Object) As Long
-    On Error GoTo ErrorHandler
-
-    If para Is Nothing Then
-        ProcessParagraph = 0
-        Exit Function
-    End If
-
-    If para.Range Is Nothing Then
-        ProcessParagraph = 0
-        Exit Function
-    End If
-
-    Dim paraText As String
-    Dim paraTextHalf As String
-    Dim detectedLevel As Long
-    Dim targetStyle As String
-
-    ' 段落テキストを取得（改行・改ページ等の制御文字を除去）
-    paraText = Trim(Replace(para.Range.Text, vbCr, ""))
-    paraText = Replace(paraText, Chr(13), "")   ' キャリッジリターン
-    paraText = Replace(paraText, Chr(12), "")   ' 改ページ（フォームフィード）
-    paraText = Replace(paraText, Chr(11), "")   ' 段落内改行（Shift+Enter）
-    paraText = Replace(paraText, Chr(7), "")    ' セル終端マーカー（表内）
-    paraText = Trim(paraText)                   ' 再度トリム
-
-    ' 半角変換版も用意（比較用）
-    paraTextHalf = ConvertToHalfWidth(paraText)
-
-    ' 空の段落はスキップ
-    If paraText = "" Then
-        ProcessParagraph = 0
-        Exit Function
-    End If
-
-    ' 「参照」を含む段落はスキップ
-    If InStr(paraText, "参照") > 0 Then
-        ProcessParagraph = 0
-        Exit Function
-    End If
-
-    ' 「・」で始まる段落はスキップ（目次形式: 「・　第1章」など）
-    If Left(paraText, 1) = "・" Then
-        ProcessParagraph = 0
-        Exit Function
-    End If
-
-    ' ハイパーリンクを含む段落はスキップ（目次など）
-    On Error Resume Next
-    If para.Range.Hyperlinks.Count > 0 Then
-        ProcessParagraph = 0
-        Exit Function
-    End If
-    If Err.Number <> 0 Then
-        Err.Clear
-    End If
-    On Error GoTo ErrorHandler
-
-    ' 表内の段落はスキップ
-    On Error Resume Next
-    If para.Range.Information(12) = True Then  ' 12 = wdWithInTable
-        ProcessParagraph = 0
-        Exit Function
-    End If
-    If Err.Number <> 0 Then
-        Err.Clear
-    End If
-    On Error GoTo ErrorHandler
-
-    detectedLevel = 0
-    targetStyle = ""
-
-    ' ========================================
-    ' 最初に「第X部」をチェック（段落先頭かつヘッダー空白時のみ）
-    ' 「第X部」で始まる段落は他のレベルの処理をスキップ
-    ' ========================================
-    If styles.Level1Style <> "" And headerIsEmpty Then
-        If MatchPattern(paraText, "^第[0-9０-９]+部") Then
-            detectedLevel = 1
-            targetStyle = styles.Level1Style
-            GoTo ApplyStyleAndExit
-        End If
-    End If
-
-    If hasSections Then
-        ' ========================================
-        ' 節ありの場合（5レベル構造）
-        ' Level3=第X節, Level4=X-X, Level5=X-X,X
-        ' ========================================
-
-        ' レベル5: X-X,X（パターンマッチ）
-        If detectedLevel = 0 And styles.Level5Style <> "" Then
-            If MatchPattern(paraTextHalf, "^[0-9]+-[0-9]+[,\.][0-9]+") Then
-                detectedLevel = 5
-                targetStyle = styles.Level5Style
-            End If
-        End If
-
-        ' レベル4: X-X（パターンマッチ、X-X,Xを除外）
-        If detectedLevel = 0 And styles.Level4Style <> "" Then
-            If MatchPattern(paraTextHalf, "^[0-9]+-[0-9]+(?![,\.0-9])") Then
-                detectedLevel = 4
-                targetStyle = styles.Level4Style
-            End If
-        End If
-
-        ' レベル3: 第X節（パターンマッチ）
-        If detectedLevel = 0 And styles.Level3Style <> "" Then
-            If MatchPattern(paraText, "^第[0-9０-９]+節") Then
-                detectedLevel = 3
-                targetStyle = styles.Level3Style
-            End If
-        End If
-    Else
-        ' ========================================
-        ' 節なしの場合（4レベル構造）
-        ' Level3=X-X, Level4=X-X,X, Level5=未使用
-        ' ========================================
-
-        ' レベル4: X-X,X（パターンマッチ）
-        If detectedLevel = 0 And styles.Level4Style <> "" Then
-            If MatchPattern(paraTextHalf, "^[0-9]+-[0-9]+[,\.][0-9]+") Then
-                detectedLevel = 4
-                targetStyle = styles.Level4Style
-            End If
-        End If
-
-        ' レベル3: X-X（パターンマッチ、X-X,Xを除外）
-        If detectedLevel = 0 And styles.Level3Style <> "" Then
-            If MatchPattern(paraTextHalf, "^[0-9]+-[0-9]+(?![,\.0-9])") Then
-                detectedLevel = 3
-                targetStyle = styles.Level3Style
-            End If
-        End If
-    End If
-
-    ' レベル2: 第X章（パターンマッチ）
-    If detectedLevel = 0 And styles.Level2Style <> "" Then
-        If MatchPattern(paraText, "^第[0-9０-９]+章") Then
-            detectedLevel = 2
-            targetStyle = styles.Level2Style
-        End If
-    End If
-
-    ' 帳票文書の場合: (X123)/(XX12)パターンに帳票スタイルを適用
-    ' (X123): 英字1文字 + 数字3文字
-    ' (XX12): 英字2文字 + 数字2文字
-    ' ※全角・半角両対応（paraTextHalfで半角統一済み）
-    If detectedLevel = 0 And isHyohyoDocument And styles.HyohyoStyle <> "" Then
-        ' 半角変換後のテキストでパターンマッチ
-        If MatchPattern(paraTextHalf, "\([A-Za-z][0-9]{3}\)") Or _
-           MatchPattern(paraTextHalf, "\([A-Za-z]{2}[0-9]{2}\)") Then
-            detectedLevel = 6  ' 帳票レベル
-            targetStyle = styles.HyohyoStyle
-            Debug.Print "  [帳票番号検出] " & Left(paraText, 50)
-        End If
-    End If
-
-    ' 特定テキストの例外処理（スタイルを適用、アウトラインはレベル1）
-    ' 特定テキスト1（例: 本書の記述について）
-    If detectedLevel = 0 And styles.Special1Text <> "" And styles.Special1Style <> "" Then
-        If paraText = styles.Special1Text Then
-            ApplyStyle para, styles.Special1Style
-            ' アウトラインレベルを1に設定（しおりの階層用）
-            On Error Resume Next
-            para.Range.ParagraphFormat.OutlineLevel = 1  ' wdOutlineLevel1
-            On Error GoTo ErrorHandler
-            Debug.Print "  [特定テキスト1→アウトライン1] " & paraText
-            ProcessParagraph = 1
-            Exit Function
-        End If
-    End If
-
-    ' 特定テキスト2（例: 修正履歴）
-    If detectedLevel = 0 And styles.Special2Text <> "" And styles.Special2Style <> "" Then
-        If paraText = styles.Special2Text Then
-            ApplyStyle para, styles.Special2Style
-            ' アウトラインレベルを1に設定（しおりの階層用）
-            On Error Resume Next
-            para.Range.ParagraphFormat.OutlineLevel = 1  ' wdOutlineLevel1
-            On Error GoTo ErrorHandler
-            Debug.Print "  [特定テキスト2→アウトライン1] " & paraText
-            ProcessParagraph = 1
-            Exit Function
-        End If
-    End If
-
-    ' 例外1: パターン外だが既にレベル1-5のスタイルが適用されている
-    If detectedLevel = 0 And styles.Exception1Style <> "" Then
-        Dim currentStyle As String
-        On Error Resume Next
-        currentStyle = para.Style.NameLocal
-        If Err.Number <> 0 Then
-            currentStyle = ""
-            Err.Clear
-        End If
-        On Error GoTo ErrorHandler
-
-        If IsLevelStyle(currentStyle, styles) Then
-            detectedLevel = -1
-            targetStyle = styles.Exception1Style
-        End If
-    End If
-
-    ' 例外2: アウトライン設定済み（段落またはスタイル）
-    If detectedLevel = 0 And styles.Exception2Style <> "" Then
-        Dim currentOutline As Long
-        On Error Resume Next
-        currentOutline = para.OutlineLevel
-        If Err.Number <> 0 Then
-            currentOutline = 10
-            Err.Clear
-        End If
-        On Error GoTo ErrorHandler
-
-        If (currentOutline >= 1 And currentOutline <= 9) Then
-            detectedLevel = -2
-            targetStyle = styles.Exception2Style
-        ElseIf HasOutlineDefinedInStyle(para, wordDoc) Then
-            detectedLevel = -2
-            targetStyle = styles.Exception2Style
-        End If
-    End If
-
-ApplyStyleAndExit:
-    ' スタイル適用
-    If detectedLevel <> 0 And targetStyle <> "" Then
-        ApplyStyle para, targetStyle
-        Debug.Print "  [レベル" & detectedLevel & "] " & Left(paraText, 50)
-        ProcessParagraph = 1
-        Exit Function
-    End If
-
-    ProcessParagraph = 0
-    Exit Function
-
-ErrorHandler:
-    ProcessParagraph = 0
-End Function
-
-' ============================================================================
-' スタイルがレベル1-5のいずれかかチェック
-' ============================================================================
-Private Function IsLevelStyle(ByVal styleName As String, ByRef styles As StyleConfig) As Boolean
-    If styleName = "" Then
-        IsLevelStyle = False
-        Exit Function
-    End If
-
-    If styleName = styles.Level1Style Or _
-       styleName = styles.Level2Style Or _
-       styleName = styles.Level3Style Or _
-       styleName = styles.Level4Style Or _
-       styleName = styles.Level5Style Then
-        IsLevelStyle = True
-    Else
-        IsLevelStyle = False
-    End If
-End Function
-
-' ============================================================================
-' Excelシートから設定を読み込み
-' ============================================================================
-Private Function LoadSettings(ByRef styles As StyleConfig, _
-                              ByRef doPdfOutput As Boolean) As Boolean
-    On Error GoTo ErrorHandler
-
-    Dim ws As Worksheet
-    Set ws = ThisWorkbook.Worksheets(SHEET_MAIN)
-
-    ' スタイル名を読み込み
-    styles.Level1Style = CStr(ws.Cells(ROW_PATTERN_LEVEL1, COL_STYLE_NAME).Value)
-    styles.Level2Style = CStr(ws.Cells(ROW_PATTERN_LEVEL2, COL_STYLE_NAME).Value)
-    styles.Level3Style = CStr(ws.Cells(ROW_PATTERN_LEVEL3, COL_STYLE_NAME).Value)
-    styles.Level4Style = CStr(ws.Cells(ROW_PATTERN_LEVEL4, COL_STYLE_NAME).Value)
-    styles.Level5Style = CStr(ws.Cells(ROW_PATTERN_LEVEL5, COL_STYLE_NAME).Value)
-    styles.Exception1Style = CStr(ws.Cells(ROW_PATTERN_EXCEPTION1, COL_STYLE_NAME).Value)
-    styles.Exception2Style = CStr(ws.Cells(ROW_PATTERN_EXCEPTION2, COL_STYLE_NAME).Value)
-    styles.HyohyoStyle = CStr(ws.Cells(ROW_PATTERN_HYOHYO, COL_STYLE_NAME).Value)
-
-    ' 特定テキスト設定を読み込み
-    styles.Special1Text = CStr(ws.Cells(ROW_PATTERN_SPECIAL1, COL_PATTERN_DESC).Value)
-    styles.Special1Style = CStr(ws.Cells(ROW_PATTERN_SPECIAL1, COL_STYLE_NAME).Value)
-    styles.Special2Text = CStr(ws.Cells(ROW_PATTERN_SPECIAL2, COL_PATTERN_DESC).Value)
-    styles.Special2Style = CStr(ws.Cells(ROW_PATTERN_SPECIAL2, COL_STYLE_NAME).Value)
-
-    ' オプション設定を読み込み
-    doPdfOutput = (CStr(ws.Cells(ROW_OPTION_PDF_OUTPUT, COL_OPTION_VALUE).Value) = "はい")
-
-    LoadSettings = True
-    Exit Function
-
-ErrorHandler:
-    LoadSettings = False
-End Function
-
-' ============================================================================
 ' 1ページ目に「帳票」の文字があるかチェック
-' （本文およびテキストボックス等の図形内も検索）
 ' ============================================================================
 Private Function HasHyohyoOnFirstPage(ByRef wordDoc As Object) As Boolean
     On Error Resume Next
@@ -580,23 +708,18 @@ Private Function HasHyohyoOnFirstPage(ByRef wordDoc As Object) As Boolean
     Dim searchRange As Object
     Dim shp As Object
 
-    ' 文書本文で「帳票」を検索
     Set searchRange = wordDoc.Content
     searchRange.Find.ClearFormatting
     If searchRange.Find.Execute(FindText:="帳票") Then
-        ' 見つかった位置が1ページ目かどうかを確認
-        ' wdActiveEndPageNumber = 3
         If searchRange.Information(3) = 1 Then
             HasHyohyoOnFirstPage = True
             Exit Function
         End If
     End If
 
-    ' 図形（テキストボックス等）内のテキストを検索
     For Each shp In wordDoc.Shapes
         If shp.TextFrame.HasText Then
             If InStr(shp.TextFrame.TextRange.Text, "帳票") > 0 Then
-                ' 図形のアンカーが1ページ目にあるか確認
                 If shp.Anchor.Information(3) = 1 Then
                     HasHyohyoOnFirstPage = True
                     Exit Function
@@ -624,7 +747,6 @@ Private Function HasSectionsInDocument(ByRef wordDoc As Object) As Boolean
     regex.Pattern = "第[0-9０-９]+節"
 
     For Each sect In wordDoc.Sections
-        ' プライマリヘッダーからテキストを取得
         headerText = sect.Headers(1).Range.Text
         If Err.Number = 0 Then
             If regex.Test(headerText) Then
@@ -638,72 +760,6 @@ Private Function HasSectionsInDocument(ByRef wordDoc As Object) As Boolean
 
     Set regex = Nothing
     HasSectionsInDocument = False
-End Function
-
-' ============================================================================
-' スタイルの存在確認
-' 存在しないスタイルがあれば、そのスタイル名を改行区切りで返す
-' すべて存在すれば空文字列を返す
-' hasSections: 節構造がある場合はTrue（Level5まで検証）
-' ============================================================================
-Private Function ValidateStyles(ByRef wordDoc As Object, ByRef styles As StyleConfig, _
-                                ByVal hasSections As Boolean) As String
-    Dim missingStyles As String
-    missingStyles = ""
-
-    ' 各スタイルの存在確認
-    If styles.Level1Style <> "" Then
-        If Not StyleExists(wordDoc, styles.Level1Style) Then
-            missingStyles = missingStyles & "  - " & styles.Level1Style & " (レベル1: 第X部)" & vbCrLf
-        End If
-    End If
-
-    If styles.Level2Style <> "" Then
-        If Not StyleExists(wordDoc, styles.Level2Style) Then
-            missingStyles = missingStyles & "  - " & styles.Level2Style & " (レベル2: 第X章)" & vbCrLf
-        End If
-    End If
-
-    If styles.Level3Style <> "" Then
-        If Not StyleExists(wordDoc, styles.Level3Style) Then
-            If hasSections Then
-                missingStyles = missingStyles & "  - " & styles.Level3Style & " (レベル3: 第X節)" & vbCrLf
-            Else
-                missingStyles = missingStyles & "  - " & styles.Level3Style & " (レベル3: X-X)" & vbCrLf
-            End If
-        End If
-    End If
-
-    If styles.Level4Style <> "" Then
-        If Not StyleExists(wordDoc, styles.Level4Style) Then
-            If hasSections Then
-                missingStyles = missingStyles & "  - " & styles.Level4Style & " (レベル4: X-X)" & vbCrLf
-            Else
-                missingStyles = missingStyles & "  - " & styles.Level4Style & " (レベル4: X-X,X)" & vbCrLf
-            End If
-        End If
-    End If
-
-    ' Level5は節がある場合のみチェック
-    If hasSections And styles.Level5Style <> "" Then
-        If Not StyleExists(wordDoc, styles.Level5Style) Then
-            missingStyles = missingStyles & "  - " & styles.Level5Style & " (レベル5: X-X,X)" & vbCrLf
-        End If
-    End If
-
-    If styles.Exception1Style <> "" Then
-        If Not StyleExists(wordDoc, styles.Exception1Style) Then
-            missingStyles = missingStyles & "  - " & styles.Exception1Style & " (例外1)" & vbCrLf
-        End If
-    End If
-
-    If styles.Exception2Style <> "" Then
-        If Not StyleExists(wordDoc, styles.Exception2Style) Then
-            missingStyles = missingStyles & "  - " & styles.Exception2Style & " (例外2)" & vbCrLf
-        End If
-    End If
-
-    ValidateStyles = missingStyles
 End Function
 
 ' ============================================================================
@@ -728,10 +784,10 @@ End Function
 ' ============================================================================
 ' 正規表現パターンマッチ
 ' ============================================================================
-Private Function MatchPattern(ByVal text As String, ByVal Pattern As String) As Boolean
+Private Function MatchPattern(ByVal Text As String, ByVal Pattern As String) As Boolean
     On Error GoTo ErrorHandler
 
-    If text = "" Or Pattern = "" Then
+    If Text = "" Or Pattern = "" Then
         MatchPattern = False
         Exit Function
     End If
@@ -746,7 +802,7 @@ Private Function MatchPattern(ByVal text As String, ByVal Pattern As String) As 
         .Pattern = Pattern
     End With
 
-    MatchPattern = regex.Test(text)
+    MatchPattern = regex.Test(Text)
 
     Set regex = Nothing
     Exit Function
@@ -756,35 +812,35 @@ ErrorHandler:
 End Function
 
 ' ============================================================================
-' 全角を半角に変換（数字、英字、ハイフン、カンマ、ピリオド、括弧）
+' 全角を半角に変換
 ' ============================================================================
-Private Function ConvertToHalfWidth(ByVal text As String) As String
+Private Function ConvertToHalfWidth(ByVal Text As String) As String
     Dim i As Long
     Dim char As String
     Dim result As String
     Dim charCode As Long
 
     result = ""
-    For i = 1 To Len(text)
-        char = Mid(text, i, 1)
+    For i = 1 To Len(Text)
+        char = Mid(Text, i, 1)
         charCode = AscW(char)
 
         Select Case charCode
-            Case &HFF10 To &HFF19  ' ０-９ → 0-9
+            Case &HFF10 To &HFF19
                 result = result & Chr(charCode - &HFF10 + Asc("0"))
-            Case &HFF21 To &HFF3A  ' Ａ-Ｚ → A-Z
+            Case &HFF21 To &HFF3A
                 result = result & Chr(charCode - &HFF21 + Asc("A"))
-            Case &HFF41 To &HFF5A  ' ａ-ｚ → a-z
+            Case &HFF41 To &HFF5A
                 result = result & Chr(charCode - &HFF41 + Asc("a"))
-            Case &HFF0D, &H2212, &H30FC  ' －、−、ー → -
+            Case &HFF0D, &H2212, &H30FC
                 result = result & "-"
-            Case &HFF0C  ' ， → ,
+            Case &HFF0C
                 result = result & ","
-            Case &HFF0E  ' ． → .
+            Case &HFF0E
                 result = result & "."
-            Case &HFF08  ' （ → (
+            Case &HFF08
                 result = result & "("
-            Case &HFF09  ' ） → )
+            Case &HFF09
                 result = result & ")"
             Case Else
                 result = result & char
@@ -806,7 +862,6 @@ Private Function HasOutlineDefinedInStyle(ByRef para As Object, ByRef wordDoc As
     Dim style As Object
     Set style = wordDoc.styles(styleName)
 
-    ' スタイルのOutlineLevelが本文(10)以外なら、アウトライン定義あり
     If style.ParagraphFormat.OutlineLevel >= 1 And _
        style.ParagraphFormat.OutlineLevel <= 9 Then
         HasOutlineDefinedInStyle = True
@@ -830,7 +885,7 @@ Private Sub ApplyStyle(ByRef para As Object, ByVal styleName As String)
 
     If Err.Number <> 0 Then
         Debug.Print "  [警告] スタイル '" & styleName & "' が見つかりません: " & _
-                    Left(para.Range.text, 50)
+                    Left(para.Range.Text, 50)
         Err.Clear
     End If
 
@@ -848,11 +903,9 @@ Private Function SelectWordFileFromInput(ByVal inputDir As String) As String
     Dim selectedIndex As Long
     Dim msg As String
 
-    ' 配列の初期化
     fileCount = 0
-    ReDim fileList(0 To 99)  ' 最大100ファイルまで対応
+    ReDim fileList(0 To 99)
 
-    ' .docxファイルを検索
     fileName = Dir(inputDir & "*.docx")
     Do While fileName <> ""
         fileList(fileCount) = fileName
@@ -860,10 +913,8 @@ Private Function SelectWordFileFromInput(ByVal inputDir As String) As String
         fileName = Dir()
     Loop
 
-    ' .docファイルを検索
     fileName = Dir(inputDir & "*.doc")
     Do While fileName <> ""
-        ' .docxと重複しないようにチェック
         Dim isDuplicate As Boolean
         isDuplicate = False
         For i = 0 To fileCount - 1
@@ -880,7 +931,6 @@ Private Function SelectWordFileFromInput(ByVal inputDir As String) As String
         fileName = Dir()
     Loop
 
-    ' ファイルが見つからない場合
     If fileCount = 0 Then
         MsgBox "Inputフォルダ内にWord文書(.docx/.doc)が見つかりませんでした。" & vbCrLf & vbCrLf & _
                "フォルダ: " & inputDir, vbExclamation, "ファイルなし"
@@ -888,13 +938,11 @@ Private Function SelectWordFileFromInput(ByVal inputDir As String) As String
         Exit Function
     End If
 
-    ' ファイルが1つだけの場合は自動選択
     If fileCount = 1 Then
         SelectWordFileFromInput = inputDir & fileList(0)
         Exit Function
     End If
 
-    ' 複数ファイルがある場合は選択させる
     msg = "処理するWord文書を選択してください:" & vbCrLf & vbCrLf
     For i = 0 To fileCount - 1
         msg = msg & (i + 1) & ". " & fileList(i) & vbCrLf
@@ -904,13 +952,11 @@ Private Function SelectWordFileFromInput(ByVal inputDir As String) As String
     Dim userInput As String
     userInput = InputBox(msg, "ファイル選択", "1")
 
-    ' キャンセルされた場合
     If userInput = "" Then
         SelectWordFileFromInput = ""
         Exit Function
     End If
 
-    ' 入力値の検証
     If Not IsNumeric(userInput) Then
         MsgBox "無効な入力です。数値を入力してください。", vbExclamation
         SelectWordFileFromInput = ""
@@ -924,91 +970,12 @@ Private Function SelectWordFileFromInput(ByVal inputDir As String) As String
         Exit Function
     End If
 
-    ' 選択されたファイルのフルパスを返す
     SelectWordFileFromInput = inputDir & fileList(selectedIndex)
 End Function
-
-' ============================================================================
-' ヘッダー内のフィールドを更新し、STYLEREFのスタイル名も変更
-' ============================================================================
-Private Sub UpdateHeaderFields(ByRef wordDoc As Object, ByRef styles As StyleConfig)
-    On Error Resume Next
-
-    Dim sect As Object
-    Dim hdr As Object
-    Dim fld As Object
-    Dim fieldCode As String
-    Dim newFieldCode As String
-
-    Debug.Print "========================================="
-    Debug.Print "ヘッダーのフィールドを更新しています..."
-
-    For Each sect In wordDoc.Sections
-        ' wdHeaderFooterPrimary = 1
-        For Each hdr In sect.Headers
-            ' ヘッダー内のフィールドを更新
-            For Each fld In hdr.Range.Fields
-                fieldCode = fld.Code.Text
-
-                ' STYLEREFフィールドの場合、スタイル名を更新
-                If InStr(fieldCode, "STYLEREF") > 0 Then
-                    newFieldCode = fieldCode
-
-                    ' デフォルトスタイル名を新しいスタイル名に置換
-                    If styles.Level1Style <> DEFAULT_LEVEL1_STYLE And _
-                       styles.Level1Style <> "" Then
-                        newFieldCode = Replace(newFieldCode, DEFAULT_LEVEL1_STYLE, styles.Level1Style)
-                    End If
-                    If styles.Level2Style <> DEFAULT_LEVEL2_STYLE And _
-                       styles.Level2Style <> "" Then
-                        newFieldCode = Replace(newFieldCode, DEFAULT_LEVEL2_STYLE, styles.Level2Style)
-                    End If
-                    If styles.Level3Style <> DEFAULT_LEVEL3_STYLE And _
-                       styles.Level3Style <> "" Then
-                        newFieldCode = Replace(newFieldCode, DEFAULT_LEVEL3_STYLE, styles.Level3Style)
-                    End If
-                    If styles.Level4Style <> DEFAULT_LEVEL4_STYLE And _
-                       styles.Level4Style <> "" Then
-                        newFieldCode = Replace(newFieldCode, DEFAULT_LEVEL4_STYLE, styles.Level4Style)
-                    End If
-                    If styles.Level5Style <> DEFAULT_LEVEL5_STYLE And _
-                       styles.Level5Style <> "" Then
-                        newFieldCode = Replace(newFieldCode, DEFAULT_LEVEL5_STYLE, styles.Level5Style)
-                    End If
-
-                    ' フィールドコードが変更された場合、更新
-                    If newFieldCode <> fieldCode Then
-                        fld.Code.Text = newFieldCode
-                        Debug.Print "  STYLEREF更新: " & Trim(fieldCode) & " → " & Trim(newFieldCode)
-                    End If
-                End If
-
-                ' フィールドを更新
-                fld.Update
-            Next fld
-        Next hdr
-
-        ' フッターも更新
-        ' wdHeaderFooterPrimary = 1
-        For Each hdr In sect.Footers
-            For Each fld In hdr.Range.Fields
-                fld.Update
-            Next fld
-        Next hdr
-    Next sect
-
-    ' 文書全体のフィールドも更新
-    wordDoc.Fields.Update
-
-    Debug.Print "ヘッダーのフィールド更新完了"
-
-    On Error GoTo 0
-End Sub
 
 ' ============================================================================
 ' テスト用: イミディエイトウィンドウに情報を出力
 ' ============================================================================
 Public Sub TestOrganizeWordBookmarks()
-    ' イミディエイトウィンドウを開いた状態でこのマクロを実行してください
     OrganizeWordBookmarks
 End Sub
