@@ -533,12 +533,16 @@ $($excludePatterns -join "`n")
                 New-Item -Path $regPath -Force | Out-Null
             }
 
-            # FileFilters にフィルターファイルのパスを設定
-            Set-ItemProperty -Path $regPath -Name "FileFilters" -Value $filterFile -Type String
+            # FileFilterPath にフィルターファイルのパスを設定（WinMerge 2.16以降）
+            Set-ItemProperty -Path $regPath -Name "FileFilterPath" -Value $filterFile -Type String
+
+            # フォルダ比較時にフィルターを適用する設定を有効化
+            Set-ItemProperty -Path $regPath -Name "ApplyFolderFilters" -Value 1 -Type DWord
 
             Write-Color "[成功] フィルターを自動有効化しました" "Green"
             Write-Host "  レジストリ: $regPath"
-            Write-Host "  FileFilters: $filterFile"
+            Write-Host "  FileFilterPath: $filterFile"
+            Write-Host "  ApplyFolderFilters: 1 (有効)"
         } catch {
             Write-Color "[警告] レジストリの更新に失敗しました: $($_.Exception.Message)" "Yellow"
             Write-Host "  手動でフィルターを有効化してください"
