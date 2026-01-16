@@ -459,13 +459,23 @@ foreach ($relativePath in $tfsFolderDict.Keys) {
 
 # Gitのみのフォルダをチェック（削除対象フォルダ）
 foreach ($relativePath in $gitFolderDict.Keys) {
-    if (-not $tfsFolderDict.ContainsKey($relativePath)) {
-        # TFSにもファイルとしても存在しないか確認（パス区切り文字を正規化して比較）
-        $normalizedPath = $relativePath.Replace('/', '\').ToLower()
+    # TFSにフォルダが存在するかチェック（大文字小文字を区別しない）
+    $normalizedGitPath = $relativePath.Replace('/', '\').ToLower()
+    $folderExistsInTfs = $false
+    foreach ($tfsPath in $tfsFolderDict.Keys) {
+        $normalizedTfsPath = $tfsPath.Replace('/', '\').ToLower()
+        if ($normalizedGitPath -eq $normalizedTfsPath) {
+            $folderExistsInTfs = $true
+            break
+        }
+    }
+
+    if (-not $folderExistsInTfs) {
+        # TFSにフォルダが存在しない場合、ファイルとしても存在しないか確認
         $existsInTfs = $false
         foreach ($filePath in $tfsFileDict.Keys) {
             $normalizedFilePath = $filePath.Replace('/', '\').ToLower()
-            if ($normalizedFilePath.StartsWith("$normalizedPath\")) {
+            if ($normalizedFilePath.StartsWith("$normalizedGitPath\")) {
                 $existsInTfs = $true
                 break
             }
