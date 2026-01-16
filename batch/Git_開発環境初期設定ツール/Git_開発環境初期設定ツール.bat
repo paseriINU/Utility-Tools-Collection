@@ -521,6 +521,29 @@ $($excludePatterns -join "`n")
             Write-Color "[作成] フィルターファイルを作成しました" "Green"
         }
 
+        # レジストリでフィルターを自動有効化
+        Write-Host ""
+        Write-Color "[設定] WinMergeのフィルター設定を更新中..." "Yellow"
+
+        try {
+            $regPath = "HKCU:\Software\Thingamahoochie\WinMerge\Settings"
+
+            # レジストリキーが存在しなければ作成
+            if (-not (Test-Path $regPath)) {
+                New-Item -Path $regPath -Force | Out-Null
+            }
+
+            # FileFilters にフィルターファイルのパスを設定
+            Set-ItemProperty -Path $regPath -Name "FileFilters" -Value $filterFile -Type String
+
+            Write-Color "[成功] フィルターを自動有効化しました" "Green"
+            Write-Host "  レジストリ: $regPath"
+            Write-Host "  FileFilters: $filterFile"
+        } catch {
+            Write-Color "[警告] レジストリの更新に失敗しました: $($_.Exception.Message)" "Yellow"
+            Write-Host "  手動でフィルターを有効化してください"
+        }
+
         Write-Host ""
         Write-Host "  フィルターファイル: $filterFile"
         Write-Host ""
@@ -529,13 +552,8 @@ $($excludePatterns -join "`n")
             Write-Host "  - $file"
         }
         Write-Host ""
-        Write-Color "使用方法:" "Cyan"
-        Write-Host "  1. WinMergeを起動"
-        Write-Host "  2. ツール > フィルター を選択"
-        Write-Host "  3. 「Git管理ファイル除外フィルター」にチェックを入れる"
-        Write-Host "  4. OK をクリック"
-        Write-Host ""
-        Write-Color "[ヒント] フォルダ比較時にフィルターが自動適用されます" "Gray"
+        Write-Color "[完了] フィルターは自動的に有効化されました" "Green"
+        Write-Host "  次回WinMergeを起動すると、フォルダ比較時にフィルターが適用されます"
     }
     Write-Host ""
 }
