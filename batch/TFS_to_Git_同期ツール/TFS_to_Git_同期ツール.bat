@@ -66,9 +66,18 @@ $UPDATE_TFS_BEFORE_COMPARE = $true
 # 比較対象から除外するファイル（Git固有ファイルなど）
 $EXCLUDE_FILES = @(
     ".gitignore",
-    ".gitkeep",
     ".gitattributes"
 )
+
+# 空フォルダに作成する.gitignoreの内容
+$GITIGNORE_CONTENT = @"
+# このファイルは空フォルダをGitで管理するために自動生成されました
+# This file was auto-generated to keep this empty folder in Git
+
+# このフォルダ内のすべてのファイルを無視（.gitignore自身を除く）
+*
+!.gitignore
+"@
 #endregion
 
 #region パスの存在確認
@@ -476,9 +485,9 @@ foreach ($folder in $newFolders) {
     try {
         if (-not (Test-Path $folder.GitFolderPath)) {
             New-Item -ItemType Directory -Path $folder.GitFolderPath -Force | Out-Null
-            # .gitkeepファイルを作成（Gitで空フォルダを追跡するため）
-            $gitkeepPath = Join-Path $folder.GitFolderPath ".gitkeep"
-            "" | Out-File -FilePath $gitkeepPath -Encoding UTF8 -NoNewline
+            # .gitignoreファイルを作成（Gitで空フォルダを追跡するため）
+            $gitignorePath = Join-Path $folder.GitFolderPath ".gitignore"
+            $GITIGNORE_CONTENT | Out-File -FilePath $gitignorePath -Encoding UTF8 -NoNewline
             Write-Host "[フォルダ作成] $($folder.RelativePath)" -ForegroundColor Magenta
             $folderCreatedCount++
         }
