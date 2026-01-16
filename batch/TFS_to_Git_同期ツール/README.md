@@ -69,8 +69,12 @@ TFS_to_Git_同期ツール/
 $TFS_DIR = "C:\Users\$env:USERNAME\source"
 $GIT_REPO_DIR = "C:\Users\$env:USERNAME\source\Git\project"
 
-# TFS最新取得を実行するか（tfコマンドが利用可能な環境のみ）
+# TFS最新取得を実行するか
 $UPDATE_TFS_BEFORE_COMPARE = $true
+
+# tf.exeのパス（空の場合はPATHから検索）
+# PATHが通っていない場合は、フルパスを指定してください
+$TF_EXE_PATH = ""
 
 # 比較対象から除外するファイル（Git固有ファイルなど）
 $EXCLUDE_FILES = @(
@@ -86,6 +90,23 @@ $TFS_DIR = "C:\Work\TFS\MyProject"
 $GIT_REPO_DIR = "D:\Repository\MyProject"
 $UPDATE_TFS_BEFORE_COMPARE = $true  # TFSを最新にしてから比較
 ```
+
+**tf.exeのパス設定（PATHが通っていない場合）:**
+
+環境変数PATHにtf.exeが登録されていない場合は、`$TF_EXE_PATH`にフルパスを指定してください。
+
+```powershell
+# Visual Studio 2022 Enterprise
+$TF_EXE_PATH = "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\IDE\CommonExtensions\Microsoft\TeamFoundation\Team Explorer\tf.exe"
+
+# Visual Studio 2022 Professional
+$TF_EXE_PATH = "C:\Program Files\Microsoft Visual Studio\2022\Professional\Common7\IDE\CommonExtensions\Microsoft\TeamFoundation\Team Explorer\tf.exe"
+
+# Visual Studio 2019
+$TF_EXE_PATH = "C:\Program Files (x86)\Microsoft Visual Studio\2019\Enterprise\Common7\IDE\CommonExtensions\Microsoft\TeamFoundation\Team Explorer\tf.exe"
+```
+
+**注意:** tf.exeが見つからない場合、エラーメッセージが表示され、TFS更新をスキップして続行するか選択できます。
 
 **除外ファイル設定:**
 - `.gitignore`, `.gitattributes` はGit固有ファイルのため、デフォルトで比較対象から除外されます
@@ -262,7 +283,8 @@ MIT License
 - **TFS最新取得機能を追加**
   - 比較前に`tf get /recursive`でTFSワークスペースを自動更新
   - `$UPDATE_TFS_BEFORE_COMPARE`設定で有効/無効を切り替え可能
-  - `tf`コマンドが利用できない環境ではスキップ
+  - `$TF_EXE_PATH`設定でtf.exeのパスを直接指定可能（PATHが通っていない環境向け）
+  - tf.exeが見つからない場合はエラー表示し、続行するか選択可能
 - **空フォルダ対応を追加**
   - TFSの空フォルダをGitに同期可能に
   - 空フォルダには`.gitignore`ファイルを自動作成（Git_空フォルダ管理ツールと同内容）
