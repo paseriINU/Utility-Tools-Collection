@@ -441,10 +441,13 @@ Allow? [y]es / [n]o / [a]lways</code></pre>
                 </div>
                 <div style="margin-top: 0.8em; padding: 0.5em; background: rgba(255,255,255,0.1); border-radius: 4px;">
                     <p class="small" style="margin: 0;">
-                        <span class="highlight-yellow">推奨モデル:</span>
+                        <span class="highlight-yellow">推奨モデル（すべて無料・オープンソース）:</span><br>
                         Qwen2.5-Coder（7B/14B）、DeepSeek-Coder、CodeLlama
                     </p>
                 </div>
+                <p class="small highlight-green" style="margin-top: 0.5em;">
+                    ※ インターネットは初回ダウンロード時のみ必要。以降は完全オフライン
+                </p>
             </section>
 
             <!-- スライド14: ローカルLLMセットアップ -->
@@ -457,10 +460,10 @@ Allow? [y]es / [n]o / [a]lways</code></pre>
                         <pre><code class="language-bash small"># インストール（Mac）
 brew install ollama
 
-# モデルをダウンロード
+# モデルDL（ここだけネット必要）
 ollama pull qwen2.5-coder:7b
 
-# サーバー起動
+# 以降はオフラインでOK
 ollama serve</code></pre>
                     </div>
                     <div>
