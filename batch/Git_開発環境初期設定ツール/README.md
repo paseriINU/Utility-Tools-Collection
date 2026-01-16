@@ -186,7 +186,8 @@ Git_開発環境初期設定ツール.bat
    [設定] WinMergeのフィルター設定を更新中...
    [成功] フィルターを自動有効化しました
      レジストリ: HKCU:\Software\Thingamahoochie\WinMerge\Settings
-     FileFilters: C:\Users\tanaka\AppData\Roaming\WinMerge\Filters\GitFiles.flt
+     FileFilterPath: C:\Users\tanaka\AppData\Roaming\WinMerge\Filters\GitFiles.flt
+     ApplyFolderFilters: 1 (有効)
 
      フィルターファイル: C:\Users\tanaka\AppData\Roaming\WinMerge\Filters\GitFiles.flt
 
