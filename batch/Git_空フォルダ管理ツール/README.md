@@ -62,10 +62,19 @@ $targetPath = "C:\path\to\your\repository"
 
 ## 作成される .gitignore の内容
 
-```
+```gitignore
 # このファイルは空フォルダをGitで管理するために自動生成されました
 # This file was auto-generated to keep this empty folder in Git
+
+# このフォルダ内のすべてのファイルを無視（.gitignore自身を除く）
+*
+!.gitignore
 ```
+
+この設定により：
+- フォルダ自体はGitで管理される
+- フォルダ内に追加されたファイルは自動的に無視される
+- `.gitignore`自身は追跡される
 
 ## 除外されるフォルダ
 
