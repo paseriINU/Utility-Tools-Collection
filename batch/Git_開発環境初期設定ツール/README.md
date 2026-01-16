@@ -183,12 +183,6 @@ Git_開発環境初期設定ツール.bat
 
    [作成] フィルターファイルを作成しました
 
-   [設定] WinMergeのフィルター設定を更新中...
-   [成功] フィルターを自動有効化しました
-     レジストリ: HKCU:\Software\Thingamahoochie\WinMerge\Settings
-     FileFilterPath: C:\Users\tanaka\AppData\Roaming\WinMerge\Filters\GitFiles.flt
-     ApplyFolderFilters: 1 (有効)
-
      フィルターファイル: C:\Users\tanaka\AppData\Roaming\WinMerge\Filters\GitFiles.flt
 
    除外対象ファイル:
@@ -196,8 +190,17 @@ Git_開発環境初期設定ツール.bat
      - .gitkeep
      - .gitattributes
 
-   [完了] フィルターは自動的に有効化されました
-     次回WinMergeを起動すると、フォルダ比較時にフィルターが適用されます
+   [完了] フィルターファイルを作成しました
+
+   【フィルターの適用方法】
+     WinMergeでフォルダ比較時に、以下の手順でフィルターを適用してください：
+
+     1. WinMergeを起動し、フォルダ比較ダイアログを開く
+     2. ダイアログ左下の「フォルダー: フィルター」欄の [...] ボタンをクリック
+     3. 「Git管理ファイル除外フィルター」を選択して [OK]
+     4. 比較を実行
+
+     ※ フィルターは毎回選択する必要があります（WinMergeの仕様）
    ```
 
 8. **完了**
