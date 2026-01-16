@@ -484,7 +484,7 @@ if ($SETUP_WINMERGE_FILTER) {
 
         # 除外パターンを生成
         $excludePatterns = $WINMERGE_EXCLUDE_FILES | ForEach-Object {
-            "f: \\$_`$"
+            "f: \$_`$"
         }
 
         # フィルターファイルの内容
