@@ -29,6 +29,10 @@ $targetPath = ""
 $gitignoreContent = @"
 # このファイルは空フォルダをGitで管理するために自動生成されました
 # This file was auto-generated to keep this empty folder in Git
+
+# このフォルダ内のすべてのファイルを無視（.gitignore自身を除く）
+*
+!.gitignore
 "@
 
 # 除外するフォルダ名（正規表現パターン）
