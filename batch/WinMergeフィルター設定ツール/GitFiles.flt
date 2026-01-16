@@ -1,0 +1,20 @@
+## This is a directory/file filter for WinMerge
+## このフィルターはGit管理ファイルを比較から除外します
+
+name: Git管理ファイル除外フィルター
+desc: .gitignore, .gitkeep, .gitattributes などのGit管理ファイルを比較から除外します
+
+## ファイルフィルター（比較から除外するファイル）
+## f: は正規表現パターン。ファイル名の末尾にマッチさせるには $ を使用
+
+## Git管理ファイル
+f: \.gitignore$
+f: \.gitkeep$
+f: \.gitattributes$
+f: \.gitmodules$
+
+## フォルダフィルター（比較から除外するフォルダ）
+## d: は正規表現パターン
+
+## Gitフォルダ
+d: \\\.git$
