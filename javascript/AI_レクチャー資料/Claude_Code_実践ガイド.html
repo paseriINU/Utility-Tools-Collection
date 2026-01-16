@@ -330,10 +330,10 @@ claude --new</code></pre>
             <section>
                 <p class="chapter-title">第2章: セットアップと基本操作</p>
                 <h2>パーミッションモード</h2>
-                <p>Claude Codeはファイル操作やコマンド実行前に確認を求めます</p>
+                <p class="small">操作実行前に確認を求めるモードを選択できます</p>
                 <div class="two-column">
                     <div>
-                        <h4 class="highlight-green">Ask Mode（デフォルト）</h4>
+                        <h4 class="highlight-green">Ask Mode</h4>
                         <ul class="small">
                             <li>すべての操作で確認</li>
                             <li>安全性が高い</li>
@@ -358,7 +358,7 @@ Allow? [y]es / [n]o / [a]lways</code></pre>
             <section>
                 <p class="chapter-title">第2章: セットアップと基本操作</p>
                 <h2>CLAUDE.md によるプロジェクト設定</h2>
-                <p>プロジェクトルートに<code>CLAUDE.md</code>を配置すると自動で読み込まれます</p>
+                <p class="small">プロジェクトルートに配置すると自動で読み込まれます</p>
                 <pre><code class="language-markdown"># CLAUDE.md
 
 ## プロジェクト概要
@@ -381,7 +381,7 @@ Allow? [y]es / [n]o / [a]lways</code></pre>
             <section>
                 <p class="chapter-title">第2章: セットアップと基本操作</p>
                 <h2>MCP（Model Context Protocol）</h2>
-                <p>外部ツールやサービスと連携するためのオープンプロトコル</p>
+                <p class="small">外部ツール連携のためのオープンプロトコル</p>
                 <div class="two-column">
                     <div>
                         <h4 class="highlight-blue">MCPでできること</h4>
@@ -418,7 +418,7 @@ Allow? [y]es / [n]o / [a]lways</code></pre>
             <section>
                 <p class="chapter-title">第2章: セットアップと基本操作</p>
                 <h2>ローカルLLMでの動作</h2>
-                <p>インターネット接続なしでも動作可能（プライバシー重視の環境向け）</p>
+                <p class="small">オフライン動作可能（プライバシー重視の環境向け）</p>
                 <h4 class="highlight-blue">設定方法</h4>
                 <pre><code class="language-bash"># Ollamaを使用する場合
 export ANTHROPIC_BASE_URL=http://localhost:11434/v1
