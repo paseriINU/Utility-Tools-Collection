@@ -60,8 +60,18 @@ git config --global core.quotepath false 2>&1 | Out-Null
 $TFS_DIR = "C:\Users\$env:USERNAME\source"
 $GIT_REPO_DIR = "C:\Users\$env:USERNAME\source\Git\project"
 
-# TFS最新取得を実行するか（tfコマンドが利用可能な環境のみ）
+# TFS最新取得を実行するか
 $UPDATE_TFS_BEFORE_COMPARE = $true
+
+# tf.exeのパス（空の場合はPATHから検索）
+# PATHが通っていない場合は、以下のようにフルパスを指定してください
+# 例: Visual Studio 2022 Enterprise
+#   $TF_EXE_PATH = "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\IDE\CommonExtensions\Microsoft\TeamFoundation\Team Explorer\tf.exe"
+# 例: Visual Studio 2022 Professional
+#   $TF_EXE_PATH = "C:\Program Files\Microsoft Visual Studio\2022\Professional\Common7\IDE\CommonExtensions\Microsoft\TeamFoundation\Team Explorer\tf.exe"
+# 例: Visual Studio 2019
+#   $TF_EXE_PATH = "C:\Program Files (x86)\Microsoft Visual Studio\2019\Enterprise\Common7\IDE\CommonExtensions\Microsoft\TeamFoundation\Team Explorer\tf.exe"
+$TF_EXE_PATH = ""
 
 # 比較対象から除外するファイル（Git固有ファイルなど）
 $EXCLUDE_FILES = @(
@@ -118,9 +128,27 @@ Write-Host ""
 
 #region TFS最新取得
 if ($UPDATE_TFS_BEFORE_COMPARE) {
-    # tfコマンドの存在確認
-    $tfCommand = Get-Command tf -ErrorAction SilentlyContinue
-    if ($tfCommand) {
+    # tf.exeのパスを決定
+    $tfExePath = $null
+
+    # 設定で直接パスが指定されている場合
+    if (-not [string]::IsNullOrWhiteSpace($TF_EXE_PATH)) {
+        if (Test-Path $TF_EXE_PATH) {
+            $tfExePath = $TF_EXE_PATH
+            Write-Host "[情報] 設定で指定されたtf.exeを使用: $tfExePath" -ForegroundColor Gray
+        } else {
+            Write-Host "[エラー] 指定されたtf.exeが見つかりません: $TF_EXE_PATH" -ForegroundColor Red
+            exit 1
+        }
+    } else {
+        # PATHから検索
+        $tfCommand = Get-Command tf -ErrorAction SilentlyContinue
+        if ($tfCommand) {
+            $tfExePath = $tfCommand.Source
+        }
+    }
+
+    if ($tfExePath) {
         Write-Host "------------------------------------------------------------------------" -ForegroundColor Cyan
         Write-Host " TFSワークスペースを最新に更新しています..." -ForegroundColor Cyan
         Write-Host "------------------------------------------------------------------------" -ForegroundColor Cyan
@@ -129,7 +157,7 @@ if ($UPDATE_TFS_BEFORE_COMPARE) {
         Push-Location $TFS_DIR
         try {
             # TFS最新取得（再帰的に全ファイル）
-            $tfResult = tf get /recursive /noprompt 2>&1
+            $tfResult = & $tfExePath get /recursive /noprompt 2>&1
             if ($LASTEXITCODE -eq 0) {
                 Write-Host "[完了] TFSワークスペースを最新に更新しました" -ForegroundColor Green
             } else {
@@ -142,9 +170,39 @@ if ($UPDATE_TFS_BEFORE_COMPARE) {
         Pop-Location
         Write-Host ""
     } else {
-        Write-Host "[情報] tfコマンドが見つかりません。TFS更新をスキップします。" -ForegroundColor Yellow
-        Write-Host "       Visual Studio開発者コマンドプロンプトから実行するか、" -ForegroundColor Gray
-        Write-Host "       tf.exeへのパスを環境変数PATHに追加してください。" -ForegroundColor Gray
+        Write-Host ""
+        Write-Host "========================================================================" -ForegroundColor Red
+        Write-Host " [エラー] tfコマンドが見つかりません" -ForegroundColor Red
+        Write-Host "========================================================================" -ForegroundColor Red
+        Write-Host ""
+        Write-Host "TFS最新取得が有効ですが、tf.exeが見つかりません。" -ForegroundColor Yellow
+        Write-Host ""
+        Write-Host "解決方法:" -ForegroundColor Cyan
+        Write-Host "  1. Visual Studio開発者コマンドプロンプトから実行する" -ForegroundColor White
+        Write-Host "  2. バッチファイル内の `$TF_EXE_PATH` にtf.exeのパスを直接指定する" -ForegroundColor White
+        Write-Host ""
+        Write-Host "tf.exeの場所（例）:" -ForegroundColor Cyan
+        Write-Host "  VS2022 Enterprise:" -ForegroundColor Gray
+        Write-Host "    C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\IDE\CommonExtensions\Microsoft\TeamFoundation\Team Explorer\tf.exe" -ForegroundColor Gray
+        Write-Host "  VS2022 Professional:" -ForegroundColor Gray
+        Write-Host "    C:\Program Files\Microsoft Visual Studio\2022\Professional\Common7\IDE\CommonExtensions\Microsoft\TeamFoundation\Team Explorer\tf.exe" -ForegroundColor Gray
+        Write-Host "  VS2019:" -ForegroundColor Gray
+        Write-Host "    C:\Program Files (x86)\Microsoft Visual Studio\2019\Enterprise\Common7\IDE\CommonExtensions\Microsoft\TeamFoundation\Team Explorer\tf.exe" -ForegroundColor Gray
+        Write-Host ""
+        Write-Host "TFS更新をスキップして続行しますか？" -ForegroundColor Yellow
+        Write-Host " 1. はい、TFS更新なしで続行する（ローカルの状態で比較）"
+        Write-Host ""
+        Write-Host " 0. いいえ、終了する"
+        Write-Host ""
+        $skipChoice = Read-Host "選択 (0-1)"
+
+        if ($skipChoice -ne "1") {
+            Write-Host ""
+            Write-Host "処理を終了します。" -ForegroundColor Yellow
+            exit 1
+        }
+        Write-Host ""
+        Write-Host "[情報] TFS更新をスキップして続行します。" -ForegroundColor Yellow
         Write-Host ""
     }
 }
