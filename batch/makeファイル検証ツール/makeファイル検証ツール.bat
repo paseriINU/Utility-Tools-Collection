@@ -50,8 +50,8 @@ Write-Host "例外ファイル: $($EXCEPTION_FILES -join ', ')" -ForegroundColor
 Write-Host "部分一致許可: $(if ($ALLOW_PARTIAL_MATCH) { 'はい' } else { 'いいえ' })" -ForegroundColor Gray
 Write-Host ""
 
-# .mkファイルを取得
-$mkFiles = Get-ChildItem -Path $TARGET_FOLDER -Filter "*.mk" -File -ErrorAction SilentlyContinue
+# .mkファイルを取得（サブフォルダも含む）
+$mkFiles = Get-ChildItem -Path $TARGET_FOLDER -Filter "*.mk" -File -Recurse -ErrorAction SilentlyContinue
 
 if ($mkFiles.Count -eq 0) {
     Write-Host "[情報] .mkファイルが見つかりませんでした。" -ForegroundColor Yellow
@@ -71,7 +71,9 @@ foreach ($mkFile in $mkFiles) {
     $mkBaseName = [System.IO.Path]::GetFileNameWithoutExtension($mkFile.Name)
     
     Write-Host "----------------------------------------" -ForegroundColor DarkGray
-    Write-Host "[検証中] $($mkFile.Name)" -ForegroundColor White
+    # 相対パスを表示
+    $relativePath = $mkFile.FullName.Replace($TARGET_FOLDER, "").TrimStart("\", "/")
+    Write-Host "[検証中] $relativePath" -ForegroundColor White
     
     # makeファイルの内容を読み込み
     try {
@@ -149,7 +151,7 @@ foreach ($mkFile in $mkFiles) {
     
     if ($fileMismatches.Count -gt 0) {
         $allMismatches += [PSCustomObject]@{
-            MakeFile = $mkFile.Name
+            MakeFile = $relativePath
             Mismatches = $fileMismatches
         }
     }
