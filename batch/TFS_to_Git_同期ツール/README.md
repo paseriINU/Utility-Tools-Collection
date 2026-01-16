@@ -7,7 +7,7 @@ TFS（Team Foundation Server）のローカルディレクトリとGitリポジ�
 - ✅ **TFS最新取得**: 比較前にTFSワークスペースを自動更新（`tf get`）
 - ✅ **高速な差分チェック**: PowerShellとMD5ハッシュで大量のファイルを効率的に処理
 - ✅ **自動同期**: TFS→Gitへファイル更新・新規追加・削除を自動実行
-- ✅ **空フォルダ対応**: TFSの空フォルダもGitに同期（.gitkeep自動作成）
+- ✅ **空フォルダ対応**: TFSの空フォルダもGitに同期（.gitignore自動作成）
 - ✅ **双方向差分検出**: TFSのみ・Gitのみのファイル/フォルダを正確に検出
 - ✅ **Gitブランチ管理**: 実行前にブランチ確認・切り替えが可能
 - ✅ **日本語対応**: UTF-8モードで日本語のブランチ名・ファイル名に対応
@@ -23,7 +23,7 @@ TFS（Team Foundation Server）のローカルディレクトリとGitリポジ�
    - **ファイル更新**: TFSとGitで内容が異なるファイルをコピー
    - **ファイル新規追加**: TFSにのみ存在するファイルをコピー
    - **ファイル削除**: Gitにのみ存在するファイルを削除
-   - **フォルダ新規作成**: TFSにのみ存在する空フォルダを作成（.gitkeep付き）
+   - **フォルダ新規作成**: TFSにのみ存在する空フォルダを作成（.gitignore付き）
    - **フォルダ削除**: Gitにのみ存在するフォルダを削除
 5. 処理結果を統計表示
 6. オプションでGitコミット
@@ -75,7 +75,6 @@ $UPDATE_TFS_BEFORE_COMPARE = $true
 # 比較対象から除外するファイル（Git固有ファイルなど）
 $EXCLUDE_FILES = @(
     ".gitignore",
-    ".gitkeep",
     ".gitattributes"
 )
 #endregion
@@ -89,8 +88,18 @@ $UPDATE_TFS_BEFORE_COMPARE = $true  # TFSを最新にしてから比較
 ```
 
 **除外ファイル設定:**
-- `.gitignore`, `.gitkeep`, `.gitattributes` はGit固有ファイルのため、デフォルトで比較対象から除外されます
+- `.gitignore`, `.gitattributes` はGit固有ファイルのため、デフォルトで比較対象から除外されます
 - これらのファイルがGitにのみ存在しても「削除対象」として表示されません
+
+**空フォルダに作成される.gitignoreの内容:**
+```gitignore
+# このファイルは空フォルダをGitで管理するために自動生成されました
+# This file was auto-generated to keep this empty folder in Git
+
+# このフォルダ内のすべてのファイルを無視（.gitignore自身を除く）
+*
+!.gitignore
+```
 
 **パス設定の重要なポイント:**
 - `TFS_DIR` と `GIT_REPO_DIR` は**同じ階層構造**を指す必要があります
@@ -256,7 +265,7 @@ MIT License
   - `tf`コマンドが利用できない環境ではスキップ
 - **空フォルダ対応を追加**
   - TFSの空フォルダをGitに同期可能に
-  - 空フォルダには`.gitkeep`ファイルを自動作成
+  - 空フォルダには`.gitignore`ファイルを自動作成（Git_空フォルダ管理ツールと同内容）
 - **Gitのみファイル/フォルダの検出を改善**
   - パス比較ロジックを修正
   - フォルダの差分も検出・同期対象に
