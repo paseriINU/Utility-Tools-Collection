@@ -414,40 +414,73 @@ Allow? [y]es / [n]o / [a]lways</code></pre>
                 </p>
             </section>
 
-            <!-- スライド13: ローカルLLM対応 -->
+            <!-- スライド13: ローカルLLM対応（概要） -->
             <section>
                 <p class="chapter-title">第2章: セットアップと基本操作</p>
                 <h2>ローカルLLMでの動作</h2>
-                <p>インターネット接続なしでも動作可能（プライバシー重視の環境向け）</p>
-                <h4 class="highlight-blue">設定方法</h4>
-                <pre><code class="language-bash"># Ollamaを使用する場合
-export ANTHROPIC_BASE_URL=http://localhost:11434/v1
-export ANTHROPIC_API_KEY=ollama
-
-# LM Studioを使用する場合
-export ANTHROPIC_BASE_URL=http://localhost:1234/v1
-export ANTHROPIC_API_KEY=lm-studio
-
-# その後、通常通り起動
-claude</code></pre>
-                <div class="two-column" style="margin-top: 1em;">
+                <p class="small">社内データを外部に送信せず、完全オフラインで動作</p>
+                <div class="two-column">
                     <div>
-                        <h4 class="highlight-green small">メリット</h4>
+                        <h4 class="highlight-blue">こんな場面で有効</h4>
                         <ul class="small">
-                            <li>完全オフライン動作</li>
-                            <li>データが外部に送信されない</li>
-                            <li>API料金が不要</li>
+                            <li>機密性の高いコードを扱う</li>
+                            <li>インターネット接続が制限</li>
+                            <li>API料金を抑えたい</li>
+                            <li>応答速度を重視（LAN内）</li>
                         </ul>
                     </div>
                     <div>
-                        <h4 class="highlight-yellow small">注意点</h4>
-                        <ul class="small">
-                            <li>モデル性能はローカルLLMに依存</li>
-                            <li>高性能GPUが必要な場合あり</li>
-                            <li>一部機能が制限される場合あり</li>
-                        </ul>
+                        <h4 class="highlight-green">主要なツール</h4>
+                        <table style="font-size: 0.55em;">
+                            <tr><th>ツール</th><th>特徴</th></tr>
+                            <tr><td>Ollama</td><td>CLI中心、軽量、Mac/Linux</td></tr>
+                            <tr><td>LM Studio</td><td>GUI、初心者向け</td></tr>
+                            <tr><td>vLLM</td><td>高性能、サーバー向け</td></tr>
+                        </table>
                     </div>
                 </div>
+                <div style="margin-top: 0.8em; padding: 0.5em; background: rgba(255,255,255,0.1); border-radius: 4px;">
+                    <p class="small" style="margin: 0;">
+                        <span class="highlight-yellow">推奨モデル:</span>
+                        Qwen2.5-Coder（7B/14B）、DeepSeek-Coder、CodeLlama
+                    </p>
+                </div>
+            </section>
+
+            <!-- スライド14: ローカルLLMセットアップ -->
+            <section>
+                <p class="chapter-title">第2章: セットアップと基本操作</p>
+                <h2>ローカルLLM セットアップ手順</h2>
+                <div class="two-column">
+                    <div>
+                        <h4 class="highlight-blue small">1. Ollamaの場合</h4>
+                        <pre><code class="language-bash small"># インストール（Mac）
+brew install ollama
+
+# モデルをダウンロード
+ollama pull qwen2.5-coder:7b
+
+# サーバー起動
+ollama serve</code></pre>
+                    </div>
+                    <div>
+                        <h4 class="highlight-green small">2. 環境変数を設定</h4>
+                        <pre><code class="language-bash small"># .bashrc や .zshrc に追加
+export ANTHROPIC_BASE_URL=\
+  http://localhost:11434/v1
+export ANTHROPIC_API_KEY=ollama
+
+# Claude Code起動
+claude</code></pre>
+                    </div>
+                </div>
+                <h4 class="highlight-yellow small" style="margin-top: 0.8em;">推奨スペック</h4>
+                <table style="font-size: 0.5em;">
+                    <tr><th>モデルサイズ</th><th>必要メモリ</th><th>GPU推奨</th><th>用途</th></tr>
+                    <tr><td>7B</td><td>8GB+</td><td>なくても可</td><td>軽量タスク</td></tr>
+                    <tr><td>14B</td><td>16GB+</td><td>8GB VRAM+</td><td>本格利用</td></tr>
+                    <tr><td>32B+</td><td>32GB+</td><td>16GB VRAM+</td><td>高精度</td></tr>
+                </table>
             </section>
 
             <!-- スライド14: デモ -->
