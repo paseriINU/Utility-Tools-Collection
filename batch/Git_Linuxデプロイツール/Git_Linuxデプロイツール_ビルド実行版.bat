@@ -132,6 +132,14 @@ $GYOMU_BUILD_MAP = @{
     # 必要に応じて追加（業務IDは親フォルダ名をそのまま指定）
 }
 
+# 連動ビルド設定
+# 特定の業務IDに変更があった場合、追加でビルドが必要な業務IDを定義
+# 例: FCB090が変更された場合、FAG060, FAG560, FAG580も連動してビルド
+$LINKED_BUILD_MAP = @{
+    "FCB090" = @("FAG060", "FAG560", "FAG580")
+    # 必要に応じて追加
+}
+
 # ビルド対象フォルダのプレフィックス（これらのフォルダ配下のみ業務ID単位ビルド対象）
 # 例: gyoumu/online/業務ID/xxx.c, gyoumu/remote/業務ID/xxx.c
 $BUILD_TARGET_PREFIXES = @("gyoumu/online/", "gyoumu/remote/", "gyoumu/batch/")
@@ -513,6 +521,27 @@ if ($transferMode -eq "all") {
             $hasNonGyomuFiles = $true
             Write-Color "[判定] 業務ID対象外ファイル: $filePath" "Yellow"
         }
+    }
+
+    # 連動ビルドの業務IDを追加
+    $linkedGyomuIds = @{}
+    foreach ($gyomuId in $gyomuIds.Keys) {
+        if ($LINKED_BUILD_MAP.ContainsKey($gyomuId)) {
+            $linkedIds = $LINKED_BUILD_MAP[$gyomuId]
+            Write-Host ""
+            Write-Color "[連動] $gyomuId に変更があるため、以下の業務IDもビルド対象に追加:" "Cyan"
+            foreach ($linkedId in $linkedIds) {
+                if (-not $gyomuIds.ContainsKey($linkedId) -and -not $linkedGyomuIds.ContainsKey($linkedId)) {
+                    $linkedGyomuIds[$linkedId] = @("(連動ビルド: ${gyomuId})")
+                    Write-Host "    + $linkedId"
+                }
+            }
+        }
+    }
+
+    # 連動ビルドの業務IDをメインリストに追加
+    foreach ($linkedId in $linkedGyomuIds.Keys) {
+        $gyomuIds[$linkedId] = $linkedGyomuIds[$linkedId]
     }
 }
 
