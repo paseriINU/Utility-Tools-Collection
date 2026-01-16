@@ -14,7 +14,15 @@
             --r-heading-font: 'Hiragino Kaku Gothic ProN', 'Meiryo', sans-serif;
             --r-code-font: 'Menlo', 'Monaco', 'Consolas', monospace;
         }
-        .reveal h1, .reveal h2, .reveal h3 {
+        .reveal h1 {
+            font-size: 1.8em;
+            text-transform: none;
+        }
+        .reveal h2 {
+            font-size: 1.4em;
+            text-transform: none;
+        }
+        .reveal h3 {
             text-transform: none;
         }
         .reveal pre {
@@ -29,6 +37,10 @@
         .reveal pre code {
             padding: 1em;
             max-height: 450px;
+            line-height: 1.4;
+        }
+        .reveal pre {
+            margin: 0.5em 0;
         }
         .reveal ul, .reveal ol {
             text-align: left;
@@ -84,8 +96,8 @@
 
             <!-- スライド1: タイトル -->
             <section>
-                <h1>Claude Code<br>実践ガイド</h1>
-                <p class="highlight-blue">AI駆動の開発を始めよう</p>
+                <h1>Claude Code 実践ガイド</h1>
+                <p class="highlight-blue" style="margin-top: 0.5em;">AI駆動の開発を始めよう</p>
                 <p class="small" style="margin-top: 2em;">
                     対象: プログラミング経験者向け<br>
                     所要時間: 約1時間
