@@ -436,8 +436,16 @@ foreach ($relativePath in $tfsFolderDict.Keys) {
     $gitFolderPath = Join-Path $GIT_REPO_DIR $relativePath
     if (-not (Test-Path $gitFolderPath)) {
         # Gitに存在しないフォルダ
-        # そのフォルダ配下にファイルがあるかチェック
-        $hasFiles = $tfsFileDict.Keys | Where-Object { $_.StartsWith("$relativePath\") -or $_.StartsWith("$relativePath/") }
+        # そのフォルダ配下にファイルがあるかチェック（パス区切り文字を正規化して比較）
+        $normalizedPath = $relativePath.Replace('/', '\').ToLower()
+        $hasFiles = $false
+        foreach ($filePath in $tfsFileDict.Keys) {
+            $normalizedFilePath = $filePath.Replace('/', '\').ToLower()
+            if ($normalizedFilePath.StartsWith("$normalizedPath\")) {
+                $hasFiles = $true
+                break
+            }
+        }
         if (-not $hasFiles) {
             # 空フォルダとして追加
             $newFolders += [PSCustomObject]@{
@@ -452,8 +460,16 @@ foreach ($relativePath in $tfsFolderDict.Keys) {
 # Gitのみのフォルダをチェック（削除対象フォルダ）
 foreach ($relativePath in $gitFolderDict.Keys) {
     if (-not $tfsFolderDict.ContainsKey($relativePath)) {
-        # TFSにもファイルとしても存在しないか確認
-        $existsInTfs = $tfsFileDict.Keys | Where-Object { $_.StartsWith("$relativePath\") -or $_.StartsWith("$relativePath/") }
+        # TFSにもファイルとしても存在しないか確認（パス区切り文字を正規化して比較）
+        $normalizedPath = $relativePath.Replace('/', '\').ToLower()
+        $existsInTfs = $false
+        foreach ($filePath in $tfsFileDict.Keys) {
+            $normalizedFilePath = $filePath.Replace('/', '\').ToLower()
+            if ($normalizedFilePath.StartsWith("$normalizedPath\")) {
+                $existsInTfs = $true
+                break
+            }
+        }
         if (-not $existsInTfs) {
             $gitFolder = $gitFolderDict[$relativePath]
             $deleteFolders += [PSCustomObject]@{
