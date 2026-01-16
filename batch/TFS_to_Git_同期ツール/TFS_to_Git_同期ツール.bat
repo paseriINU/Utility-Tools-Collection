@@ -336,7 +336,8 @@ $gitFiles = Get-ChildItem -Path $GIT_REPO_DIR -Recurse -File -ErrorAction Silent
     $_.FullName -notlike '*\.git\*' -and $_.Name -notin $EXCLUDE_FILES
 }
 $gitFolders = Get-ChildItem -Path $GIT_REPO_DIR -Recurse -Directory -ErrorAction SilentlyContinue | Where-Object {
-    $_.FullName -notlike '*\.git*'
+    # .gitフォルダ自体とその配下のみを除外（.githubなどは除外しない）
+    $_.FullName -notlike '*\.git\*' -and $_.Name -ne '.git'
 }
 
 # パスの正規化関数（末尾のバックスラッシュを統一）
