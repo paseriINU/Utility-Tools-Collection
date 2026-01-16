@@ -15,6 +15,7 @@ PowerShell polyglot pattern を使用し、Windows OpenSSH Client で鍵の生�
 - **接続テスト**: 公開鍵認証での接続を自動確認
 - **コメント自動付与**: `ユーザー名@コンピューター名` を鍵に付与
 - **Gitリポジトリのクローン**: 設定されている場合、リポジトリを自動クローン
+- **WinMergeフィルター設定**: .gitignore等のGit管理ファイルを比較から除外
 
 ## 必要な環境
 
@@ -27,6 +28,7 @@ PowerShell polyglot pattern を使用し、Windows OpenSSH Client で鍵の生�
 ### オプション
 
 - **Git for Windows**: リポジトリクローン機能を使用する場合
+- **WinMerge**: フィルター設定機能を使用する場合
 
 ### OpenSSH Clientの確認方法
 
@@ -66,6 +68,14 @@ $USE_PASSPHRASE = $false        # パスフレーズの使用
 # Gitリポジトリクローン設定（空欄の場合はスキップ）
 $GIT_CLONE_URL = ""             # クローンするリポジトリのURL
 $GIT_LOCAL_PATH = ""            # クローン先のローカルパス
+
+# WinMergeフィルター設定
+$SETUP_WINMERGE_FILTER = $true  # WinMergeフィルターを設定するか
+$WINMERGE_EXCLUDE_FILES = @(    # 比較時に除外するファイル名パターン
+    ".gitignore",
+    ".gitkeep",
+    ".gitattributes"
+)
 
 #==============================================================================
 #endregion
@@ -163,7 +173,31 @@ Git_開発環境初期設定ツール.bat
    [成功] リポジトリのクローンが完了しました
    ```
 
-7. **完了**
+7. **WinMergeフィルター設定**（WinMergeがインストールされている場合）
+   ```
+   ================================================================
+     WinMergeフィルター設定
+   ================================================================
+
+   [OK] WinMergeが見つかりました: C:\Program Files\WinMerge\WinMergeU.exe
+
+   [作成] フィルターファイルを作成しました
+
+     フィルターファイル: C:\Users\tanaka\AppData\Roaming\WinMerge\Filters\GitFiles.flt
+
+   除外対象ファイル:
+     - .gitignore
+     - .gitkeep
+     - .gitattributes
+
+   使用方法:
+     1. WinMergeを起動
+     2. ツール > フィルター を選択
+     3. 「Git管理ファイル除外フィルター」にチェックを入れる
+     4. OK をクリック
+   ```
+
+8. **完了**
    ```
    ================================================================
      Git開発環境の初期設定が完了しました！
@@ -207,6 +241,13 @@ Git_開発環境初期設定ツール.bat
 |-----|------|-----|
 | `$GIT_CLONE_URL` | クローンするリポジトリURL | `git@github.com:user/repo.git` |
 | `$GIT_LOCAL_PATH` | クローン先のローカルパス | `C:\Projects\MyRepo` |
+
+### WinMergeフィルター設定
+
+| 項目 | 説明 | デフォルト |
+|-----|------|----------|
+| `$SETUP_WINMERGE_FILTER` | WinMergeフィルターを設定するか | `$true` |
+| `$WINMERGE_EXCLUDE_FILES` | 比較時に除外するファイル名 | `.gitignore`, `.gitkeep`, `.gitattributes` |
 
 ### 鍵の種類
 
