@@ -99,8 +99,7 @@
                 <h1>Claude Code 実践ガイド</h1>
                 <p class="highlight-blue" style="margin-top: 0.5em;">AI駆動の開発を始めよう</p>
                 <p class="small" style="margin-top: 2em;">
-                    対象: プログラミング経験者向け<br>
-                    所要時間: 約1時間
+                    対象: プログラミング経験者向け
                 </p>
             </section>
 
@@ -372,7 +371,80 @@ Allow? [y]es / [n]o / [a]lways</code></pre>
                 </p>
             </section>
 
-            <!-- スライド12: デモ -->
+            <!-- スライド12: MCP -->
+            <section>
+                <p class="chapter-title">第2章: セットアップと基本操作</p>
+                <h2>MCP（Model Context Protocol）</h2>
+                <p>外部ツールやサービスと連携するためのオープンプロトコル</p>
+                <div class="two-column">
+                    <div>
+                        <h4 class="highlight-blue">MCPでできること</h4>
+                        <ul class="small">
+                            <li>GitHub連携（PR作成・レビュー）</li>
+                            <li>データベース操作</li>
+                            <li>Slack/Notion連携</li>
+                            <li>ブラウザ操作</li>
+                            <li>独自ツールの追加</li>
+                        </ul>
+                    </div>
+                    <div>
+                        <h4 class="highlight-green">設定方法</h4>
+                        <pre><code class="language-json small">// .mcp.json
+{
+  "mcpServers": {
+    "github": {
+      "command": "npx",
+      "args": ["-y",
+        "@modelcontextprotocol/
+        server-github"]
+    }
+  }
+}</code></pre>
+                    </div>
+                </div>
+                <p class="small highlight-yellow">
+                    <span class="badge badge-green">Tip</span>
+                    MCPサーバーを追加することで、Claudeの機能を拡張できます
+                </p>
+            </section>
+
+            <!-- スライド13: ローカルLLM対応 -->
+            <section>
+                <p class="chapter-title">第2章: セットアップと基本操作</p>
+                <h2>ローカルLLMでの動作</h2>
+                <p>インターネット接続なしでも動作可能（プライバシー重視の環境向け）</p>
+                <h4 class="highlight-blue">設定方法</h4>
+                <pre><code class="language-bash"># Ollamaを使用する場合
+export ANTHROPIC_BASE_URL=http://localhost:11434/v1
+export ANTHROPIC_API_KEY=ollama
+
+# LM Studioを使用する場合
+export ANTHROPIC_BASE_URL=http://localhost:1234/v1
+export ANTHROPIC_API_KEY=lm-studio
+
+# その後、通常通り起動
+claude</code></pre>
+                <div class="two-column" style="margin-top: 1em;">
+                    <div>
+                        <h4 class="highlight-green small">メリット</h4>
+                        <ul class="small">
+                            <li>完全オフライン動作</li>
+                            <li>データが外部に送信されない</li>
+                            <li>API料金が不要</li>
+                        </ul>
+                    </div>
+                    <div>
+                        <h4 class="highlight-yellow small">注意点</h4>
+                        <ul class="small">
+                            <li>モデル性能はローカルLLMに依存</li>
+                            <li>高性能GPUが必要な場合あり</li>
+                            <li>一部機能が制限される場合あり</li>
+                        </ul>
+                    </div>
+                </div>
+            </section>
+
+            <!-- スライド14: デモ -->
             <section data-background-color="#1a1a2e">
                 <p class="chapter-title">第2章: セットアップと基本操作</p>
                 <h2>デモ: 実際に起動してみよう</h2>
