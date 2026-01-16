@@ -14,6 +14,13 @@
             --r-heading-font: 'Hiragino Kaku Gothic ProN', 'Meiryo', sans-serif;
             --r-code-font: 'Menlo', 'Monaco', 'Consolas', monospace;
         }
+        .reveal .slides {
+            width: 95% !important;
+            max-width: 1400px;
+        }
+        .reveal .slides > section {
+            padding: 0 20px;
+        }
         .reveal h1 {
             font-size: 1.8em;
             text-transform: none;
@@ -107,11 +114,11 @@
             <section>
                 <h2>本日のアジェンダ</h2>
                 <ol>
-                    <li><strong>イントロダクション</strong></li>
-                    <li><strong>セットアップと基本操作</strong></li>
-                    <li><strong>効果的なプロンプト技法</strong></li>
-                    <li><strong>実践的な活用シーン</strong></li>
-                    <li><strong>Tips & まとめ</strong></li>
+                    <li><strong>イントロダクション</strong> - Claude Codeとは？</li>
+                    <li><strong>セットアップと基本操作</strong> - 環境構築から基本コマンドまで</li>
+                    <li><strong>効果的なプロンプト技法</strong> - AIを最大限活用する方法</li>
+                    <li><strong>実践的な活用シーン</strong> - 実際の開発フローでの活用</li>
+                    <li><strong>Tips & まとめ</strong> - 生産性向上のコツ</li>
                 </ol>
             </section>
 
@@ -981,6 +988,9 @@ JSDoc形式のコメントを追加して」</code></pre>
             progress: true,
             center: true,
             transition: 'fade',
+            width: 1400,
+            height: 900,
+            margin: 0.04,
             plugins: [ RevealHighlight, RevealNotes ]
         });
     </script>
