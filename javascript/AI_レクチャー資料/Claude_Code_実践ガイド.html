@@ -1,0 +1,904 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Claude Code 実践ガイド</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@4.6.1/dist/reset.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@4.6.1/dist/reveal.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@4.6.1/dist/theme/night.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@4.6.1/plugin/highlight/monokai.css">
+    <style>
+        :root {
+            --r-main-font: 'Hiragino Kaku Gothic ProN', 'Meiryo', sans-serif;
+            --r-heading-font: 'Hiragino Kaku Gothic ProN', 'Meiryo', sans-serif;
+            --r-code-font: 'Menlo', 'Monaco', 'Consolas', monospace;
+        }
+        .reveal h1, .reveal h2, .reveal h3 {
+            text-transform: none;
+        }
+        .reveal pre {
+            width: 100%;
+            font-size: 0.5em;
+        }
+        .reveal code {
+            padding: 0.2em 0.4em;
+            background: rgba(255,255,255,0.1);
+            border-radius: 4px;
+        }
+        .reveal pre code {
+            padding: 1em;
+            max-height: 450px;
+        }
+        .reveal ul, .reveal ol {
+            text-align: left;
+        }
+        .reveal .highlight-red { color: #ff6b6b; }
+        .reveal .highlight-green { color: #69db7c; }
+        .reveal .highlight-blue { color: #74c0fc; }
+        .reveal .highlight-yellow { color: #ffd43b; }
+        .reveal .small { font-size: 0.7em; }
+        .reveal .two-column {
+            display: flex;
+            gap: 2em;
+        }
+        .reveal .two-column > div {
+            flex: 1;
+        }
+        .reveal .badge {
+            display: inline-block;
+            padding: 0.2em 0.6em;
+            border-radius: 4px;
+            font-size: 0.7em;
+            margin: 0.2em;
+        }
+        .reveal .badge-green { background: #2f9e44; }
+        .reveal .badge-blue { background: #1971c2; }
+        .reveal .badge-red { background: #e03131; }
+        .reveal .badge-yellow { background: #e67700; color: #000; }
+        .reveal table {
+            font-size: 0.6em;
+        }
+        .reveal th, .reveal td {
+            padding: 0.3em 0.6em;
+        }
+        .chapter-title {
+            color: #74c0fc;
+            font-size: 0.6em;
+            margin-bottom: 0.5em;
+        }
+        .slide-number {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            font-size: 0.5em;
+            color: rgba(255,255,255,0.5);
+        }
+    </style>
+</head>
+<body>
+    <div class="reveal">
+        <div class="slides">
+
+            <!-- ===== 第1章: イントロダクション ===== -->
+
+            <!-- スライド1: タイトル -->
+            <section>
+                <h1>Claude Code<br>実践ガイド</h1>
+                <p class="highlight-blue">AI駆動の開発を始めよう</p>
+                <p class="small" style="margin-top: 2em;">
+                    対象: プログラミング経験者向け<br>
+                    所要時間: 約1時間
+                </p>
+            </section>
+
+            <!-- スライド2: アジェンダ -->
+            <section>
+                <h2>本日のアジェンダ</h2>
+                <ol>
+                    <li><strong>イントロダクション</strong> - Claude Codeとは？</li>
+                    <li><strong>セットアップと基本操作</strong> - 環境構築から基本コマンドまで</li>
+                    <li><strong>効果的なプロンプト技法</strong> - AIを最大限活用する方法</li>
+                    <li><strong>実践的な活用シーン</strong> - 実際の開発フローでの活用</li>
+                    <li><strong>Tips & まとめ</strong> - 生産性向上のコツ</li>
+                </ol>
+            </section>
+
+            <!-- スライド3: Claude Codeとは -->
+            <section>
+                <p class="chapter-title">第1章: イントロダクション</p>
+                <h2>Claude Code とは？</h2>
+                <ul>
+                    <li>Anthropic社が提供する<span class="highlight-blue">AIコーディングアシスタント</span></li>
+                    <li><strong>ターミナルベース</strong>のCLIツール</li>
+                    <li>プロジェクト全体を理解し、<span class="highlight-green">コンテキストを維持</span></li>
+                    <li>ファイル操作、Git操作、コマンド実行が可能</li>
+                    <li><span class="highlight-yellow">自然言語</span>で指示を出すだけでコードを生成・修正</li>
+                </ul>
+            </section>
+
+            <!-- スライド4: できること一覧 -->
+            <section>
+                <p class="chapter-title">第1章: イントロダクション</p>
+                <h2>Claude Code でできること</h2>
+                <div class="two-column">
+                    <div>
+                        <h4 class="highlight-green">コード操作</h4>
+                        <ul class="small">
+                            <li>コード生成・修正</li>
+                            <li>バグ修正</li>
+                            <li>リファクタリング</li>
+                            <li>コードレビュー</li>
+                        </ul>
+                    </div>
+                    <div>
+                        <h4 class="highlight-blue">開発支援</h4>
+                        <ul class="small">
+                            <li>プロジェクト構造の理解</li>
+                            <li>ドキュメント作成</li>
+                            <li>Git操作の自動化</li>
+                            <li>テスト作成</li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="two-column" style="margin-top: 1em;">
+                    <div>
+                        <h4 class="highlight-yellow">ファイル操作</h4>
+                        <ul class="small">
+                            <li>ファイル読み書き</li>
+                            <li>検索・置換</li>
+                            <li>ディレクトリ操作</li>
+                        </ul>
+                    </div>
+                    <div>
+                        <h4 class="highlight-red">コマンド実行</h4>
+                        <ul class="small">
+                            <li>シェルコマンド</li>
+                            <li>ビルド・テスト</li>
+                            <li>パッケージ管理</li>
+                        </ul>
+                    </div>
+                </div>
+            </section>
+
+            <!-- スライド5: Before/After比較 -->
+            <section>
+                <p class="chapter-title">第1章: イントロダクション</p>
+                <h2>従来の開発との違い</h2>
+                <div class="two-column">
+                    <div>
+                        <h4 class="highlight-red">Before（従来）</h4>
+                        <ul class="small">
+                            <li>ドキュメントを検索</li>
+                            <li>Stack Overflowで調べる</li>
+                            <li>コードを手動で書く</li>
+                            <li>エラーを一つずつ修正</li>
+                            <li>コミットメッセージを考える</li>
+                        </ul>
+                    </div>
+                    <div>
+                        <h4 class="highlight-green">After（Claude Code）</h4>
+                        <ul class="small">
+                            <li>「〇〇の方法を教えて」</li>
+                            <li>AIがコンテキストを理解</li>
+                            <li>「この機能を実装して」</li>
+                            <li>エラーを渡すだけで修正</li>
+                            <li>「コミットして」で完了</li>
+                        </ul>
+                    </div>
+                </div>
+                <p style="margin-top: 1em;" class="highlight-yellow">
+                    開発時間を大幅に短縮！
+                </p>
+            </section>
+
+            <!-- ===== 第2章: セットアップと基本操作 ===== -->
+
+            <!-- スライド6: インストール方法 -->
+            <section>
+                <p class="chapter-title">第2章: セットアップと基本操作</p>
+                <h2>インストール方法</h2>
+                <h4>Mac / Linux</h4>
+                <pre><code class="language-bash"># npmでインストール
+npm install -g @anthropic-ai/claude-code
+
+# または Homebrew（Mac）
+brew install claude-code</code></pre>
+                <h4>Windows</h4>
+                <pre><code class="language-bash"># npmでインストール
+npm install -g @anthropic-ai/claude-code
+
+# WSL2環境を推奨</code></pre>
+                <p class="small highlight-yellow">※ Node.js 18以上が必要</p>
+            </section>
+
+            <!-- スライド7: 起動方法 -->
+            <section>
+                <p class="chapter-title">第2章: セットアップと基本操作</p>
+                <h2>起動方法とセッション管理</h2>
+                <pre><code class="language-bash"># 基本の起動（カレントディレクトリで開始）
+claude
+
+# 特定のディレクトリで開始
+claude /path/to/project
+
+# 前回のセッションを再開
+claude --resume
+
+# 新しいセッションを強制的に開始
+claude --new</code></pre>
+                <p class="small">
+                    <span class="badge badge-green">Tip</span>
+                    セッションは自動保存されるため、中断しても再開可能
+                </p>
+            </section>
+
+            <!-- スライド8: 基本コマンド -->
+            <section>
+                <p class="chapter-title">第2章: セットアップと基本操作</p>
+                <h2>基本的なコマンド一覧</h2>
+                <table>
+                    <tr>
+                        <th>コマンド</th>
+                        <th>説明</th>
+                    </tr>
+                    <tr>
+                        <td><code>/help</code></td>
+                        <td>ヘルプを表示</td>
+                    </tr>
+                    <tr>
+                        <td><code>/clear</code></td>
+                        <td>会話履歴をクリア</td>
+                    </tr>
+                    <tr>
+                        <td><code>/model</code></td>
+                        <td>使用モデルを切り替え</td>
+                    </tr>
+                    <tr>
+                        <td><code>/commit</code></td>
+                        <td>変更をGitコミット</td>
+                    </tr>
+                    <tr>
+                        <td><code>/config</code></td>
+                        <td>設定を表示・変更</td>
+                    </tr>
+                    <tr>
+                        <td><code>/compact</code></td>
+                        <td>会話を要約して圧縮</td>
+                    </tr>
+                    <tr>
+                        <td><code>/quit</code></td>
+                        <td>Claude Codeを終了</td>
+                    </tr>
+                </table>
+            </section>
+
+            <!-- スライド9: キーボードショートカット -->
+            <section>
+                <p class="chapter-title">第2章: セットアップと基本操作</p>
+                <h2>キーボードショートカット</h2>
+                <table>
+                    <tr>
+                        <th>ショートカット</th>
+                        <th>説明</th>
+                    </tr>
+                    <tr>
+                        <td><code>Ctrl + C</code></td>
+                        <td>現在の処理を中断</td>
+                    </tr>
+                    <tr>
+                        <td><code>Ctrl + L</code></td>
+                        <td>画面をクリア</td>
+                    </tr>
+                    <tr>
+                        <td><code>Ctrl + R</code></td>
+                        <td>コマンド履歴を検索</td>
+                    </tr>
+                    <tr>
+                        <td><code>↑ / ↓</code></td>
+                        <td>履歴を遡る/進む</td>
+                    </tr>
+                    <tr>
+                        <td><code>Tab</code></td>
+                        <td>ファイルパスを補完</td>
+                    </tr>
+                    <tr>
+                        <td><code>Esc</code></td>
+                        <td>入力をキャンセル</td>
+                    </tr>
+                </table>
+            </section>
+
+            <!-- スライド10: パーミッションモード -->
+            <section>
+                <p class="chapter-title">第2章: セットアップと基本操作</p>
+                <h2>パーミッションモード</h2>
+                <p>Claude Codeはファイル操作やコマンド実行前に確認を求めます</p>
+                <div class="two-column">
+                    <div>
+                        <h4 class="highlight-green">Ask Mode（デフォルト）</h4>
+                        <ul class="small">
+                            <li>すべての操作で確認</li>
+                            <li>安全性が高い</li>
+                            <li>初心者におすすめ</li>
+                        </ul>
+                    </div>
+                    <div>
+                        <h4 class="highlight-yellow">Trust Mode</h4>
+                        <ul class="small">
+                            <li>自動で操作を実行</li>
+                            <li>効率的だがリスクあり</li>
+                            <li>慣れてから使用</li>
+                        </ul>
+                    </div>
+                </div>
+                <pre><code class="language-bash"># 確認プロンプトの例
+Claude wants to edit: src/main.js
+Allow? [y]es / [n]o / [a]lways</code></pre>
+            </section>
+
+            <!-- スライド11: CLAUDE.md -->
+            <section>
+                <p class="chapter-title">第2章: セットアップと基本操作</p>
+                <h2>CLAUDE.md によるプロジェクト設定</h2>
+                <p>プロジェクトルートに<code>CLAUDE.md</code>を配置すると自動で読み込まれます</p>
+                <pre><code class="language-markdown"># CLAUDE.md
+
+## プロジェクト概要
+このプロジェクトはReact + TypeScriptで構築されたWebアプリです。
+
+## コーディング規約
+- 変数名はキャメルケースで統一
+- コンポーネントはfunctional componentを使用
+- テストは必ずjestで書くこと
+
+## 重要なファイル
+- src/App.tsx: メインエントリーポイント
+- src/api/: API関連の処理</code></pre>
+                <p class="small highlight-yellow">
+                    Claudeがプロジェクトの文脈を理解し、適切なコードを生成します
+                </p>
+            </section>
+
+            <!-- スライド12: デモ -->
+            <section data-background-color="#1a1a2e">
+                <p class="chapter-title">第2章: セットアップと基本操作</p>
+                <h2>デモ: 実際に起動してみよう</h2>
+                <div style="border: 2px solid #74c0fc; padding: 2em; border-radius: 8px;">
+                    <p>ライブデモンストレーション</p>
+                    <ol class="small">
+                        <li>Claude Codeを起動</li>
+                        <li>プロジェクトを開く</li>
+                        <li>簡単な質問をしてみる</li>
+                        <li>ファイルを読んでもらう</li>
+                    </ol>
+                </div>
+            </section>
+
+            <!-- ===== 第3章: 効果的なプロンプト技法 ===== -->
+
+            <!-- スライド13: 良いプロンプトとは -->
+            <section>
+                <p class="chapter-title">第3章: 効果的なプロンプト技法</p>
+                <h2>良いプロンプトとは？</h2>
+                <div class="two-column">
+                    <div>
+                        <h4 class="highlight-green">良いプロンプトの特徴</h4>
+                        <ul class="small">
+                            <li><strong>具体的</strong>: 何をしたいか明確</li>
+                            <li><strong>文脈あり</strong>: 背景情報を含む</li>
+                            <li><strong>制約明示</strong>: 条件や制限を伝える</li>
+                            <li><strong>期待値明示</strong>: 出力形式を指定</li>
+                        </ul>
+                    </div>
+                    <div>
+                        <h4 class="highlight-red">悪いプロンプトの特徴</h4>
+                        <ul class="small">
+                            <li><strong>曖昧</strong>: 何をしたいか不明</li>
+                            <li><strong>情報不足</strong>: 必要な情報がない</li>
+                            <li><strong>一度に多すぎ</strong>: 複数タスク混在</li>
+                            <li><strong>前提の欠如</strong>: 共有知識を仮定</li>
+                        </ul>
+                    </div>
+                </div>
+            </section>
+
+            <!-- スライド14: 悪いプロンプト例 -->
+            <section>
+                <p class="chapter-title">第3章: 効果的なプロンプト技法</p>
+                <h2>悪いプロンプト例</h2>
+                <div style="background: rgba(255,0,0,0.1); padding: 1em; border-radius: 8px; border-left: 4px solid #e03131;">
+                    <pre><code class="language-text">バグ直して</code></pre>
+                    <p class="small highlight-red">問題点: どのバグ？どこのファイル？どんな症状？</p>
+                </div>
+                <div style="background: rgba(255,0,0,0.1); padding: 1em; border-radius: 8px; border-left: 4px solid #e03131; margin-top: 1em;">
+                    <pre><code class="language-text">いい感じにして</code></pre>
+                    <p class="small highlight-red">問題点: 何が「いい」の基準？どこを改善？</p>
+                </div>
+                <div style="background: rgba(255,0,0,0.1); padding: 1em; border-radius: 8px; border-left: 4px solid #e03131; margin-top: 1em;">
+                    <pre><code class="language-text">全部書いて</code></pre>
+                    <p class="small highlight-red">問題点: 何を？どんな仕様で？どの言語で？</p>
+                </div>
+            </section>
+
+            <!-- スライド15: 良いプロンプト例 -->
+            <section>
+                <p class="chapter-title">第3章: 効果的なプロンプト技法</p>
+                <h2>良いプロンプト例</h2>
+                <div style="background: rgba(0,255,0,0.1); padding: 1em; border-radius: 8px; border-left: 4px solid #2f9e44;">
+                    <pre><code class="language-text">src/utils/date.ts の formatDate関数で、
+日付が null の場合に "N/A" を返すように修正してください。
+現在は null を渡すとエラーになります。</code></pre>
+                </div>
+                <div style="background: rgba(0,255,0,0.1); padding: 1em; border-radius: 8px; border-left: 4px solid #2f9e44; margin-top: 1em;">
+                    <pre><code class="language-text">UserProfileコンポーネントをリファクタリングして、
+- ロジックをカスタムフック useUserProfile に分離
+- 表示部分を presentational component に
+- TypeScriptの型を厳密に定義
+してください。</code></pre>
+                </div>
+            </section>
+
+            <!-- スライド16: コンテキストの与え方 -->
+            <section>
+                <p class="chapter-title">第3章: 効果的なプロンプト技法</p>
+                <h2>コンテキストの与え方</h2>
+                <h4>5W1Hを意識する</h4>
+                <ul>
+                    <li><span class="highlight-blue">What</span>: 何をしたいのか</li>
+                    <li><span class="highlight-blue">Where</span>: どのファイル・どの箇所か</li>
+                    <li><span class="highlight-blue">Why</span>: なぜその変更が必要か</li>
+                    <li><span class="highlight-blue">How</span>: どのような方法で（制約）</li>
+                    <li><span class="highlight-blue">When</span>: いつ実行されるか（条件）</li>
+                </ul>
+                <pre><code class="language-text">【例】
+What: ログイン機能を追加したい
+Where: src/pages/Login.tsx（新規作成）
+Why: ユーザー認証を実装するため
+How: Firebase Authを使用
+When: ユーザーがログインボタンを押した時</code></pre>
+            </section>
+
+            <!-- スライド17: @記法 -->
+            <section>
+                <p class="chapter-title">第3章: 効果的なプロンプト技法</p>
+                <h2>ファイル参照の使い方（@記法）</h2>
+                <p>ファイルを直接参照してコンテキストを与えられます</p>
+                <pre><code class="language-text"># ファイルを参照
+@src/components/Button.tsx を見て、同じスタイルで
+Input コンポーネントを作成してください
+
+# 複数ファイルを参照
+@src/api/user.ts と @src/types/user.ts を参考に
+新しいAPIエンドポイントを追加してください
+
+# ディレクトリを参照
+@src/components/ 配下のコンポーネント一覧を見て、
+命名規則を教えてください</code></pre>
+                <p class="small highlight-yellow">
+                    <span class="badge badge-green">Tip</span>
+                    Tabキーでファイルパスを補完できます
+                </p>
+            </section>
+
+            <!-- スライド18: 段階的な指示 -->
+            <section>
+                <p class="chapter-title">第3章: 効果的なプロンプト技法</p>
+                <h2>段階的な指示の出し方</h2>
+                <p>大きなタスクは小さく分割して指示する</p>
+                <div class="two-column">
+                    <div>
+                        <h4 class="highlight-red">一度に全部</h4>
+                        <pre><code class="language-text small">ユーザー管理機能を
+全部作って</code></pre>
+                        <p class="small">結果が予測しづらい</p>
+                    </div>
+                    <div>
+                        <h4 class="highlight-green">段階的に</h4>
+                        <pre><code class="language-text small">1. まずユーザー型を定義
+2. 次にAPIを実装
+3. 最後にUIを作成</code></pre>
+                        <p class="small">確認しながら進められる</p>
+                    </div>
+                </div>
+                <pre><code class="language-text">【推奨フロー】
+Step 1: 「ユーザー型の定義を提案して」
+Step 2: 「OK、それで実装して」
+Step 3: 「次はAPIエンドポイントを作って」</code></pre>
+            </section>
+
+            <!-- スライド19: 確認と質問 -->
+            <section>
+                <p class="chapter-title">第3章: 効果的なプロンプト技法</p>
+                <h2>確認と質問を活用する</h2>
+                <p>Claudeに積極的に質問させましょう</p>
+                <pre><code class="language-text"># 実装前に確認を求める
+「ユーザー登録機能を作りたい。
+実装前に確認事項があれば質問してください」
+
+# 複数の選択肢を求める
+「この機能を実装する方法を3つ提案して、
+それぞれのメリット・デメリットを教えて」
+
+# 不明点を明確にする
+「このエラーの原因として考えられるものを
+優先度順に列挙してください」</code></pre>
+                <p class="small highlight-yellow">
+                    対話的に進めることで、より良い結果が得られます
+                </p>
+            </section>
+
+            <!-- スライド20: テンプレート集 -->
+            <section>
+                <p class="chapter-title">第3章: 効果的なプロンプト技法</p>
+                <h2>プロンプトテンプレート集</h2>
+                <div class="small">
+                    <h4>バグ修正</h4>
+                    <pre><code>@[ファイル] の [行数] 付近で [症状] が発生しています。
+エラーメッセージ: [エラー内容]
+原因を特定して修正してください。</code></pre>
+                    <h4>機能追加</h4>
+                    <pre><code>[機能名] を実装してください。
+- 要件: [要件リスト]
+- 使用技術: [ライブラリ等]
+- 配置場所: [ファイルパス]</code></pre>
+                    <h4>リファクタリング</h4>
+                    <pre><code>@[ファイル] をリファクタリングしてください。
+目的: [可読性向上/パフォーマンス改善/等]
+制約: [既存の動作を変更しない/等]</code></pre>
+                </div>
+            </section>
+
+            <!-- スライド21: よくある間違い -->
+            <section>
+                <p class="chapter-title">第3章: 効果的なプロンプト技法</p>
+                <h2>よくある間違いと対策</h2>
+                <table>
+                    <tr>
+                        <th>間違い</th>
+                        <th>対策</th>
+                    </tr>
+                    <tr>
+                        <td class="highlight-red">長すぎる指示</td>
+                        <td>段階的に分割する</td>
+                    </tr>
+                    <tr>
+                        <td class="highlight-red">曖昧な表現</td>
+                        <td>具体的な例を添える</td>
+                    </tr>
+                    <tr>
+                        <td class="highlight-red">エラーだけ貼る</td>
+                        <td>状況と操作手順も伝える</td>
+                    </tr>
+                    <tr>
+                        <td class="highlight-red">結果を検証しない</td>
+                        <td>動作確認を依頼する</td>
+                    </tr>
+                    <tr>
+                        <td class="highlight-red">全自動を期待</td>
+                        <td>レビューと対話を重視</td>
+                    </tr>
+                </table>
+            </section>
+
+            <!-- スライド22: 演習 -->
+            <section data-background-color="#1a1a2e">
+                <p class="chapter-title">第3章: 効果的なプロンプト技法</p>
+                <h2>演習: プロンプトを書いてみよう</h2>
+                <div style="border: 2px solid #74c0fc; padding: 2em; border-radius: 8px;">
+                    <p>以下のシナリオに対するプロンプトを考えてみましょう</p>
+                    <div style="background: rgba(255,255,255,0.1); padding: 1em; border-radius: 4px; margin-top: 1em;">
+                        <p class="small" style="text-align: left;">
+                            <strong>シナリオ:</strong><br>
+                            Reactアプリで、ボタンをクリックしたら
+                            APIからユーザー一覧を取得して表示する機能を
+                            追加したい。
+                        </p>
+                    </div>
+                    <p class="small" style="margin-top: 1em;">
+                        <span class="badge badge-yellow">ヒント</span>
+                        5W1Hを意識して書いてみましょう
+                    </p>
+                </div>
+            </section>
+
+            <!-- ===== 第4章: 実践的な活用シーン ===== -->
+
+            <!-- スライド23: プロジェクト構造の理解 -->
+            <section>
+                <p class="chapter-title">第4章: 実践的な活用シーン</p>
+                <h2>シーン1: プロジェクト構造の理解</h2>
+                <p>新しいプロジェクトに参加したとき</p>
+                <pre><code class="language-text"># ディレクトリ構造を把握
+「このプロジェクトのディレクトリ構造を説明して」
+
+# 主要ファイルを特定
+「エントリーポイントとなるファイルはどれ？」
+
+# 技術スタックを確認
+「使用しているフレームワークとライブラリを
+package.jsonから教えて」
+
+# 特定機能の実装箇所を探す
+「ユーザー認証に関連するファイルを探して」</code></pre>
+            </section>
+
+            <!-- スライド24: コード生成 -->
+            <section>
+                <p class="chapter-title">第4章: 実践的な活用シーン</p>
+                <h2>シーン2: コード生成</h2>
+                <pre><code class="language-text"># コンポーネント生成
+「@src/components/Button.tsx を参考に、
+同じスタイルでSelectコンポーネントを作成して」
+
+# API実装
+「REST APIのエンドポイント /api/users を実装して。
+- GET: ユーザー一覧取得
+- POST: ユーザー作成
+- PUT: ユーザー更新
+- DELETE: ユーザー削除」
+
+# テスト生成
+「@src/utils/validation.ts のユニットテストを
+Jest形式で作成して。エッジケースも含めて」</code></pre>
+            </section>
+
+            <!-- スライド25: バグ修正 -->
+            <section>
+                <p class="chapter-title">第4章: 実践的な活用シーン</p>
+                <h2>シーン3: バグ修正</h2>
+                <pre><code class="language-text"># エラー情報を共有
+「以下のエラーが発生しています。原因を特定して修正して
+
+TypeError: Cannot read property 'map' of undefined
+    at UserList (src/components/UserList.tsx:15:23)」
+
+# 動作不良を報告
+「ログイン後にホーム画面にリダイレクトされるはずが、
+ログイン画面に戻ってしまいます。
+@src/pages/Login.tsx を確認して原因を調査して」
+
+# 条件付きバグ
+「特定の条件でのみ発生するバグがあります。
+- 条件: ユーザー名が空の場合
+- 症状: アプリがクラッシュ
+- 対象: @src/components/Profile.tsx」</code></pre>
+            </section>
+
+            <!-- スライド26: コードレビュー -->
+            <section>
+                <p class="chapter-title">第4章: 実践的な活用シーン</p>
+                <h2>シーン4: コードレビュー</h2>
+                <pre><code class="language-text"># 全般的なレビュー
+「@src/services/auth.ts をレビューして。
+以下の観点でコメントをお願いします：
+- セキュリティ
+- パフォーマンス
+- 可読性
+- ベストプラクティス」
+
+# セキュリティ特化
+「このAPIエンドポイントにセキュリティ上の
+脆弱性がないか確認して」
+
+# 変更差分のレビュー
+「git diff を見て、今回の変更に問題がないか
+レビューして」</code></pre>
+            </section>
+
+            <!-- スライド27: リファクタリング -->
+            <section>
+                <p class="chapter-title">第4章: 実践的な活用シーン</p>
+                <h2>シーン5: リファクタリング</h2>
+                <pre><code class="language-text"># 関数の分割
+「@src/utils/data.ts の processData関数が長すぎます。
+適切な粒度に分割してください」
+
+# 共通化
+「@src/components/Header.tsx と @src/components/Footer.tsx で
+重複しているロジックを共通化して」
+
+# モダン化
+「このクラスコンポーネントを
+React Hooksを使ったfunctional componentに変換して」
+
+# パフォーマンス改善
+「このリストコンポーネントが遅いです。
+React.memoやuseMemoを使って最適化して」</code></pre>
+            </section>
+
+            <!-- スライド28: ドキュメント作成 -->
+            <section>
+                <p class="chapter-title">第4章: 実践的な活用シーン</p>
+                <h2>シーン6: ドキュメント作成</h2>
+                <pre><code class="language-text"># README作成
+「このプロジェクトのREADME.mdを作成して。
+- 概要
+- インストール方法
+- 使い方
+- 設定方法
+を含めてください」
+
+# API仕様書
+「@src/api/ 配下のエンドポイントを分析して、
+OpenAPI形式のAPI仕様書を作成して」
+
+# コメント追加
+「@src/utils/complex.ts に
+JSDoc形式のコメントを追加して」</code></pre>
+            </section>
+
+            <!-- スライド29: Git操作 -->
+            <section>
+                <p class="chapter-title">第4章: 実践的な活用シーン</p>
+                <h2>シーン7: Git操作の自動化</h2>
+                <pre><code class="language-text"># 変更をコミット
+/commit
+
+# 意味のあるコミットメッセージを自動生成
+「今の変更内容を確認して、
+適切なコミットメッセージを提案して」
+
+# ブランチ操作
+「feature/user-auth ブランチを作成して、
+そこで作業を開始して」
+
+# 差分確認
+「main ブランチとの差分を確認して、
+変更点をまとめて」</code></pre>
+            </section>
+
+            <!-- スライド30: デモ - バグ修正 -->
+            <section data-background-color="#1a1a2e">
+                <p class="chapter-title">第4章: 実践的な活用シーン</p>
+                <h2>デモ: 実際のバグ修正フロー</h2>
+                <div style="border: 2px solid #74c0fc; padding: 2em; border-radius: 8px;">
+                    <p>ライブデモンストレーション</p>
+                    <ol class="small">
+                        <li>エラーメッセージを共有</li>
+                        <li>Claudeが原因を分析</li>
+                        <li>修正案を提示</li>
+                        <li>修正を適用</li>
+                        <li>動作確認</li>
+                    </ol>
+                </div>
+            </section>
+
+            <!-- スライド31: デモ - 機能追加 -->
+            <section data-background-color="#1a1a2e">
+                <p class="chapter-title">第4章: 実践的な活用シーン</p>
+                <h2>デモ: 機能追加の実例</h2>
+                <div style="border: 2px solid #74c0fc; padding: 2em; border-radius: 8px;">
+                    <p>ライブデモンストレーション</p>
+                    <ol class="small">
+                        <li>要件を伝える</li>
+                        <li>Claudeが設計を提案</li>
+                        <li>確認してから実装開始</li>
+                        <li>段階的にファイルを作成</li>
+                        <li>テストを追加</li>
+                        <li>コミット</li>
+                    </ol>
+                </div>
+            </section>
+
+            <!-- スライド32: プランモード -->
+            <section>
+                <p class="chapter-title">第4章: 実践的な活用シーン</p>
+                <h2>プランモードの活用</h2>
+                <p>大きな変更の前に計画を立てる</p>
+                <pre><code class="language-text"># プランモードで計画
+「認証機能を追加したい。
+まず計画を立てて、実装前に確認させてください」
+
+# Claudeの応答例
+計画:
+1. 必要なパッケージのインストール
+2. 認証用の型定義を追加
+3. 認証サービスの実装
+4. ログイン/ログアウトページの作成
+5. 認証ガードの実装
+6. テストの追加
+
+この計画で進めてよいですか？</code></pre>
+                <p class="small highlight-yellow">
+                    <span class="badge badge-green">Tip</span>
+                    大規模な変更は必ずプランモードで確認を
+                </p>
+            </section>
+
+            <!-- ===== 第5章: Tips & まとめ ===== -->
+
+            <!-- スライド33: Tips 10選 -->
+            <section>
+                <p class="chapter-title">第5章: Tips & まとめ</p>
+                <h2>プロダクティビティTips 10選</h2>
+                <div class="two-column small">
+                    <div>
+                        <ol>
+                            <li><strong>CLAUDE.md</strong>を必ず用意</li>
+                            <li><strong>@記法</strong>でファイル参照</li>
+                            <li><strong>段階的</strong>に指示を出す</li>
+                            <li><strong>/commit</strong>でGit操作効率化</li>
+                            <li>エラーは<strong>全文</strong>コピペ</li>
+                        </ol>
+                    </div>
+                    <div>
+                        <ol start="6">
+                            <li>結果は必ず<strong>レビュー</strong></li>
+                            <li><strong>テスト</strong>も一緒に依頼</li>
+                            <li>困ったら<strong>質問</strong>させる</li>
+                            <li><strong>/compact</strong>で会話を整理</li>
+                            <li><strong>対話</strong>を重視する</li>
+                        </ol>
+                    </div>
+                </div>
+            </section>
+
+            <!-- スライド34: 注意点 -->
+            <section>
+                <p class="chapter-title">第5章: Tips & まとめ</p>
+                <h2>注意点とセキュリティ</h2>
+                <div class="two-column">
+                    <div>
+                        <h4 class="highlight-red">注意すべきこと</h4>
+                        <ul class="small">
+                            <li>生成コードは必ずレビュー</li>
+                            <li>機密情報を含めない</li>
+                            <li>本番環境では慎重に</li>
+                            <li>バックアップを取る</li>
+                            <li>100%正確ではない</li>
+                        </ul>
+                    </div>
+                    <div>
+                        <h4 class="highlight-green">推奨プラクティス</h4>
+                        <ul class="small">
+                            <li>Gitで変更を追跡</li>
+                            <li>テストで動作確認</li>
+                            <li>小さい変更を積み重ね</li>
+                            <li>不明点は質問する</li>
+                            <li>定期的にレビュー</li>
+                        </ul>
+                    </div>
+                </div>
+                <p class="small highlight-yellow" style="margin-top: 1em;">
+                    AIは強力なツールですが、最終判断は人間が行いましょう
+                </p>
+            </section>
+
+            <!-- スライド35: まとめ -->
+            <section>
+                <p class="chapter-title">第5章: Tips & まとめ</p>
+                <h2>まとめ</h2>
+                <ul>
+                    <li><strong>Claude Code</strong>はAI駆動のコーディングアシスタント</li>
+                    <li><strong>良いプロンプト</strong>が良い結果を生む</li>
+                    <li><strong>段階的な指示</strong>と<strong>対話</strong>が重要</li>
+                    <li>様々な開発シーンで活用可能</li>
+                    <li>ただし<strong>最終判断は人間</strong>が行う</li>
+                </ul>
+                <div style="margin-top: 2em; padding: 1em; background: rgba(116,192,252,0.2); border-radius: 8px;">
+                    <p class="highlight-blue">
+                        AIを味方につけて、開発をもっと楽しく！
+                    </p>
+                </div>
+                <p style="margin-top: 2em;">ご質問はありますか？</p>
+            </section>
+
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/reveal.js@4.6.1/dist/reveal.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/reveal.js@4.6.1/plugin/highlight/highlight.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/reveal.js@4.6.1/plugin/notes/notes.js"></script>
+    <script>
+        Reveal.initialize({
+            hash: true,
+            slideNumber: true,
+            progress: true,
+            center: true,
+            transition: 'fade',
+            plugins: [ RevealHighlight, RevealNotes ]
+        });
+    </script>
+</body>
+</html>
