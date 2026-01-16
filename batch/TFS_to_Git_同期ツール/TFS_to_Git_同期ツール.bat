@@ -135,16 +135,44 @@ if ($UPDATE_TFS_BEFORE_COMPARE) {
     if (-not [string]::IsNullOrWhiteSpace($TF_EXE_PATH)) {
         if (Test-Path $TF_EXE_PATH) {
             $tfExePath = $TF_EXE_PATH
-            Write-Host "[情報] 設定で指定されたtf.exeを使用: $tfExePath" -ForegroundColor Gray
+            Write-Host "[情報] 設定で指定されたtf.exeを使用" -ForegroundColor Gray
         } else {
             Write-Host "[エラー] 指定されたtf.exeが見つかりません: $TF_EXE_PATH" -ForegroundColor Red
             exit 1
         }
     } else {
-        # PATHから検索
+        # 1. PATHから検索
         $tfCommand = Get-Command tf -ErrorAction SilentlyContinue
         if ($tfCommand) {
             $tfExePath = $tfCommand.Source
+            Write-Host "[情報] PATHからtf.exeを検出" -ForegroundColor Gray
+        } else {
+            # 2. Visual Studioインストールパスから自動検索
+            Write-Host "[情報] tf.exeを自動検索中..." -ForegroundColor Gray
+
+            # 検索対象のパス一覧（新しいバージョン順）
+            $searchPaths = @(
+                # Visual Studio 2022
+                "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\IDE\CommonExtensions\Microsoft\TeamFoundation\Team Explorer\tf.exe",
+                "C:\Program Files\Microsoft Visual Studio\2022\Professional\Common7\IDE\CommonExtensions\Microsoft\TeamFoundation\Team Explorer\tf.exe",
+                "C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\CommonExtensions\Microsoft\TeamFoundation\Team Explorer\tf.exe",
+                # Visual Studio 2019
+                "C:\Program Files (x86)\Microsoft Visual Studio\2019\Enterprise\Common7\IDE\CommonExtensions\Microsoft\TeamFoundation\Team Explorer\tf.exe",
+                "C:\Program Files (x86)\Microsoft Visual Studio\2019\Professional\Common7\IDE\CommonExtensions\Microsoft\TeamFoundation\Team Explorer\tf.exe",
+                "C:\Program Files (x86)\Microsoft Visual Studio\2019\Community\Common7\IDE\CommonExtensions\Microsoft\TeamFoundation\Team Explorer\tf.exe",
+                # Visual Studio 2017
+                "C:\Program Files (x86)\Microsoft Visual Studio\2017\Enterprise\Common7\IDE\CommonExtensions\Microsoft\TeamFoundation\Team Explorer\tf.exe",
+                "C:\Program Files (x86)\Microsoft Visual Studio\2017\Professional\Common7\IDE\CommonExtensions\Microsoft\TeamFoundation\Team Explorer\tf.exe",
+                "C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\Common7\IDE\CommonExtensions\Microsoft\TeamFoundation\Team Explorer\tf.exe"
+            )
+
+            foreach ($path in $searchPaths) {
+                if (Test-Path $path) {
+                    $tfExePath = $path
+                    Write-Host "[情報] tf.exeを自動検出: $tfExePath" -ForegroundColor Green
+                    break
+                }
+            }
         }
     }
 

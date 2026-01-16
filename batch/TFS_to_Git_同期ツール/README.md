@@ -91,19 +91,22 @@ $GIT_REPO_DIR = "D:\Repository\MyProject"
 $UPDATE_TFS_BEFORE_COMPARE = $true  # TFSを最新にしてから比較
 ```
 
-**tf.exeのパス設定（PATHが通っていない場合）:**
+**tf.exeの自動検索:**
 
-環境変数PATHにtf.exeが登録されていない場合は、`$TF_EXE_PATH`にフルパスを指定してください。
+tf.exeは以下の順序で自動検索されます：
+1. `$TF_EXE_PATH`設定で直接指定されている場合はそれを使用
+2. 環境変数PATHから検索
+3. Visual Studioの一般的なインストールパスを自動検索（VS2022→VS2019→VS2017の順）
+
+通常は設定不要で自動的にtf.exeが見つかります。
+
+**手動でパスを指定する場合:**
+
+自動検索で見つからない場合や、特定のバージョンを使用したい場合は`$TF_EXE_PATH`を指定：
 
 ```powershell
 # Visual Studio 2022 Enterprise
 $TF_EXE_PATH = "C:\Program Files\Microsoft Visual Studio\2022\Enterprise\Common7\IDE\CommonExtensions\Microsoft\TeamFoundation\Team Explorer\tf.exe"
-
-# Visual Studio 2022 Professional
-$TF_EXE_PATH = "C:\Program Files\Microsoft Visual Studio\2022\Professional\Common7\IDE\CommonExtensions\Microsoft\TeamFoundation\Team Explorer\tf.exe"
-
-# Visual Studio 2019
-$TF_EXE_PATH = "C:\Program Files (x86)\Microsoft Visual Studio\2019\Enterprise\Common7\IDE\CommonExtensions\Microsoft\TeamFoundation\Team Explorer\tf.exe"
 ```
 
 **注意:** tf.exeが見つからない場合、エラーメッセージが表示され、TFS更新をスキップして続行するか選択できます。
@@ -283,7 +286,8 @@ MIT License
 - **TFS最新取得機能を追加**
   - 比較前に`tf get /recursive`でTFSワークスペースを自動更新
   - `$UPDATE_TFS_BEFORE_COMPARE`設定で有効/無効を切り替え可能
-  - `$TF_EXE_PATH`設定でtf.exeのパスを直接指定可能（PATHが通っていない環境向け）
+  - tf.exeを自動検索（PATH → VS2022 → VS2019 → VS2017の順）
+  - `$TF_EXE_PATH`設定でtf.exeのパスを直接指定することも可能
   - tf.exeが見つからない場合はエラー表示し、続行するか選択可能
 - **空フォルダ対応を追加**
   - TFSの空フォルダをGitに同期可能に
