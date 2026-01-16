@@ -55,8 +55,13 @@ git config --global core.quotepath false 2>&1 | Out-Null
 
 #region 設定セクション
 # TFSとGitのディレクトリパスを設定（固定値）
+# 重要: TFS_DIRとGIT_REPO_DIRは同じフォルダ構造を指すようにしてください
+# 例: TFSの "C:\TFS\project\src" とGitの "C:\Git\project\src" を比較する場合
 $TFS_DIR = "C:\Users\$env:USERNAME\source"
 $GIT_REPO_DIR = "C:\Users\$env:USERNAME\source\Git\project"
+
+# TFS最新取得を実行するか（tfコマンドが利用可能な環境のみ）
+$UPDATE_TFS_BEFORE_COMPARE = $true
 #endregion
 
 #region パスの存在確認
@@ -94,6 +99,40 @@ Write-Host ""
 Write-Host "TFSディレクトリ: $TFS_DIR" -ForegroundColor White
 Write-Host "Gitディレクトリ: $GIT_REPO_DIR" -ForegroundColor White
 Write-Host ""
+
+#region TFS最新取得
+if ($UPDATE_TFS_BEFORE_COMPARE) {
+    # tfコマンドの存在確認
+    $tfCommand = Get-Command tf -ErrorAction SilentlyContinue
+    if ($tfCommand) {
+        Write-Host "------------------------------------------------------------------------" -ForegroundColor Cyan
+        Write-Host " TFSワークスペースを最新に更新しています..." -ForegroundColor Cyan
+        Write-Host "------------------------------------------------------------------------" -ForegroundColor Cyan
+        Write-Host ""
+
+        Push-Location $TFS_DIR
+        try {
+            # TFS最新取得（再帰的に全ファイル）
+            $tfResult = tf get /recursive /noprompt 2>&1
+            if ($LASTEXITCODE -eq 0) {
+                Write-Host "[完了] TFSワークスペースを最新に更新しました" -ForegroundColor Green
+            } else {
+                Write-Host "[警告] TFS更新で問題が発生しました（続行します）" -ForegroundColor Yellow
+                Write-Host $tfResult -ForegroundColor Gray
+            }
+        } catch {
+            Write-Host "[警告] TFS更新でエラーが発生しました: $_" -ForegroundColor Yellow
+        }
+        Pop-Location
+        Write-Host ""
+    } else {
+        Write-Host "[情報] tfコマンドが見つかりません。TFS更新をスキップします。" -ForegroundColor Yellow
+        Write-Host "       Visual Studio開発者コマンドプロンプトから実行するか、" -ForegroundColor Gray
+        Write-Host "       tf.exeへのパスを環境変数PATHに追加してください。" -ForegroundColor Gray
+        Write-Host ""
+    }
+}
+#endregion
 
 # Gitディレクトリに移動
 Set-Location $GIT_REPO_DIR
@@ -185,32 +224,63 @@ Write-Host ""
 Write-Host "ファイルをスキャン中..." -ForegroundColor Cyan
 Write-Host ""
 
-# TFSとGitのファイル一覧を取得
-Write-Verbose "TFSディレクトリをスキャン中: $TFS_DIR"
+# TFSとGitのファイル・フォルダ一覧を取得
+Write-Host "TFSディレクトリをスキャン中: $TFS_DIR" -ForegroundColor Gray
 $tfsFiles = Get-ChildItem -Path $TFS_DIR -Recurse -File -ErrorAction SilentlyContinue
+$tfsFolders = Get-ChildItem -Path $TFS_DIR -Recurse -Directory -ErrorAction SilentlyContinue
 
-Write-Verbose "Gitディレクトリをスキャン中: $GIT_REPO_DIR"
+Write-Host "Gitディレクトリをスキャン中: $GIT_REPO_DIR" -ForegroundColor Gray
 $gitFiles = Get-ChildItem -Path $GIT_REPO_DIR -Recurse -File -ErrorAction SilentlyContinue | Where-Object {
     $_.FullName -notlike '*\.git\*'
 }
+$gitFolders = Get-ChildItem -Path $GIT_REPO_DIR -Recurse -Directory -ErrorAction SilentlyContinue | Where-Object {
+    $_.FullName -notlike '*\.git*'
+}
+
+# パスの正規化関数（末尾のバックスラッシュを統一）
+function Normalize-Path($path) {
+    return $path.TrimEnd('\', '/')
+}
+
+$TFS_DIR_NORMALIZED = Normalize-Path $TFS_DIR
+$GIT_REPO_DIR_NORMALIZED = Normalize-Path $GIT_REPO_DIR
 
 # ファイルを相対パスでハッシュテーブルに格納
 $tfsFileDict = @{}
 foreach ($file in $tfsFiles) {
-    $relativePath = $file.FullName.Substring($TFS_DIR.Length).TrimStart('\')
+    $relativePath = $file.FullName.Substring($TFS_DIR_NORMALIZED.Length).TrimStart('\', '/')
     $tfsFileDict[$relativePath] = $file
 }
 
 $gitFileDict = @{}
 foreach ($file in $gitFiles) {
-    $relativePath = $file.FullName.Substring($GIT_REPO_DIR.Length).TrimStart('\')
+    $relativePath = $file.FullName.Substring($GIT_REPO_DIR_NORMALIZED.Length).TrimStart('\', '/')
     $gitFileDict[$relativePath] = $file
 }
 
+# フォルダを相対パスでハッシュテーブルに格納
+$tfsFolderDict = @{}
+foreach ($folder in $tfsFolders) {
+    $relativePath = $folder.FullName.Substring($TFS_DIR_NORMALIZED.Length).TrimStart('\', '/')
+    $tfsFolderDict[$relativePath] = $folder
+}
+
+$gitFolderDict = @{}
+foreach ($folder in $gitFolders) {
+    $relativePath = $folder.FullName.Substring($GIT_REPO_DIR_NORMALIZED.Length).TrimStart('\', '/')
+    $gitFolderDict[$relativePath] = $folder
+}
+
+Write-Host "TFS: $($tfsFileDict.Count) ファイル, $($tfsFolderDict.Count) フォルダ" -ForegroundColor Gray
+Write-Host "Git: $($gitFileDict.Count) ファイル, $($gitFolderDict.Count) フォルダ" -ForegroundColor Gray
+Write-Host ""
+
 # 差分を格納する配列
-$newFiles = @()      # TFSにあってGitにない（新規追加）
-$updateFiles = @()   # 両方にあるが内容が異なる（更新）
-$deleteFiles = @()   # GitにあってTFSにない（削除対象）
+$newFiles = @()       # TFSにあってGitにない（新規追加）
+$updateFiles = @()    # 両方にあるが内容が異なる（更新）
+$deleteFiles = @()    # GitにあってTFSにない（削除対象）
+$newFolders = @()     # TFSにあってGitにない空フォルダ
+$deleteFolders = @()  # GitにあってTFSにないフォルダ
 $identicalCount = 0
 
 # TFSファイルをチェック（更新 & 新規追加）
@@ -259,8 +329,41 @@ foreach ($relativePath in $gitFileDict.Keys) {
     }
 }
 
+# TFSのみのフォルダをチェック（新規フォルダ - 空フォルダ対応）
+foreach ($relativePath in $tfsFolderDict.Keys) {
+    $gitFolderPath = Join-Path $GIT_REPO_DIR $relativePath
+    if (-not (Test-Path $gitFolderPath)) {
+        # Gitに存在しないフォルダ
+        # そのフォルダ配下にファイルがあるかチェック
+        $hasFiles = $tfsFileDict.Keys | Where-Object { $_.StartsWith("$relativePath\") -or $_.StartsWith("$relativePath/") }
+        if (-not $hasFiles) {
+            # 空フォルダとして追加
+            $newFolders += [PSCustomObject]@{
+                RelativePath = $relativePath
+                TfsFolder = $tfsFolderDict[$relativePath]
+                GitFolderPath = $gitFolderPath
+            }
+        }
+    }
+}
+
+# Gitのみのフォルダをチェック（削除対象フォルダ）
+foreach ($relativePath in $gitFolderDict.Keys) {
+    if (-not $tfsFolderDict.ContainsKey($relativePath)) {
+        # TFSにもファイルとしても存在しないか確認
+        $existsInTfs = $tfsFileDict.Keys | Where-Object { $_.StartsWith("$relativePath\") -or $_.StartsWith("$relativePath/") }
+        if (-not $existsInTfs) {
+            $gitFolder = $gitFolderDict[$relativePath]
+            $deleteFolders += [PSCustomObject]@{
+                RelativePath = $relativePath
+                GitFolder = $gitFolder
+            }
+        }
+    }
+}
+
 # 差分がない場合は終了
-if ($newFiles.Count -eq 0 -and $updateFiles.Count -eq 0 -and $deleteFiles.Count -eq 0) {
+if ($newFiles.Count -eq 0 -and $updateFiles.Count -eq 0 -and $deleteFiles.Count -eq 0 -and $newFolders.Count -eq 0 -and $deleteFolders.Count -eq 0) {
     Write-Host "差分はありません。ファイルは同期されています。" -ForegroundColor Green
     Write-Host ""
     exit 0
@@ -296,18 +399,38 @@ if ($deleteFiles.Count -gt 0) {
     Write-Host ""
 }
 
+if ($newFolders.Count -gt 0) {
+    Write-Host "=== 新規フォルダ (空フォルダをGitに作成) ===" -ForegroundColor Magenta
+    foreach ($folder in $newFolders) {
+        Write-Host "  [フォルダ新規] $($folder.RelativePath)" -ForegroundColor Magenta
+    }
+    Write-Host ""
+}
+
+if ($deleteFolders.Count -gt 0) {
+    Write-Host "=== 削除対象フォルダ (Gitから削除) ===" -ForegroundColor DarkRed
+    foreach ($folder in $deleteFolders) {
+        Write-Host "  [フォルダ削除] $($folder.RelativePath)" -ForegroundColor DarkRed
+    }
+    Write-Host ""
+}
+
 # 差分サマリー表示
 Write-Host "========================================================================" -ForegroundColor Yellow
 Write-Host " 差分サマリー" -ForegroundColor Yellow
 Write-Host "========================================================================" -ForegroundColor Yellow
 Write-Host ""
-Write-Host "新規ファイル (TFS → Git): " -NoNewline -ForegroundColor Green
+Write-Host "新規ファイル (TFS → Git):   " -NoNewline -ForegroundColor Green
 Write-Host "$($newFiles.Count) 件"
-Write-Host "更新ファイル (TFS → Git): " -NoNewline -ForegroundColor Yellow
+Write-Host "更新ファイル (TFS → Git):   " -NoNewline -ForegroundColor Yellow
 Write-Host "$($updateFiles.Count) 件"
-Write-Host "削除対象 (Gitのみ):       " -NoNewline -ForegroundColor Red
+Write-Host "削除対象ファイル (Gitのみ): " -NoNewline -ForegroundColor Red
 Write-Host "$($deleteFiles.Count) 件"
-Write-Host "変更なし:                 " -NoNewline -ForegroundColor Gray
+Write-Host "新規フォルダ (空フォルダ):  " -NoNewline -ForegroundColor Magenta
+Write-Host "$($newFolders.Count) 件"
+Write-Host "削除対象フォルダ:           " -NoNewline -ForegroundColor DarkRed
+Write-Host "$($deleteFolders.Count) 件"
+Write-Host "変更なし:                   " -NoNewline -ForegroundColor Gray
 Write-Host "$identicalCount 件"
 Write-Host ""
 
@@ -338,6 +461,24 @@ Write-Host ""
 # 統計カウンタ
 $copiedCount = 0
 $deletedCount = 0
+$folderCreatedCount = 0
+$folderDeletedCount = 0
+
+# 新規フォルダを作成（空フォルダ対応）
+foreach ($folder in $newFolders) {
+    try {
+        if (-not (Test-Path $folder.GitFolderPath)) {
+            New-Item -ItemType Directory -Path $folder.GitFolderPath -Force | Out-Null
+            # .gitkeepファイルを作成（Gitで空フォルダを追跡するため）
+            $gitkeepPath = Join-Path $folder.GitFolderPath ".gitkeep"
+            "" | Out-File -FilePath $gitkeepPath -Encoding UTF8 -NoNewline
+            Write-Host "[フォルダ作成] $($folder.RelativePath)" -ForegroundColor Magenta
+            $folderCreatedCount++
+        }
+    } catch {
+        Write-Warning "フォルダ作成エラー: $($folder.RelativePath) - $_"
+    }
+}
 
 # 新規ファイルをコピー
 foreach ($file in $newFiles) {
@@ -380,13 +521,29 @@ foreach ($file in $deleteFiles) {
     }
 }
 
+# 削除フォルダを削除（深い階層から削除するためソート）
+$sortedDeleteFolders = $deleteFolders | Sort-Object { $_.RelativePath.Length } -Descending
+foreach ($folder in $sortedDeleteFolders) {
+    try {
+        if (Test-Path $folder.GitFolder.FullName) {
+            Remove-Item -Path $folder.GitFolder.FullName -Recurse -Force
+            Write-Host "[フォルダ削除完了] $($folder.RelativePath)" -ForegroundColor DarkRed
+            $folderDeletedCount++
+        }
+    } catch {
+        Write-Warning "フォルダ削除エラー: $($folder.RelativePath) - $_"
+    }
+}
+
 Write-Host ""
 Write-Host "========================================================================" -ForegroundColor Cyan
 Write-Host " 同期完了" -ForegroundColor Cyan
 Write-Host "========================================================================" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "コピー/更新ファイル: $copiedCount" -ForegroundColor Green
-Write-Host "削除ファイル: $deletedCount" -ForegroundColor Red
+Write-Host "削除ファイル:         $deletedCount" -ForegroundColor Red
+Write-Host "作成フォルダ:         $folderCreatedCount" -ForegroundColor Magenta
+Write-Host "削除フォルダ:         $folderDeletedCount" -ForegroundColor DarkRed
 Write-Host ""
 #endregion
 
