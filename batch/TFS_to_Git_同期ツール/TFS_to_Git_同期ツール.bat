@@ -438,10 +438,10 @@ foreach ($relativePath in $tfsFolderDict.Keys) {
     if (-not (Test-Path $gitFolderPath)) {
         # Gitに存在しないフォルダ
         # そのフォルダ配下にファイルがあるかチェック（パス区切り文字を正規化して比較）
-        $normalizedPath = $relativePath.Replace('/', '\').ToLower()
+        $normalizedPath = $relativePath.Replace('/', '\')
         $hasFiles = $false
         foreach ($filePath in $tfsFileDict.Keys) {
-            $normalizedFilePath = $filePath.Replace('/', '\').ToLower()
+            $normalizedFilePath = $filePath.Replace('/', '\')
             if ($normalizedFilePath.StartsWith("$normalizedPath\")) {
                 $hasFiles = $true
                 break
@@ -459,44 +459,28 @@ foreach ($relativePath in $tfsFolderDict.Keys) {
 }
 
 # Gitのみのフォルダをチェック（削除対象フォルダ）
-# デバッグ: Gitフォルダ数を表示
-Write-Host "[DEBUG] Gitフォルダ数: $($gitFolderDict.Count)" -ForegroundColor Magenta
-Write-Host "[DEBUG] TFSフォルダ数: $($tfsFolderDict.Count)" -ForegroundColor Magenta
-
 foreach ($relativePath in $gitFolderDict.Keys) {
-    # TFSにフォルダが存在するかチェック（大文字小文字を区別しない）
-    $normalizedGitPath = $relativePath.Replace('/', '\').ToLower()
-    $folderExistsInTfs = $false
-    foreach ($tfsPath in $tfsFolderDict.Keys) {
-        $normalizedTfsPath = $tfsPath.Replace('/', '\').ToLower()
-        if ($normalizedGitPath -eq $normalizedTfsPath) {
-            $folderExistsInTfs = $true
-            break
-        }
-    }
-
-    Write-Host "[DEBUG] チェック中: $relativePath -> TFSにフォルダ存在: $folderExistsInTfs" -ForegroundColor Magenta
+    # TFSにフォルダが存在するかチェック（ハッシュテーブルのContainsKeyを使用）
+    $normalizedGitPath = $relativePath.Replace('/', '\')
+    $folderExistsInTfs = $tfsFolderDict.ContainsKey($relativePath)
 
     if (-not $folderExistsInTfs) {
         # TFSにフォルダが存在しない場合、ファイルとしても存在しないか確認
         $existsInTfs = $false
         $searchPattern = "$normalizedGitPath\"
         foreach ($filePath in $tfsFileDict.Keys) {
-            $normalizedFilePath = $filePath.Replace('/', '\').ToLower()
+            $normalizedFilePath = $filePath.Replace('/', '\')
             if ($normalizedFilePath.StartsWith($searchPattern)) {
                 $existsInTfs = $true
-                Write-Host "[DEBUG]   TFSファイル存在: $filePath" -ForegroundColor Magenta
                 break
             }
         }
-        Write-Host "[DEBUG]   TFSにファイル存在: $existsInTfs" -ForegroundColor Magenta
         if (-not $existsInTfs) {
             $gitFolder = $gitFolderDict[$relativePath]
             $deleteFolders += [PSCustomObject]@{
                 RelativePath = $relativePath
                 GitFolder = $gitFolder
             }
-            Write-Host "[DEBUG]   -> 削除対象に追加" -ForegroundColor Yellow
         }
     }
 }
