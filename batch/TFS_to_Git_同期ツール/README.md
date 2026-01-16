@@ -71,6 +71,13 @@ $GIT_REPO_DIR = "C:\Users\$env:USERNAME\source\Git\project"
 
 # TFS最新取得を実行するか（tfコマンドが利用可能な環境のみ）
 $UPDATE_TFS_BEFORE_COMPARE = $true
+
+# 比較対象から除外するファイル（Git固有ファイルなど）
+$EXCLUDE_FILES = @(
+    ".gitignore",
+    ".gitkeep",
+    ".gitattributes"
+)
 #endregion
 ```
 
@@ -80,6 +87,10 @@ $TFS_DIR = "C:\Work\TFS\MyProject"
 $GIT_REPO_DIR = "D:\Repository\MyProject"
 $UPDATE_TFS_BEFORE_COMPARE = $true  # TFSを最新にしてから比較
 ```
+
+**除外ファイル設定:**
+- `.gitignore`, `.gitkeep`, `.gitattributes` はGit固有ファイルのため、デフォルトで比較対象から除外されます
+- これらのファイルがGitにのみ存在しても「削除対象」として表示されません
 
 **パス設定の重要なポイント:**
 - `TFS_DIR` と `GIT_REPO_DIR` は**同じ階層構造**を指す必要があります
@@ -249,6 +260,9 @@ MIT License
 - **Gitのみファイル/フォルダの検出を改善**
   - パス比較ロジックを修正
   - フォルダの差分も検出・同期対象に
+- **Git固有ファイル除外機能を追加**
+  - `.gitignore`, `.gitkeep`, `.gitattributes` を比較対象から除外
+  - `$EXCLUDE_FILES`設定でカスタマイズ可能
 
 ### v1.2.0 (2025-12-06)
 - **エンコーディング問題の完全修正**

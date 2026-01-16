@@ -62,6 +62,13 @@ $GIT_REPO_DIR = "C:\Users\$env:USERNAME\source\Git\project"
 
 # TFS最新取得を実行するか（tfコマンドが利用可能な環境のみ）
 $UPDATE_TFS_BEFORE_COMPARE = $true
+
+# 比較対象から除外するファイル（Git固有ファイルなど）
+$EXCLUDE_FILES = @(
+    ".gitignore",
+    ".gitkeep",
+    ".gitattributes"
+)
 #endregion
 
 #region パスの存在確認
@@ -231,7 +238,7 @@ $tfsFolders = Get-ChildItem -Path $TFS_DIR -Recurse -Directory -ErrorAction Sile
 
 Write-Host "Gitディレクトリをスキャン中: $GIT_REPO_DIR" -ForegroundColor Gray
 $gitFiles = Get-ChildItem -Path $GIT_REPO_DIR -Recurse -File -ErrorAction SilentlyContinue | Where-Object {
-    $_.FullName -notlike '*\.git\*'
+    $_.FullName -notlike '*\.git\*' -and $_.Name -notin $EXCLUDE_FILES
 }
 $gitFolders = Get-ChildItem -Path $GIT_REPO_DIR -Recurse -Directory -ErrorAction SilentlyContinue | Where-Object {
     $_.FullName -notlike '*\.git*'
