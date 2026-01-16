@@ -4,8 +4,11 @@ TFS（Team Foundation Server）のローカルディレクトリとGitリポジ�
 
 ## 機能
 
+- ✅ **TFS最新取得**: 比較前にTFSワークスペースを自動更新（`tf get`）
 - ✅ **高速な差分チェック**: PowerShellとMD5ハッシュで大量のファイルを効率的に処理
 - ✅ **自動同期**: TFS→Gitへファイル更新・新規追加・削除を自動実行
+- ✅ **空フォルダ対応**: TFSの空フォルダもGitに同期（.gitkeep自動作成）
+- ✅ **双方向差分検出**: TFSのみ・Gitのみのファイル/フォルダを正確に検出
 - ✅ **Gitブランチ管理**: 実行前にブランチ確認・切り替えが可能
 - ✅ **日本語対応**: UTF-8モードで日本語のブランチ名・ファイル名に対応
 - ✅ **コミット機能**: 同期後にオプションでGitコミット可能
@@ -13,14 +16,17 @@ TFS（Team Foundation Server）のローカルディレクトリとGitリポジ�
 
 ## 動作の流れ
 
-1. TFSとGitのディレクトリ内のファイルを再帰的にスキャン
-2. MD5ハッシュでファイルの差分をチェック
-3. 以下の3つの処理を実行:
-   - **更新**: TFSとGitで内容が異なるファイルをコピー
-   - **新規追加**: TFSにのみ存在するファイルをコピー
-   - **削除**: Gitにのみ存在するファイルを削除
-4. 処理結果を統計表示（更新/新規/削除/変更なしの件数）
-5. オプションでGitコミット
+1. **TFS最新取得**: `tf get /recursive` でTFSワークスペースを最新に更新
+2. TFSとGitのディレクトリ内のファイル・フォルダを再帰的にスキャン
+3. MD5ハッシュでファイルの差分をチェック
+4. 以下の処理を実行:
+   - **ファイル更新**: TFSとGitで内容が異なるファイルをコピー
+   - **ファイル新規追加**: TFSにのみ存在するファイルをコピー
+   - **ファイル削除**: Gitにのみ存在するファイルを削除
+   - **フォルダ新規作成**: TFSにのみ存在する空フォルダを作成（.gitkeep付き）
+   - **フォルダ削除**: Gitにのみ存在するフォルダを削除
+5. 処理結果を統計表示
+6. オプションでGitコミット
 
 ## ファイル構成
 
@@ -39,6 +45,10 @@ TFS_to_Git_同期ツール/
 - Git for Windows
   - **自動チェック**: スクリプト実行時にGitのインストールを自動確認します
   - Gitが未インストールの場合は、インストールガイドを表示します
+- TFS（Team Foundation Server）クライアント（オプション）
+  - `tf` コマンドが利用可能な場合、比較前にTFSワークスペースを自動更新
+  - Visual Studio開発者コマンドプロンプトから実行するか、`tf.exe`へのパスを環境変数PATHに追加
+  - `tf` コマンドが利用できない場合はTFS更新をスキップして比較のみ実行
 
 ## インストール
 
@@ -55,8 +65,19 @@ TFS_to_Git_同期ツール/
 ```powershell
 #region 設定セクション
 # TFSとGitのディレクトリパスを設定（固定値）
+# 重要: TFS_DIRとGIT_REPO_DIRは同じフォルダ構造を指すようにしてください
 $TFS_DIR = "C:\Users\$env:USERNAME\source"
 $GIT_REPO_DIR = "C:\Users\$env:USERNAME\source\Git\project"
+
+# TFS最新取得を実行するか（tfコマンドが利用可能な環境のみ）
+$UPDATE_TFS_BEFORE_COMPARE = $true
+
+# 比較対象から除外するファイル（Git固有ファイルなど）
+$EXCLUDE_FILES = @(
+    ".gitignore",
+    ".gitkeep",
+    ".gitattributes"
+)
 #endregion
 ```
 
@@ -64,7 +85,16 @@ $GIT_REPO_DIR = "C:\Users\$env:USERNAME\source\Git\project"
 ```powershell
 $TFS_DIR = "C:\Work\TFS\MyProject"
 $GIT_REPO_DIR = "D:\Repository\MyProject"
+$UPDATE_TFS_BEFORE_COMPARE = $true  # TFSを最新にしてから比較
 ```
+
+**除外ファイル設定:**
+- `.gitignore`, `.gitkeep`, `.gitattributes` はGit固有ファイルのため、デフォルトで比較対象から除外されます
+- これらのファイルがGitにのみ存在しても「削除対象」として表示されません
+
+**パス設定の重要なポイント:**
+- `TFS_DIR` と `GIT_REPO_DIR` は**同じ階層構造**を指す必要があります
+- 例: TFSの `C:\TFS\project\src` とGitの `C:\Git\project\src` を比較する場合、両方とも `src` フォルダを指定
 
 ### 2. 実行
 
@@ -218,6 +248,21 @@ git --version
 MIT License
 
 ## 変更履歴
+
+### v1.3.0 (2025-01-16)
+- **TFS最新取得機能を追加**
+  - 比較前に`tf get /recursive`でTFSワークスペースを自動更新
+  - `$UPDATE_TFS_BEFORE_COMPARE`設定で有効/無効を切り替え可能
+  - `tf`コマンドが利用できない環境ではスキップ
+- **空フォルダ対応を追加**
+  - TFSの空フォルダをGitに同期可能に
+  - 空フォルダには`.gitkeep`ファイルを自動作成
+- **Gitのみファイル/フォルダの検出を改善**
+  - パス比較ロジックを修正
+  - フォルダの差分も検出・同期対象に
+- **Git固有ファイル除外機能を追加**
+  - `.gitignore`, `.gitkeep`, `.gitattributes` を比較対象から除外
+  - `$EXCLUDE_FILES`設定でカスタマイズ可能
 
 ### v1.2.0 (2025-12-06)
 - **エンコーディング問題の完全修正**
